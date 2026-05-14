@@ -2,6 +2,7 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.supabase.co https://fonts.googleapis.com https://fonts.gstatic.com https://cdn.jsdelivr.net; img-src 'self' data: blob:; connect-src 'self' https://*.supabase.co;">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
 <title>Saporis — Mantenimiento v5</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
@@ -421,7 +422,15 @@ tr:nth-child(even) td{background:#F8FAFC}
   </div>
 </div>
 
-<script>
+<script>window.onerror = function(msg, src, line, col, err) {
+  document.body.style.cssText = 'font-family:sans-serif;padding:20px;background:#fff';
+  document.body.innerHTML = '<h2 style="color:red">Error en la app</h2><p>' + msg + '</p><p>Linea: ' + line + '</p><p>' + (err ? err.stack : '') + '</p>';
+  return false;
+};
+window.addEventListener('unhandledrejection', function(e) {
+  console.error('Unhandled promise rejection:', e.reason);
+});
+
 // -
 // SUPABASE CONFIGURATION
 // -
@@ -1779,72 +1788,67 @@ function eliminarLI(key,idx){if(!confirm('¿Eliminar?'))return;LISTAS[key].splic
 // ================================================================
 // INIT  Load from Supabase then restore session
 // ================================================================
-async function initApp(){
-  showLoading('Iniciando Saporis...');
-  try {
-    // Load all data from Supabase in parallel
-    showLoading('Cargando usuarios...');
-    const [dbUsers, dbOrdenes, dbPM03, dbRefs, dbConsumo, dbMTBF, dbGasto, dbInsp, dbListas] = await Promise.all([
-      dbGetUsers(),
-      dbGetOrdenes(),
-      dbGetPM03(),
-      dbGetRefacciones(),
-      supaGet('consumo_ref','order=created_at.desc&limit=200'),
-      dbGetMTBF(),
-      dbGetGasto(),
-      dbGetInspecciones(),
-      dbGetListas()
-    ]);
-
-    // Map to app format
-    if(dbUsers && dbUsers.length > 0) {
-      USERS = dbUsers.map(rowToUser);
-      saveDB('users', USERS);
-    }
-    if(dbOrdenes) { ORDENES = dbOrdenes.map(rowToOrden); saveDB('ordenes', ORDENES); }
-    if(dbPM03) { PM03_PLAN = dbPM03.map(rowToPM03); saveDB('pm03_plan', PM03_PLAN); }
-    if(dbRefs) { REFACCIONES = dbRefs; saveDB('refacciones', REFACCIONES); }
-    if(dbConsumo) { CONSUMO_REF = dbConsumo; saveDB('consumo_ref', CONSUMO_REF); }
-    if(dbMTBF) { MTBF_DATA = dbMTBF; saveDB('mtbf_data', MTBF_DATA); }
-    if(dbGasto) { GASTO_DATA = dbGasto; saveDB('gasto_data', GASTO_DATA); }
-    if(dbInsp) { INSPECCIONES = dbInsp; saveDB('inspecciones', INSPECCIONES); }
-    if(dbListas) { LISTAS = {...DEFAULT_LISTAS, ...dbListas}; saveListas(); }
-
-    // If DB is empty (first run), seed default users
-    if(!dbUsers || dbUsers.length === 0) {
-      showLoading('Configurando por primera vez...');
-      await Promise.all(DEFAULT_USERS.filter(u=>u.rol!=='super').map(u => dbSaveUser(u)));
-      USERS = DEFAULT_USERS.filter(u=>u.rol!=='super');
-    }
-
-    hideLoading();
-  } catch(err) {
-    console.error('Supabase load error:', err);
-    hideLoading();
-    showAlert('Sin conexión  usando datos locales', 'warning');
-    // Fallback to localStorage
-    USERS = loadDB('users', DEFAULT_USERS);
-    ORDENES = loadDB('ordenes', []);
-    PM03_PLAN = loadDB('pm03_plan', []);
-    REFACCIONES = loadDB('refacciones', []);
-    CONSUMO_REF = loadDB('consumo_ref', []);
-    MTBF_DATA = loadDB('mtbf_data', []);
-    GASTO_DATA = loadDB('gasto_data', []);
-    INSPECCIONES = loadDB('inspecciones', []);
-  }
+// ================================================================
+// INIT - Show login immediately, sync Supabase in background
+// ================================================================
+function initApp(){
+  // Always load from localStorage first for instant display
+  USERS = loadDB('users', DEFAULT_USERS);
+  ORDENES = loadDB('ordenes', []);
+  PM03_PLAN = loadDB('pm03_plan', []);
+  REFACCIONES = loadDB('refacciones', []);
+  CONSUMO_REF = loadDB('consumo_ref', []);
+  MTBF_DATA = loadDB('mtbf_data', []);
+  GASTO_DATA = loadDB('gasto_data', []);
+  INSPECCIONES = loadDB('inspecciones', []);
 
   // Restore session
   const sess = loadDB('session', null);
-  if(sess && sess.id) {
-    if(sess.rol==='super') {
-      currentUser = {id:'u_super',username:'superusuario',nombre:'Super Usuario',rol:'super'};
+  if(sess && sess.id){
+    if(sess.rol==='super'){
+      currentUser={id:'u_super',username:'superusuario',nombre:'Super Usuario',rol:'super'};
     } else {
-      currentUser = USERS.find(x=>x.id===sess.id) || null;
+      currentUser=USERS.find(x=>x.id===sess.id)||null;
     }
   }
-  if(currentUser) { renderMenu(); showScreen('screen-menu'); }
+  if(currentUser){renderMenu();showScreen('screen-menu');}
   else showScreen('screen-login');
+
+  // Sync with Supabase in background (non-blocking)
+  syncFromSupabase();
 }
+
+async function syncFromSupabase(){
+  try {
+    const dbUsers = await dbGetUsers();
+    if(dbUsers && dbUsers.length > 0){
+      USERS = dbUsers.map(rowToUser);
+      saveDB('users', USERS);
+    } else {
+      // First run - seed users
+      const defaultsToSeed = DEFAULT_USERS.filter(u=>u.rol!=='super');
+      await Promise.all(defaultsToSeed.map(u=>dbSaveUser(u).catch(()=>{})));
+    }
+    const [dbOrdenes,dbPM03,dbRefs,dbMTBF,dbGasto,dbInsp] = await Promise.all([
+      dbGetOrdenes().catch(()=>[]),
+      dbGetPM03().catch(()=>[]),
+      dbGetRefacciones().catch(()=>[]),
+      dbGetMTBF().catch(()=>[]),
+      dbGetGasto().catch(()=>[]),
+      dbGetInspecciones().catch(()=>[])
+    ]);
+    if(dbOrdenes&&dbOrdenes.length>=0){ORDENES=dbOrdenes.map(rowToOrden);saveDB('ordenes',ORDENES);}
+    if(dbPM03&&dbPM03.length>=0){PM03_PLAN=dbPM03.map(rowToPM03);saveDB('pm03_plan',PM03_PLAN);}
+    if(dbRefs&&dbRefs.length>=0){REFACCIONES=dbRefs;saveDB('refacciones',REFACCIONES);}
+    if(dbMTBF)MTBF_DATA=dbMTBF;
+    if(dbGasto)GASTO_DATA=dbGasto;
+    if(dbInsp)INSPECCIONES=dbInsp;
+    console.log('Supabase sync OK');
+  } catch(err){
+    console.log('Supabase sync error (using local data):', err);
+  }
+}
+
 initApp();
 
 // - Mostrar opciones al guardar PM -
