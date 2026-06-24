@@ -2255,14 +2255,22 @@ async function recargarSHO(){
   var descAcc=accConfig.descripcion||'Sin registro';
   var bgAcc=diasAcc===null?'#e5e7eb':diasAcc>=7?'#16a34a':'#dc2626';
 
-  // ── Tarjetas SHE / Q Prioridad A (Saporis MTTO) ─────────
+  // ── Tarjetas SHE / Q Prioridad A (tabla ordenes de Saporis MTTO) ─
   var sheA=null, qA=null;
   try{
-    var sheRes=await db('sho_comentarios','GET',null,'tipo=eq.she&prioridad=eq.A&estatus=eq.abierta');
-    if(Array.isArray(sheRes)) sheA=sheRes.length;
-    var qRes=await db('sho_comentarios','GET',null,'tipo=eq.calidad&prioridad=eq.A&estatus=eq.abierta');
-    if(Array.isArray(qRes)) qA=qRes.length;
-  }catch(e){}
+    var sheRes=await fetch(SB+'/rest/v1/ordenes?tipo=eq.PM02&prioridad=eq.A&estado=eq.abierta&tipo_anormalidad=eq.Seguridad&select=id',
+      {headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Prefer':'count=exact','Range':'0-0'}});
+    if(sheRes.ok){
+      var sheCount=sheRes.headers.get('content-range');
+      sheA=sheCount?parseInt(sheCount.split('/')[1])||0:0;
+    }
+    var qRes=await fetch(SB+'/rest/v1/ordenes?tipo=eq.PM02&prioridad=eq.A&estado=eq.abierta&tipo_anormalidad=eq.Calidad&select=id',
+      {headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Prefer':'count=exact','Range':'0-0'}});
+    if(qRes.ok){
+      var qCount=qRes.headers.get('content-range');
+      qA=qCount?parseInt(qCount.split('/')[1])||0:0;
+    }
+  }catch(e){console.warn('SHO Mtto query error',e);}
   var bgSHE=sheA===null?'#e5e7eb':sheA===0?'#16a34a':'#dc2626';
   var bgQ=qA===null?'#e5e7eb':qA===0?'#16a34a':'#dc2626';
 
