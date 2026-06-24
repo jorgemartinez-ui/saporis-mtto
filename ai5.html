@@ -1,0 +1,2534 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Asset Intensity — Saporis Producción</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#f3f4f6;color:#1a1a1a}
+.screen{position:fixed;inset:0;display:none;flex-direction:column;background:#f3f4f6}
+.screen.active{display:flex}
+.topbar{background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;padding:12px 16px;padding-top:max(env(safe-area-inset-top,0px),12px);display:flex;align-items:center;gap:10px;flex-shrink:0}
+.topbar-back{background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:4px 8px}
+.topbar-title{font-size:17px;font-weight:800}
+.topbar-sub{font-size:11px;opacity:.8}
+.scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:16px}
+.btn{display:block;width:100%;padding:13px;border:none;border-radius:12px;font-family:Nunito,sans-serif;font-size:15px;font-weight:700;cursor:pointer;text-align:center}
+.btn-green{background:#16a34a;color:#fff}
+.btn-gray{background:#f3f4f6;color:#374151}
+.btn-red{background:#dc2626;color:#fff}
+.btn-blue{background:#0891b2;color:#fff}
+.fc{width:100%;padding:11px 14px;border:1.5px solid #e5e7eb;border-radius:10px;font-family:Nunito,sans-serif;font-size:15px;background:#fff;outline:none;margin-bottom:12px}
+.fc:focus{border-color:#16a34a}
+.card{background:#fff;border-radius:16px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,.07);margin-bottom:12px}
+.badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700}
+@keyframes ck-blink{0%,100%{opacity:1}50%{opacity:.55}}
+.ck-alerta-blink{animation:ck-blink 1s ease-in-out infinite;}
+</style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="s-login" class="screen active">
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;background:linear-gradient(160deg,#16a34a,#0d2144)">
+    <div style="font-size:56px;margin-bottom:12px">📈</div>
+    <div style="font-size:30px;font-weight:900;color:#fff;margin-bottom:4px">Asset Intensity</div>
+    <div style="font-size:13px;color:rgba(255,255,255,.7);margin-bottom:48px">Saporis Comercial — Producción</div>
+    <div style="width:100%;max-width:360px;background:#fff;border-radius:20px;padding:24px">
+      <input id="l-user" type="text" class="fc" placeholder="Usuario" autocomplete="off">
+      <input id="l-pass" type="password" class="fc" placeholder="Contraseña">
+      <button class="btn btn-green" onclick="doLogin()">Entrar →</button>
+      <div id="l-err" style="color:#dc2626;font-size:13px;text-align:center;margin-top:8px;display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- HOME (Dashboard / Consultas) -->
+<div id="s-home" class="screen">
+  <div class="topbar">
+    <div style="flex:1">
+      <div class="topbar-title">📈 Asset Intensity</div>
+      <div class="topbar-sub">Saporis Comercial — Producción</div>
+    </div>
+    <button onclick="doLogout()" style="background:rgba(255,255,255,.1);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer">Salir</button>
+  </div>
+  <div class="scroll" style="display:flex;flex-direction:column;justify-content:center;align-items:center;gap:18px;padding:32px">
+    <button onclick="irDashboard()" style="width:100%;max-width:340px;padding:28px;background:#16a34a;color:#fff;border:none;border-radius:18px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.12)">📊 Dashboard</button>
+    <button onclick="irArrancar()" style="width:100%;max-width:340px;padding:28px;background:#0891b2;color:#fff;border:none;border-radius:18px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.12)">🖥️ Consola del Operador</button>
+    <button onclick="irConsultas()" style="width:100%;max-width:340px;padding:28px;background:#0d2144;color:#fff;border:none;border-radius:18px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.12)">📊 Line Summary</button>
+    <button id="btn-home-admin" onclick="go('s-admin-hub')" style="width:100%;max-width:340px;padding:28px;background:#374151;color:#fff;border:none;border-radius:18px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.12);display:none">⚙️ Administración</button>
+  </div>
+</div>
+
+<!-- ARRANCAR LÍNEA -->
+<div id="s-arrancar" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="go('s-home')">←</button>
+    <div style="flex:1"><div class="topbar-title">🖥️ Consola del Operador</div></div>
+  </div>
+  <div class="scroll" style="padding:20px">
+    <label style="font-size:.85rem;font-weight:700;display:block;margin-bottom:8px;color:#374151">Selecciona una línea para operar</label>
+    <select id="arrancar-sel" class="fc" onchange="if(this.value) irArrancarLinea(this.value)">
+      <option value="">— Elige una línea —</option>
+    </select>
+    <div id="arrancar-msg" style="font-size:12px;color:#9ca3af;margin-top:8px"></div>
+  </div>
+</div>
+
+<!-- CONSULTAS -->
+<div id="s-consultas" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="go('s-home')">←</button>
+    <div style="flex:1"><div class="topbar-title">📊 Line Summary</div></div>
+  </div>
+  <div class="scroll" style="padding:20px">
+    <label style="font-size:.85rem;font-weight:700;display:block;margin-bottom:8px;color:#374151">Selecciona una línea para consultar</label>
+    <select id="consultas-sel" class="fc" onchange="if(this.value) irConsultaLinea(this.value)">
+      <option value="">— Elige una línea —</option>
+    </select>
+  </div>
+</div>
+
+<!-- LISTA DE LÍNEAS (Dashboard) -->
+<div id="s-lista" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="go('s-home')">←</button>
+    <div style="flex:1">
+      <div class="topbar-title">📈 Asset Intensity</div>
+      <div class="topbar-sub" id="lista-sub">—</div>
+    </div>
+    <button id="btn-admin-usr" onclick="go('s-admin')" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:none">👥 Usuarios</button>
+    <button id="btn-cfg" onclick="go('s-config')" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:none">⚙️</button>
+    <button onclick="doLogout()" style="background:rgba(255,255,255,.1);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer">Salir</button>
+  </div>
+  <div class="scroll" id="lista-cont"></div>
+</div>
+
+<!-- SHO -->
+<div id="s-sho" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="go('s-linea')">←</button>
+    <div style="flex:1"><div class="topbar-title">⛑ SHO</div><div class="topbar-sub" id="sho-sub">—</div></div>
+    <button onclick="recargarSHO()" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer">↻</button>
+  </div>
+  <div class="scroll" id="sho-cont" style="padding:10px"></div>
+</div>
+
+<!-- LOGSHEET -->
+<div id="s-logsheet" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="volverDesdeLogsheet()">←</button>
+    <div style="flex:1"><div class="topbar-title">📋 Logsheet</div><div class="topbar-sub" id="ls-sub">—</div></div>
+  </div>
+  <div style="display:flex;gap:0;padding:12px 12px 0;flex-wrap:wrap;align-items:flex-end">
+    <button onclick="cambiarCategoriaLS('checklist')" id="ls-tab-checklist" style="padding:8px 12px;font-weight:800;font-size:11px;border:none;border-radius:8px 8px 0 0;cursor:pointer;font-family:Nunito,sans-serif;background:#1a1a1a;color:#fff">Check List</button>
+    <button onclick="cambiarCategoriaLS('cl')" id="ls-tab-cl" style="padding:8px 12px;font-weight:800;font-size:11px;border:none;border-radius:8px 8px 0 0;cursor:pointer;font-family:Nunito,sans-serif;background:#e5e7eb;color:#374151;margin-left:3px">CL</button>
+    <button onclick="cambiarCategoriaLS('lil')" id="ls-tab-lil" style="padding:8px 12px;font-weight:800;font-size:11px;border:none;border-radius:8px 8px 0 0;cursor:pointer;font-family:Nunito,sans-serif;background:#e5e7eb;color:#374151;margin-left:3px">LIL</button>
+    <button onclick="cambiarCategoriaLS('calidad')" id="ls-tab-calidad" style="padding:8px 12px;font-weight:800;font-size:11px;border:none;border-radius:8px 8px 0 0;cursor:pointer;font-family:Nunito,sans-serif;background:#e5e7eb;color:#374151;margin-left:3px">Calidad</button>
+    <button onclick="cambiarCategoriaLS('puntos_q')" id="ls-tab-puntos_q" style="padding:8px 12px;font-weight:800;font-size:11px;border:none;border-radius:8px 8px 0 0;cursor:pointer;font-family:Nunito,sans-serif;background:#e5e7eb;color:#374151;margin-left:3px">Puntos Q</button>
+    <span id="ls-tabs-extra"></span>
+    <button id="ls-btn-add-cat" onclick="nuevaCategoriaLS()" style="padding:6px 10px;font-weight:900;font-size:16px;border:none;border-radius:8px 8px 0 0;cursor:pointer;font-family:Nunito,sans-serif;background:#d1d5db;color:#374151;margin-left:3px;display:none">+</button>
+  </div>
+  <div class="scroll" id="ls-cont" style="padding:12px;background:#f9fafb;min-height:100px"></div>
+</div>
+
+<!-- CHECKLIST EJECUCIÓN (antes de arrancar) -->
+<div id="s-cklist-exec" class="screen">
+  <div class="topbar">
+    <div style="flex:1"><div class="topbar-title">✅ Check List de arranque</div><div class="topbar-sub" id="cke-sub">Completa todos los puntos para arrancar</div></div>
+  </div>
+  <div class="scroll" style="padding:16px" id="cke-cont"></div>
+</div>
+
+<!-- LÍNEA -->
+<div id="s-linea" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="volverDesdeLinea()">←</button>
+    <div style="flex:1">
+      <div class="topbar-title" id="linea-title">—</div>
+      <div class="topbar-sub" id="linea-sub">—</div>
+    </div>
+  </div>
+  <div class="scroll" style="padding:0 0 32px" id="linea-cont"></div>
+</div>
+
+<!-- CONFIG -->
+<div id="s-config" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="volverDesdeAdmin()">←</button>
+    <div class="topbar-title">⚙️ Configuración</div>
+  </div>
+  <div class="scroll" id="cfg-cont"></div>
+</div>
+
+<!-- ADMINISTRACIÓN HUB -->
+<div id="s-admin-hub" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="go('s-home')">←</button>
+    <div style="flex:1"><div class="topbar-title">⚙️ Administración</div></div>
+  </div>
+  <div class="scroll" style="display:flex;flex-direction:column;gap:14px;padding:24px">
+    <button onclick="ORIGEN_ADMIN='s-admin-hub';go('s-admin');cargarAdmin()" style="padding:22px;background:#0d2144;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;text-align:left">👥 Gestión de usuarios</button>
+    <button onclick="ORIGEN_ADMIN='s-admin-hub';go('s-config');cargarConfig()" style="padding:22px;background:#0891b2;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;text-align:left">🏭 Gestión de líneas</button>
+    <button onclick="irGestionOrdenes()" style="padding:22px;background:#7c3aed;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;text-align:left">📋 Gestión de órdenes</button>
+    <button onclick="irLogsheetAdmin()" style="padding:22px;background:#16a34a;color:#fff;border:none;border-radius:14px;font-size:16px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;text-align:left">📝 Logsheet</button>
+  </div>
+</div>
+
+<!-- GESTIÓN DE ÓRDENES -->
+<div id="s-gestion-ordenes" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="go('s-admin-hub')">←</button>
+    <div style="flex:1"><div class="topbar-title">📋 Gestión de órdenes</div></div>
+  </div>
+  <div style="padding:12px 16px;display:flex;gap:8px;flex-wrap:wrap">
+    <select id="go-filtro" onchange="cargarGestionOrdenes()" class="fc" style="margin-bottom:0;flex:1;min-width:120px">
+      <option value="todas">Todas</option>
+      <option value="corriendo">Corriendo</option>
+      <option value="detenida">Detenida</option>
+      <option value="cerrada">CTEC</option>
+    </select>
+    <select id="go-linea" onchange="cargarGestionOrdenes()" class="fc" style="margin-bottom:0;flex:1;min-width:120px">
+      <option value="">Todas las líneas</option>
+    </select>
+  </div>
+  <div class="scroll" style="padding:0 16px 24px" id="go-cont"></div>
+</div>
+
+<!-- LOGSHEET ADMIN -->
+<div id="s-logsheet-admin" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="go('s-admin-hub')">←</button>
+    <div style="flex:1"><div class="topbar-title">📝 Logsheet Admin</div></div>
+  </div>
+  <div class="scroll" style="padding:20px">
+    <label style="font-size:.85rem;font-weight:700;display:block;margin-bottom:8px;color:#374151">Selecciona una línea</label>
+    <select id="lsa-linea" onchange="seleccionarLineaLogsheetAdmin(this.value)" class="fc">
+      <option value="">— Selecciona una línea —</option>
+    </select>
+  </div>
+</div>
+
+<!-- ADMIN USUARIOS -->
+<div id="s-admin" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="volverDesdeAdmin()">←</button>
+    <div style="flex:1"><div class="topbar-title">👥 Usuarios</div></div>
+    <button onclick="abrirNuevoUsuario()" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">+ Nuevo</button>
+  </div>
+  <div class="scroll" id="admin-cont"></div>
+</div>
+
+<script>
+// ── Credenciales Supabase ──────────────────────────────────────
+const SB='https://bwjvmtwkgvyewyjfazou.supabase.co';
+const SK='sb_publishable_bMC14dd2RT3n0Ka3Mwb8Yg_JRXlz-OE';
+
+// ── Estado ────────────────────────────────────────────────────
+var ME=null, LINEAS=[], RCODES=[], LINEA_ID=null, TIMER=null, ORIGEN_LINEA='dashboard';
+var COL={corriendo:'#16a34a',pnp:'#dc2626',pp:'#ca8a04',idle:'#9ca3af',detenida:'#64748b'};
+var LBL={corriendo:'▶ Corriendo',pnp:'🔴 Paro No Planeado',pp:'🟡 Paro Planeado',idle:'⬜ Idle',detenida:'⏹ Línea detenida'};
+var ICO={corriendo:'▶',pnp:'🔴',pp:'🟡',idle:'⬜',detenida:'⏹'};
+var ORDEN_ACTIVA=null; // orden de producción activa
+
+// ── Supabase helpers ──────────────────────────────────────────
+async function db(tabla,method,body,q){
+  var r=await fetch(SB+'/rest/v1/'+tabla+(q?'?'+q:''),{
+    method,headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Accept':'application/json','Prefer':'return=representation'},
+    body:body?JSON.stringify(body):undefined
+  });
+  if(r.status===204) return null;
+  var j=await r.json().catch(()=>null);
+  if(!r.ok){console.error(tabla,j);return null;}
+  return j;
+}
+async function dbP(tabla,method,body,q){
+  return fetch(SB+'/rest/v1/'+tabla+(q?'?'+q:''),{
+    method,headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'return=minimal'},
+    body:body?JSON.stringify(body):undefined
+  });
+}
+
+// ── Utilidades ────────────────────────────────────────────────
+function go(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+function toast(msg,col){
+  var t=document.createElement('div');
+  t.style.cssText='position:fixed;top:max(env(safe-area-inset-top,0px),16px);left:50%;transform:translateX(-50%);background:'+(col||'#1a3c5e')+';color:#fff;padding:10px 20px;border-radius:12px;font-weight:700;font-size:13px;z-index:9999;max-width:90vw;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.2)';
+  t.textContent=msg;
+  document.body.appendChild(t);
+  setTimeout(()=>{t.style.opacity='0';t.style.transition='opacity .3s';setTimeout(()=>t.remove(),300)},2500);
+}
+function hoy(){var d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function turno(){
+  var m=new Date().getHours()*60+new Date().getMinutes();
+  return m>=390&&m<870?'T1':m>=870&&m<1350?'T2':'T3';
+}
+function turnoDe(ts){
+  var d=new Date(ts), m=d.getHours()*60+d.getMinutes();
+  return m>=390&&m<870?'T1':m>=870&&m<1350?'T2':'T3';
+}
+function tIni(t,f){
+  var d=new Date(f+'T00:00:00');
+  d.setHours(t==='T1'?6:t==='T2'?14:22,t==='T1'||t==='T2'?30:30,0,0);
+  return d.getTime();
+}
+function fmtD(ms){var s=Math.floor(ms/1000),h=Math.floor(s/3600),m=Math.floor(s%3600/60);return(h?h+'h ':'')+m+'m';}
+// ── Segmentos de eventos para la tabla (incluye huecos 'corriendo' implícitos) ─
+function segmentosConGaps(evsList, tsI, ahora){
+  var out=[], cur=tsI;
+  for(var idx=0;idx<evsList.length;idx++){
+    var e=evsList[idx];
+    var i=Math.max(e.ts_inicio,tsI);
+    var siguiente=idx<evsList.length-1?evsList[idx+1]:null;
+    var fEff;
+    if(e.ts_fin){
+      fEff=Math.min(e.ts_fin,ahora);
+    }else{
+      // Evento en curso: si hay un evento posterior sé que este terminó ahí; si no, sigue hasta ahora
+      fEff=siguiente&&siguiente.ts_inicio<ahora?siguiente.ts_inicio:ahora;
+    }
+    if(i>cur) out.push({id:'gap_'+cur,tipo:'corriendo',reason_code:null,comentario:null,historial:[],ts_inicio:cur,ts_fin:i,sintetico:true,_dfin:i});
+    out.push({id:e.id,tipo:e.tipo,reason_code:e.reason_code,comentario:e.comentario,historial:e.historial||[],ts_inicio:e.ts_inicio,ts_fin:e.ts_fin,sintetico:false,_dfin:fEff});
+    cur=Math.max(cur,fEff);
+  }
+  if(cur<ahora) out.push({id:'gap_'+cur,tipo:'corriendo',reason_code:null,comentario:null,historial:[],ts_inicio:cur,ts_fin:null,sintetico:true,_dfin:ahora});
+  return out;
+}
+function parseMotivoComentario(seg){
+  if(seg.sintetico) return {motivo:'Corriendo',comentario:'—'};
+  if(seg.tipo==='detenida') return {motivo:'⏹ Línea detenida',comentario:'Lapso entre detención y reanudación'};
+  if(seg.comentario) return {motivo:seg.reason_code||LBL[seg.tipo],comentario:seg.comentario};
+  if(seg.reason_code && seg.reason_code.indexOf(' — ')>-1){
+    var idx=seg.reason_code.indexOf(' — ');
+    return {motivo:seg.reason_code.slice(0,idx),comentario:seg.reason_code.slice(idx+3)};
+  }
+  return {motivo:seg.reason_code||LBL[seg.tipo],comentario:'—'};
+}
+function calcKPIsLinea(evsList, tsI, ahora){
+  var tC=0,tPNP=0,tPP=0,tI=0,curC=tsI;
+  evsList.forEach(e=>{
+    var i=Math.max(e.ts_inicio,tsI),f=e.ts_fin?Math.min(e.ts_fin,ahora):ahora,d=Math.max(0,f-i);
+    if(i>curC) tC+=(i-curC);
+    if(e.tipo==='corriendo')tC+=d;else if(e.tipo==='pnp')tPNP+=d;else if(e.tipo==='pp')tPP+=d;else if(e.tipo==='idle')tI+=d;// 'detenida' excluido de KPIs
+    curC=Math.max(curC,f);
+  });
+  if(curC<ahora) tC+=(ahora-curC);
+  var tOcup=tC+tPNP+tPP;
+  return {
+    AI: tOcup>0?Math.round(tC/tOcup*100):100,
+    PNP: tOcup>0?Math.round(tPNP/tOcup*100):0,
+    PP: tOcup>0?Math.round(tPP/tOcup*100):0
+  };
+}
+function sem(d){var dt=new Date(d);dt.setHours(0,0,0,0);var j=new Date(dt.getFullYear(),0,1);return Math.ceil(((dt-j)/86400000+j.getDay()+1)/7);}
+function fmtFecha(ts){var d=new Date(ts);var dd=String(d.getDate()).padStart(2,'0'),mm=String(d.getMonth()+1).padStart(2,'0'),yy=String(d.getFullYear()).slice(2);return dd+mm+yy;}
+async function genFolio(lineaId){
+  // Buscar último folio del día para esta línea
+  var h=hoy();
+  var rows=await db('ai_ordenes','GET',null,'linea_id=eq.'+lineaId+'&fecha=eq.'+h+'&order=folio.desc&limit=1');
+  var prefix=fmtFecha(Date.now());
+  var siguiente=1;
+  if(rows&&rows.length){
+    var ultimo=rows[0].folio;
+    var partes=ultimo.split('-');
+    if(partes.length===2) siguiente=parseInt(partes[1])+1;
+  }
+  return prefix+'-'+String(siguiente).padStart(5,'0');
+}
+
+function modal(titulo,body,onOk,color,label){
+  var m=document.createElement('div');
+  m.className='m-modal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  m.innerHTML='<div style="background:#fff;border-radius:22px 22px 0 0;padding:28px 20px 40px;width:100%;max-width:480px;max-height:85vh;overflow-y:auto">'
+    +'<div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 20px"></div>'
+    +'<div style="font-size:16px;font-weight:900;color:#1a3c5e;margin-bottom:16px">'+titulo+'</div>'
+    +body
+    +'<div style="display:flex;gap:10px;margin-top:16px">'
+    +'<button id="m-cancel" style="flex:1;padding:14px;background:#f3f4f6;border:none;border-radius:12px;cursor:pointer;font-weight:700;font-family:Nunito,sans-serif">Cancelar</button>'
+    +(onOk?'<button id="m-ok" style="flex:2;padding:14px;background:'+(color||'#16a34a')+';color:#fff;border:none;border-radius:12px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">'+(label||'Guardar')+'</button>':'')
+    +'</div></div>';
+  document.body.appendChild(m);
+  m.querySelector('#m-cancel').onclick=()=>m.remove();
+  if(onOk) m.querySelector('#m-ok').onclick=()=>onOk(m);
+  return m;
+}
+
+// ── LOGIN ─────────────────────────────────────────────────────
+async function doLogin(){
+  var u=document.getElementById('l-user').value.trim();
+  var p=document.getElementById('l-pass').value.trim();
+  var err=document.getElementById('l-err');
+  err.style.display='none';
+  if(!u||!p){err.textContent='Ingresa usuario y contraseña';err.style.display='block';return;}
+  var rows=await db('ai_usuarios','GET',null,'username=eq.'+encodeURIComponent(u)+'&activo=eq.true&limit=1');
+  if(!rows||!rows.length){err.textContent='Usuario no encontrado';err.style.display='block';return;}
+  var usr=rows[0];
+  if(usr.password!==p){err.textContent='Contraseña incorrecta';err.style.display='block';return;}
+  ME={id:usr.id,nombre:usr.nombre,rol:usr.rol,username:usr.username};
+  localStorage.setItem('ai_me',JSON.stringify(ME));
+  iniciarSesion();
+}
+function doLogout(){
+  localStorage.removeItem('ai_me');
+  ME=null;
+  if(TIMER) clearInterval(TIMER);
+  go('s-login');
+}
+function iniciarSesion(){
+  var esAdmin=ME.rol==='admin'||ME.rol==='super';
+  document.getElementById('btn-cfg').style.display=esAdmin?'':'none';
+  document.getElementById('btn-admin-usr').style.display=esAdmin?'':'none';
+  document.getElementById('btn-home-admin').style.display=esAdmin?'':'none';
+  go('s-home');
+  iniciarMonitorChecklists();
+}
+function irDashboard(){
+  cargarLista();
+}
+async function irConsultas(){
+  go('s-consultas');
+  var sel=document.getElementById('consultas-sel');
+  var lin=await db('ai_lineas','GET',null,'order=nombre.asc');
+  LINEAS=lin||LINEAS;
+  sel.innerHTML='<option value="">— Elige una línea —</option>'+(lin||[]).map(l=>'<option value="'+l.id+'">'+l.nombre+'</option>').join('');
+  sel.value='';
+}
+function irConsultaLinea(id){
+  ORIGEN_LINEA='consultas';
+  abrirLinea(id);
+}
+async function irArrancar(){
+  go('s-arrancar');
+  var sel=document.getElementById('arrancar-sel');
+  var msg=document.getElementById('arrancar-msg');
+  var [lin,ords]=await Promise.all([
+    db('ai_lineas','GET',null,'activa=eq.true&order=nombre.asc'),
+    db('ai_ordenes','GET',null,'estado=eq.abierta')
+  ]);
+  LINEAS=lin||LINEAS;
+  // Excluir solo líneas CON ORDEN ACTIVA Y NO DETENIDA (detenida_en is null = corriendo ahora)
+  var enCurso=new Set((ords||[]).filter(o=>!o.detenida_en).map(o=>o.linea_id));
+  var disponibles=(lin||[]).filter(l=>!enCurso.has(l.id));
+  var conOrdenDetenida=new Set((ords||[]).filter(o=>o.detenida_en).map(o=>o.linea_id));
+  sel.innerHTML='<option value="">— Elige una línea —</option>'+disponibles.map(l=>{
+    var detenida=conOrdenDetenida.has(l.id);
+    return '<option value="'+l.id+'">'+(detenida?'⏸ ':'')+l.nombre+(detenida?' (orden detenida — pendiente CTEC)':'')+'</option>';
+  }).join('');
+  sel.value='';
+  msg.textContent=disponibles.length?'':'Todas las líneas tienen una orden corriendo. Ve a Dashboard para verlas.';
+}
+function irArrancarLinea(id){
+  ORIGEN_LINEA='arrancar';
+  abrirLinea(id);
+}
+function volverDesdeLinea(){
+  go(ORIGEN_LINEA==='consultas'?'s-consultas':ORIGEN_LINEA==='arrancar'?'s-arrancar':'s-lista');
+}
+
+// ── LISTA DE LÍNEAS ───────────────────────────────────────────
+async function cargarLista(){
+  if(TIMER) clearInterval(TIMER);
+  go('s-lista');
+  var t=turno(), h=hoy(), ahora=Date.now();
+  var diaInicio=new Date(h+'T06:30:00').getTime();
+  document.getElementById('lista-sub').textContent='Turno '+t+' · '+new Date().toLocaleDateString('es-MX',{weekday:'long',day:'2-digit',month:'long'});
+  var cont=document.getElementById('lista-cont');
+  cont.innerHTML='<div style="text-align:center;padding:40px;color:#9ca3af">Cargando...</div>';
+
+  // Filtro activa/inactiva (default: solo activas)
+  var filtroActiva=window._dashFiltro||'activa';
+
+  var qLineas=filtroActiva==='todas'?'order=nombre.asc':filtroActiva==='inactiva'?'activa=eq.false&order=nombre.asc':'activa=eq.true&order=nombre.asc';
+  var [lin,evsAbiertos,ordsAbiertas]=await Promise.all([
+    db('ai_lineas','GET',null,qLineas),
+    db('ai_eventos','GET',null,'ts_fin=is.null'),
+    db('ai_ordenes','GET',null,'estado=eq.abierta')
+  ]);
+  LINEAS=lin||[];
+
+  // Construir lookup de órdenes por línea
+  var ordenPorLinea={};
+  (ordsAbiertas||[]).forEach(o=>{ordenPorLinea[o.linea_id]=o;});
+
+  // Filtros visuales
+  var filtroHTML=`<div style="display:flex;gap:6px;padding:0 16px 10px">
+    ${['activa','inactiva','todas'].map(f=>`<button onclick="window._dashFiltro='${f}';cargarLista()" style="padding:5px 12px;border:2px solid #000;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;background:${filtroActiva===f?'#0d2144':'#fff'};color:${filtroActiva===f?'#fff':'#000'}">${{activa:'Activas',inactiva:'Inactivas',todas:'Todas'}[f]}</button>`).join('')}
+  </div>`;
+
+  if(!LINEAS.length){
+    cont.innerHTML=filtroHTML+'<div class="card" style="text-align:center;padding:32px"><div style="font-size:40px">🏭</div><div style="font-weight:800;margin-top:10px">Sin líneas en este filtro</div></div>';
+    TIMER=setInterval(cargarLista,30000);
+    return;
+  }
+
+  // Cargar eventos del día solo para líneas con orden activa corriendo
+  var idsConOrden=Object.keys(ordenPorLinea).filter(id=>!ordenPorLinea[id].detenida_en);
+  var evsDia=[];
+  if(idsConOrden.length){
+    evsDia=await db('ai_eventos','GET',null,'linea_id=in.('+idsConOrden.join(',')+')&ts_inicio=gte.'+diaInicio+'&order=ts_inicio.asc')||[];
+  }
+
+  cont.innerHTML=filtroHTML+LINEAS.map(l=>{
+    var ord=ordenPorLinea[l.id];
+    var tieneOrdenActiva=ord&&!ord.detenida_en;
+    var tieneOrdenDetenida=ord&&ord.detenida_en;
+    var sinOrden=!ord;
+
+    // Determinar estado de la línea
+    var ev=(evsAbiertos||[]).find(e=>e.linea_id===l.id);
+    var tipo=tieneOrdenActiva?(ev?ev.tipo:'corriendo'):(tieneOrdenDetenida?'detenida':'sinorden');
+    var colEstado={'corriendo':'#16a34a','pnp':'#dc2626','pp':'#ca8a04','idle':'#9ca3af','detenida':'#1a1a1a','sinorden':'#6b7280'}[tipo]||'#6b7280';
+    var lblEstado={'corriendo':'▶ Corriendo','pnp':'🔴 PNP','pp':'🟡 PP','idle':'⬜ Idle','detenida':'⏹ Detenida','sinorden':'— Sin orden'}[tipo]||tipo;
+
+    // KPIs solo cuando hay orden activa corriendo
+    var kpisHTML='<div style="flex:1;display:flex;align-items:center;justify-content:center;padding:0 10px"><div style="font-size:11px;color:#9ca3af;text-align:center">'+(sinOrden?'Sin orden':'Detenida')+'</div></div>';
+    if(tieneOrdenActiva){
+      var winIni=Math.max(ord.ts_inicio,diaInicio);
+      var evsL=evsDia.filter(e=>e.linea_id===l.id);
+      var k=calcKPIsLinea(evsL,winIni,ahora);
+      var oAI=l.objetivo_ai!=null?l.objetivo_ai:85;
+      var oPP=l.objetivo_pp!=null?l.objetivo_pp:15;
+      var oPNP=l.objetivo_pnp!=null?l.objetivo_pnp:10;
+      kpisHTML=`<div style="flex:1;display:flex">
+        <div style="flex:1;background:${k.AI>=oAI?'#16a34a':'#dc2626'};display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff">
+          <div style="font-size:7px;font-weight:700;opacity:.85">AI</div>
+          <div style="font-size:14px;font-weight:900">${k.AI}%</div>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column">
+          <div style="flex:1;background:${k.PP<=oPP?'#16a34a':'#dc2626'};display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff;border-bottom:1px solid rgba(255,255,255,.35)">
+            <div style="font-size:6px;font-weight:700;opacity:.85">PP</div>
+            <div style="font-size:11px;font-weight:900">${k.PP}%</div>
+          </div>
+          <div style="flex:1;background:${k.PNP<=oPNP?'#16a34a':'#dc2626'};display:flex;flex-direction:column;align-items:center;justify-content:center;color:#fff">
+            <div style="font-size:6px;font-weight:700;opacity:.85">PNP</div>
+            <div style="font-size:11px;font-weight:900">${k.PNP}%</div>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    return `<div onclick="ORIGEN_LINEA='dashboard';abrirLinea('${l.id}')" style="background:#fff;border-radius:16px;margin-bottom:12px;box-shadow:0 2px 12px rgba(0,0,0,.08);overflow:hidden;cursor:pointer;opacity:${l.activa?1:.7}">
+      <div style="padding:10px 14px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #f3f4f6">
+        <div style="font-weight:800;font-size:14px">${l.nombre}${!l.activa?'<span style="font-size:10px;color:#9ca3af;margin-left:6px">Inactiva</span>':''}</div>
+        <div style="background:${colEstado};color:#fff;border-radius:8px;padding:3px 10px;font-size:11px;font-weight:700">${lblEstado}</div>
+      </div>
+      <div style="display:flex;height:80px">
+        <div style="flex:3;display:flex;flex-direction:column;justify-content:center;padding:0 14px">
+          <div style="font-size:10px;color:#9ca3af;font-weight:700">Orden en curso</div>
+          <div style="font-size:14px;font-weight:900;color:#1a3c5e">${ord?ord.folio:'—'}</div>
+        </div>
+        ${kpisHTML}
+      </div>
+    </div>`;
+  }).join('');
+
+  TIMER=setInterval(cargarLista,30000);
+}
+
+// ── PANTALLA DE LÍNEA ─────────────────────────────────────────
+async function abrirLinea(id){
+  LINEA_ID=id;
+  if(TIMER) clearInterval(TIMER);
+  go('s-linea');
+  window.AI_F_DIA='hoy';
+  window.AI_F_MES=new Date().getMonth()+1;
+  window.AI_F_AÑO=new Date().getFullYear();
+  window.AI_F_TURNO='turno_actual';
+  window.AI_F_EVTIPO='todos';
+  var l=LINEAS.find(x=>x.id===id);
+  document.getElementById('linea-title').textContent=l?l.nombre:'—';
+  // Cargar orden activa desde localStorage o Supabase
+  var savedOrden=localStorage.getItem('ai_orden_'+id);
+  if(savedOrden){try{ORDEN_ACTIVA=JSON.parse(savedOrden);}catch(e){ORDEN_ACTIVA=null;}}
+  if(!ORDEN_ACTIVA){
+    var rows=await db('ai_ordenes','GET',null,'linea_id=eq.'+id+'&estado=eq.abierta&order=ts_inicio.desc&limit=1');
+    ORDEN_ACTIVA=rows&&rows.length?rows[0]:null;
+  }
+  // Sincronizar _tsF desde detenida_en (persiste entre sesiones y dispositivos)
+  if(ORDEN_ACTIVA&&ORDEN_ACTIVA.detenida_en&&!ORDEN_ACTIVA._tsF){
+    ORDEN_ACTIVA._tsF=ORDEN_ACTIVA.detenida_en;
+    localStorage.setItem('ai_orden_'+id,JSON.stringify(ORDEN_ACTIVA));
+  }
+  await renderLinea();
+  TIMER=setInterval(renderLinea,30000);
+}
+
+async function renderLinea(){
+  var cont=document.getElementById('linea-cont');
+  var l=LINEAS.find(x=>x.id===LINEA_ID);
+  if(!cont||!l) return;
+
+  // ── Filtros ──────────────────────────────────────────────────
+  var fT=window.AI_F_TURNO||'turno_actual';
+  var fDia=window.AI_F_DIA||'hoy';
+  var fM=window.AI_F_MES||(new Date().getMonth()+1);
+  var fA=window.AI_F_AÑO||new Date().getFullYear();
+  var hFiltro;
+  if(fDia==='hoy'){
+    hFiltro=hoy();
+    fA=new Date().getFullYear();
+    fM=new Date().getMonth()+1;
+  }else{
+    var mesNum=(fM==='todos'?new Date().getMonth()+1:fM);
+    hFiltro=fA+'-'+String(mesNum).padStart(2,'0')+'-'+String(fDia).padStart(2,'0');
+  }
+  var esHoy=hFiltro===hoy();
+  var esSemana=fT==='semana';
+  window.AI_MODO_HISTORIAL=!esHoy&&!esSemana;
+  var t=fT==='turno_actual'?turno():(fT==='dia'||fT==='semana'?turno():fT);
+  var tsI, tsF;
+  if(esSemana){
+    var lunes=lunesDeEstaFecha(fA,fM,fDia==='hoy'?new Date().getDate():fDia);
+    tsI=new Date(lunes.getFullYear(),lunes.getMonth(),lunes.getDate(),6,30,0).getTime();
+    tsF=tsI+7*24*3600*1000;
+  } else if(fT==='dia'){
+    tsI=new Date(hFiltro+'T06:30:00').getTime();
+    tsF=tsI+24*3600*1000;
+  } else {
+    tsI=tIni(t,hFiltro);
+    tsF=tsI+8*3600*1000;
+  }
+  // Si la orden está detenida, los KPIs y la barra se calculan hasta el momento de detención
+  var tsDetencion=ORDEN_ACTIVA&&(ORDEN_ACTIVA._tsF||ORDEN_ACTIVA.detenida_en)||null;
+  var ahora=Math.min(Date.now(),tsF,tsDetencion&&tsDetencion>tsI?tsDetencion:Date.now());
+  var dur=tsF-tsI;
+
+  // ── Cargar datos ─────────────────────────────────────────────
+  var [evs,pzs]=await Promise.all([
+    db('ai_eventos','GET',null,'linea_id=eq.'+LINEA_ID+'&ts_inicio=gte.'+(tsI-9*3600000)+'&ts_inicio=lt.'+tsF+'&order=ts_inicio.asc'),
+    db('ai_piezas','GET',null,'linea_id=eq.'+LINEA_ID+'&fecha=eq.'+hFiltro+(fT==='dia'?'':'&turno=eq.'+t))
+  ]);
+  evs=evs||[]; pzs=pzs||[];
+  var evAct=esHoy?(evs.find(e=>!e.ts_fin)||null):null;
+  var tipoAct=evAct?evAct.tipo:'corriendo';
+  // Si la orden está detenida, forzar estado visual a 'detenida' (negro)
+  if(tsDetencion&&!(ORDEN_ACTIVA&&ORDEN_ACTIVA.estado==='cerrada')) tipoAct='detenida';
+
+  // ── Cálculos (tiempo ocupado excluye idle) ───────────────────
+  // tsI0: inicio efectivo de la orden (no acumular corriendo antes de que arrancara)
+  var tsI0=ORDEN_ACTIVA&&ORDEN_ACTIVA.ts_inicio&&ORDEN_ACTIVA.ts_inicio>tsI?ORDEN_ACTIVA.ts_inicio:tsI;
+  var tC=0,tPNP=0,tPP=0,tI=0,curC=tsI0;
+  evs.forEach(e=>{
+    var i=Math.max(e.ts_inicio,tsI0),f=e.ts_fin?Math.min(e.ts_fin,ahora):ahora,d=Math.max(0,f-i);
+    if(i>curC) tC+=(i-curC); // hueco sin evento = corriendo
+    if(e.tipo==='corriendo')tC+=d;else if(e.tipo==='pnp')tPNP+=d;
+    else if(e.tipo==='pp')tPP+=d;else if(e.tipo==='idle')tI+=d;// 'detenida' excluido
+    curC=Math.max(curC,f);
+  });
+  if(curC<ahora) tC+=(ahora-curC); // hueco final sin evento = corriendo
+  var tOcup=tC+tPNP+tPP;
+  var AI=tOcup>0?Math.round(tC/tOcup*100):0;
+  var PNP=tOcup>0?Math.round(tPNP/tOcup*100):0;
+  var PP=tOcup>0?Math.round(tPP/tOcup*100):0;
+  var tCorriendoHr=tC/3600000; // solo tiempo corriendo para calcular piezas esperadas
+  var pzEsperadas=Math.round((l.target_hora||0)*tCorriendoHr);
+  var pzRegistradas=pzs.reduce((s,p)=>s+p.piezas,0);
+  var pzDiff=pzRegistradas-pzEsperadas;
+  var diffMin=l.target_hora>0?Math.round(Math.abs(pzDiff)/l.target_hora*60):0;
+  var diffLabel=pzDiff>=0?'+'+diffMin+' min':'-'+diffMin+' min';
+  var diffCol=pzDiff>=0?'#16a34a':'#dc2626';
+  var unidad=l.unidad||'pzs';
+
+  // AI real si orden cerrada
+  var ordenCerrada=esHoy&&ORDEN_ACTIVA&&ORDEN_ACTIVA.estado==='cerrada';
+  var detenida=esHoy&&!!tsDetencion&&!ordenCerrada;
+  var aiMostrar=ordenCerrada&&ORDEN_ACTIVA.ai_real!=null?ORDEN_ACTIVA.ai_real:AI;
+  var pzTotalVal=esHoy&&ORDEN_ACTIVA&&ORDEN_ACTIVA.piezas_total?ORDEN_ACTIVA.piezas_total:pzRegistradas;
+
+  // ── Topbar con color de estado ───────────────────────────────
+  document.getElementById('linea-title').textContent=(l?l.nombre:'—')+(ORDEN_ACTIVA?' · '+(ORDEN_ACTIVA.folio||''):'');
+  document.getElementById('linea-sub').textContent=fT==='turno_actual'?'Turno '+turno():fT==='dia'?'Día completo':'Turno '+fT;
+  var topbar=document.querySelector('#s-linea .topbar');
+  var colTopbar=tipoAct==='detenida'?'#16a34a':tipoAct==='idle'?'#6b7280':COL[tipoAct]||COL.corriendo;
+  if(topbar) topbar.style.background='linear-gradient(135deg,'+colTopbar+','+colTopbar+'cc)';
+
+  // ── Segmentos (eventos reales + huecos 'corriendo') ───────────
+  // Si no hay orden activa, la barra no debe mostrar corriendo sintético (línea parada)
+  // tsIEfectivo: la orden empieza desde cuando se arrancó, no desde las 6:30
+  var tsIEfectivo=ORDEN_ACTIVA&&ORDEN_ACTIVA.ts_inicio&&ORDEN_ACTIVA.ts_inicio>tsI?ORDEN_ACTIVA.ts_inicio:tsI;
+  var ahora_barra=(!ORDEN_ACTIVA)?tsI:(detenida&&tsDetencion?Math.min(tsDetencion,tsF):Math.min(Date.now(),tsF));
+  var segmentos=segmentosConGaps(evs,tsIEfectivo,ahora_barra);
+  window.AI_SEGS=segmentos;
+
+  // ── Barra de tiempo ──────────────────────────────────────────
+  var nH=esSemana?7*24:(fT==='dia'?24:8), marcas='';
+  // Prefijo gris antes del inicio real de la orden
+  var prefijoGris=tsIEfectivo>tsI?((tsIEfectivo-tsI)/dur*100).toFixed(2)+'%':'0%';
+  var segs=(tsIEfectivo>tsI?'<div style="width:'+prefijoGris+';height:100%;background:#e5e7eb;flex-shrink:0"></div>':'')+segmentos.map(seg=>{
+    var i=Math.max(seg.ts_inicio,tsIEfectivo), f=Math.min(seg._dfin,ahora_barra);
+    var p=Math.max(0,((f-i)/dur*100));
+    if(p<0.01) return '';
+    return '<div onmouseenter="mostrarTipEvento(event,\''+seg.id+'\')" onmousemove="posicionarTip(event)" onmouseleave="ocultarTipEvento()" onclick="ocultarTipEvento();abrirEditorSegmento(\''+seg.id+'\')" style="width:'+p.toFixed(2)+'%;height:100%;background:'+COL[seg.tipo]+';cursor:pointer;flex-shrink:0" onmouseover="this.style.filter=\'brightness(.8)\'" onmouseout="this.style.filter=\'\'"></div>';
+  }).join('');
+  if(ahora_barra<tsF){var p=((tsF-ahora_barra)/dur*100).toFixed(2);segs+='<div style="flex:1;min-width:'+p+'%;height:100%;background:#e5e7eb"></div>';}
+  // Marcas de tiempo: 2 dígitos de hora; en semana solo mostrar nombre del día
+  var diasSem=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
+  if(esSemana){
+    for(var i=0;i<=7;i++){var p=(i/7*100).toFixed(1),dd=new Date(tsI+i*24*3600000);
+      var lbl=i<7?diasSem[i]+'<br>'+dd.getDate():'';
+      marcas+='<div style="position:absolute;left:'+p+'%;font-size:8px;color:#9ca3af;transform:translateX(-50%);text-align:center;line-height:1.3">'+lbl+'</div>';}
+  }else{
+    var paso=nH>8?2:1; // en día completo solo marcar cada 2 horas
+    for(var i=0;i<=nH;i+=paso){var p=(i/nH*100).toFixed(1),hh=new Date(tsI+i*3600000).getHours();
+      marcas+='<div style="position:absolute;left:'+p+'%;font-size:9px;color:#9ca3af;transform:translateX(-50%)">'+String(hh).padStart(2,'0')+'</div>';}
+  }
+
+  // ── Gráfica piezas ───────────────────────────────────────────
+  var hrs=[],mx=Math.round((l.target_hora||1)*1.1); // máximo = target + 10%
+  for(var i=0;i<nH;i++){var ts_h=tsI+i*3600000,hh=new Date(ts_h).getHours(),p=pzs.find(x=>x.hora===hh)||null;hrs.push({h:hh,v:p?p.piezas:null,tn:turnoDe(ts_h)});}
+  var pctTarget=Math.min(98,Math.max(2,(l.target_hora||0)/mx*100)).toFixed(1);
+  var lblsTop=hrs.map(({v})=>'<div style="flex:1;text-align:center;font-size:9px;color:#374151;font-weight:700;height:14px">'+( v!==null?v:'' )+'</div>').join('');
+  var barras=hrs.map(({h,v,tn})=>{
+    var pct=v!==null?Math.min(100,v/mx*100).toFixed(1):0;
+    var col=v===null?'#e5e7eb':v>=(l.target_hora||0)?'#16a34a':'#dc2626';
+    return '<div onclick="editarPiezas('+h+','+v+',\''+tn+'\')" style="flex:1;height:100%;display:flex;align-items:flex-end;cursor:pointer">'
+      +'<div style="width:100%;background:'+col+';border-radius:3px 3px 0 0;height:'+pct+'%;min-height:'+(v?3:0)+'px"></div></div>';
+  }).join('');
+  var lblsBottom=hrs.map(({h})=>'<div style="flex:1;text-align:center;font-size:9px;color:#9ca3af">'+h+':30</div>').join('');
+
+  // ── Tabla eventos (con huecos 'corriendo' y filtro) ───────────
+  var fEvTipo=window.AI_F_EVTIPO||'todos';
+  var segVisibles=fEvTipo==='todos'?segmentos:segmentos.filter(s=>s.tipo===fEvTipo);
+  var tbEv=segVisibles.slice().reverse().map(seg=>{
+    var pc=parseMotivoComentario(seg);
+    var finTxt=seg.ts_fin?new Date(seg.ts_fin).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}):'En curso';
+    var durTxt=seg.ts_fin?Math.round((seg.ts_fin-seg.ts_inicio)/60000)+' min':'En curso';
+    var modificado=!seg.sintetico&&seg.historial&&seg.historial.length>0;
+    var td='padding:5px 6px;font-size:11px;vertical-align:middle;';
+    return '<tr style="border-bottom:1px solid #f3f4f6;cursor:pointer" onclick="infoEvento(\''+seg.id+'\')">'
+      +'<td style="'+td+'text-align:center" onclick="event.stopPropagation()"><input type="checkbox" class="ev-chk" data-id="'+seg.id+'" style="width:16px;height:16px;cursor:pointer"></td>'
+      +'<td style="'+td+'"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:'+COL[seg.tipo]+';margin-right:4px"></span>'+pc.motivo+'</td>'
+      +'<td style="'+td+'color:#6b7280">'+pc.comentario+'</td>'
+      +'<td style="'+td+'">'+(modificado?'<span style="background:#fef08a;color:#854d0e;border-radius:5px;padding:1px 6px;font-size:10px;font-weight:700">Modificado</span>':'—')+'</td>'
+      +'<td style="'+td+'color:#6b7280">'+new Date(seg.ts_inicio).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+'</td>'
+      +'<td style="'+td+'color:#6b7280">'+finTxt+'</td>'
+      +'<td style="'+td+'color:#6b7280">'+durTxt+'</td>'
+      +'</tr>';
+  }).join('');
+
+  // ── Render HTML ───────────────────────────────────────────────
+  var mesesNom=['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+  var mesesFull=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  // Etiqueta del botón de fecha unificado
+  var fechaBtnLbl;
+  if(fDia==='hoy'){
+    var dh=new Date();
+    fechaBtnLbl='📅 '+dh.getDate()+' '+mesesFull[dh.getMonth()]+' '+dh.getFullYear();
+  } else {
+    fechaBtnLbl='📅 '+(typeof fDia==='number'?fDia:'?')+' '+(typeof fM==='number'?mesesFull[fM-1]:'?')+' '+fA;
+  }
+  cont.innerHTML=
+    // ── Línea única: Fecha + Navegación + Turno ───────────────
+    '<div style="display:flex;gap:5px;padding:8px 16px 0;align-items:center;flex-wrap:nowrap">'
+    +'<button onclick="abrirPopupFecha(this)" style="flex:1;min-width:0;padding:7px 8px;border:2px solid #000;border-radius:9px;font-family:Nunito,sans-serif;font-size:.78rem;font-weight:700;background:#fff;cursor:pointer;color:#000;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+fechaBtnLbl+' ▾</button>'
+    // ── Navegación D / T ──────────────────────────────────
+    +'<div style="display:flex;gap:2px;flex-shrink:0">'
+    +'<button onclick="navFecha(-1)" onmousedown="this.style.transform=\'scale(.88)\';this.style.background=\'#e5e7eb\'" onmouseup="this.style.transform=\'\';this.style.background=\'#fff\'" onmouseleave="this.style.transform=\'\';this.style.background=\'#fff\'" style="padding:5px 9px;background:#fff;color:#000;border:2px solid #000;border-radius:7px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;transition:transform .1s;line-height:1">◄</button>'
+    +'<button onclick="setNavMode(\'s\')" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='s'?'#7f1d1d':'#fff')+';color:'+(window.AI_NAV_MODE==='s'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">S</button>'
+    +'<button onclick="setNavMode(\'d\')" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='d'?'#7f1d1d':'#fff')+';color:'+(window.AI_NAV_MODE==='d'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">D</button>'
+    +'<button onclick="setNavMode(\'t\')" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='t'?'#7f1d1d':'#fff')+';color:'+(window.AI_NAV_MODE==='t'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">T</button>'
+    +'<button onclick="navFecha(1)" onmousedown="this.style.transform=\'scale(.88)\';this.style.background=\'#e5e7eb\'" onmouseup="this.style.transform=\'\';this.style.background=\'#fff\'" onmouseleave="this.style.transform=\'\';this.style.background=\'#fff\'" style="padding:5px 9px;background:#fff;color:#000;border:2px solid #000;border-radius:7px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;transition:transform .1s;line-height:1">►</button>'
+    +'</div>'
+    +'<select onchange="window.AI_F_TURNO=this.value;renderLinea()" style="flex:1;min-width:0;padding:7px 4px;border:1.5px solid #e5e7eb;border-radius:9px;font-family:Nunito,sans-serif;font-size:.78rem;background:#fff"><option value="turno_actual"'+(fT==='turno_actual'?' selected':'')+'>Turno actual</option><option value="T1"'+(fT==='T1'?' selected':'')+'>T1</option><option value="T2"'+(fT==='T2'?' selected':'')+'>T2</option><option value="T3"'+(fT==='T3'?' selected':'')+'>T3</option><option value="dia"'+(fT==='dia'?' selected':'')+'>Día completo</option></select>'
+    +'</div>'
+    // KPIs — 4 cuadros
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px;padding:8px 16px">'
+    +'<div style="background:'+(aiMostrar>=(l.objetivo_ai!=null?l.objetivo_ai:85)?'#16a34a':'#dc2626')+';border-radius:10px;padding:10px;color:#fff;text-align:center"><div style="font-size:8px;font-weight:700;opacity:.85">Asset Intensity</div><div style="font-size:20px;font-weight:900;line-height:1.1">'+ aiMostrar +'%</div>'+(ordenCerrada?'<div style="font-size:8px;opacity:.8">Real</div>':'')+'</div>'
+    +'<div style="background:#dc2626;border-radius:10px;padding:10px;color:#fff;text-align:center"><div style="font-size:8px;font-weight:700;opacity:.85">%PNP</div><div style="font-size:20px;font-weight:900;line-height:1.1">'+PNP+'%</div></div>'
+    +'<div style="background:#ca8a04;border-radius:10px;padding:10px;color:#fff;text-align:center"><div style="font-size:8px;font-weight:700;opacity:.85">%PP</div><div style="font-size:20px;font-weight:900;line-height:1.1">'+PP+'%</div></div>'
+    +'<div style="background:'+diffCol+';border-radius:10px;padding:10px;color:#fff;text-align:center"><div style="font-size:8px;font-weight:700;opacity:.85">Piezas</div><div style="font-size:17px;font-weight:900;line-height:1.1">'+ diffLabel +'</div><div style="font-size:7px;opacity:.8">'+ pzRegistradas +'/'+ pzEsperadas +'</div></div>'
+    +'</div>'
+    // Botones
+    +(esHoy?'<div style="padding:0 16px 8px"><div style="display:flex;gap:5px;align-items:center">'
+    +'<div style="width:34px;height:34px;border-radius:50%;background:'+COL[tipoAct]+';flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:15px">'+ICO[tipoAct]+'</div>'
+    +'<button onclick="accionPlay()" style="flex:2;padding:8px 4px;background:#16a34a;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:10px;cursor:pointer;font-family:Nunito,sans-serif;opacity:'+(tipoAct==='corriendo'?1:.65)+'">▶ Corriendo</button>'
+    +'<button onclick="pararLinea()" style="flex:2;padding:8px 4px;background:#1a1a1a;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:10px;cursor:pointer;font-family:Nunito,sans-serif">⏹ Detener</button>'
+    +'<button onclick="selRC(\'pnp\')" style="flex:1;padding:8px 4px;background:#dc2626;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:10px;cursor:pointer;font-family:Nunito,sans-serif;opacity:'+(tipoAct==='pnp'?1:.65)+'">PNP</button>'
+    +'<button onclick="selRC(\'pp\')" style="flex:1;padding:8px 4px;background:#ca8a04;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:10px;cursor:pointer;font-family:Nunito,sans-serif;opacity:'+(tipoAct==='pp'?1:.65)+'">PP</button>'
+    +'<button onclick="selRC(\'idle\')" style="flex:1;padding:8px 4px;background:#9ca3af;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:10px;cursor:pointer;font-family:Nunito,sans-serif;opacity:'+(tipoAct==='idle'?1:.65)+'">Idle</button>'
+    +(evAct?'<div style="font-size:9px;color:#6b7280;min-width:28px;text-align:center">'+fmtD(Date.now()-evAct.ts_inicio)+'</div>':'')
+    +'</div></div>'
+    :'<div style="padding:0 16px 8px"><div style="background:#fef3c7;color:#92400e;border-radius:9px;padding:8px 12px;font-size:11px;font-weight:700;text-align:center">📖 Modo consulta — viendo historial de '+hFiltro+' (solo lectura)</div></div>')
+    // Barra de tiempo
+    +'<div style="padding:0 16px 8px">'
+    +'<div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:3px">Línea de tiempo'+(ORDEN_ACTIVA&&esHoy?' - Orden: '+ORDEN_ACTIVA.folio:'')+'</div>'
+    +'<div style="height:52px;border-radius:10px;overflow:hidden;display:flex;box-shadow:0 1px 4px rgba(0,0,0,.15)">'+segs+'</div>'
+    +'<div style="position:relative;height:16px;margin-top:1px">'+marcas+'</div>'
+    +'</div>'
+    // Gráfica piezas
+    +'<div style="padding:0 16px 10px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'
+    +'<div style="font-size:10px;font-weight:700;color:#374151">'+( unidad==='kg'?'Kg':'Piezas' )+' por hora · Total: '+(esHoy&&(detenida||ordenCerrada)?'<input id="pz-total-inp" type="number" value="'+pzTotalVal+'" '+(ordenCerrada?'disabled':'')+' style="width:75px;padding:3px 6px;border:1.5px solid #0891b2;border-radius:6px;font-family:Nunito,sans-serif;font-size:11px;font-weight:700;text-align:center">     '+ unidad :'<b>'+pzRegistradas+' '+unidad+'</b>')+'</div>'
+    +'<div style="display:flex;gap:5px">'
+    +(esHoy&&detenida?'<button onclick="guardarOrden()" style="padding:4px 10px;background:#0891b2;color:#fff;border:none;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">💾 Guardar</button><button onclick="cerrarTecnico()" style="padding:4px 10px;background:#7c3aed;color:#fff;border:none;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">CTEC</button>':'')
+    +(esHoy&&!detenida&&!ordenCerrada?'<button onclick="regPiezas()" style="padding:4px 10px;background:#0d2144;color:#fff;border:none;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">+ Registrar</button>':'')
+    +'</div></div>'
+    +'<div style="background:#f9fafb;border-radius:12px;padding:10px">'
+    +'<div style="display:flex;gap:3px">'+lblsTop+'</div>'
+    +'<div style="position:relative;height:150px;display:flex;gap:3px;margin-top:1px">'+barras
+    +'<div style="position:absolute;bottom:'+pctTarget+'%;left:0;right:0;height:2px;background:#d97706;opacity:.9;pointer-events:none"></div>'
+    +'<div style="position:absolute;bottom:calc('+pctTarget+'% + 3px);right:4px;font-size:9px;color:#d97706;font-weight:700">'+l.target_hora+' '+unidad+'</div>'
+    +'</div>'
+    +'<div style="display:flex;gap:3px;margin-top:1px">'+lblsBottom+'</div>'
+    +'</div></div>'
+    // Tabla eventos
+    +'<div style="padding:0 16px 16px">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:5px;flex-wrap:wrap">'
+    +'<div style="display:flex;gap:5px">'
+    +'<button onclick="irLogsheet()" style="padding:4px 10px;background:#1a1a1a;color:#fff;border:none;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">📋 Logsheet</button>'
+    +'<button onclick="irSHO()" style="padding:4px 10px;background:#0891b2;color:#fff;border:none;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">⛑ SHO</button>'
+    +'</div>'
+    +'<div style="font-size:10px;font-weight:700;color:#374151">Eventos ('+ segVisibles.length +') · T.Ocupado: '+fmtD(tOcup)+'</div>'
+    +'<div style="display:flex;gap:5px">'
+    +'<select onchange="window.AI_F_EVTIPO=this.value;renderLinea()" style="padding:4px 6px;border:1.5px solid #e5e7eb;border-radius:7px;font-family:Nunito,sans-serif;font-size:.72rem;background:#fff">'
+    +[['todos','Todos'],['corriendo','Corriendo'],['pnp','PNP'],['pp','PP'],['idle','Idle']].map(([v,t])=>'<option value="'+v+'"'+(fEvTipo===v?' selected':'')+'>'+t+'</option>').join('')
+    +'</select>'
+    +'<button onclick="unirEventos()" style="padding:4px 10px;background:#7c3aed;color:#fff;border:none;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">🔗 Unir</button>'
+    +'<button onclick="partirEvento()" style="padding:4px 10px;background:#0891b2;color:#fff;border:none;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">✂️ Partir</button>'
+    +'</div></div>'
+    +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+    +'<thead><tr style="border-bottom:2px solid #e5e7eb">'
+    +'<th style="text-align:left;padding:5px 6px;font-size:10px;color:#6b7280;white-space:nowrap">Unir</th>'
+    +'<th style="text-align:left;padding:5px 6px;font-size:10px;color:#6b7280;white-space:nowrap">Motivo</th>'
+    +'<th style="text-align:left;padding:5px 6px;font-size:10px;color:#6b7280;white-space:nowrap">Comentario</th>'
+    +'<th style="text-align:left;padding:5px 6px;font-size:10px;color:#6b7280;white-space:nowrap">Reclasificado</th>'
+    +'<th style="text-align:left;padding:5px 6px;font-size:10px;color:#6b7280;white-space:nowrap">Inicio</th>'
+    +'<th style="text-align:left;padding:5px 6px;font-size:10px;color:#6b7280;white-space:nowrap">Final</th>'
+    +'<th style="text-align:left;padding:5px 6px;font-size:10px;color:#6b7280;white-space:nowrap">Duración</th>'
+    +'</tr></thead>'
+    +'<tbody>'+(tbEv||'<tr><td colspan="7" style="text-align:center;padding:16px;color:#9ca3af;font-size:11px">Sin eventos</td></tr>')+'</tbody></table></div></div>';
+}
+
+// ── PLAY — iniciar o continuar orden ─────────────────────────
+async function accionPlay(){
+  if(ORDEN_ACTIVA&&ORDEN_ACTIVA.estado==='abierta'&&!ORDEN_ACTIVA._tsF){
+    // Viene de PNP/PP/Idle sin haber presionado Detener: pasar directo a Corriendo
+    await cambiarEstado('corriendo');
+    return;
+  }
+  if(ORDEN_ACTIVA&&ORDEN_ACTIVA.estado==='abierta'){
+    // Se detuvo la línea con Detener: preguntar si continuar o nueva orden
+    var m=document.createElement('div');
+    m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+    m.innerHTML='<div style="background:#fff;border-radius:22px 22px 0 0;padding:28px 20px 40px;width:100%;max-width:480px">'
+      +'<div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 16px"></div>'
+      +'<div style="font-size:16px;font-weight:900;color:#1a3c5e;margin-bottom:4px">▶ Iniciar línea</div>'
+      +'<div style="font-size:13px;color:#6b7280;margin-bottom:20px">Orden activa: <b>'+ORDEN_ACTIVA.folio+'</b></div>'
+      +'<button onclick="this.closest(\'div\').parentElement.remove();continuarOrden()" style="width:100%;padding:14px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif;margin-bottom:10px">▶ Continuar misma orden</button>'
+      +'<button onclick="this.closest(\'div\').parentElement.remove();iniciarNuevaOrden()" style="width:100%;padding:14px;background:#0d2144;color:#fff;border:none;border-radius:12px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif;margin-bottom:10px">🆕 Nueva orden</button>'
+      +'<button onclick="this.closest(\'div\').parentElement.remove()" style="width:100%;padding:12px;background:#f3f4f6;border:none;border-radius:12px;cursor:pointer;font-weight:700;font-family:Nunito,sans-serif">Cancelar</button>'
+      +'</div>';
+    document.body.appendChild(m);
+    return;
+  }
+  await iniciarNuevaOrden();
+}
+
+// ── LOGSHEET ────────────────────────────────────────────────────
+var LS_CAT='checklist';
+var LS_CAT_COLS={checklist:{bg:'#1a1a1a',fg:'#fff'},cl:{bg:'#0d2144',fg:'#fff'},lil:{bg:'#16a34a',fg:'#000'},calidad:{bg:'#9333ea',fg:'#fff'},puntos_q:{bg:'#0891b2',fg:'#fff'}};
+var ORIGEN_LOGSHEET='s-linea';
+function volverDesdeLogsheet(){go(ORIGEN_LOGSHEET);}
+function irLogsheet(){
+  ORIGEN_LOGSHEET='s-linea';
+  var l=LINEAS.find(x=>x.id===LINEA_ID);
+  document.getElementById('ls-sub').textContent=l?l.nombre:'—';
+  var esAdmin=ME.rol==='admin'||ME.rol==='super';
+  var btnPlus=document.getElementById('ls-btn-add-cat');
+  if(btnPlus) btnPlus.style.display=esAdmin?'':'none';
+  go('s-logsheet');
+  LS_CAT='checklist';
+  actualizarTabsLS();
+  renderLogsheet();
+}
+function cambiarCategoriaLS(cat){
+  LS_CAT=cat;
+  actualizarTabsLS();
+  renderLogsheet();
+}
+async function actualizarTabsLS(){
+  // Colores de fijas
+  var fijas=['checklist','cl','lil','calidad','puntos_q'];
+  fijas.forEach(c=>{
+    var btn=document.getElementById('ls-tab-'+c);
+    if(!btn) return;
+    if(c===LS_CAT){
+      var col=LS_CAT_COLS[c]||{bg:'#374151',fg:'#fff'};
+      btn.style.background=col.bg; btn.style.color=col.fg;
+    }else{btn.style.background='#e5e7eb';btn.style.color='#374151';}
+  });
+  // Pestañas custom
+  var cats=await db('ai_logsheet_categorias','GET',null,'linea_id=eq.'+LINEA_ID+'&activo=eq.true&order=orden.asc')||[];
+  var tabsCont=document.getElementById('ls-tabs-extra');
+  if(tabsCont) tabsCont.innerHTML=cats.map(c=>{
+    var activo=LS_CAT==='cat_'+c.id;
+    return '<button onclick="cambiarCategoriaLS(\'cat_'+c.id+'\')" id="ls-tab-cat_'+c.id+'" style="padding:8px 12px;font-weight:800;font-size:11px;border:none;border-radius:8px 8px 0 0;cursor:pointer;font-family:Nunito,sans-serif;background:'+(activo?'#6b7280':'#d1d5db')+';color:#000;margin-left:3px">'+c.nombre+'</button>';
+  }).join('');
+}
+async function renderLogsheet(){
+  var cont=document.getElementById('ls-cont');
+  cont.innerHTML='<div style="text-align:center;padding:20px;color:#9ca3af">Cargando...</div>';
+  var esAdmin=ME.rol==='admin'||ME.rol==='super';
+  // Cargar categorías custom de esta línea
+  var cats=await db('ai_logsheet_categorias','GET',null,'linea_id=eq.'+LINEA_ID+'&activo=eq.true&order=orden.asc')||[];
+  // Renderizar pestañas custom si las hay
+  var tabsCont=document.getElementById('ls-tabs-extra');
+  if(tabsCont) tabsCont.innerHTML=cats.map(c=>'<button onclick="cambiarCategoriaLS(\'cat_'+c.id+'\')" id="ls-tab-cat_'+c.id+'" style="padding:8px 12px;font-weight:800;font-size:11px;border:none;border-radius:8px 8px 0 0;cursor:pointer;font-family:Nunito,sans-serif;background:#e5e7eb;color:#374151;margin-left:3px">'+c.nombre+'</button>').join('');
+  // Resolver categoría actual: fija o custom
+  var catFija=LS_CAT&&!LS_CAT.startsWith('cat_');
+  var catQuery=catFija?LS_CAT:(cats.find(c=>'cat_'+c.id===LS_CAT)||{}).nombre||LS_CAT;
+  // Diagnóstico: consulta con manejo de error explícito
+  var clsRaw=await fetch(SB+'/rest/v1/ai_checklists?linea_id=eq.'+LINEA_ID+'&categoria=eq.'+catQuery+'&activo=eq.true&order=created_at.asc',
+    {headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Accept':'application/json'}});
+  if(!clsRaw.ok){
+    var err=await clsRaw.text();
+    cont.innerHTML='<div style="background:#fee2e2;border-radius:10px;padding:14px;margin:10px;font-size:12px"><b>Error al cargar checklists:</b> '+clsRaw.status+' '+err+'<br><br>Corre este SQL en Supabase:<br><code>ALTER TABLE ai_checklists DISABLE ROW LEVEL SECURITY;</code></div>';
+    return;
+  }
+  var cls=await clsRaw.json()||[];
+  var rows=cls.map(c=>{
+    var btnOp=esAdmin
+      ?'<div style="display:flex;gap:5px">'
+        +'<button onclick="ejecutarChecklistManual(\''+c.id+'\')" style="padding:4px 10px;background:#16a34a;color:#fff;border:none;border-radius:7px;font-size:11px;cursor:pointer;font-family:Nunito,sans-serif">▶ Ejecutar</button>'
+        +'<button onclick="editarChecklist(\''+c.id+'\')" style="padding:4px 10px;background:#f3f4f6;border:none;border-radius:7px;font-size:11px;cursor:pointer;font-family:Nunito,sans-serif">✏️</button>'
+        +'<button onclick="eliminarChecklist(\''+c.id+'\',\''+c.nombre.replace(/'/g,'')+'\')\" style="padding:4px 10px;background:#fee2e2;color:#dc2626;border:none;border-radius:7px;font-size:11px;cursor:pointer;font-family:Nunito,sans-serif">🗑️</button>'
+        +'</div>'
+      :'<button onclick="ejecutarChecklistManual(\''+c.id+'\')" style="padding:4px 10px;background:#16a34a;color:#fff;border:none;border-radius:7px;font-size:11px;cursor:pointer;font-family:Nunito,sans-serif">▶ Ejecutar</button>';
+    return '<div style="background:#fff;border-radius:12px;padding:14px;margin-bottom:10px;box-shadow:0 1px 6px rgba(0,0,0,.07)">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
+      +'<div><div style="font-size:13px;font-weight:800">'+c.nombre+'</div>'
+      +(c.requiere_antes_arranque||c.frecuencia==='antes_arranque'?'<div style="font-size:10px;background:#fef9c3;color:#854d0e;border-radius:4px;padding:1px 6px;display:inline-block;margin-top:2px;font-weight:700">⚡ Antes de arranque</div>':
+      c.frecuencia==='inicio_produccion'?'<div style="font-size:10px;background:#dbeafe;color:#1e40af;border-radius:4px;padding:1px 6px;display:inline-block;margin-top:2px;font-weight:700">🚀 Al inicio de producción</div>':
+      c.frecuencia==='medio_turno'?'<div style="font-size:10px;background:#f3e8ff;color:#6b21a8;border-radius:4px;padding:1px 6px;display:inline-block;margin-top:2px;font-weight:700">⏰ A medio turno</div>':
+      c.frecuencia==='cada_x_horas'?'<div style="font-size:10px;background:#dcfce7;color:#166534;border-radius:4px;padding:1px 6px;display:inline-block;margin-top:2px;font-weight:700">🔄 Cada '+c.intervalo_horas+' h</div>':'')
+      +'</div>'+btnOp+'</div>'
+      +'<div id="pts-'+c.id+'" style="margin-top:8px;padding-top:8px;border-top:1px solid #f3f4f6"></div>'
+      +'<button onclick="cargarPuntos(\''+c.id+'\')" style="padding:4px 10px;background:#f3f4f6;border:none;border-radius:7px;font-size:11px;cursor:pointer;margin-top:6px;font-family:Nunito,sans-serif">Ver puntos ▾</button>'
+      +'</div>';
+  }).join('');
+  var actColores=LS_CAT_COLS[LS_CAT]||{bg:'#9ca3af',fg:'#000'};
+  cont.innerHTML=rows
+    +(esAdmin?'<button onclick="nuevoChecklist()" style="width:100%;padding:14px;background:'+actColores.bg+';color:'+actColores.fg+';border:none;border-radius:12px;font-weight:800;font-size:14px;cursor:pointer;margin-top:6px;font-family:Nunito,sans-serif">+ Agregar checklist</button>':'')
+    +(cls.length===0&&!esAdmin?'<div style="text-align:center;padding:20px;color:#9ca3af;font-size:12px">Sin checklists configurados para esta categoría.</div>':'');
+}
+async function cargarPuntos(clId){
+  var cont=document.getElementById('pts-'+clId); if(!cont) return;
+  var pts=await db('ai_checklist_puntos','GET',null,'checklist_id=eq.'+clId+'&activo=eq.true&order=orden.asc')||[];
+  cont.innerHTML=pts.map((p,i)=>'<div style="font-size:12px;color:#374151;padding:3px 0"><span style="color:#9ca3af">'+(i+1)+'.</span> '+p.descripcion+'</div>').join('')||'<div style="font-size:11px;color:#9ca3af">Sin puntos registrados.</div>';
+}
+async function eliminarChecklist(clId,nombre){
+  if(!confirm('¿Eliminar el checklist "'+nombre+'" y todos sus puntos?'))return;
+  await dbP('ai_checklist_puntos','PATCH',{activo:false},'checklist_id=eq.'+clId);
+  await dbP('ai_checklists','PATCH',{activo:false},'id=eq.'+clId);
+  toast('🗑️ Checklist eliminado','#dc2626');
+  renderLogsheet();
+}
+async function ejecutarChecklistManual(clId){
+  var cls=await db('ai_checklists','GET',null,'id=eq.'+clId)||[];
+  if(!cls.length) return;
+  window._ck_pendientes_arranque=[cls[0]];
+  window._ck_callback_arranque=()=>{go('s-logsheet');toast('✅ Checklist completado','#16a34a');};
+  ejecutarChecklistArranque([cls[0]],0,window._ck_callback_arranque);
+}
+function nuevoChecklist(){
+  var l=LINEAS.find(x=>x.id===LINEA_ID);
+  modal('📋 Nuevo checklist',
+    `<div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#166534">
+      <span style="font-weight:800">Línea: </span>${l?l.nombre:'—'}
+    </div>
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">¿Cuándo se ejecuta?</label>
+    <select id="cl-frec" class="fc" onchange="document.getElementById('cl-horas-row').style.display=this.value==='cada_x_horas'?'block':'none'">
+      <option value="antes_arranque">Antes de arrancar la orden (bloquea el inicio)</option>
+      <option value="inicio_produccion">Al inicio de producción</option>
+      <option value="medio_turno">A medio turno</option>
+      <option value="cada_x_horas">Cada X horas</option>
+    </select>
+    <div id="cl-horas-row" style="display:none">
+      <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Cada cuántas horas</label>
+      <input type="number" id="cl-horas" class="fc" min="0.5" step="0.5" placeholder="Ej: 2">
+    </div>
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Nombre del checklist</label>
+    <input type="text" id="cl-nombre" class="fc" placeholder="Ej: Verificación de código, Sanitización...">`,
+    async(m)=>{
+      var frec=document.getElementById('cl-frec').value;
+      var nombre=document.getElementById('cl-nombre').value.trim();
+      var horas=frec==='cada_x_horas'?parseFloat(document.getElementById('cl-horas').value)||null:null;
+      if(!nombre){toast('Escribe el nombre','#dc2626');return;}
+      if(frec==='cada_x_horas'&&!horas){toast('Indica cada cuántas horas','#dc2626');return;}
+      var cats=await db('ai_logsheet_categorias','GET',null,'linea_id=eq.'+LINEA_ID+'&activo=eq.true')||[];
+      var catNombre=LS_CAT.startsWith('cat_')?(cats.find(c=>'cat_'+c.id===LS_CAT)||{}).nombre||LS_CAT:LS_CAT;
+      var id='aicl_'+Date.now();
+      await dbP('ai_checklists','POST',{id,linea_id:LINEA_ID,categoria:catNombre,nombre,
+        requiere_antes_arranque:frec==='antes_arranque',frecuencia:frec,intervalo_horas:horas,
+        activo:true,creado_por:ME.nombre},'');
+      m.remove();
+      agregarPuntosChecklist(id,nombre);
+    },'#1a1a1a','Siguiente →');
+}
+async function nuevaCategoriaLS(){
+  var l=LINEAS.find(x=>x.id===LINEA_ID);
+  modal('➕ Nueva categoría',
+    `<div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12px;color:#166534">
+      <span style="font-weight:800">Línea: </span>${l?l.nombre:'—'}
+    </div>
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Nombre de la categoría</label>
+    <input type="text" id="cat-nombre" class="fc" placeholder="Ej: Mantenimiento, Calidad 2...">`,
+    async(m)=>{
+      var nombre=document.getElementById('cat-nombre').value.trim();
+      if(!nombre){toast('Escribe el nombre','#dc2626');return;}
+      var cats=await db('ai_logsheet_categorias','GET',null,'linea_id=eq.'+LINEA_ID)||[];
+      await dbP('ai_logsheet_categorias','POST',{id:'ailscat_'+Date.now(),linea_id:LINEA_ID,nombre,orden:cats.length,activo:true},'');
+      m.remove();toast('✅ Categoría creada','#16a34a');
+      irLogsheet();
+    },'#374151');
+}
+function agregarPuntosChecklist(clId,nombreCL){
+  window._cl_puntos_tmp=[];
+  var render=()=>{
+    var lista=window._cl_puntos_tmp.map((p,i)=>'<div style="display:flex;align-items:center;gap:6px;padding:4px 0"><span style="font-size:12px;color:#9ca3af">'+(i+1)+'.</span><span style="font-size:12px;flex:1">'+p+'</span><button onclick="window._cl_puntos_tmp.splice('+i+',1);document.getElementById(\'cl-pts-lista\').innerHTML=\'\';setTimeout(()=>document.getElementById(\'cl-pts-lista\').insertAdjacentHTML(\'beforeend\',window._cl_puntos_tmp.map((p,i)=>\'<div style=\\\"display:flex;align-items:center;gap:6px;padding:4px 0\\\"><span style=\\\"font-size:12px;color:#9ca3af\\\">\'+(i+1)+\'.</span><span style=\\\"font-size:12px;flex:1\\\">\'+ p +\'</span></div>\').join(\'\')),0)" style="border:none;background:none;color:#dc2626;cursor:pointer;font-size:14px">✕</button></div>').join('');
+    var el=document.getElementById('cl-pts-lista'); if(el) el.innerHTML=lista;
+  };
+  modal('📋 Puntos de: '+nombreCL,
+    `<div id="cl-pts-lista" style="max-height:220px;overflow-y:auto;margin-bottom:10px"></div>
+    <div style="display:flex;gap:6px">
+      <input type="text" id="cl-nuevo-punto" class="fc" style="margin-bottom:0;flex:1" placeholder="Describe el punto a verificar...">
+      <button onclick="var v=document.getElementById('cl-nuevo-punto').value.trim();if(v){window._cl_puntos_tmp.push(v);document.getElementById('cl-nuevo-punto').value='';var lista=window._cl_puntos_tmp.map((p,i)=>'<div style=\\'display:flex;align-items:center;gap:6px;padding:4px 0\\'><span style=\\'font-size:12px;color:#9ca3af\\'>'+(i+1)+'.</span><span style=\\'font-size:12px;flex:1\\'>'+p+'</span></div>').join('');document.getElementById('cl-pts-lista').innerHTML=lista;}" style="padding:10px 14px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif;white-space:nowrap">+ Agregar</button>
+    </div>`,
+    async(m)=>{
+      if(!window._cl_puntos_tmp.length){toast('Agrega al menos un punto','#dc2626');return;}
+      for(var i=0;i<window._cl_puntos_tmp.length;i++){
+        await dbP('ai_checklist_puntos','POST',{id:'aiclp_'+Date.now()+'_'+i,checklist_id:clId,descripcion:window._cl_puntos_tmp[i],orden:i,activo:true},'');
+      }
+      m.remove();
+      toast('✅ Checklist guardado','#16a34a');
+      renderLogsheet();
+    },'#1a1a1a','💾 Guardar checklist');
+  setTimeout(()=>{var el=document.getElementById('cl-pts-lista');if(el&&window._cl_puntos_tmp.length===0)el.innerHTML='';},100);
+}
+async function editarChecklist(clId){
+  var cls=await db('ai_checklists','GET',null,'id=eq.'+clId)||[];
+  if(!cls.length) return;
+  var c=cls[0];
+  var frec=c.frecuencia||(c.requiere_antes_arranque?'antes_arranque':'inicio_produccion');
+  modal('✏️ Editar: '+c.nombre,
+    `<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Nombre</label>
+    <input type="text" id="cle-nombre" class="fc" value="${c.nombre}">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">¿Cuándo se ejecuta?</label>
+    <select id="cle-frec" class="fc" onchange="document.getElementById('cle-horas-row').style.display=this.value==='cada_x_horas'?'block':'none'">
+      <option value="antes_arranque"${frec==='antes_arranque'?' selected':''}>Antes de arrancar la orden</option>
+      <option value="inicio_produccion"${frec==='inicio_produccion'?' selected':''}>Al inicio de producción</option>
+      <option value="medio_turno"${frec==='medio_turno'?' selected':''}>A medio turno</option>
+      <option value="cada_x_horas"${frec==='cada_x_horas'?' selected':''}>Cada X horas</option>
+    </select>
+    <div id="cle-horas-row" style="display:${frec==='cada_x_horas'?'block':'none'}">
+      <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Cada cuántas horas</label>
+      <input type="number" id="cle-horas" class="fc" min="0.5" step="0.5" value="${c.intervalo_horas||''}">
+    </div>`,
+    async(m)=>{
+      var nombre=document.getElementById('cle-nombre').value.trim();
+      var frec=document.getElementById('cle-frec').value;
+      var horas=frec==='cada_x_horas'?parseFloat(document.getElementById('cle-horas').value)||null:null;
+      await dbP('ai_checklists','PATCH',{nombre,requiere_antes_arranque:frec==='antes_arranque',
+        frecuencia:frec,intervalo_horas:horas},'id=eq.'+clId);
+      m.remove();toast('✅ Actualizado','#0891b2');renderLogsheet();
+    },'#0891b2','Actualizar');
+}
+// ── VERIFICAR CHECKLISTS ANTES DE ARRANQUE ────────────────────
+async function verificarChecklistsArranque(callback){
+  var cls=await db('ai_checklists','GET',null,'linea_id=eq.'+LINEA_ID+'&requiere_antes_arranque=eq.true&activo=eq.true')||[];
+  if(!cls.length){callback();return;}
+  // Ver si ya hay ejecuciones completas para la orden activa
+  var pendientes=[];
+  for(var c of cls){
+    var execs=await db('ai_checklist_ejecuciones','GET',null,'checklist_id=eq.'+c.id+'&orden_id=eq.'+(ORDEN_ACTIVA?ORDEN_ACTIVA.id:'none')+'&completado=eq.true')||[];
+    if(!execs.length) pendientes.push(c);
+  }
+  if(!pendientes.length){callback();return;}
+  ejecutarChecklistArranque(pendientes,0,callback);
+}
+async function ejecutarChecklistArranque(pendientes,idx,callback){
+  if(idx>=pendientes.length){callback();return;}
+  var c=pendientes[idx];
+  var pts=await db('ai_checklist_puntos','GET',null,'checklist_id=eq.'+c.id+'&activo=eq.true&order=orden.asc')||[];
+  var cont=document.getElementById('cke-cont');
+  document.getElementById('cke-sub').textContent=c.nombre+' ('+(idx+1)+'/'+pendientes.length+')';
+  go('s-cklist-exec');
+  var respuestas={};
+  cont.innerHTML=pts.map((p,i)=>'<div style="display:flex;align-items:flex-start;gap:10px;background:#fff;border-radius:10px;padding:12px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,.06)">'
+    +'<input type="checkbox" id="ckp-'+p.id+'" style="width:20px;height:20px;margin-top:1px;flex-shrink:0">'
+    +'<label for="ckp-'+p.id+'" style="font-size:13px;font-weight:600;color:#374151;cursor:pointer">'+p.descripcion+'</label>'
+    +'</div>').join('')
+    +'<button onclick="guardarEjecucionChecklist(\''+c.id+'\','+JSON.stringify(pts.map(p=>p.id)).replace(/"/g,"'")+','+idx+','+pendientes.length+')" style="width:100%;padding:16px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-weight:800;font-size:15px;cursor:pointer;margin-top:10px;font-family:Nunito,sans-serif">✅ Guardar y continuar</button>';
+}
+async function guardarEjecucionChecklist(clId,puntosIds,idx,total){
+  var resp={};
+  var todos=true;
+  puntosIds.forEach(pid=>{var el=document.getElementById('ckp-'+pid);if(el){resp[pid]=el.checked;if(!el.checked)todos=false;}});
+  if(!todos){toast('Completa todos los puntos antes de continuar','#dc2626');return;}
+  var ejecucion={id:'aicke_'+Date.now(),checklist_id:clId,linea_id:LINEA_ID,orden_id:ORDEN_ACTIVA?ORDEN_ACTIVA.id:'',
+    usuario:ME.nombre,respuestas:resp,completado:true,ts_inicio:Date.now(),ts_fin:Date.now()};
+  await dbP('ai_checklist_ejecuciones','POST',ejecucion,'');
+  // Si hay más checklists pendientes, continúa; si no, arranca
+  var pendientes=window._ck_pendientes_arranque||[];
+  idx++;
+  if(idx<pendientes.length){
+    ejecutarChecklistArranque(pendientes,idx,window._ck_callback_arranque);
+  }else{
+    go('s-linea');
+    window._ck_callback_arranque&&window._ck_callback_arranque();
+  }
+}
+
+async function continuarOrden(){
+  if(ORDEN_ACTIVA){
+    ORDEN_ACTIVA._tsF=null;
+    localStorage.setItem('ai_orden_'+LINEA_ID,JSON.stringify(ORDEN_ACTIVA));
+    await dbP('ai_ordenes','PATCH',{detenida_en:null},'id=eq.'+ORDEN_ACTIVA.id);
+  }
+  await cambiarEstado('corriendo');
+}
+
+async function iniciarNuevaOrden(){
+  // Verificar si la línea tiene productos configurados
+  var l=LINEAS.find(x=>x.id===LINEA_ID);
+  var area=l?l.area||'envasado':'envasado';
+  var tipoProd=area==='envasado'?'Fert':'Halb';
+  var prods=await db('ai_productos','GET',null,'linea_id=eq.'+LINEA_ID+'&activo=eq.true&order=nombre.asc')||[];
+  if(prods.length===0){
+    // Sin productos configurados, arrancar con objetivos de la línea (comportamiento anterior)
+    await _crearNuevaOrden(null,null,l);
+    return;
+  }
+  // Pedir selección de producto
+  modal('📦 Selecciona '+tipoProd,
+    `<div style="font-size:12px;color:#6b7280;margin-bottom:10px">Elige el ${tipoProd} que vas a producir en esta orden</div>
+    <select id="prod-sel" class="fc">
+      <option value="">— Selecciona un ${tipoProd} —</option>
+      ${prods.map(p=>'<option value="'+p.id+'">'+p.nombre+(p.codigo?' ('+p.codigo+')':'')+'</option>').join('')}
+    </select>`,
+    async(m)=>{
+      var prodId=document.getElementById('prod-sel').value;
+      if(!prodId){toast('Selecciona un '+tipoProd,'#dc2626');return;}
+      var prod=prods.find(p=>p.id===prodId);
+      m.remove();
+      await _crearNuevaOrden(prod,area,l);
+    },'#16a34a','Arrancar');
+}
+async function _crearNuevaOrden(prod,area,l){
+  var folio=await genFolio(LINEA_ID);
+  var ahora=Date.now();
+  // Usar objetivos del producto si existe, sino los de la línea
+  var targetHora=prod?prod.target_hora:(l?l.target_hora:0);
+  var orden={
+    id:'aior_'+ahora,
+    folio:folio,
+    linea_id:LINEA_ID,
+    linea_nombre:l?l.nombre:'—',
+    ts_inicio:ahora,
+    ts_fin:null,
+    turno:turno(),
+    fecha:hoy(),
+    operador:ME.nombre,
+    piezas_total:null,
+    piezas_objetivo:targetHora,
+    tiempo_ocupado_min:0,
+    ai_real:null,
+    estado:'abierta',
+    detenida_en:null,
+    producto_id:prod?prod.id:null,
+    producto_nombre:prod?prod.nombre:null
+  };
+  // Aplicar objetivos del producto a la línea en memoria (para cálculos del turno)
+  if(prod&&l){
+    l._target_hora_orden=prod.target_hora;
+    l._objetivo_ai_orden=prod.objetivo_ai;
+    l._objetivo_pp_orden=prod.objetivo_pp;
+    l._objetivo_pnp_orden=prod.objetivo_pnp;
+  }
+  await dbP('ai_ordenes','POST',orden,'');
+  ORDEN_ACTIVA=orden;
+  localStorage.setItem('ai_orden_'+LINEA_ID,JSON.stringify(orden));
+  // Verificar checklists requeridos antes de arrancar
+  var cls=await db('ai_checklists','GET',null,'linea_id=eq.'+LINEA_ID+'&requiere_antes_arranque=eq.true&activo=eq.true')||[];
+  if(cls.length){
+    window._ck_pendientes_arranque=cls;
+    window._ck_callback_arranque=async()=>{ await cambiarEstado('corriendo'); toast('▶ Orden '+folio+' iniciada','#16a34a'); };
+    ejecutarChecklistArranque(cls,0,window._ck_callback_arranque);
+  }else{
+    await cambiarEstado('corriendo');
+    toast('▶ Orden '+folio+' iniciada','#16a34a');
+  }
+}
+
+// ── DETENER — calcular AI real ────────────────────────────────
+async function pararLinea(){
+  if(!confirm('¿Detener la orden de producción y calcular Asset Intensity real?')) return;
+  var ahora=Date.now();
+  // Cerrar evento activo
+  var evs=await db('ai_eventos','GET',null,'linea_id=eq.'+LINEA_ID+'&ts_fin=is.null')||[];
+  for(var e of evs) await dbP('ai_eventos','PATCH',{ts_fin:ahora},'id=eq.'+e.id);
+  if(TIMER) clearInterval(TIMER);
+  // Calcular tiempo ocupado real de la orden
+  if(ORDEN_ACTIVA){
+    var tsI=ORDEN_ACTIVA.ts_inicio;
+    var allEvs=await db('ai_eventos','GET',null,'linea_id=eq.'+LINEA_ID+'&ts_inicio=gte.'+tsI+'&order=ts_inicio.asc')||[];
+    var tC=0,tPNP=0,tPP=0,curC=tsI;
+    allEvs.forEach(e=>{
+      var i=Math.max(e.ts_inicio,tsI),f=e.ts_fin?Math.min(e.ts_fin,ahora):ahora,d=Math.max(0,f-i);
+      if(i>curC) tC+=(i-curC);
+      if(e.tipo==='corriendo')tC+=d;else if(e.tipo==='pnp')tPNP+=d;else if(e.tipo==='pp')tPP+=d;
+      curC=Math.max(curC,f);
+    });
+    if(curC<ahora) tC+=(ahora-curC);
+    var tOcupMs=tC+tPNP+tPP;
+    var tOcupMin=Math.round(tOcupMs/60000);
+    var tOcupHr=tOcupMs/3600000;
+    var l=LINEAS.find(x=>x.id===LINEA_ID);
+    var pzObjetivo=l?(l.target_hora||0)*(tC/3600000):0; // solo tiempo corriendo
+    ORDEN_ACTIVA._tOcupMin=tOcupMin;
+    ORDEN_ACTIVA._pzObjetivo=Math.round(pzObjetivo);
+    ORDEN_ACTIVA._tC=tC;
+    ORDEN_ACTIVA._tsF=ahora;
+    localStorage.setItem('ai_orden_'+LINEA_ID,JSON.stringify(ORDEN_ACTIVA));
+    await dbP('ai_ordenes','PATCH',{detenida_en:ahora},'id=eq.'+ORDEN_ACTIVA.id);
+    // Crear evento 'detenida' para marcar el lapso de inactividad en la barra
+    await dbP('ai_eventos','POST',{id:'aiev_det_'+ahora,linea_id:LINEA_ID,tipo:'detenida',
+      reason_code:null,comentario:null,ts_inicio:ahora,ts_fin:null,
+      turno:turno(),fecha:hoy(),año:new Date().getFullYear(),semana:sem(hoy()),
+      operador:ME.nombre,historial:[]},'');
+  }
+  renderLinea();
+  toast('⏹ Orden detenida — ingresa piezas totales y guarda','#1a1a1a');
+}
+
+// ── GUARDAR ORDEN ─────────────────────────────────────────────
+async function guardarOrden(){
+  if(!ORDEN_ACTIVA) return;
+  var inp=document.getElementById('pz-total-inp');
+  var pzTotal=inp?parseInt(inp.value)||0:0;
+  if(!pzTotal){toast('Ingresa el total de piezas','#dc2626');return;}
+  var l=LINEAS.find(x=>x.id===LINEA_ID);
+  var pzObj=ORDEN_ACTIVA._pzObjetivo||0;
+  var aiReal=pzObj>0?Math.round(pzTotal/pzObj*100):0;
+  ORDEN_ACTIVA.piezas_total=pzTotal;
+  ORDEN_ACTIVA.ai_real=aiReal;
+  ORDEN_ACTIVA.tiempo_ocupado_min=ORDEN_ACTIVA._tOcupMin||0;
+  await dbP('ai_ordenes','PATCH',{piezas_total:pzTotal,ai_real:aiReal,tiempo_ocupado_min:ORDEN_ACTIVA._tOcupMin||0},'id=eq.'+ORDEN_ACTIVA.id);
+  toast('💾 Guardado — AI Real: '+aiReal+'%','#0891b2');
+  renderLinea();
+}
+
+async function cerrarTecnico(){
+  if(!ORDEN_ACTIVA) return;
+  if(!confirm('¿Confirmar cierre técnico (CTEC)? Ya no se podrá editar.')) return;
+  var inp=document.getElementById('pz-total-inp');
+  var pzTotal=inp?parseInt(inp.value)||ORDEN_ACTIVA.piezas_total||0:ORDEN_ACTIVA.piezas_total||0;
+  var pzObj=ORDEN_ACTIVA._pzObjetivo||0;
+  var aiReal=pzObj>0?Math.round(pzTotal/pzObj*100):ORDEN_ACTIVA.ai_real||0;
+  var ahora=Date.now();
+  // Cerrar evento 'detenida' si aún está abierto
+  var evsDet=await db('ai_eventos','GET',null,'linea_id=eq.'+LINEA_ID+'&tipo=eq.detenida&ts_fin=is.null')||[];
+  for(var e of evsDet) await dbP('ai_eventos','PATCH',{ts_fin:ahora},'id=eq.'+e.id);
+  // Guardar historial de CTEC
+  var hist=(ORDEN_ACTIVA.historial||[]).slice();
+  hist.push({ts:ahora,usuario:ME.nombre,accion:'CTEC realizado'});
+  await dbP('ai_ordenes','PATCH',{
+    piezas_total:pzTotal,ai_real:aiReal,
+    tiempo_ocupado_min:ORDEN_ACTIVA._tOcupMin||0,
+    ts_fin:ORDEN_ACTIVA._tsF||ahora,
+    estado:'cerrada',
+    historial:hist
+  },'id=eq.'+ORDEN_ACTIVA.id);
+  ORDEN_ACTIVA.estado='cerrada';
+  ORDEN_ACTIVA.ai_real=aiReal;
+  localStorage.removeItem('ai_orden_'+LINEA_ID);
+  toast('✅ Orden '+ORDEN_ACTIVA.folio+' cerrada — AI Real: '+aiReal+'%','#16a34a');
+  renderLinea();
+}
+
+// ── CAMBIAR ESTADO CON COMENTARIO ────────────────────────────
+function selRCConCom(tipo, rc){
+  // Pide comentario forzoso después de seleccionar reason code
+  document.querySelectorAll('.m-rc').forEach(m=>m.remove());
+  var m=document.createElement('div');
+  m.className='m-rcc';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  m.innerHTML=`<div style="background:#fff;border-radius:22px 22px 0 0;padding:28px 20px 40px;width:100%;max-width:480px">
+    <div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 16px"></div>
+    <div style="font-size:16px;font-weight:900;color:${COL[tipo]};margin-bottom:4px">${LBL[tipo]} · ${rc}</div>
+    <div style="font-size:13px;color:#374151;margin-bottom:8px;font-weight:700">Comentario (obligatorio)</div>
+    <textarea id="rc-com" style="width:100%;padding:12px;border:1.5px solid #e5e7eb;border-radius:10px;font-family:Nunito,sans-serif;font-size:14px;resize:none;height:80px;outline:none" placeholder="Describe brevemente el motivo..."></textarea>
+    <div style="display:flex;gap:10px;margin-top:12px">
+      <button onclick="document.querySelectorAll('.m-rcc').forEach(x=>x.remove())" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:12px;cursor:pointer;font-weight:700;font-family:Nunito,sans-serif">Cancelar</button>
+      <button onclick="var com=document.getElementById('rc-com').value.trim();if(!com){document.getElementById('rc-com').style.borderColor='#dc2626';return;}document.querySelectorAll('.m-rcc').forEach(x=>x.remove());cambiarEstado('${tipo}','${rc}',com)" style="flex:2;padding:13px;background:${COL[tipo]};color:#fff;border:none;border-radius:12px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">Registrar paro</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  setTimeout(()=>document.getElementById('rc-com').focus(),300);
+}
+
+// ── EDITAR PIEZAS ─────────────────────────────────────────────
+function editarPiezas(hNum, valorActual, turnoSlot){
+  if(window.AI_MODO_HISTORIAL){toast('📖 Modo consulta — no se puede editar','#92400e');return;}
+  var l=LINEAS.find(x=>x.id===LINEA_ID);
+  var t=turnoSlot||turno();
+  var hNumFin=(hNum+1)%24;
+  var unidad=l?l.unidad||'pzs':'pzs';
+  var m=document.createElement('div');
+  m.className='m-epz';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  m.innerHTML=`<div style="background:#fff;border-radius:22px 22px 0 0;padding:28px 20px 40px;width:100%;max-width:480px">
+    <div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 16px"></div>
+    <div style="font-size:16px;font-weight:900;color:#1a3c5e;margin-bottom:4px">✏️ Editar ${hNum}:30 – ${hNumFin}:30</div>
+    <div style="font-size:12px;color:#9ca3af;margin-bottom:16px">Target: ${l?l.target_hora:0} ${unidad}</div>
+    <input type="number" id="ep-v" style="width:100%;padding:14px;border:1.5px solid #e5e7eb;border-radius:10px;font-family:Nunito,sans-serif;font-size:1.3rem;text-align:center;outline:none;margin-bottom:16px" value="${valorActual||''}" placeholder="Cantidad...">
+    <div style="display:flex;gap:10px">
+      <button onclick="document.querySelectorAll('.m-epz').forEach(x=>x.remove())" style="flex:1;padding:14px;background:#f3f4f6;border:none;border-radius:12px;cursor:pointer;font-weight:700;font-family:Nunito,sans-serif">Cancelar</button>
+      <button onclick="(async()=>{var v=parseInt(document.getElementById('ep-v').value)||0;if(!v)return;await fetch(SB+'/rest/v1/ai_piezas',{method:'POST',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},body:JSON.stringify({id:'aipz_'+LINEA_ID+'_'+hoy()+'_'+${hNum},linea_id:LINEA_ID,fecha:hoy(),turno:'${t}',hora:${hNum},piezas:v,operador:ME.nombre})});document.querySelectorAll('.m-epz').forEach(x=>x.remove());toast('✅ Actualizado','#16a34a');renderLinea();})()" style="flex:2;padding:14px;background:#0d2144;color:#fff;border:none;border-radius:12px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">💾 Guardar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  setTimeout(()=>document.getElementById('ep-v').focus(),300);
+}
+
+// ── CAMBIAR ESTADO ────────────────────────────────────────────
+async function cambiarEstado(tipo, rc, comentario){
+  var ahora=Date.now();
+  var evs=await db('ai_eventos','GET',null,'linea_id=eq.'+LINEA_ID+'&ts_fin=is.null')||[];
+  for(var e of evs) await dbP('ai_eventos','PATCH',{ts_fin:ahora},'id=eq.'+e.id);
+  if(tipo!=='corriendo'){
+    await dbP('ai_eventos','POST',{id:'aiev_'+ahora,linea_id:LINEA_ID,tipo,reason_code:rc||null,comentario:comentario||null,
+      ts_inicio:ahora,ts_fin:null,turno:turno(),fecha:hoy(),
+      año:new Date().getFullYear(),semana:sem(hoy()),operador:ME.nombre,historial:[]},'');
+  }
+  toast(LBL[tipo]+(rc?' · '+rc:''),COL[tipo]);
+  renderLinea();
+}
+
+async function selRC(tipo){
+  var rcs=await db('ai_reason_codes','GET',null,'tipo=eq.'+tipo+'&activo=eq.true&order=nombre.asc')||[];
+  var btns=rcs.map(r=>`<button onclick="selRCConCom('${tipo}','${r.nombre}')" 
+    style="width:100%;padding:14px;background:${COL[tipo]};color:#fff;border:none;border-radius:14px;font-size:15px;font-weight:800;cursor:pointer;margin-bottom:10px;font-family:Nunito,sans-serif">${r.nombre}</button>`).join('');
+  var m=document.createElement('div');
+  m.className='m-rc';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  m.innerHTML=`<div style="background:#fff;border-radius:22px 22px 0 0;padding:28px 20px 40px;width:100%;max-width:480px">
+    <div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 20px"></div>
+    <div style="font-size:18px;font-weight:900;color:${COL[tipo]};margin-bottom:4px">${LBL[tipo]}</div>
+    <div style="font-size:13px;color:#9ca3af;margin-bottom:20px">¿Cuál es el motivo?</div>
+    ${btns}
+    <button onclick="document.querySelectorAll('.m-rc').forEach(m=>m.remove())" style="width:100%;padding:13px;background:#f3f4f6;border:none;border-radius:12px;cursor:pointer;font-weight:700;font-family:Nunito,sans-serif">Cancelar</button>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+
+
+// ── UNIR EVENTOS ──────────────────────────────────────────────
+function unirEventos(){
+  if(window.AI_MODO_HISTORIAL){toast('📖 Modo consulta — no se puede editar','#92400e');return;}
+  var chks=Array.from(document.querySelectorAll('.ev-chk:checked'));
+  if(chks.length<2){toast('Selecciona al menos 2 eventos para unir','#dc2626');return;}
+  var ids=chks.map(c=>c.dataset.id);
+  var full=window.AI_SEGS||[];
+  var segs=full.filter(s=>ids.includes(s.id)).sort((a,b)=>a.ts_inicio-b.ts_inicio);
+  if(segs.length<2){toast('No se encontraron los eventos seleccionados','#dc2626');return;}
+  if(segs.some(s=>!s.ts_fin)){toast('No puedes unir un evento que sigue en curso','#dc2626');return;}
+  var idxs=segs.map(s=>full.indexOf(s)).sort((a,b)=>a-b);
+  for(var i=1;i<idxs.length;i++){
+    if(idxs[i]!==idxs[i-1]+1){toast('Solo puedes unir paros consecutivos, sin otro evento entre ellos','#dc2626');return;}
+  }
+  preguntarTipoUnion(segs);
+}
+function preguntarTipoUnion(segs){
+  var resumen=segs.map(s=>ICO[s.tipo]+' '+new Date(s.ts_inicio).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+'–'+new Date(s.ts_fin).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})).join('  +  ');
+  var tipoSugerido=segs.slice().sort((a,b)=>(b.ts_fin-b.ts_inicio)-(a.ts_fin-a.ts_inicio))[0].tipo;
+  modal('🔗 Unir '+segs.length+' eventos',
+    `<div style="font-size:12px;color:#6b7280;margin-bottom:14px">${resumen}</div>
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">¿Cómo quedará el evento unido?</label>
+    <select id="un-tipo" class="fc">${['corriendo','pnp','pp','idle'].map(t=>'<option value="'+t+'"'+(t===tipoSugerido?' selected':'')+'>'+LBL[t]+'</option>').join('')}</select>
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Motivo</label>
+    <input type="text" id="un-motivo" class="fc" placeholder="Motivo del evento unido...">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Comentario</label>
+    <textarea id="un-com" class="fc" style="height:70px;resize:none"></textarea>`,
+    async(m)=>{
+      var tipo=document.getElementById('un-tipo').value;
+      var motivo=document.getElementById('un-motivo').value.trim();
+      var com=document.getElementById('un-com').value.trim();
+      m.remove();
+      await ejecutarUnion(segs,tipo,motivo,com);
+    },'#7c3aed','Unir');
+}
+async function ejecutarUnion(segs,tipo,motivo,com){
+  var ts_inicio=segs[0].ts_inicio, ts_fin=segs[segs.length-1].ts_fin;
+  var historialPrevio=[];
+  for(var s of segs){ if(!s.sintetico) historialPrevio=historialPrevio.concat(s.historial||[]); }
+  historialPrevio.push({ts:Date.now(),usuario:ME.nombre,accion:'Unió '+segs.length+' eventos ('+segs.map(s=>LBL[s.tipo]).join(' + ')+') en uno solo: '+LBL[tipo]});
+  for(var s of segs){
+    if(!s.sintetico) await fetch(SB+'/rest/v1/ai_eventos?id=eq.'+s.id,{method:'DELETE',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Prefer':'return=minimal'}});
+  }
+  await dbP('ai_eventos','POST',{id:'aiev_'+Date.now(),linea_id:LINEA_ID,tipo,reason_code:motivo||null,comentario:com||null,
+    ts_inicio,ts_fin,turno:turno(),fecha:hoy(),año:new Date().getFullYear(),semana:sem(hoy()),operador:ME.nombre,historial:historialPrevio},'');
+  toast('🔗 Eventos unidos','#7c3aed');
+  renderLinea();
+}
+
+// ── PARTIR EVENTO ─────────────────────────────────────────────
+function partirSegmento(id){
+  // Partir directo desde el editor de segmento (sin necesitar checkbox)
+  var seg=(window.AI_SEGS||[]).find(s=>s.id===id);
+  if(!seg){toast('Evento no encontrado','#dc2626');return;}
+  if(seg.tipo==='detenida'){toast('Los eventos de detención no se pueden partir','#dc2626');return;}
+  var finEfectivo=seg._dfin||seg.ts_fin||Date.now();
+  _abrirModalPartir(seg,finEfectivo);
+}
+function partirEvento(){
+  if(window.AI_MODO_HISTORIAL){toast('📖 Modo consulta — no se puede editar','#92400e');return;}
+  var chks=Array.from(document.querySelectorAll('.ev-chk:checked'));
+  if(chks.length!==1){toast('Selecciona exactamente 1 evento para partir','#dc2626');return;}
+  var seg=(window.AI_SEGS||[]).find(s=>s.id===chks[0].dataset.id);
+  if(!seg){toast('Evento no encontrado','#dc2626');return;}
+  if(seg.tipo==='detenida'){toast('Los eventos de detención no se pueden partir','#dc2626');return;}
+  var finEfectivo=seg._dfin||seg.ts_fin||Date.now();
+  _abrirModalPartir(seg,finEfectivo);
+}
+function _abrirModalPartir(seg,finEfectivo){
+  var tH=t=>String(new Date(t).getHours()).padStart(2,'0')+':'+String(new Date(t).getMinutes()).padStart(2,'0');
+  var tipos=['corriendo','pnp','pp','idle'];
+  var tipoBtns=(pref,tipoActual)=>tipos.map(t=>`<button onclick="
+    document.querySelectorAll('.pt-${pref}').forEach(b=>{b.style.background='#f9fafb';b.style.color='#374151';b.style.borderColor='#e5e7eb'});
+    this.style.background='${COL[t]||'#9ca3af'}';this.style.color='#fff';this.style.borderColor='${COL[t]||'#9ca3af'}';
+    document.getElementById('${pref}-tipo').value='${t}'"
+    class="pt-${pref}" style="flex:1;padding:5px 2px;border:2px solid ${t===tipoActual?COL[t]:'#e5e7eb'};background:${t===tipoActual?COL[t]:'#f9fafb'};color:${t===tipoActual?'#fff':'#374151'};border-radius:7px;font-weight:800;font-size:9px;cursor:pointer;font-family:Nunito,sans-serif">${LBL[t]}</button>`).join('');
+  var m=document.createElement('div');
+  m.className='m-partir';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  m.innerHTML=`<div style="background:#fff;border-radius:22px 22px 0 0;padding:20px 16px 36px;width:100%;max-width:560px;max-height:92vh;overflow-y:auto">
+    <div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 14px"></div>
+    <div style="font-size:15px;font-weight:900;color:#1a3c5e;margin-bottom:4px">✂️ Partir evento</div>
+    <div style="font-size:11px;color:#9ca3af;margin-bottom:14px">
+      Rango original: ${tH(seg.ts_inicio)} – ${tH(finEfectivo)} · La hora de corte es la hora final de Parte 1 e inicio de Parte 2.
+    </div>
+    <input type="hidden" id="pt1-tipo" value="${seg.tipo}">
+    <input type="hidden" id="pt2-tipo" value="corriendo">
+    <div style="display:flex;gap:10px">
+      <div style="flex:1;border:2px solid #e5e7eb;border-radius:12px;padding:12px">
+        <div style="font-weight:900;font-size:12px;color:#0891b2;margin-bottom:8px">Parte 1</div>
+        <div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:4px">Tipo</div>
+        <div style="display:flex;gap:3px;margin-bottom:10px">${tipoBtns('pt1',seg.tipo)}</div>
+        <div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:2px">Inicio (fijo)</div>
+        <div style="background:#f3f4f6;border-radius:8px;padding:8px;text-align:center;font-weight:700;font-size:13px;margin-bottom:8px;color:#6b7280">${tH(seg.ts_inicio)}</div>
+        <div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:2px">Hora de corte</div>
+        <input type="time" id="pt-corte" class="fc" style="margin-bottom:0" value="${tH(Math.round((seg.ts_inicio+finEfectivo)/2/60000)*60000)}">
+      </div>
+      <div style="flex:1;border:2px solid #e5e7eb;border-radius:12px;padding:12px">
+        <div style="font-weight:900;font-size:12px;color:#7c3aed;margin-bottom:8px">Parte 2</div>
+        <div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:4px">Tipo</div>
+        <div style="display:flex;gap:3px;margin-bottom:10px">${tipoBtns('pt2','corriendo')}</div>
+        <div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:2px">Inicio</div>
+        <div style="background:#f3f4f6;border-radius:8px;padding:8px;text-align:center;font-size:11px;color:#9ca3af;margin-bottom:8px">= Hora de corte</div>
+        <div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:2px">Final (fijo)</div>
+        <div style="background:#f3f4f6;border-radius:8px;padding:8px;text-align:center;font-weight:700;font-size:13px;color:#6b7280">${tH(finEfectivo)}</div>
+      </div>
+    </div>
+    <div id="pt-error" style="color:#dc2626;font-size:11px;font-weight:700;margin-top:10px;display:none"></div>
+    <div style="display:flex;gap:10px;margin-top:14px">
+      <button onclick="document.querySelectorAll('.m-partir').forEach(x=>x.remove())" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:12px;cursor:pointer;font-weight:700;font-family:Nunito,sans-serif">Cancelar</button>
+      <button onclick="confirmarParticion('${seg.id}',${seg.ts_inicio},${finEfectivo},${seg.ts_fin||'null'},${seg.sintetico})" style="flex:2;padding:13px;background:#0d2144;color:#fff;border:none;border-radius:12px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">✂️ Partir</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+async function confirmarParticion(segId,tsInicio,tsFinEfectivo,tsFinReal,esSintetico){
+  var corteStr=document.getElementById('pt-corte').value;
+  var tipo1=document.getElementById('pt1-tipo').value;
+  var tipo2=document.getElementById('pt2-tipo').value;
+  var errEl=document.getElementById('pt-error');
+  if(!corteStr){errEl.textContent='Ingresa la hora de corte';errEl.style.display='block';return;}
+  var base=new Date(tsInicio); base.setHours(0,0,0,0);
+  var corteMs=base.getTime()+horaAMs(corteStr);
+  if(corteMs<=tsInicio){errEl.textContent='La hora de corte debe ser después del inicio ('+new Date(tsInicio).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+')';errEl.style.display='block';return;}
+  if(corteMs>=tsFinEfectivo){errEl.textContent='La hora de corte debe ser antes del final ('+new Date(tsFinEfectivo).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+')';errEl.style.display='block';return;}
+  // Todo correcto
+  document.querySelectorAll('.m-partir').forEach(x=>x.remove());
+  var histBase=[];
+  if(!esSintetico){
+    var segData=(window.AI_SEGS||[]).find(s=>s.id===segId);
+    if(segData) histBase=(segData.historial||[]).slice();
+    histBase.push({ts:Date.now(),usuario:ME.nombre,accion:'Partido en 2: Parte 1 ('+LBL[tipo1]+') hasta '+new Date(corteMs).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+', Parte 2 ('+LBL[tipo2]+')'});
+    await fetch(SB+'/rest/v1/ai_eventos?id=eq.'+segId,{method:'DELETE',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Prefer':'return=minimal'}});
+  }
+  var ahora=Date.now();
+  await dbP('ai_eventos','POST',{id:'aiev_p1_'+ahora,linea_id:LINEA_ID,tipo:tipo1,reason_code:null,comentario:null,
+    ts_inicio:tsInicio,ts_fin:corteMs,turno:turno(),fecha:hoy(),año:new Date().getFullYear(),semana:sem(hoy()),operador:ME.nombre,historial:histBase},'');
+  await dbP('ai_eventos','POST',{id:'aiev_p2_'+ahora,linea_id:LINEA_ID,tipo:tipo2,reason_code:null,comentario:null,
+    ts_inicio:corteMs,ts_fin:tsFinReal||null,turno:turno(),fecha:hoy(),año:new Date().getFullYear(),semana:sem(hoy()),operador:ME.nombre,historial:[{ts:Date.now(),usuario:ME.nombre,accion:'Creado al partir evento'}]},'');
+  toast('✂️ Evento partido en 2','#0891b2');
+  renderLinea();
+}
+function infoEvento(id){
+  var seg=(window.AI_SEGS||[]).find(s=>s.id===id);
+  if(!seg) return;
+  var pc=parseMotivoComentario(seg);
+  var dur=seg.ts_fin?fmtD(seg.ts_fin-seg.ts_inicio):'En curso';
+  var hist=(seg.historial||[]).slice().reverse().map(h=>
+    '<div style="padding:8px 0;border-bottom:1px solid #f3f4f6"><div style="font-size:12px;font-weight:700">'+h.accion+'</div><div style="font-size:11px;color:#9ca3af">'+h.usuario+' · '+new Date(h.ts).toLocaleString('es-MX',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</div></div>'
+  ).join('')||'<div style="color:#9ca3af;font-size:12px;text-align:center;padding:12px">Sin movimientos</div>';
+  var m=modal((seg.historial&&seg.historial.length?'🔁 Reclasificado · ':'')+LBL[seg.tipo],
+    `<div style="background:#f9fafb;border-radius:12px;padding:14px;margin-bottom:12px">
+      <div style="font-size:13px;margin-bottom:4px"><b>Motivo:</b> ${pc.motivo}</div>
+      <div style="font-size:13px;margin-bottom:4px"><b>Comentario:</b> ${pc.comentario}</div>
+      <div style="font-size:13px;margin-bottom:4px"><b>Inicio:</b> ${new Date(seg.ts_inicio).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})}</div>
+      <div style="font-size:13px;margin-bottom:4px"><b>Final:</b> ${seg.ts_fin?new Date(seg.ts_fin).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}):'En curso'}</div>
+      <div style="font-size:13px"><b>Duración:</b> ${dur}</div>
+    </div>
+    <div style="font-size:13px;font-weight:800;color:#1a3c5e;margin-bottom:6px">Historial de movimientos</div>
+    ${hist}`,
+    null);
+  var btnCancel=m.querySelector('#m-cancel');
+  if(btnCancel) btnCancel.textContent='Cerrar';
+}
+
+// ── TOOLTIP DE LA BARRA DE TIEMPO ──────────────────────────────
+function mostrarTipEvento(ev, id){
+  var seg=(window.AI_SEGS||[]).find(s=>s.id===id);
+  if(!seg) return;
+  var pc=parseMotivoComentario(seg);
+  var tip=document.getElementById('ev-tip');
+  if(!tip){
+    tip=document.createElement('div');
+    tip.id='ev-tip';
+    tip.style.cssText='position:fixed;z-index:10000;background:#1a1a1a;color:#fff;padding:8px 12px;border-radius:8px;font-size:11px;font-family:Nunito,sans-serif;pointer-events:none;max-width:220px;box-shadow:0 4px 12px rgba(0,0,0,.3);line-height:1.4';
+    document.body.appendChild(tip);
+  }
+  var reclasTag=(seg.historial&&seg.historial.length)?'<div style="color:#fbbf24;font-weight:800;margin-bottom:3px">🔁 Reclasificado</div>':'';
+  var rango=new Date(seg.ts_inicio).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+' – '+(seg.ts_fin?new Date(seg.ts_fin).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}):'En curso');
+  var durTip=seg.ts_fin?Math.round((seg.ts_fin-seg.ts_inicio)/60000)+' min':(seg._dfin&&seg._dfin<Date.now()?Math.round((seg._dfin-seg.ts_inicio)/60000)+' min':'En curso');
+  tip.innerHTML=reclasTag+'<div style="font-weight:700">'+rango+' · '+durTip+'</div><div>'+pc.motivo+'</div>'+(pc.comentario!=='—'?'<div style="color:#d1d5db">'+pc.comentario+'</div>':'');
+  tip.style.display='block';
+  posicionarTip(ev);
+}
+function posicionarTip(ev){
+  var tip=document.getElementById('ev-tip'); if(!tip) return;
+  var w=window.innerWidth;
+  tip.style.left=Math.min(ev.clientX+10,w-230)+'px';
+  tip.style.top=(ev.clientY+16)+'px';
+}
+function ocultarTipEvento(){
+  var tip=document.getElementById('ev-tip'); if(tip) tip.style.display='none';
+}
+
+// ── EDITAR SEGMENTO (tipo y/o horas) ───────────────────────────
+function abrirEditorSegmento(id){
+  if(window.AI_MODO_HISTORIAL){toast('📖 Modo consulta — no se puede editar','#92400e');return;}
+  var full=window.AI_SEGS||[];
+  var idx=full.findIndex(s=>s.id===id);
+  if(idx<0) return;
+  var seg=full[idx];
+  // Los eventos 'detenida' son eventos de sistema, no se editan
+  if(seg.tipo==='detenida'){infoEvento(id);return;}
+  var enCurso=!seg.ts_fin;
+  var tH=t=>String(new Date(t).getHours()).padStart(2,'0')+':'+String(new Date(t).getMinutes()).padStart(2,'0');
+  var tipos=['corriendo','pnp','pp','idle'];
+  var tipoBtns=tipos.map(t=>'<button onclick="document.querySelectorAll(\'.ed-tipo-btn\').forEach(b=>{b.style.background=\'#f9fafb\';b.style.color=\'#374151\';b.style.borderColor=\'#e5e7eb\'});this.style.background=\''+COL[t]+'\';this.style.color=\'#fff\';this.style.borderColor=\''+COL[t]+'\';document.getElementById(\'ed-tipo\').value=\''+t+'\'" class="ed-tipo-btn" style="flex:1;padding:8px 4px;border:2px solid '+(t===seg.tipo?COL[t]:'#e5e7eb')+';background:'+(t===seg.tipo?COL[t]:'#f9fafb')+';color:'+(t===seg.tipo?'#fff':'#374151')+';border-radius:9px;font-weight:800;font-size:11px;cursor:pointer;font-family:Nunito,sans-serif">'+LBL[t]+'</button>').join('');
+  var m=document.createElement('div');
+  m.className='m-edseg';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  m.innerHTML=`<div style="background:#fff;border-radius:22px 22px 0 0;padding:28px 20px 40px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto">
+    <div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 16px"></div>
+    <div style="font-size:16px;font-weight:900;color:#1a3c5e;margin-bottom:14px">✏️ Editar segmento</div>
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:6px">Tipo</label>
+    <input type="hidden" id="ed-tipo" value="${seg.tipo}">
+    <div style="display:flex;gap:6px;margin-bottom:16px">${tipoBtns}</div>
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Hora inicio</label>
+    <input type="time" id="ed-hi" class="fc" value="${tH(seg.ts_inicio)}">
+    ${enCurso?'<div style="font-size:12px;color:#9ca3af;margin-bottom:10px">Este evento sigue en curso, todavía no tiene hora final.</div>':
+      `<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Hora final</label>
+      <input type="time" id="ed-hf" class="fc" value="${tH(seg.ts_fin)}">`}
+    <div style="display:flex;gap:10px;margin-top:6px">
+      <button onclick="document.querySelectorAll('.m-edseg').forEach(x=>x.remove())" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:12px;cursor:pointer;font-weight:700;font-family:Nunito,sans-serif">Cancelar</button>
+      <button onclick="confirmarEdicionSegmento('${id}')" style="flex:2;padding:13px;background:#0d2144;color:#fff;border:none;border-radius:12px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">💾 Guardar</button>
+      <button onclick="document.querySelectorAll('.m-edseg').forEach(x=>x.remove());partirSegmento('${id}')" style="flex:1;padding:13px;background:#0891b2;color:#fff;border:none;border-radius:12px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">✂️</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+function horaAMs(hhmm){var p=hhmm.split(':');return (+p[0])*3600000+(+p[1])*60000;}
+function confirmarEdicionSegmento(id){
+  var full=window.AI_SEGS||[];
+  var idx=full.findIndex(s=>s.id===id);
+  if(idx<0) return;
+  var seg=full[idx];
+  var nuevoTipo=document.getElementById('ed-tipo').value;
+  var hi=document.getElementById('ed-hi').value;
+  var hfEl=document.getElementById('ed-hf');
+  var base=new Date(seg.ts_inicio); base.setHours(0,0,0,0);
+  var nuevoInicio=base.getTime()+horaAMs(hi);
+  if(nuevoInicio<seg.ts_inicio-12*3600000) nuevoInicio+=86400000; // turno que cruza medianoche
+  var nuevoFin=hfEl?base.getTime()+horaAMs(hfEl.value):seg.ts_fin;
+  if(hfEl && nuevoFin<nuevoInicio) nuevoFin+=86400000;
+  var prev=idx>0?full[idx-1]:null;
+  var next=idx<full.length-1?full[idx+1]:null;
+  if(prev && nuevoInicio<prev.ts_inicio){toast('No puedes extenderte más allá del inicio del evento anterior','#dc2626');return;}
+  if(next && nuevoFin && next.ts_fin && nuevoFin>next.ts_fin){toast('No puedes extenderte más allá del final del siguiente evento','#dc2626');return;}
+  if(nuevoFin && nuevoFin<=nuevoInicio){toast('La hora final debe ser después de la hora inicio','#dc2626');return;}
+  if(nuevoInicio===seg.ts_inicio && nuevoFin===seg.ts_fin && nuevoTipo===seg.tipo){toast('No hay cambios para guardar','#9ca3af');return;}
+  document.querySelectorAll('.m-edseg').forEach(x=>x.remove());
+  modal('⚠️ Confirmar cambio',
+    `<div style="font-size:13px;color:#374151;margin-bottom:10px">Vas a modificar este evento. Si le quitas o agregas tiempo a la hora de inicio o final, se ajustará automáticamente el evento anterior o siguiente para que no se traslapen ni queden huecos sin sentido.</div>
+     <div style="font-size:13px;color:#374151;font-weight:700">¿Confirmas el cambio?</div>`,
+    async(m)=>{ m.remove(); await aplicarEdicionSegmento(seg,prev,next,nuevoTipo,nuevoInicio,nuevoFin); },
+    '#0d2144','Confirmar');
+}
+async function aplicarEdicionSegmento(seg,prev,next,nuevoTipo,nuevoInicio,nuevoFin){
+  var historialPrevio=(seg.sintetico?[]:(seg.historial||[])).slice();
+  var cambios=[];
+  if(nuevoTipo!==seg.tipo) cambios.push('tipo de '+LBL[seg.tipo]+' a '+LBL[nuevoTipo]);
+  if(nuevoInicio!==seg.ts_inicio) cambios.push('inicio a '+new Date(nuevoInicio).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}));
+  if(seg.ts_fin && nuevoFin!==seg.ts_fin) cambios.push('final a '+new Date(nuevoFin).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}));
+  historialPrevio.push({ts:Date.now(),usuario:ME.nombre,accion:'Editado: '+(cambios.join(', ')||'sin cambios detectados')});
+  if(prev && !prev.sintetico && nuevoInicio<seg.ts_inicio){
+    await dbP('ai_eventos','PATCH',{ts_fin:nuevoInicio},'id=eq.'+prev.id);
+  }
+  if(next && !next.sintetico && seg.ts_fin && nuevoFin>seg.ts_fin){
+    await dbP('ai_eventos','PATCH',{ts_inicio:nuevoFin},'id=eq.'+next.id);
+  }
+  if(!seg.sintetico) await fetch(SB+'/rest/v1/ai_eventos?id=eq.'+seg.id,{method:'DELETE',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Prefer':'return=minimal'}});
+  await dbP('ai_eventos','POST',{id:'aiev_'+Date.now(),linea_id:LINEA_ID,tipo:nuevoTipo,reason_code:seg.reason_code||null,comentario:seg.comentario||null,
+    ts_inicio:nuevoInicio,ts_fin:nuevoFin||null,turno:turno(),fecha:hoy(),año:new Date().getFullYear(),semana:sem(hoy()),operador:ME.nombre,historial:historialPrevio},'');
+  toast('✅ Evento actualizado','#16a34a');
+  renderLinea();
+}
+
+// ── PIEZAS ────────────────────────────────────────────────────
+function regPiezas(){
+  var l=LINEAS.find(x=>x.id===LINEA_ID);
+  var t=turno(), tsI=tIni(t,hoy()), hAct=new Date().getHours();
+  var opts=Array.from({length:8},(_,i)=>{var h=new Date(tsI+i*3600000).getHours();return`<option value="${h}"${h===hAct?' selected':''}>${h}:00 – ${h+1}:00</option>`;}).join('');
+  modal('📦 Piezas producidas',
+    `<div style="font-size:12px;color:#9ca3af;margin-bottom:16px">Target: ${l?l.target_hora:0} uds/hr</div>
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Hora</label>
+    <select id="pz-h" class="fc"><${opts}</select>
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Piezas</label>
+    <input type="number" id="pz-v" class="fc" min="0" placeholder="Ej: 1250" style="font-size:1.2rem;text-align:center">`,
+    async(m)=>{
+      var h=parseInt(document.getElementById('pz-h').value);
+      var v=parseInt(document.getElementById('pz-v').value)||0;
+      if(!v){toast('Ingresa el número de piezas','#dc2626');return;}
+      await fetch(SB+'/rest/v1/ai_piezas',{method:'POST',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+        body:JSON.stringify({id:'aipz_'+LINEA_ID+'_'+hoy()+'_'+h,linea_id:LINEA_ID,fecha:hoy(),turno:t,hora:h,piezas:v,operador:ME.nombre})});
+      m.remove();toast('✅ '+v+' piezas registradas','#16a34a');renderLinea();
+    },'#0d2144','💾 Guardar');
+}
+
+// ── CONFIG ────────────────────────────────────────────────────
+async function cargarConfig(){
+  if(TIMER){clearInterval(TIMER);TIMER=null;}
+  go('s-config');
+  var cont=document.getElementById('cfg-cont');
+  cont.innerHTML='<div style="text-align:center;padding:32px;color:#9ca3af">Cargando...</div>';
+  var [lin,rcs,prods]=await Promise.all([
+    db('ai_lineas','GET',null,'order=nombre.asc'),
+    db('ai_reason_codes','GET',null,'order=tipo.asc,nombre.asc'),
+    db('ai_productos','GET',null,'activo=eq.true&order=linea_id.asc,nombre.asc')
+  ]);
+  LINEAS=lin||[]; RCODES=rcs||[];
+  var todosProds=prods||[];
+  var esSuper=ME.rol==='super';
+  var filtroArea=window._cfgFiltroArea||'todas';
+  var linFiltradas=filtroArea==='todas'?LINEAS:LINEAS.filter(l=>(l.area||'envasado')===filtroArea);
+
+  // Filtro de área
+  var filtroHTML=['todas','envasado','fabricacion'].map(a=>`
+    <button onclick="window._cfgFiltroArea='${a}';cargarConfig()" style="padding:5px 12px;border:2px solid #000;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;background:${filtroArea===a?'#0d2144':'#fff'};color:${filtroArea===a?'#fff':'#000'}">
+      ${{todas:'Todas',envasado:'Envasado',fabricacion:'Fabricación'}[a]}
+    </button>`).join('');
+  var linHTML='<div style="display:flex;gap:6px;margin-bottom:12px">'+filtroHTML+'</div>'
+  +linFiltradas.map(l=>{
+    var area=l.area||'envasado';
+    var tipoProd=area==='envasado'?'Ferts':'Halbs';
+    var unidLabel=l.unidad==='kg'?'kg/h':'pzs/h';
+    var prodsLinea=todosProds.filter(p=>p.linea_id===l.id);
+    var prodsHTML=prodsLinea.length
+      ? prodsLinea.map(p=>`<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #f3f4f6;font-size:11px"><span style="font-weight:700">${p.nombre}${p.codigo?' ('+p.codigo+')':''}</span><span style="color:#6b7280">${p.target_hora} ${unidLabel} · AI:${p.objetivo_ai}% PP:${p.objetivo_pp}% PNP:${p.objetivo_pnp}%</span></div>`).join('')
+      : `<div style="font-size:11px;color:#9ca3af;padding:3px 0">Sin ${tipoProd}</div>`;
+    return `<div style="background:#f9fafb;border-radius:12px;padding:14px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">
+        <div>
+          <div style="font-weight:800;font-size:14px">${l.nombre}</div>
+          <div style="margin-top:3px"><span style="background:${area==='envasado'?'#0891b2':'#16a34a'};color:#fff;border-radius:4px;padding:1px 7px;font-size:10px;font-weight:700">${area==='envasado'?'Envasado':'Fabricación'}</span><span style="font-size:11px;color:#6b7280;margin-left:6px">${unidLabel} · ${l.activa?'Activa':'Inactiva'}</span></div>
+        </div>
+        <div style="display:flex;gap:6px">
+          <button onclick="editarLinea('${l.id}')" style="padding:6px 10px;background:#e0f7fa;color:#0891b2;border:none;border-radius:8px;cursor:pointer;font-size:.82rem;font-weight:700;font-family:Nunito,sans-serif">✏️</button>
+          ${esSuper?`<button onclick="eliminarLinea('${l.id}','${l.nombre}')" style="padding:6px 10px;background:#fee2e2;color:#dc2626;border:none;border-radius:8px;cursor:pointer;font-size:.82rem;font-weight:700;font-family:Nunito,sans-serif">🗑️</button>`:''}
+        </div>
+      </div>
+      <div style="border-top:1px solid #e5e7eb;padding-top:6px">${prodsHTML}</div>
+      <button onclick="gestionarProductos('${l.id}','${l.nombre}','${area}')" style="margin-top:6px;padding:3px 10px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">+ ${tipoProd}</button>
+    </div>`
+  }).join('')||'<div style="color:#9ca3af;text-align:center;padding:20px">Sin líneas en esta área</div>';
+
+  var rcHTML=['pnp','pp','idle'].map(tipo=>`
+    <div style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="background:${COL[tipo]};color:#fff;border-radius:8px;padding:4px 12px;font-size:12px;font-weight:700">${LBL[tipo]}</span>
+        <button onclick="agregarRC('${tipo}')" style="padding:5px 12px;background:#0d2144;color:#fff;border:none;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">+ Agregar</button>
+      </div>
+      ${(RCODES.filter(r=>r.tipo===tipo)).map(r=>`
+        <div style="background:#f9fafb;border-radius:8px;padding:8px 12px;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-size:13px;font-weight:600">${r.nombre}</span>
+          <div style="display:flex;gap:5px">
+            <button onclick="editarRC('${r.id}','${r.nombre.replace(/'/g,'\\\'')}')" style="background:#e0f7fa;color:#0891b2;border:none;border-radius:6px;padding:4px 10px;font-size:.75rem;cursor:pointer;font-family:Nunito,sans-serif">✏️</button>
+            <button onclick="elimRC('${r.id}')" style="background:#fee2e2;color:#dc2626;border:none;border-radius:6px;padding:4px 10px;font-size:.75rem;cursor:pointer;font-family:Nunito,sans-serif">🗑️</button>
+          </div>
+        </div>`).join('')}
+    </div>`).join('');
+
+  cont.innerHTML=`
+    <div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:16px;font-weight:800;color:#1a3c5e">🏭 Líneas</div>
+        <button onclick="nuevaLinea()" style="padding:7px 14px;background:#16a34a;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:.82rem;font-weight:700;font-family:Nunito,sans-serif">+ Nueva</button>
+      </div>${linHTML}
+    </div>
+    <div class="card"><div style="font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:12px">📋 Reason Codes</div>${rcHTML}</div>`;
+}
+
+function nuevaLinea(){
+  // Paso 1: elegir área
+  modal('🏭 Nueva línea — Paso 1/2',
+    `<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:6px">Área</label>
+    <select id="nl-area" class="fc">
+      <option value="envasado">Envasado</option>
+      <option value="fabricacion">Fabricación</option>
+    </select>`,
+    (m)=>{
+      var area=document.getElementById('nl-area').value;
+      m.remove();
+      _nuevaLineaPaso2(area);
+    },'#16a34a','Siguiente →');
+}
+function _nuevaLineaPaso2(area){
+  var tipoProd=area==='envasado'?'Fert':'Halb';
+  modal('🏭 Nueva línea — Paso 2/2',
+    `<div style="background:#f0f9ff;border-radius:8px;padding:8px 12px;margin-bottom:12px;font-size:12px;color:#0369a1"><span style="font-weight:800">Área: </span>${area==='envasado'?'Envasado':'Fabricación'}</div>
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Nombre de la línea</label>
+    <input type="text" id="nl-n" class="fc" placeholder="Ej: Doypack 1, Cocedor 1...">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Unidad de medida</label>
+    <select id="nl-u" class="fc"><option value="pzs">Piezas (pzs)</option><option value="kg">Kilogramos (kg)</option></select>`,
+    async(m)=>{
+      var n=document.getElementById('nl-n').value.trim();
+      var u=document.getElementById('nl-u').value;
+      if(!n){toast('Escribe el nombre','#dc2626');return;}
+      var id='ailin_'+Date.now();
+      var r=await fetch(SB+'/rest/v1/ai_lineas',{method:'POST',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'return=minimal'},
+        body:JSON.stringify({id,nombre:n,target_hora:0,unidad:u,area,objetivo_ai:85,objetivo_pp:15,objetivo_pnp:10,activa:true})});
+      if(!r.ok){var err=await r.text();toast('Error: '+r.status+' '+err,'#dc2626');return;}
+      m.remove();
+      toast('✅ Línea creada — ahora agrega '+tipoProd+'s','#16a34a');
+      // Recargar LINEAS y abrir gestión de productos
+      var lin=await db('ai_lineas','GET',null,'order=nombre.asc');
+      LINEAS=lin||[];
+      gestionarProductos(id,n,area);
+    },'#16a34a','Guardar línea');
+}
+async function editarLinea(id){
+  var l=LINEAS.find(x=>x.id===id);if(!l)return;
+  var area=l.area||'envasado';
+  var tipoProd=area==='envasado'?'Fert':'Halb';
+  var prods=await db('ai_productos','GET',null,'linea_id=eq.'+id+'&activo=eq.true&order=nombre.asc')||[];
+  modal('✏️ Editar línea: '+l.nombre,
+    `<div style="background:#f0f9ff;border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:12px;color:#0369a1"><span style="font-weight:800">Área: </span>${area==='envasado'?'Envasado':'Fabricación'}
+    <select id="el-area" class="fc" style="margin-top:6px;margin-bottom:0"><option value="envasado"${area==='envasado'?' selected':''}>Envasado</option><option value="fabricacion"${area==='fabricacion'?' selected':''}>Fabricación</option></select></div>
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Nombre</label>
+    <input type="text" id="el-n" class="fc" value="${l.nombre}">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Unidad de medida</label>
+    <select id="el-u" class="fc"><option value="pzs"${l.unidad==='pzs'?' selected':''}>Piezas (pzs)</option><option value="kg"${l.unidad==='kg'?' selected':''}>Kilogramos (kg)</option></select>
+    <div style="margin-top:12px;border-top:1px solid #e5e7eb;padding-top:10px">
+      <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">${tipoProd}s de esta línea (${prods.length})</div>
+      ${prods.map(p=>'<div style="background:#f9fafb;border-radius:8px;padding:8px 12px;margin-bottom:4px;font-size:12px"><b>'+p.nombre+'</b> '+( p.codigo?'('+p.codigo+')':'' )+' · '+p.target_hora+' u/h</div>').join('')||'<div style="font-size:11px;color:#9ca3af">Sin '+tipoProd+'s aún</div>'}
+      <button type="button" onclick="gestionarProductos('${id}','${l.nombre}','${area}')" style="margin-top:8px;padding:6px 12px;background:#0d2144;color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">+ Gestionar ${tipoProd}s</button>
+    </div>`,
+    async(m)=>{
+      var n=document.getElementById('el-n').value.trim();
+      var u=document.getElementById('el-u').value;
+      var newArea=document.getElementById('el-area').value;
+      var r=await fetch(SB+'/rest/v1/ai_lineas?id=eq.'+id,{method:'PATCH',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'return=minimal'},
+        body:JSON.stringify({nombre:n,unidad:u,area:newArea})});
+      if(!r.ok){var err=await r.text();toast('Error: '+r.status+' '+err,'#dc2626');return;}
+      if(!r.ok){var err=await r.text();toast('Error: '+r.status+' '+err,'#dc2626');return;}
+      m.remove();toast('✅ Actualizado','#0891b2');cargarConfig();
+    },'#0891b2','Actualizar');
+}
+async function gestionarProductos(lineaId,lineaNombre,area){
+  var tipoProd=area==='envasado'?'Fert':'Halb';
+  var prods=await db('ai_productos','GET',null,'linea_id=eq.'+lineaId+'&activo=eq.true&order=nombre.asc')||[];
+  modal('📦 '+tipoProd+'s · '+lineaNombre,
+    `<div id="prod-lista">`
+    +prods.map(p=>'<div style="background:#f9fafb;border-radius:10px;padding:10px 12px;margin-bottom:6px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:center">'
+      +'<div><div style="font-weight:800;font-size:13px">'+p.nombre+(p.codigo?' <span style="color:#6b7280;font-size:11px">('+p.codigo+')</span>':'')+'</div>'
+      +'<div style="font-size:11px;color:#6b7280">'+p.target_hora+' u/h · AI:'+p.objetivo_ai+'% PP:'+p.objetivo_pp+'% PNP:'+p.objetivo_pnp+'%</div>'
+      +'</div>'
+      +'<div style="display:flex;gap:5px">'
+      +'<button onclick="editarProducto(\''+p.id+'\',\''+lineaId+'\',\''+lineaNombre+'\',\''+area+'\')" style="padding:4px 8px;background:#e0f7fa;color:#0891b2;border:none;border-radius:6px;font-size:11px;cursor:pointer">✏️</button>'
+      +'<button onclick="eliminarProducto(\''+p.id+'\',\''+lineaId+'\',\''+lineaNombre+'\',\''+area+'\')" style="padding:4px 8px;background:#fee2e2;color:#dc2626;border:none;border-radius:6px;font-size:11px;cursor:pointer">🗑️</button>'
+      +'</div></div></div>'
+    ).join('')
+    +(prods.length===0?'<div style="color:#9ca3af;font-size:12px;text-align:center;padding:12px">Sin '+tipoProd+'s aún</div>':'')
+    +'</div>'
+    +'<button type="button" onclick="agregarProducto(\''+lineaId+'\',\''+lineaNombre.replace(/'/g,'')+'\',\''+area+'\')" style="width:100%;margin-top:10px;padding:10px;background:#16a34a;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">+ Nuevo '+tipoProd+'</button>',
+    null);
+}
+function agregarProducto(lineaId,lineaNombre,area){
+  var tipoProd=area==='envasado'?'Fert':'Halb';
+  document.querySelectorAll('.m-modal').forEach(x=>x.remove());
+  modal('+ Nuevo '+tipoProd+' · '+lineaNombre,
+    `<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Nombre del ${tipoProd}</label>
+    <input type="text" id="np-n" class="fc" placeholder="Ej: Salsa Valentina 220ml">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Código (SAP / ERP)</label>
+    <input type="text" id="np-cod" class="fc" placeholder="Ej: 100234">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Target por hora</label>
+    <input type="number" id="np-t" class="fc" min="0" placeholder="Ej: 3000">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Objetivo AI (%)</label>
+    <input type="number" id="np-ai" class="fc" value="85" min="0" max="100">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Objetivo PP% (máx)</label>
+    <input type="number" id="np-pp" class="fc" value="15" min="0" max="100">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Objetivo PNP% (máx)</label>
+    <input type="number" id="np-pnp" class="fc" value="10" min="0" max="100">`,
+    async(m)=>{
+      var n=document.getElementById('np-n').value.trim();
+      var cod=document.getElementById('np-cod').value.trim();
+      var t=parseFloat(document.getElementById('np-t').value)||0;
+      var ai=parseInt(document.getElementById('np-ai').value)||85;
+      var pp=parseInt(document.getElementById('np-pp').value)||15;
+      var pnp=parseInt(document.getElementById('np-pnp').value)||10;
+      if(!n){toast('Escribe el nombre','#dc2626');return;}
+      var r=await fetch(SB+'/rest/v1/ai_productos',{method:'POST',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'return=minimal'},
+        body:JSON.stringify({id:'aiprod_'+Date.now(),linea_id:lineaId,nombre:n,codigo:cod||null,tipo:area==='envasado'?'fert':'halb',target_hora:t,objetivo_ai:ai,objetivo_pp:pp,objetivo_pnp:pnp,activo:true})});
+      if(!r.ok){var err=await r.text();toast('Error: '+r.status+' '+err,'#dc2626');return;}
+      document.querySelectorAll('.m-modal').forEach(x=>x.remove());
+      toast('✅ '+tipoProd+' agregado','#16a34a');
+      cargarConfig();
+    },'#16a34a','Guardar '+tipoProd);
+}
+async function editarProducto(prodId,lineaId,lineaNombre,area){
+  var tipoProd=area==='envasado'?'Fert':'Halb';
+  var prods=await db('ai_productos','GET',null,'id=eq.'+prodId)||[];
+  if(!prods.length) return;
+  var p=prods[0];
+  document.querySelectorAll('.m-modal').forEach(x=>x.remove());
+  modal('✏️ Editar '+tipoProd,
+    `<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Nombre</label>
+    <input type="text" id="ep-n" class="fc" value="${p.nombre}">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Código</label>
+    <input type="text" id="ep-cod" class="fc" value="${p.codigo||''}">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Target por hora</label>
+    <input type="number" id="ep-t" class="fc" value="${p.target_hora||0}">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Objetivo AI (%)</label>
+    <input type="number" id="ep-ai" class="fc" value="${p.objetivo_ai||85}">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Objetivo PP%</label>
+    <input type="number" id="ep-pp" class="fc" value="${p.objetivo_pp||15}">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Objetivo PNP%</label>
+    <input type="number" id="ep-pnp" class="fc" value="${p.objetivo_pnp||10}">`,
+    async(m)=>{
+      var n=document.getElementById('ep-n').value.trim();
+      var cod=document.getElementById('ep-cod').value.trim();
+      var t=parseFloat(document.getElementById('ep-t').value)||0;
+      var ai=parseInt(document.getElementById('ep-ai').value)||85;
+      var pp=parseInt(document.getElementById('ep-pp').value)||15;
+      var pnp=parseInt(document.getElementById('ep-pnp').value)||10;
+      var r=await fetch(SB+'/rest/v1/ai_productos?id=eq.'+prodId,{method:'PATCH',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'return=minimal'},
+        body:JSON.stringify({nombre:n,codigo:cod||null,target_hora:t,objetivo_ai:ai,objetivo_pp:pp,objetivo_pnp:pnp})});
+      if(!r.ok){var err=await r.text();toast('Error: '+r.status,'#dc2626');return;}
+      m.remove();toast('✅ Actualizado','#0891b2');
+      gestionarProductos(lineaId,lineaNombre,area);
+    },'#0891b2','Actualizar');
+}
+async function eliminarProducto(prodId,lineaId,lineaNombre,area){
+  if(!confirm('¿Eliminar este producto?'))return;
+  await dbP('ai_productos','PATCH',{activo:false},'id=eq.'+prodId);
+  toast('Eliminado','#dc2626');
+  gestionarProductos(lineaId,lineaNombre,area);
+}
+function agregarRC(tipo){
+  modal('+ Reason Code · '+LBL[tipo],
+    `<input type="text" id="rc-n" class="fc" placeholder="Ej: Falla mecánica, CIP, Comida...">`,
+    async(m)=>{
+      var n=document.getElementById('rc-n').value.trim();
+      if(!n){toast('Escribe el nombre','#dc2626');return;}
+      await fetch(SB+'/rest/v1/ai_reason_codes',{method:'POST',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({id:'rc_'+Date.now(),tipo,nombre:n,activo:true})});
+      m.remove();toast('✅ Agregado','#16a34a');cargarConfig();
+    },COL[tipo]);
+}
+async function elimRC(id){
+  if(!confirm('¿Eliminar este reason code?'))return;
+  await fetch(SB+'/rest/v1/ai_reason_codes?id=eq.'+id,{method:'DELETE',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Prefer':'return=minimal'}});
+  toast('Eliminado','#dc2626');cargarConfig();
+}
+function editarRC(id,nombreActual){
+  modal('✏️ Editar Reason Code',
+    `<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Nombre</label>
+    <input type="text" id="erc-n" class="fc" value="${nombreActual}">`,
+    async(m)=>{
+      var n=document.getElementById('erc-n').value.trim();
+      if(!n){toast('Escribe el nombre','#dc2626');return;}
+      await dbP('ai_reason_codes','PATCH',{nombre:n},'id=eq.'+id);
+      m.remove();toast('✅ Actualizado','#0891b2');cargarConfig();
+    },'#0891b2','Guardar');
+}
+async function eliminarLinea(id,nombre){
+  if(ME.rol!=='super'){toast('Solo el Super Usuario puede eliminar líneas','#dc2626');return;}
+  if(!confirm('¿Eliminar la línea "'+nombre+'" y todos sus datos? Esta acción no se puede deshacer.'))return;
+  await dbP('ai_lineas','PATCH',{activa:false},'id=eq.'+id);
+  toast('Línea eliminada','#dc2626');cargarConfig();
+}
+
+// ── ADMIN USUARIOS ────────────────────────────────────────────
+async function cargarAdmin(){
+  if(TIMER){clearInterval(TIMER);TIMER=null;}
+  go('s-admin');
+  var cont=document.getElementById('admin-cont');
+  cont.innerHTML='<div style="text-align:center;padding:32px;color:#9ca3af">Cargando...</div>';
+  var rows=await db('ai_usuarios','GET',null,'order=nombre.asc')||[];
+  var rolColor={super:'#7c3aed',admin:'#0891b2',operador:'#16a34a'};
+  cont.innerHTML=rows.map(u=>`
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-weight:800;font-size:15px">${u.nombre}</div>
+        <div style="font-size:12px;color:#6b7280">@${u.username}</div>
+        <span class="badge" style="background:${rolColor[u.rol]||'#6b7280'};color:#fff;margin-top:4px">${u.rol}</span>
+        ${!u.activo?'<span class="badge" style="background:#fee2e2;color:#dc2626;margin-left:6px">Inactivo</span>':''}
+      </div>
+      <div style="display:flex;gap:6px">
+        <button onclick="editarUsuario('${u.id}')" style="padding:7px 12px;background:#e0f7fa;color:#0891b2;border:none;border-radius:8px;cursor:pointer;font-size:.8rem;font-weight:700;font-family:Nunito,sans-serif">✏️</button>
+        <button onclick="elimUsuario('${u.id}','${u.nombre}')" style="padding:7px 12px;background:#fee2e2;color:#dc2626;border:none;border-radius:8px;cursor:pointer;font-size:.8rem;font-weight:700;font-family:Nunito,sans-serif">🗑️</button>
+      </div>
+    </div>`).join('')||'<div class="card" style="text-align:center;padding:40px;color:#9ca3af">Sin usuarios</div>';
+}
+
+function rolOpts(sel){
+  return['super','admin','operador'].map(r=>`<option value="${r}"${sel===r?' selected':''}>${r}</option>`).join('');
+}
+
+function abrirNuevoUsuario(){
+  modal('👤 Nuevo usuario',
+    `<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Nombre completo</label>
+    <input type="text" id="nu-nombre" class="fc" placeholder="Ej: Juan Pérez">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Usuario (login)</label>
+    <input type="text" id="nu-user" class="fc" placeholder="Ej: jperez" autocomplete="off">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Contraseña</label>
+    <input type="text" id="nu-pass" class="fc" placeholder="Contraseña" autocomplete="off">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Rol</label>
+    <select id="nu-rol" class="fc">${rolOpts('operador')}</select>`,
+    async(m)=>{
+      var nombre=document.getElementById('nu-nombre').value.trim();
+      var user=document.getElementById('nu-user').value.trim();
+      var pass=document.getElementById('nu-pass').value.trim();
+      var rol=document.getElementById('nu-rol').value;
+      if(!nombre||!user||!pass){toast('Completa todos los campos','#dc2626');return;}
+      var r=await fetch(SB+'/rest/v1/ai_usuarios',{method:'POST',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'return=minimal'},
+        body:JSON.stringify({id:'aiusr_'+Date.now(),username:user,nombre,password:pass,rol,activo:true})});
+      if(r.ok||r.status===201||r.status===204){m.remove();toast('✅ Usuario creado','#16a34a');cargarAdmin();}
+      else{var t=await r.text();toast('Error: '+JSON.parse(t).message,'#dc2626');}
+    },'#16a34a','Crear usuario');
+}
+
+async function editarUsuario(id){
+  var rows=await db('ai_usuarios','GET',null,'id=eq.'+id+'&limit=1');
+  var u=rows&&rows[0];if(!u)return;
+  modal('✏️ Editar usuario',
+    `<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Nombre completo</label>
+    <input type="text" id="eu-nombre" class="fc" value="${u.nombre}">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Usuario (login)</label>
+    <input type="text" id="eu-user" class="fc" value="${u.username}">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Nueva contraseña (dejar vacío = no cambiar)</label>
+    <input type="text" id="eu-pass" class="fc" placeholder="Nueva contraseña...">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Rol</label>
+    <select id="eu-rol" class="fc">${rolOpts(u.rol)}</select>
+    <label style="display:flex;align-items:center;gap:8px;font-size:.82rem;font-weight:700;cursor:pointer">
+      <input type="checkbox" id="eu-activo" ${u.activo?'checked':''} style="width:18px;height:18px"> Activo
+    </label>`,
+    async(m)=>{
+      var nombre=document.getElementById('eu-nombre').value.trim();
+      var user=document.getElementById('eu-user').value.trim();
+      var pass=document.getElementById('eu-pass').value.trim();
+      var rol=document.getElementById('eu-rol').value;
+      var activo=document.getElementById('eu-activo').checked;
+      var payload={nombre,username:user,rol,activo};
+      if(pass) payload.password=pass;
+      await fetch(SB+'/rest/v1/ai_usuarios?id=eq.'+id,{method:'PATCH',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(payload)});
+      m.remove();toast('✅ Usuario actualizado','#0891b2');cargarAdmin();
+    },'#0891b2','Actualizar');
+}
+
+async function elimUsuario(id,nombre){
+  if(!confirm('¿Eliminar a '+nombre+'?'))return;
+  await fetch(SB+'/rest/v1/ai_usuarios?id=eq.'+id,{method:'DELETE',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Prefer':'return=minimal'}});
+  toast('Eliminado','#dc2626');cargarAdmin();
+}
+
+// ── Navegación entre pantallas con botones específicos ──────
+// ── GESTIÓN DE ÓRDENES ───────────────────────────────────────
+async function irGestionOrdenes(){
+  if(TIMER){clearInterval(TIMER);TIMER=null;}
+  go('s-gestion-ordenes');
+  var lin=await db('ai_lineas','GET',null,'activa=eq.true&order=nombre.asc')||[];
+  LINEAS=lin;
+  var sel=document.getElementById('go-linea');
+  sel.innerHTML='<option value="">Todas las líneas</option>'+lin.map(l=>'<option value="'+l.id+'">'+l.nombre+'</option>').join('');
+  cargarGestionOrdenes();
+}
+async function cargarGestionOrdenes(){
+  var cont=document.getElementById('go-cont');
+  cont.innerHTML='<div style="text-align:center;padding:20px;color:#9ca3af">Cargando...</div>';
+  var filtro=document.getElementById('go-filtro').value;
+  var lineaId=document.getElementById('go-linea').value;
+  var q='order=ts_inicio.desc&limit=50';
+  if(lineaId) q+='&linea_id=eq.'+lineaId;
+  if(filtro==='cerrada') q+='&estado=eq.cerrada';
+  else if(filtro==='corriendo') q+='&estado=eq.abierta&detenida_en=is.null';
+  else if(filtro==='detenida') q+='&estado=eq.abierta&detenida_en=not.is.null';
+  else q+='&estado=in.(abierta,cerrada)';
+  var ords=await db('ai_ordenes','GET',null,q)||[];
+  if(!ords.length){cont.innerHTML='<div style="text-align:center;padding:20px;color:#9ca3af">Sin órdenes con ese filtro.</div>';return;}
+  cont.innerHTML=ords.map(o=>{
+    var l=LINEAS.find(x=>x.id===o.linea_id);
+    var estado=o.estado==='cerrada'?'CTEC':o.detenida_en?'Detenida':'Corriendo';
+    var col=o.estado==='cerrada'?'#7c3aed':o.detenida_en?'#1a1a1a':'#16a34a';
+    var hist=(o.historial||[]).slice().reverse().map(h=>
+      '<div style="font-size:10px;color:#6b7280;padding:2px 0">'+new Date(h.ts).toLocaleString('es-MX',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' · '+h.usuario+' — '+h.accion+'</div>'
+    ).join('');
+    return '<div style="background:#fff;border-radius:12px;padding:14px;margin-bottom:10px;box-shadow:0 1px 6px rgba(0,0,0,.07)">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">'
+      +'<div><div style="font-weight:800;font-size:13px">'+o.folio+'</div>'
+      +'<div style="font-size:11px;color:#6b7280">'+(l?l.nombre:'—')+' · '+new Date(o.ts_inicio).toLocaleString('es-MX',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</div>'
+      +(hist?'<div style="margin-top:4px">'+hist+'</div>':'')
+      +'</div>'
+      +'<div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end">'
+      +'<span style="background:'+col+';color:#fff;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700">'+estado+'</span>'
+      +(o.estado==='cerrada'?'<button onclick="quitarCTEC(\''+o.id+'\',\''+o.folio+'\')" style="padding:4px 10px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">Quitar CTEC</button>':'')
+      +'</div></div></div>';
+  }).join('');
+}
+async function quitarCTEC(ordenId, folio){
+  var ahora=Date.now();
+  var ords=await db('ai_ordenes','GET',null,'id=eq.'+ordenId)||[];
+  if(!ords.length) return;
+  var hist=(ords[0].historial||[]).slice();
+  hist.push({ts:ahora,usuario:ME.nombre,accion:'CTEC removido para edición'});
+  await dbP('ai_ordenes','PATCH',{estado:'abierta',detenida_en:ords[0].ts_fin,ts_fin:null,historial:hist},'id=eq.'+ordenId);
+  toast('✅ CTEC removido en '+folio,'#0891b2');
+  cargarGestionOrdenes();
+}
+
+// ── LOGSHEET ADMIN ───────────────────────────────────────────
+async function irLogsheetAdmin(){
+  if(TIMER){clearInterval(TIMER);TIMER=null;}
+  go('s-logsheet-admin');
+  var lin=await db('ai_lineas','GET',null,'activa=eq.true&order=nombre.asc')||[];
+  LINEAS=lin;
+  var sel=document.getElementById('lsa-linea');
+  if(sel) sel.innerHTML='<option value="">— Selecciona una línea —</option>'+lin.map(l=>'<option value="'+l.id+'">'+l.nombre+'</option>').join('');
+  if(sel) sel.value='';
+}
+function seleccionarLineaLogsheetAdmin(id){
+  if(!id) return;
+  LINEA_ID=id;
+  ORIGEN_LOGSHEET='s-logsheet-admin';
+  var l=LINEAS.find(x=>x.id===id);
+  var sub=document.getElementById('ls-sub');
+  if(sub) sub.textContent=l?l.nombre:'—';
+  var btnPlus=document.getElementById('ls-btn-add-cat');
+  if(btnPlus) btnPlus.style.display='';
+  LS_CAT='checklist';
+  go('s-logsheet');
+  actualizarTabsLS();
+  renderLogsheet();
+}
+
+// ── POPUP UNIFICADO DE FECHA ──────────────────────────────────
+var _pfMesSel=null; // mes seleccionado en etapa 1 antes de confirmar
+function abrirPopupFecha(btn){
+  document.querySelectorAll('.cal-popup').forEach(x=>x.remove());
+  var fM=typeof window.AI_F_MES==='number'?window.AI_F_MES:new Date().getMonth()+1;
+  var fA=window.AI_F_AÑO||new Date().getFullYear();
+  _pfMesSel=null;
+  _mostrarEtapa1Fecha(btn,fA,fM);
+}
+function _mostrarEtapa1Fecha(btn,año,mesSel){
+  document.querySelectorAll('.cal-popup').forEach(x=>x.remove());
+  var meses=['ENE','FEB','MAR','ABR','MAY','JUN','JUL','AGO','SEP','OCT','NOV','DIC'];
+  var pop=document.createElement('div');
+  pop.className='cal-popup';
+  pop.style.cssText='position:fixed;z-index:10001;background:#fff;border:2px solid #000;border-radius:10px;padding:10px;box-shadow:0 6px 24px rgba(0,0,0,.25);min-width:220px';
+  var rect=btn.getBoundingClientRect();
+  pop.style.top=Math.min(rect.bottom+4,window.innerHeight-260)+'px';
+  pop.style.left=Math.max(4,Math.min(rect.left,window.innerWidth-240))+'px';
+  pop.innerHTML=
+    // Cabecera: flechas de año + año centrado
+    '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;border:2px solid #000;border-radius:7px;overflow:hidden">'
+    +'<button onclick="_cambiarAñoPF('+(año-1)+',this.closest(\'.cal-popup\'))" style="padding:6px 14px;background:#fff;border:none;font-size:20px;font-weight:900;cursor:pointer;border-right:2px solid #000">◄</button>'
+    +'<span style="font-size:15px;font-weight:900;color:#000" id="pf-año">'+año+'</span>'
+    +'<button onclick="_cambiarAñoPF('+(año+1)+',this.closest(\'.cal-popup\'))" style="padding:6px 14px;background:#fff;border:none;font-size:20px;font-weight:900;cursor:pointer;border-left:2px solid #000">►</button>'
+    +'</div>'
+    // Grid de meses 4x3
+    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">'
+    +meses.map((m,i)=>{
+      var activo=(i+1)===mesSel;
+      return '<div onclick="_seleccionarMesPF('+(i+1)+','+año+',this.closest(\'.cal-popup\'))" '
+        +'style="padding:8px 6px;font-size:12px;font-weight:800;cursor:pointer;border:2px solid #000;border-radius:5px;'
+        +'background:'+(activo?'#7f1d1d':'#fff')+';color:'+(activo?'#fff':'#000')+';text-align:left;font-family:Nunito,sans-serif">'+m+'</div>';
+    }).join('')
+    +'</div>';
+  document.body.appendChild(pop);
+  setTimeout(()=>{document.addEventListener('click',function ck(e){if(!pop.contains(e.target)&&e.target!==btn){pop.remove();document.removeEventListener('click',ck);}},true);},100);
+}
+function _cambiarAñoPF(nuevoAño,pop){
+  var mesSel=window.AI_F_MES||(new Date().getMonth()+1);
+  var btn=document.querySelector('button[onclick*="abrirPopupFecha"]');
+  // Actualizar el año en el filtro y redibujar el popup
+  window.AI_F_AÑO=nuevoAño;
+  if(!btn){pop.remove();return;}
+  _mostrarEtapa1Fecha(btn,nuevoAño,typeof mesSel==='number'?mesSel:new Date().getMonth()+1);
+}
+function _seleccionarMesPF(mes,año,pop){
+  pop.remove();
+  // Etapa 2: calendario de días
+  var fDia=window.AI_F_DIA||'hoy';
+  if(fDia==='hoy') fDia=new Date().getDate();
+  fDia=parseInt(fDia);
+  var diasEnMes=new Date(año,mes,0).getDate();
+  if(fDia>diasEnMes) fDia=diasEnMes;
+  var primerDia=(new Date(año,mes-1,1).getDay()+6)%7;
+  var mesesFull=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var btn=document.querySelector('button[onclick*="abrirPopupFecha"]');
+  if(!btn) return;
+  var pop2=document.createElement('div');
+  pop2.className='cal-popup';
+  pop2.style.cssText='position:fixed;z-index:10001;background:#fff;border:2px solid #000;border-radius:10px;padding:10px;box-shadow:0 6px 24px rgba(0,0,0,.25)';
+  var rect=btn.getBoundingClientRect();
+  pop2.style.top=Math.min(rect.bottom+4,window.innerHeight-300)+'px';
+  pop2.style.left=Math.max(4,Math.min(rect.left,window.innerWidth-240))+'px';
+  var html='<div style="font-size:13px;font-weight:900;text-align:center;margin-bottom:8px;border-bottom:2px solid #000;padding-bottom:6px">'+mesesFull[mes-1]+' '+año+'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(7,28px);gap:2px;margin-bottom:8px">';
+  ['L','M','X','J','V','S','D'].forEach(d=>{html+='<div style="text-align:center;font-size:9px;font-weight:700;color:#6b7280;padding:2px 0;font-family:Nunito,sans-serif">'+d+'</div>';});
+  for(var e=0;e<primerDia;e++) html+='<div></div>';
+  for(var d=1;d<=diasEnMes;d++){
+    var act=d===fDia;
+    html+='<div onclick="window._pfDiaSel='+d+';document.querySelectorAll(\'.cal-popup .pf-dia-activo\').forEach(x=>{x.style.background=\'#fff\';x.style.color=\'#000\';x.classList.remove(\'pf-dia-activo\')});this.style.background=\'#7f1d1d\';this.style.color=\'#fff\';this.classList.add(\'pf-dia-activo\')" '
+      +'style="text-align:center;padding:4px 2px;font-size:11px;font-weight:700;cursor:pointer;border-radius:5px;'
+      +'background:'+(act?'#7f1d1d':'#fff')+';color:'+(act?'#fff':'#000')+';'
+      +'border:1px solid '+(act?'#7f1d1d':'#e5e7eb')+';font-family:Nunito,sans-serif'+(act?' class="pf-dia-activo"':'')+'">'
+      +d+'</div>';
+  }
+  window._pfDiaSel=fDia;
+  html+='</div>'
+    +'<div style="display:flex;gap:6px;border-top:2px solid #000;padding-top:8px">'
+    +'<button onclick="document.querySelectorAll(\'.cal-popup\').forEach(x=>x.remove())" style="flex:1;padding:8px;background:#fff;border:2px solid #000;border-radius:8px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif;font-size:12px">Cancelar</button>'
+    +'<button onclick="_confirmarFecha('+mes+','+año+')" style="flex:2;padding:8px;background:#7f1d1d;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif;font-size:12px">✓ Guardar</button>'
+    +'</div>';
+  pop2.innerHTML=html;
+  document.body.appendChild(pop2);
+  setTimeout(()=>{document.addEventListener('click',function ck(e){if(!pop2.contains(e.target)&&e.target!==btn){pop2.remove();document.removeEventListener('click',ck);}},true);},100);
+}
+function _confirmarFecha(mes,año){
+  document.querySelectorAll('.cal-popup').forEach(x=>x.remove());
+  window.AI_F_AÑO=año;
+  window.AI_F_MES=mes;
+  window.AI_F_DIA=window._pfDiaSel||new Date().getDate();
+  renderLinea();
+}
+// Mantener compatibilidad con navDia que usa AI_F_MES/AÑO/DIA
+function abrirCalMes(btn){abrirPopupFecha(btn);}
+function abrirCalDia(btn){abrirPopupFecha(btn);}
+
+// ── NAVEGACIÓN D/T ───────────────────────────────────────────
+window.AI_NAV_MODE=null;
+function setNavMode(m){
+  if(window.AI_NAV_MODE===m){
+    window.AI_NAV_MODE=null;
+    window.AI_F_TURNO='turno_actual';
+  }else{
+    window.AI_NAV_MODE=m;
+    if(m==='d') window.AI_F_TURNO='dia';
+    else if(m==='s') window.AI_F_TURNO='semana';
+    else window.AI_F_TURNO=turno();
+  }
+  renderLinea();
+}
+function navFecha(dir){
+  var modo=window.AI_NAV_MODE;
+  if(!modo) return;
+  if(modo==='s') navSemana(dir);
+  else if(modo==='d'){ navDia(dir); window.AI_F_TURNO='dia'; }
+  else navTurno(dir);
+}
+function navSemana(dir){
+  // Mover una semana entera
+  var fDia=window.AI_F_DIA||'hoy';
+  var fM=window.AI_F_MES||(new Date().getMonth()+1);
+  var fA=window.AI_F_AÑO||new Date().getFullYear();
+  if(fDia==='hoy'){var d=new Date();fA=d.getFullYear();fM=d.getMonth()+1;fDia=d.getDate();}
+  var fecha=new Date(fA,fM-1,parseInt(fDia));
+  fecha.setDate(fecha.getDate()+dir*7);
+  window.AI_F_AÑO=fecha.getFullYear();
+  window.AI_F_MES=fecha.getMonth()+1;
+  window.AI_F_DIA=fecha.getDate();
+  window.AI_F_TURNO='semana';
+  renderLinea();
+}
+function lunesDeEstaFecha(fA,fM,fDia){
+  // Retorna el lunes de la semana que contiene la fecha dada
+  var d=new Date(fA,fM-1,parseInt(fDia));
+  var day=d.getDay(); // 0=Dom
+  var diff=day===0?-6:1-day;
+  d.setDate(d.getDate()+diff);
+  return d;
+}
+function navDia(dir){
+  // Obtener fecha actual en los filtros
+  var fDia=window.AI_F_DIA||'hoy';
+  var fM=window.AI_F_MES||(new Date().getMonth()+1);
+  var fA=window.AI_F_AÑO||new Date().getFullYear();
+  if(fDia==='hoy'){var d=new Date();fA=d.getFullYear();fM=d.getMonth()+1;fDia=d.getDate();}
+  fDia=parseInt(fDia);
+  // Mover día
+  var fecha=new Date(fA,fM-1,fDia);
+  fecha.setDate(fecha.getDate()+dir);
+  window.AI_F_AÑO=fecha.getFullYear();
+  window.AI_F_MES=fecha.getMonth()+1;
+  window.AI_F_DIA=fecha.getDate();
+  renderLinea();
+}
+function navTurno(dir){
+  var fT=window.AI_F_TURNO||'turno_actual';
+  // Normalizar turno actual
+  if(fT==='turno_actual'||fT==='dia') fT=turno();
+  var orden=['T1','T2','T3'];
+  var idx=orden.indexOf(fT);
+  var nuevoIdx=(idx+dir+3)%3;
+  // Si cruzamos de T3→T1 avanzando, sumamos un día; T1→T3 retrocediendo, restamos un día
+  if(dir===1&&idx===2) navDia(1);
+  else if(dir===-1&&idx===0) navDia(-1);
+  window.AI_F_TURNO=orden[nuevoIdx];
+  renderLinea();
+}
+
+var ORIGEN_ADMIN='s-admin-hub';
+function volverDesdeAdmin(){go(ORIGEN_ADMIN);}
+function irAdminHub(){
+  if(TIMER){clearInterval(TIMER);TIMER=null;}
+  ORIGEN_ADMIN='s-admin-hub';
+  go('s-admin-hub');
+}
+// ── FIX AUTO-ARRANQUE: cuando no hay orden activa, acotar barra a tsI ─────────
+// (ver uso en renderLinea: if(!ORDEN_ACTIVA) ahora_barra=tsI)
+
+// ── SHO ─────────────────────────────────────────────────────
+function irSHO(){
+  var l=LINEAS.find(x=>x.id===LINEA_ID);
+  document.getElementById('sho-sub').textContent=l?l.nombre:'—';
+  go('s-sho');
+  recargarSHO();
+}
+async function recargarSHO(){
+  var cont=document.getElementById('sho-cont');
+  cont.innerHTML='<div style="text-align:center;padding:30px;color:#9ca3af">Cargando...</div>';
+  var esAdmin=ME.rol==='admin'||ME.rol==='super';
+  var h=hoy(), ahora=Date.now();
+  var cfgs=await db('ai_sho_config','GET',null,'linea_id=eq.'+LINEA_ID)||[];
+  var cfg={}; (cfgs||[]).forEach(c=>{cfg[c.tipo]=c.valor||{};});
+
+  // ── Días sin accidentes ──────────────────────────────────
+  var accConfig=cfg['accidentes']||{};
+  var fechaAcc=accConfig.fecha_ultimo||null;
+  var diasAcc=fechaAcc?Math.floor((Date.now()-new Date(fechaAcc+'T06:00:00').getTime())/86400000):null;
+  var descAcc=accConfig.descripcion||'Sin registro';
+  var bgAcc=diasAcc===null?'#e5e7eb':diasAcc>=7?'#16a34a':'#dc2626';
+
+  // ── Tarjetas SHE / Q Prioridad A (Saporis MTTO) ─────────
+  var sheA=null, qA=null;
+  try{
+    var sheRes=await db('sho_comentarios','GET',null,'tipo=eq.she&prioridad=eq.A&estatus=eq.abierta');
+    if(Array.isArray(sheRes)) sheA=sheRes.length;
+    var qRes=await db('sho_comentarios','GET',null,'tipo=eq.calidad&prioridad=eq.A&estatus=eq.abierta');
+    if(Array.isArray(qRes)) qA=qRes.length;
+  }catch(e){}
+  var bgSHE=sheA===null?'#e5e7eb':sheA===0?'#16a34a':'#dc2626';
+  var bgQ=qA===null?'#e5e7eb':qA===0?'#16a34a':'#dc2626';
+
+  // ── Cumplimiento Logsheet y Puntos Q por turno ───────────
+  var execsHoy=await db('ai_checklist_ejecuciones','GET',null,'linea_id=eq.'+LINEA_ID+'&ts_fin=gte.'+(new Date(h+'T06:30:00').getTime()))||[];
+  var clsLS=await db('ai_checklists','GET',null,'linea_id=eq.'+LINEA_ID+'&activo=eq.true&categoria=neq.puntos_q')||[];
+  var clsQ=await db('ai_checklists','GET',null,'linea_id=eq.'+LINEA_ID+'&activo=eq.true&categoria=eq.puntos_q')||[];
+  function cumplPorTurno(cls,execs,t){
+    if(!cls.length) return 100;
+    var tIx=tIni(t,h), tFx=tIx+8*3600000;
+    var ex=execs.filter(e=>e.ts_inicio>=tIx&&e.ts_inicio<tFx&&e.completado);
+    return Math.round(ex.length/cls.length*100);
+  }
+  var lsT1=cumplPorTurno(clsLS,execsHoy,'T1'), lsT2=cumplPorTurno(clsLS,execsHoy,'T2'), lsT3=cumplPorTurno(clsLS,execsHoy,'T3');
+  var qT1=cumplPorTurno(clsQ,execsHoy,'T1'), qT2=cumplPorTurno(clsQ,execsHoy,'T2'), qT3=cumplPorTurno(clsQ,execsHoy,'T3');
+  var bgLS=lsT1>=90&&lsT2>=90&&lsT3>=90?'#16a34a':'#dc2626';
+  var bgQc=qT1>=90&&qT2>=90&&qT3>=90?'#16a34a':'#dc2626';
+
+  // ── Prioridades ───────────────────────────────────────────
+  var prios=cfg['prioridades']||{p1:'',p2:'',p3:''};
+
+  // ── Producción por turno — acumulada por hora ────────────
+  var pzs=await db('ai_piezas','GET',null,'linea_id=eq.'+LINEA_ID+'&fecha=eq.'+h)||[];
+  var ordAct=await db('ai_ordenes','GET',null,'linea_id=eq.'+LINEA_ID+'&estado=eq.abierta&limit=1');
+  var targetH=0;
+  if(ordAct&&ordAct.length&&ordAct[0].producto_id){
+    var prod=await db('ai_productos','GET',null,'id=eq.'+ordAct[0].producto_id);
+    if(prod&&prod.length) targetH=prod[0].target_hora||0;
+  }else{
+    var l=LINEAS.find(x=>x.id===LINEA_ID);
+    targetH=l?l.target_hora||0:0;
+  }
+  function objetivoPorTurno(t){
+    var tIx=tIni(t,h), tFx=tIx+8*3600000;
+    var elapsed=Math.max(0,Math.min(ahora,tFx)-tIx)/3600000; // horas transcurridas
+    return Math.round(targetH*elapsed);
+  }
+  function realPorTurno(t){
+    return pzs.filter(p=>p.turno===t).reduce((s,p)=>s+p.piezas,0);
+  }
+
+  // ── Helper de celda con color de fondo ───────────────────
+  var cel=(titulo,contenido,bg,editable,editFn)=>{
+    var isDark=bg&&bg!=='#e5e7eb'&&bg!=='#fbbf24';
+    var lblCol=isDark?'rgba(0,0,0,.7)':'#6b7280';
+    return `<div style="border-radius:12px;padding:10px;background:${bg||'#fff'};min-height:90px;border:${bg&&bg!=='#fff'?'none':'2px solid #e5e7eb'}">
+      <div style="font-size:9px;font-weight:800;color:${lblCol};text-transform:uppercase;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center">
+        ${titulo}
+        ${esAdmin&&editable?`<button onclick="${editFn}" style="font-size:9px;padding:1px 6px;background:rgba(0,0,0,.12);border:none;border-radius:4px;cursor:pointer;color:#000;font-family:Nunito,sans-serif">✏️</button>`:''}
+      </div>${contenido}</div>`;
+  };
+
+  var prodCel=(t)=>{
+    var real=realPorTurno(t), obj=objetivoPorTurno(t);
+    var ok=obj===0||real>=obj;
+    var pct=obj>0?Math.min(100,Math.round(real/obj*100)):100;
+    return cel('Producción '+t,
+      `<div style="text-align:center">
+        <div style="font-size:22px;font-weight:900;color:#000">${real.toLocaleString()}</div>
+        <div style="font-size:10px;color:rgba(0,0,0,.6)">Obj: ${obj.toLocaleString()} · ${pct}%</div>
+        <div style="height:5px;background:rgba(0,0,0,.12);border-radius:3px;margin-top:6px">
+          <div style="height:100%;background:rgba(0,0,0,.4);border-radius:3px;width:${pct}%"></div>
+        </div>
+      </div>`,ok?'#16a34a':'#dc2626',false,'');
+  };
+
+  cont.innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+      ${cel('Días sin accidentes',
+        `<div style="text-align:center">
+          <div style="font-size:36px;font-weight:900;color:#000">${diasAcc!==null?diasAcc:'—'}</div>
+          <div style="font-size:10px;color:rgba(0,0,0,.6);margin-top:2px">${descAcc}</div>
+        </div>`,bgAcc,true,"editarSHOAccidentes()")}
+      ${cel('Tarjetas SHE<br>Prioridad A',
+        `<div style="text-align:center">
+          <div style="font-size:36px;font-weight:900;color:#000">${sheA!==null?sheA:'—'}</div>
+          <div style="font-size:10px;color:rgba(0,0,0,.6)">${sheA===null?'Sin datos de Mtto':'abiertas'}</div>
+        </div>`,bgSHE,false,'')}
+      ${cel('Tarjetas Q<br>Prioridad A',
+        `<div style="text-align:center">
+          <div style="font-size:36px;font-weight:900;color:#000">${qA!==null?qA:'—'}</div>
+          <div style="font-size:10px;color:rgba(0,0,0,.6)">${qA===null?'Sin datos de Mtto':'abiertas'}</div>
+        </div>`,bgQ,false,'')}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">
+      ${cel('Cumpl. Puntos Q',
+        `<div style="font-size:11px;color:#000">
+          ${[['T1',qT1],['T2',qT2],['T3',qT3]].map(([t,v])=>`
+            <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(0,0,0,.1)">
+              <span>${t}</span><b style="color:${v<90?'#fee2e2':'inherit'}">${v}%</b>
+            </div>`).join('')}
+        </div>`,bgQc,false,'')}
+      ${cel('Cumpl. Logsheet',
+        `<div>
+          ${[['T1',lsT1],['T2',lsT2],['T3',lsT3]].map(([t,v])=>`
+            <div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px solid rgba(0,0,0,.1);font-size:11px;color:#000">
+              <span>${t}</span><b>${v}%</b>
+            </div>`).join('')}
+        </div>`,bgLS,false,'')}
+      ${cel('Prioridades',
+        `<div style="font-size:11px;color:#000">
+          ${[prios.p1,prios.p2,prios.p3].map((p,i)=>`
+            <div style="padding:4px 0;border-bottom:1px solid rgba(0,0,0,.15);min-height:22px">
+              ${p?`<b>${i+1}.</b> ${p}`:''}
+            </div>`).join('')}
+        </div>`,'#fbbf24',true,"editarSHOPrioridades()")}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">
+      ${prodCel('T1')} ${prodCel('T2')} ${prodCel('T3')}
+    </div>`;
+}
+function editarSHOAccidentes(){
+  var cfg={}; // se cargará del estado actual en el DOM
+  modal('✏️ Días sin accidentes',
+    `<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Fecha del último accidente</label>
+    <input type="date" id="sho-acc-fecha" class="fc">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Descripción breve</label>
+    <input type="text" id="sho-acc-desc" class="fc" placeholder="Ej: Corte menor en mano derecha">`,
+    async(m)=>{
+      var fecha=document.getElementById('sho-acc-fecha').value;
+      var desc=document.getElementById('sho-acc-desc').value.trim();
+      if(!fecha){toast('Selecciona la fecha','#dc2626');return;}
+      var id='sho_acc_'+LINEA_ID;
+      await fetch(SB+'/rest/v1/ai_sho_config',{method:'POST',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+        body:JSON.stringify({id,linea_id:LINEA_ID,tipo:'accidentes',valor:{fecha_ultimo:fecha,descripcion:desc},updated_at:new Date().toISOString(),updated_by:ME.nombre})});
+      m.remove();toast('✅ Actualizado','#16a34a');recargarSHO();
+    },'#16a34a','Guardar');
+}
+function editarSHOReclamos(){
+  modal('✏️ Número de reclamos',
+    `<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Número de reclamos</label>
+    <input type="number" id="sho-rec-num" class="fc" min="0" value="0">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Descripción</label>
+    <input type="text" id="sho-rec-desc" class="fc" placeholder="Descripción breve">`,
+    async(m)=>{
+      var num=parseInt(document.getElementById('sho-rec-num').value)||0;
+      var desc=document.getElementById('sho-rec-desc').value.trim();
+      var id='sho_rec_'+LINEA_ID;
+      await fetch(SB+'/rest/v1/ai_sho_config',{method:'POST',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+        body:JSON.stringify({id,linea_id:LINEA_ID,tipo:'reclamos',valor:{numero:num,descripcion:desc},updated_at:new Date().toISOString(),updated_by:ME.nombre})});
+      m.remove();toast('✅ Actualizado','#16a34a');recargarSHO();
+    },'#0891b2','Guardar');
+}
+function editarSHOPrioridades(){
+  modal('✏️ Prioridades',
+    `<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Prioridad 1</label>
+    <input type="text" id="sho-p1" class="fc" placeholder="">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Prioridad 2</label>
+    <input type="text" id="sho-p2" class="fc" placeholder="">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Prioridad 3</label>
+    <input type="text" id="sho-p3" class="fc" placeholder="">`,
+    async(m)=>{
+      var p1=document.getElementById('sho-p1').value.trim();
+      var p2=document.getElementById('sho-p2').value.trim();
+      var p3=document.getElementById('sho-p3').value.trim();
+      var id='sho_prio_'+LINEA_ID;
+      await fetch(SB+'/rest/v1/ai_sho_config',{method:'POST',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+        body:JSON.stringify({id,linea_id:LINEA_ID,tipo:'prioridades',valor:{p1,p2,p3},updated_at:new Date().toISOString(),updated_by:ME.nombre})});
+      m.remove();toast('✅ Actualizado','#374151');recargarSHO();
+    },'#374151','Guardar');
+}
+
+// ── MONITOR DE CHECKLISTS ─────────────────────────────────────
+var _ckMonitorTimer=null;
+var _ckSnooze={};   // {checklist_id+'_'+linea_id: timestamp_snooze}
+var _ckAlertaActiva=false;
+
+function iniciarMonitorChecklists(){
+  if(_ckMonitorTimer) clearInterval(_ckMonitorTimer);
+  _ckMonitorTimer=setInterval(revisarAlertasChecklists,60000);
+  setTimeout(revisarAlertasChecklists,3000); // primera revisión a los 3s
+}
+
+async function revisarAlertasChecklists(){
+  if(_ckAlertaActiva) return; // ya hay una alerta visible
+  var ahora=Date.now();
+  try{
+    var [lineas,ords]=await Promise.all([
+      db('ai_lineas','GET',null,'activa=eq.true'),
+      db('ai_ordenes','GET',null,'estado=eq.abierta')
+    ]);
+    if(!lineas||!ords) return;
+    for(var ord of ords){
+      var linea=lineas.find(l=>l.id===ord.linea_id); if(!linea) continue;
+      var cls=await db('ai_checklists','GET',null,'linea_id=eq.'+ord.linea_id+'&activo=eq.true')||[];
+      for(var c of cls){
+        var frec=c.frecuencia||(c.requiere_antes_arranque?'antes_arranque':'inicio_produccion');
+        if(frec==='antes_arranque') continue; // estos bloquean el arranque, no alertan aquí
+        var snoozeKey=c.id+'_'+ord.linea_id;
+        var snoozeTs=_ckSnooze[snoozeKey]||0;
+        if(ahora-snoozeTs<5*60*1000) continue; // snoozed, esperar 5 min
+        var debeMostrar=false;
+        var tsOrden=ord.ts_inicio||ahora;
+        if(frec==='inicio_produccion'){
+          // Verificar si ya fue ejecutado para esta orden
+          var execs=await db('ai_checklist_ejecuciones','GET',null,'checklist_id=eq.'+c.id+'&orden_id=eq.'+ord.id+'&completado=eq.true')||[];
+          debeMostrar=execs.length===0;
+        }else if(frec==='medio_turno'){
+          var tInicioTurno=tIni(turno(),hoy());
+          var mitad=tInicioTurno+4*3600000; // 4h = mitad de turno de 8h
+          if(ahora>=mitad){
+            var execs=await db('ai_checklist_ejecuciones','GET',null,'checklist_id=eq.'+c.id+'&orden_id=eq.'+ord.id+'&completado=eq.true')||[];
+            debeMostrar=execs.length===0;
+          }
+        }else if(frec==='cada_x_horas'&&c.intervalo_horas){
+          var intervMs=c.intervalo_horas*3600000;
+          var execs=await db('ai_checklist_ejecuciones','GET',null,'checklist_id=eq.'+c.id+'&orden_id=eq.'+ord.id+'&completado=eq.true&order=ts_fin.desc&limit=1')||[];
+          var ultimaTs=execs.length?execs[0].ts_fin:tsOrden;
+          debeMostrar=ahora-ultimaTs>=intervMs;
+        }
+        if(debeMostrar){
+          mostrarAlertaChecklist(c,linea,ord);
+          return; // una alerta a la vez
+        }
+      }
+    }
+  }catch(e){console.warn('Monitor CK error',e);}
+}
+
+function mostrarAlertaChecklist(ck,linea,ord){
+  _ckAlertaActiva=true;
+  var snoozeKey=ck.id+'_'+linea.id;
+  var m=document.createElement('div');
+  m.id='ck-alerta-overlay';
+  m.className='ck-alerta-blink';
+  m.style.cssText='position:fixed;inset:0;background:#dc2626;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center';
+  m.innerHTML=`
+    <div style="font-size:64px;margin-bottom:16px">⚠️</div>
+    <div style="font-size:22px;font-weight:900;color:#000;margin-bottom:8px">CHECK LIST PENDIENTE</div>
+    <div style="font-size:18px;font-weight:800;color:#000;margin-bottom:6px">${ck.nombre}</div>
+    <div style="font-size:14px;color:#000;opacity:.8;margin-bottom:32px">Línea: ${linea.nombre}</div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center">
+      <button onclick="cerrarAlertaCK('${snoozeKey}')" style="padding:16px 28px;background:#000;color:#fff;border:none;border-radius:14px;font-weight:900;font-size:16px;cursor:pointer;font-family:Nunito,sans-serif">✕ Cerrar</button>
+      <button onclick="ejecutarDesdeAlerta('${ck.id}','${snoozeKey}')" style="padding:16px 28px;background:#fff;color:#dc2626;border:none;border-radius:14px;font-weight:900;font-size:16px;cursor:pointer;font-family:Nunito,sans-serif">▶ Ejecutar ahora</button>
+    </div>
+    <div style="font-size:11px;color:#000;opacity:.6;margin-top:20px">Si cierras sin ejecutar, esta alerta volverá en 5 minutos</div>`;
+  document.body.appendChild(m);
+}
+function cerrarAlertaCK(snoozeKey){
+  _ckSnooze[snoozeKey]=Date.now();
+  _ckAlertaActiva=false;
+  var el=document.getElementById('ck-alerta-overlay');
+  if(el) el.remove();
+}
+async function ejecutarDesdeAlerta(clId,snoozeKey){
+  var el=document.getElementById('ck-alerta-overlay');
+  if(el) el.remove();
+  _ckAlertaActiva=false;
+  var cls=await db('ai_checklists','GET',null,'id=eq.'+clId)||[];
+  if(!cls.length) return;
+  window._ck_pendientes_arranque=[cls[0]];
+  window._ck_callback_arranque=()=>{
+    delete _ckSnooze[snoozeKey];
+    toast('✅ Checklist completado','#16a34a');
+  };
+  ejecutarChecklistArranque([cls[0]],0,window._ck_callback_arranque);
+}
+
+document.getElementById('btn-cfg').addEventListener('click',cargarConfig);
+document.getElementById('btn-admin-usr').addEventListener('click',cargarAdmin);
+
+// ── Init ─────────────────────────────────────────────────────
+(function(){
+  var s=localStorage.getItem('ai_me');
+  if(s){try{ME=JSON.parse(s);iniciarSesion();}catch(e){go('s-login');}}
+})();
+</script>
+</body>
+</html>
