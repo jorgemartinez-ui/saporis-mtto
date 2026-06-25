@@ -87,22 +87,19 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
   </div>
   <!-- Barra de filtros -->
   <div style="background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:8px 12px">
-    <!-- Fila 1: Botones de periodo + flechas + refresh -->
-    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-      <div style="display:flex;gap:3px">
-        <button onclick="lsNavegar(-1)" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;background:#fff;font-size:16px;font-weight:900;cursor:pointer">◄</button>
-        ${['T','D','S','M'].map(m=>`<button onclick="lsSetModo('${m}')" id="ls-modo-${m}" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000">${m}</button>`).join('')}
-        <button onclick="lsNavegar(1)" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;background:#fff;font-size:16px;font-weight:900;cursor:pointer">►</button>
-      </div>
-      <div id="ls-periodo-label" style="font-size:11px;font-weight:700;color:#374151;flex:1;text-align:center"></div>
-      <button onclick="cargarLineSummary()" style="padding:5px 12px;background:#0d2144;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">↻ Refresh</button>
+    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
+      <button onclick="lsNavegar(-1)" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;background:#fff;font-size:16px;font-weight:900;cursor:pointer">◄</button>
+      <button onclick="lsSetModo('T')" id="ls-modo-T" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000">T</button>
+      <button onclick="lsSetModo('D')" id="ls-modo-D" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#0d2144;color:#fff">D</button>
+      <button onclick="lsSetModo('S')" id="ls-modo-S" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000">S</button>
+      <button onclick="lsSetModo('M')" id="ls-modo-M" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000">M</button>
+      <button onclick="lsNavegar(1)" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;background:#fff;font-size:16px;font-weight:900;cursor:pointer">►</button>
+      <div id="ls-periodo-label" style="font-size:11px;font-weight:700;color:#374151;flex:1;text-align:center;min-width:80px"></div>
+      <button onclick="cargarLineSummary()" style="padding:5px 12px;background:#0d2144;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">↻</button>
     </div>
-    <!-- Fila 2: Selector Desde / Hasta (solo en modo Rango) -->
-    <div id="ls-rango-row" style="display:none;margin-top:8px;display:flex;gap:8px;align-items:center">
-      <span style="font-size:11px;font-weight:700;color:#6b7280">Desde:</span>
-      <button id="ls-desde-btn" onclick="abrirCalendarioLS('desde',this)" style="padding:5px 10px;border:1.5px solid #000;border-radius:8px;font-size:11px;font-weight:700;background:#fff;cursor:pointer">Seleccionar</button>
-      <span style="font-size:11px;font-weight:700;color:#6b7280">Hasta:</span>
-      <button id="ls-hasta-btn" onclick="abrirCalendarioLS('hasta',this)" style="padding:5px 10px;border:1.5px solid #000;border-radius:8px;font-size:11px;font-weight:700;background:#fff;cursor:pointer">Seleccionar</button>
+    <!-- Filtro de líneas -->
+    <div style="margin-top:8px">
+      <div id="ls-lineas-filtro" style="display:flex;gap:5px;flex-wrap:wrap"></div>
     </div>
   </div>
   <div class="scroll" id="ls-tabla-cont" style="padding:0"></div>
@@ -409,15 +406,15 @@ function irDashboard(){
   cargarLista();
 }
 // ── LINE SUMMARY ─────────────────────────────────────────────
-var _lsModo='D', _lsOffset=0, _lsDesdeTs=null, _lsHastaTs=null;
+var _lsModo='D', _lsOffset=0, _lsDesdeTs=null, _lsHastaTs=null, _lsLineasSel=new Set();
 var _lsTooltips={
-  TO:'Tiempo Ocupado (min) = Corriendo + PP + PNP',
+  TO:'Tiempo Ocupado (min) = TC + PP + PNP',
   TC:'Tiempo Corriendo (min)',
-  PP:'Tiempo de Paro Planeado (min)',
+  PP:'Tiempo Paro Planeado (min)',
   '%PP':'% Paro Planeado sobre Tiempo Ocupado',
-  PNP:'Tiempo de Paro No Planeado (min)',
+  PNP:'Tiempo Paro No Planeado (min)',
   '%PNP':'% Paro No Planeado sobre Tiempo Ocupado',
-  Inexplicado:'Minutos de producción sin explicar: diferencia entre lo producido y lo esperado a velocidad nominal durante el tiempo corriendo. Negativo = faltaron piezas (registra más PNP). Positivo = se hizo más de lo esperado.',
+  Inexplicado:'Minutos de producción sin explicar. Negativo = faltaron piezas (registra más PNP). Positivo = se hizo más de lo esperado.',
   AI:'Asset Intensity % = TC / TO × 100'
 };
 async function irConsultas(){
@@ -425,7 +422,28 @@ async function irConsultas(){
   go('s-consultas');
   var lin=await db('ai_lineas','GET',null,'activa=eq.true&order=nombre.asc');
   LINEAS=lin||LINEAS;
+  _lsLineasSel=new Set(); // todas seleccionadas por default (set vacío = todas)
+  _renderFiltroLineas();
   lsSetModo('D');
+}
+function _renderFiltroLineas(){
+  var cont=document.getElementById('ls-lineas-filtro');
+  if(!cont) return;
+  var todasSel=_lsLineasSel.size===0;
+  cont.innerHTML='<button onclick="_lsToggleLinea(\'todas\')" style="padding:3px 10px;border:1.5px solid #000;border-radius:7px;font-size:10px;font-weight:800;cursor:pointer;background:'+(todasSel?'#0d2144':'#fff')+';color:'+(todasSel?'#fff':'#000')+'">Todas</button>'
+    +LINEAS.map(l=>{var sel=_lsLineasSel.has(l.id);
+      return '<button onclick="_lsToggleLinea(\''+l.id+'\')" style="padding:3px 10px;border:1.5px solid #000;border-radius:7px;font-size:10px;font-weight:700;cursor:pointer;background:'+(sel?'#0d2144':'#fff')+';color:'+(sel?'#fff':'#000')+'">'+l.nombre+'</button>';
+    }).join('');
+}
+function _lsToggleLinea(id){
+  if(id==='todas'){_lsLineasSel=new Set();}
+  else{
+    if(_lsLineasSel.has(id)) _lsLineasSel.delete(id);
+    else _lsLineasSel.add(id);
+    if(_lsLineasSel.size===LINEAS.length) _lsLineasSel=new Set(); // todas = vacío
+  }
+  _renderFiltroLineas();
+  cargarLineSummary();
 }
 function lsSetModo(m){
   _lsModo=m; _lsOffset=0;
@@ -433,172 +451,118 @@ function lsSetModo(m){
     var btn=document.getElementById('ls-modo-'+x);
     if(btn){btn.style.background=x===m?'#0d2144':'#fff';btn.style.color=x===m?'#fff':'#000';}
   });
-  var rangoRow=document.getElementById('ls-rango-row');
-  if(rangoRow) rangoRow.style.display='none';
   lsActualizarRango();
   cargarLineSummary();
 }
-function lsNavegar(dir){
-  _lsOffset+=dir;
-  lsActualizarRango();
-  cargarLineSummary();
-}
+function lsNavegar(dir){_lsOffset+=dir;lsActualizarRango();cargarLineSummary();}
 function lsActualizarRango(){
-  var ahora=Date.now(), h=hoy();
-  var label='';
+  var h=hoy();
   if(_lsModo==='T'){
     var t=turno(), tI=tIni(t,h)+_lsOffset*8*3600000;
     _lsDesdeTs=tI; _lsHastaTs=tI+8*3600000;
-    var d=new Date(tI);
-    label='Turno '+t+' · '+d.toLocaleDateString('es-MX',{day:'2-digit',month:'short'});
+    var lbl=document.getElementById('ls-periodo-label');
+    if(lbl) lbl.textContent='Turno '+t+' · '+new Date(tI).toLocaleDateString('es-MX',{day:'2-digit',month:'short'});
   }else if(_lsModo==='D'){
     var base=new Date(h+'T06:30:00').getTime()+_lsOffset*24*3600000;
     _lsDesdeTs=base; _lsHastaTs=base+24*3600000;
-    label=new Date(base).toLocaleDateString('es-MX',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+    var lbl=document.getElementById('ls-periodo-label');
+    if(lbl) lbl.textContent=new Date(base).toLocaleDateString('es-MX',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
   }else if(_lsModo==='S'){
     var lunes=lunesDeEstaFecha(new Date().getFullYear(),new Date().getMonth()+1,new Date().getDate());
     var baseS=new Date(lunes.getFullYear(),lunes.getMonth(),lunes.getDate(),6,30,0).getTime()+_lsOffset*7*24*3600000;
     _lsDesdeTs=baseS; _lsHastaTs=baseS+7*24*3600000;
-    label='Semana: '+new Date(baseS).toLocaleDateString('es-MX',{day:'2-digit',month:'short'})+' – '+new Date(_lsHastaTs-1).toLocaleDateString('es-MX',{day:'2-digit',month:'short'});
+    var lbl=document.getElementById('ls-periodo-label');
+    if(lbl) lbl.textContent='Sem: '+new Date(baseS).toLocaleDateString('es-MX',{day:'2-digit',month:'short'})+' – '+new Date(_lsHastaTs-1).toLocaleDateString('es-MX',{day:'2-digit',month:'short'});
   }else if(_lsModo==='M'){
-    var now=new Date(); var y=now.getFullYear(), mes=now.getMonth()+_lsOffset;
-    var d1=new Date(y,mes,1,6,30,0); var d2=new Date(y,mes+1,1,6,30,0);
+    var now=new Date(), y=now.getFullYear(), mes=now.getMonth()+_lsOffset;
+    var d1=new Date(y,mes,1,6,30,0), d2=new Date(y,mes+1,1,6,30,0);
     _lsDesdeTs=d1.getTime(); _lsHastaTs=d2.getTime();
-    label=d1.toLocaleDateString('es-MX',{month:'long',year:'numeric'});
+    var lbl=document.getElementById('ls-periodo-label');
+    if(lbl) lbl.textContent=d1.toLocaleDateString('es-MX',{month:'long',year:'numeric'});
   }
-  var lbl=document.getElementById('ls-periodo-label');
-  if(lbl) lbl.textContent=label;
-}
-function abrirCalendarioLS(tipo,btn){
-  document.querySelectorAll('.cal-popup').forEach(x=>x.remove());
-  var fA=new Date().getFullYear(), fM=new Date().getMonth()+1;
-  var mesesFull=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  _mostrarEtapa1Fecha(btn, fA, fM);
-  // Override confirmar para tipo desde/hasta
-  window._confirmarFecha=function(mes,año){
-    document.querySelectorAll('.cal-popup').forEach(x=>x.remove());
-    var dia=window._pfDiaSel||new Date().getDate();
-    var ts=new Date(año,mes-1,dia,6,30,0).getTime();
-    if(tipo==='desde'){
-      _lsDesdeTs=ts;
-      var b=document.getElementById('ls-desde-btn');
-      if(b) b.textContent=dia+' '+mesesFull[mes-1]+' '+año;
-    }else{
-      _lsHastaTs=ts+24*3600000;
-      var b=document.getElementById('ls-hasta-btn');
-      if(b) b.textContent=dia+' '+mesesFull[mes-1]+' '+año;
-    }
-  };
 }
 async function cargarLineSummary(){
   var cont=document.getElementById('ls-tabla-cont');
   if(!cont) return;
   if(!_lsDesdeTs) lsActualizarRango();
   cont.innerHTML='<div style="text-align:center;padding:40px;color:#9ca3af">Cargando...</div>';
-  // Cargar órdenes en el rango
-  var ords=await db('ai_ordenes','GET',null,
-    'ts_inicio=gte.'+_lsDesdeTs+'&ts_inicio=lt.'+_lsHastaTs+'&estado=in.(abierta,cerrada)&order=ts_inicio.asc')||[];
-  if(!ords.length){
-    cont.innerHTML='<div style="text-align:center;padding:40px;color:#9ca3af">Sin órdenes en este periodo</div>';
-    return;
-  }
-  // Cargar todos los eventos del periodo
-  var evsTodos=await db('ai_eventos','GET',null,
-    'ts_inicio=gte.'+(_lsDesdeTs-9*3600000)+'&ts_inicio=lt.'+_lsHastaTs+'&order=ts_inicio.asc')||[];
-  // Agrupar órdenes por línea
-  var porLinea={};
-  ords.forEach(o=>{
-    if(!porLinea[o.linea_id]) porLinea[o.linea_id]={nombre:o.linea_nombre||o.linea_id,ordenes:[]};
-    porLinea[o.linea_id].ordenes.push(o);
-  });
-  // Tooltip headers
+  // Líneas a mostrar (filtro)
+  var lineasMostrar=_lsLineasSel.size===0?LINEAS:LINEAS.filter(l=>_lsLineasSel.has(l.id));
+  if(!lineasMostrar.length){cont.innerHTML='<div style="text-align:center;padding:40px;color:#9ca3af">Sin líneas seleccionadas</div>';return;}
+  // Cargar órdenes del periodo
+  var ords=await db('ai_ordenes','GET',null,'ts_inicio=gte.'+_lsDesdeTs+'&ts_inicio=lt.'+_lsHastaTs+'&estado=in.(abierta,cerrada)&order=ts_inicio.asc')||[];
+  // Cargar eventos del periodo (extendido 9h para capturar los que cruzaron turno)
+  var evsTodos=await db('ai_eventos','GET',null,'ts_inicio=gte.'+(_lsDesdeTs-9*3600000)+'&ts_inicio=lt.'+_lsHastaTs+'&order=ts_inicio.asc')||[];
   var cols=['TO','TC','PP','%PP','PNP','%PNP','Inexplicado','Cant. actual','AI'];
-  var thStyle='padding:6px 8px;font-size:10px;font-weight:800;color:#374151;white-space:nowrap;border-bottom:2px solid #e5e7eb;cursor:help;text-align:right';
-  var ths=`<th style="${thStyle.replace('right','left')}">Orden</th>
-    <th style="${thStyle.replace('right','left')}">Inicio OP</th>
-    <th style="${thStyle.replace('right','left')}">Fin OP</th>`
-    +cols.map(c=>`<th title="${_lsTooltips[c]||c}" style="${thStyle}">${c}</th>`).join('');
+  var thS='padding:6px 8px;font-size:10px;font-weight:800;color:#374151;white-space:nowrap;border-bottom:2px solid #e5e7eb;cursor:help';
+  var ths='<th style="'+thS+';text-align:left">Orden</th><th style="'+thS+';text-align:left">Inicio OP</th><th style="'+thS+';text-align:left">Fin OP</th>'
+    +cols.map(c=>'<th title="'+(_lsTooltips[c]||c)+'" style="'+thS+';text-align:right">'+c+'</th>').join('');
   var html='<div style="overflow-x:auto">';
-  Object.keys(porLinea).forEach(lineaId=>{
-    var linea=porLinea[lineaId];
-    var l=LINEAS.find(x=>x.id===lineaId);
-    // Calcular KPIs por orden
-    var rows=[]; var totTO=0,totTC=0,totPP=0,totPNP=0,totPzs=0;
-    linea.ordenes.forEach(o=>{
-      var evs=evsTodos.filter(e=>e.linea_id===lineaId&&e.ts_inicio>=o.ts_inicio&&(o.ts_fin?e.ts_inicio<=o.ts_fin:true));
-      var tsI=o.ts_inicio, tsF=o.ts_fin||o.detenida_en||Date.now();
+  lineasMostrar.forEach(l=>{
+    var ordsL=ords.filter(o=>o.linea_id===l.id);
+    if(!ordsL.length){
+      html+='<div style="background:#fff;border-bottom:2px solid #e5e7eb"><div style="padding:10px 12px;background:#0d2144;color:#fff;font-weight:800;font-size:13px">'+l.nombre+'</div>'
+        +'<div style="padding:12px;font-size:12px;color:#9ca3af">Sin órdenes en este periodo</div></div>';
+      return;
+    }
+    var rows=[], totTO=0,totTC=0,totPP=0,totPNP=0,totPzs=0;
+    ordsL.forEach(o=>{
+      var evs=evsTodos.filter(e=>e.linea_id===l.id&&e.ts_inicio>=o.ts_inicio);
+      var tsI=o.ts_inicio, tsF2=o.ts_fin||o.detenida_en||Date.now();
       var tC=0,tPP=0,tPNP=0,cur=tsI;
       evs.forEach(e=>{
-        var i=Math.max(e.ts_inicio,tsI),f=e.ts_fin?Math.min(e.ts_fin,tsF):tsF,d=Math.max(0,f-i);
+        var i=Math.max(e.ts_inicio,tsI),f=e.ts_fin?Math.min(e.ts_fin,tsF2):tsF2,d=Math.max(0,f-i);
         if(i>cur) tC+=(i-cur);
         if(e.tipo==='corriendo') tC+=d;
         else if(e.tipo==='pp') tPP+=d;
         else if(e.tipo==='pnp') tPNP+=d;
         cur=Math.max(cur,f);
       });
-      if(cur<tsF) tC+=(tsF-cur);
+      if(cur<tsF2) tC+=(tsF2-cur);
       var tO=tC+tPP+tPNP;
-      var ai=tO>0?Math.round(tC/tO*100):0;
-      var ppPct=tO>0?Math.round(tPP/tO*100):0;
-      var pnpPct=tO>0?Math.round(tPNP/tO*100):0;
-      var targetH=l?l.target_hora||0:0;
-      var pzAct=o.piezas_total||0;
-      var pzEsp=targetH*(tC/3600000);
-      var diffPz=pzAct-pzEsp;
-      var inexMin=targetH>0?Math.round(diffPz/targetH*60):0;
-      var toMin=Math.round(tO/60000), tcMin=Math.round(tC/60000);
-      var ppMin=Math.round(tPP/60000), pnpMin=Math.round(tPNP/60000);
+      var ai=tO>0?Math.round(tC/tO*100):0, ppP=tO>0?Math.round(tPP/tO*100):0, pnpP=tO>0?Math.round(tPNP/tO*100):0;
+      var targetH=l.target_hora||0, pzAct=o.piezas_total||0;
+      var inexMin=targetH>0?Math.round((pzAct-(targetH*(tC/3600000)))/targetH*60):0;
+      var toMin=Math.round(tO/60000), tcMin=Math.round(tC/60000), ppMin=Math.round(tPP/60000), pnpMin=Math.round(tPNP/60000);
       totTO+=tO; totTC+=tC; totPP+=tPP; totPNP+=tPNP; totPzs+=pzAct;
       var finStr=o.ts_fin?new Date(o.ts_fin).toLocaleString('es-MX',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):o.detenida_en?'⏹ Detenida':'En curso';
-      rows.push(`<tr style="border-bottom:1px solid #f3f4f6">
-        <td style="padding:5px 8px;font-size:11px;font-weight:700;white-space:nowrap">${o.folio||'—'}</td>
-        <td style="padding:5px 8px;font-size:11px;color:#6b7280;white-space:nowrap">${new Date(o.ts_inicio).toLocaleString('es-MX',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
-        <td style="padding:5px 8px;font-size:11px;color:#6b7280;white-space:nowrap">${finStr}</td>
-        <td style="padding:5px 8px;font-size:11px;text-align:right">${toMin}</td>
-        <td style="padding:5px 8px;font-size:11px;text-align:right">${tcMin}</td>
-        <td style="padding:5px 8px;font-size:11px;text-align:right">${ppMin}</td>
-        <td style="padding:5px 8px;font-size:11px;text-align:right;color:${ppPct>=(l?l.objetivo_pp||15:15)?'#dc2626':'#16a34a'}">${ppPct}%</td>
-        <td style="padding:5px 8px;font-size:11px;text-align:right">${pnpMin}</td>
-        <td style="padding:5px 8px;font-size:11px;text-align:right;color:${pnpPct>=(l?l.objetivo_pnp||10:10)?'#dc2626':'#16a34a'}">${pnpPct}%</td>
-        <td style="padding:5px 8px;font-size:11px;text-align:right;font-weight:700;color:${inexMin<0?'#dc2626':inexMin>0?'#16a34a':'#374151'}">${inexMin>0?'+':''}${inexMin} min</td>
-        <td style="padding:5px 8px;font-size:11px;text-align:right">${pzAct.toLocaleString()}</td>
-        <td style="padding:5px 8px;font-size:12px;font-weight:900;text-align:right;color:${ai>=(l?l.objetivo_ai||85:85)?'#16a34a':'#dc2626'}">${ai}%</td>
-      </tr>`);
+      var oAI=l.objetivo_ai!=null?l.objetivo_ai:85, oPP=l.objetivo_pp!=null?l.objetivo_pp:15, oPNP=l.objetivo_pnp!=null?l.objetivo_pnp:10;
+      rows.push('<tr style="border-bottom:1px solid #f3f4f6">'
+        +'<td style="padding:5px 8px;font-size:11px;font-weight:700;white-space:nowrap">'+( o.folio||'—' )+'</td>'
+        +'<td style="padding:5px 8px;font-size:11px;color:#6b7280;white-space:nowrap">'+new Date(o.ts_inicio).toLocaleString('es-MX',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+'</td>'
+        +'<td style="padding:5px 8px;font-size:11px;color:#6b7280;white-space:nowrap">'+finStr+'</td>'
+        +'<td style="padding:5px 8px;font-size:11px;text-align:right">'+toMin+'</td>'
+        +'<td style="padding:5px 8px;font-size:11px;text-align:right">'+tcMin+'</td>'
+        +'<td style="padding:5px 8px;font-size:11px;text-align:right">'+ppMin+'</td>'
+        +'<td style="padding:5px 8px;font-size:11px;text-align:right;color:'+(ppP>=oPP?'#dc2626':'#16a34a')+'">'+ppP+'%</td>'
+        +'<td style="padding:5px 8px;font-size:11px;text-align:right">'+pnpMin+'</td>'
+        +'<td style="padding:5px 8px;font-size:11px;text-align:right;color:'+(pnpP>=oPNP?'#dc2626':'#16a34a')+'">'+pnpP+'%</td>'
+        +'<td style="padding:5px 8px;font-size:11px;text-align:right;font-weight:700;color:'+(inexMin<0?'#dc2626':inexMin>0?'#16a34a':'#374151')+'">'+(inexMin>0?'+':'')+inexMin+' min</td>'
+        +'<td style="padding:5px 8px;font-size:11px;text-align:right">'+pzAct.toLocaleString()+'</td>'
+        +'<td style="padding:5px 8px;font-size:12px;font-weight:900;text-align:right;color:'+(ai>=oAI?'#16a34a':'#dc2626')+'">'+ai+'%</td>'
+        +'</tr>');
     });
-    // Total ponderado
-    var totO=totTO+0, totAI=totTO>0?Math.round(totTC/totTO*100):0;
-    var totPPpct=totTO>0?Math.round(totPP/totTO*100):0;
-    var totPNPpct=totTO>0?Math.round(totPNP/totTO*100):0;
-    var totToMin=Math.round(totTO/60000), totTcMin=Math.round(totTC/60000);
-    var totPpMin=Math.round(totPP/60000), totPnpMin=Math.round(totPNP/60000);
-    var pzEspTotal=(l?l.target_hora||0:0)*(totTC/3600000);
-    var diffTot=totPzs-pzEspTotal;
-    var inexTot=(l&&l.target_hora)?Math.round(diffTot/l.target_hora*60):0;
-    html+=`
-      <div style="background:#fff;border-bottom:3px solid #e5e7eb">
-        <div style="padding:10px 12px;background:#0d2144;color:#fff;font-weight:800;font-size:13px">${linea.nombre}</div>
-        <table style="width:100%;border-collapse:collapse">
-          <thead><tr style="background:#f9fafb">${ths}</tr></thead>
-          <tbody>${rows.join('')}</tbody>
-          <tfoot><tr style="background:#1a3c5e;color:#fff">
-            <td colspan="3" style="padding:6px 8px;font-size:11px;font-weight:800">Total</td>
-            <td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">${totToMin}</td>
-            <td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">${totTcMin}</td>
-            <td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">${totPpMin}</td>
-            <td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">${totPPpct}%</td>
-            <td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">${totPnpMin}</td>
-            <td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">${totPNPpct}%</td>
-            <td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">${inexTot>0?'+':''}${inexTot} min</td>
-            <td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">${totPzs.toLocaleString()}</td>
-            <td style="padding:6px 8px;font-size:13px;font-weight:900;text-align:right">${totAI}%</td>
-          </tr></tfoot>
-        </table>
-      </div>`;
+    var totAI=totTO>0?Math.round(totTC/totTO*100):0, totPPp=totTO>0?Math.round(totPP/totTO*100):0, totPNPp=totTO>0?Math.round(totPNP/totTO*100):0;
+    var totInex=l.target_hora>0?Math.round((totPzs-(l.target_hora*(totTC/3600000)))/l.target_hora*60):0;
+    html+='<div style="background:#fff;border-bottom:3px solid #e5e7eb">'
+      +'<div style="padding:10px 12px;background:#0d2144;color:#fff;font-weight:800;font-size:13px">'+l.nombre+'</div>'
+      +'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#f9fafb">'+ths+'</tr></thead><tbody>'+rows.join('')+'</tbody>'
+      +'<tfoot><tr style="background:#1a3c5e;color:#fff">'
+      +'<td colspan="3" style="padding:6px 8px;font-size:11px;font-weight:800">Total</td>'
+      +'<td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">'+Math.round(totTO/60000)+'</td>'
+      +'<td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">'+Math.round(totTC/60000)+'</td>'
+      +'<td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">'+Math.round(totPP/60000)+'</td>'
+      +'<td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">'+totPPp+'%</td>'
+      +'<td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">'+Math.round(totPNP/60000)+'</td>'
+      +'<td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">'+totPNPp+'%</td>'
+      +'<td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">'+(totInex>0?'+':'')+totInex+' min</td>'
+      +'<td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">'+totPzs.toLocaleString()+'</td>'
+      +'<td style="padding:6px 8px;font-size:13px;font-weight:900;text-align:right">'+totAI+'%</td>'
+      +'</tr></tfoot></table></div>';
   });
   html+='</div>';
   cont.innerHTML=html;
 }
-async function irConsultaLinea(id){LINEA_ID=id;ORIGEN_LINEA='consultas';abrirLinea(id);}
 async function irArrancar(){
   go('s-arrancar');
   var sel=document.getElementById('arrancar-sel');
@@ -852,7 +816,7 @@ async function renderLinea(){
   // Normalizar ts_inicio a número (puede venir como string de Supabase)
   var ordTsB=ORDEN_ACTIVA&&ORDEN_ACTIVA.ts_inicio?(typeof ORDEN_ACTIVA.ts_inicio==='string'?new Date(ORDEN_ACTIVA.ts_inicio).getTime():Number(ORDEN_ACTIVA.ts_inicio)):null;
   var tsIEfectivo=ordTsB&&ordTsB>tsI?ordTsB:tsI;
-  var ahora_barra=(!ORDEN_ACTIVA)?tsI:(detenida&&tsDetencion?Math.min(tsDetencion,tsF):Math.min(Date.now(),tsF));
+  var ahora_barra=(!ORDEN_ACTIVA&&esHoy)?tsI:(detenida&&tsDetencion?Math.min(tsDetencion,tsF):(!esHoy?tsF:Math.min(Date.now(),tsF)));
   var segmentos=segmentosConGaps(evs,tsIEfectivo,ahora_barra);
   window.AI_SEGS=segmentos;
 
