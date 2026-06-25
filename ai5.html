@@ -343,16 +343,17 @@ function calcKPIsLinea(evsList, tsI, ahora){
 function sem(d){var dt=new Date(d);dt.setHours(0,0,0,0);var j=new Date(dt.getFullYear(),0,1);return Math.ceil(((dt-j)/86400000+j.getDay()+1)/7);}
 function fmtFecha(ts){var d=new Date(ts);var dd=String(d.getDate()).padStart(2,'0'),mm=String(d.getMonth()+1).padStart(2,'0'),yy=String(d.getFullYear()).slice(2);return dd+mm+yy;}
 async function genFolio(lineaId){
-  // Buscar último folio del día para esta línea
+  // Buscar último folio del día para ESTA LÍNEA (no global) — evita colisión entre líneas
   var h=hoy();
-  var rows=await db('ai_ordenes','GET',null,'linea_id=eq.'+lineaId+'&fecha=eq.'+h+'&order=folio.desc&limit=1');
-  var prefix=fmtFecha(Date.now());
+  var rows=await db('ai_ordenes','GET',null,'linea_id=eq.'+lineaId+'&fecha=eq.'+h+'&order=ts_inicio.desc&limit=1');
+  var prefix=fmtFecha(Date.now()); // YYMMDD
   var siguiente=1;
   if(rows&&rows.length){
-    var ultimo=rows[0].folio;
+    var ultimo=rows[0].folio||'';
     var partes=ultimo.split('-');
-    if(partes.length===2) siguiente=parseInt(partes[1])+1;
+    if(partes.length>=2){var n=parseInt(partes[partes.length-1]);if(!isNaN(n)) siguiente=n+1;}
   }
+  // Formato: YYMMDD-NNNNN (contador por línea por día, sin riesgo de duplicado entre líneas)
   return prefix+'-'+String(siguiente).padStart(5,'0');
 }
 
@@ -696,29 +697,28 @@ async function cargarLista(){
     return;
   }
 
-  // Cargar eventos del día solo para líneas con orden activa corriendo
-  var idsConOrden=Object.keys(ordenPorLinea).filter(id=>!ordenPorLinea[id].detenida_en);
-  var evsDia=[];
-  if(idsConOrden.length){
-    evsDia=await db('ai_eventos','GET',null,'linea_id=in.('+idsConOrden.join(',')+')&ts_inicio=gte.'+diaInicio+'&order=ts_inicio.asc')||[];
-  }
+  // Cargar eventos del día para TODAS las líneas (no solo las con orden no-detenida)
+  var todasLineasIds=LINEAS.map(l=>l.id).join(',');
+  var evsDia=todasLineasIds?await db('ai_eventos','GET',null,'linea_id=in.('+todasLineasIds+')&ts_inicio=gte.'+diaInicio+'&order=ts_inicio.asc')||[]:[];
 
   cont.innerHTML=filtroHTML+LINEAS.map(l=>{
     var ord=ordenPorLinea[l.id];
-    var tieneOrdenActiva=ord&&!ord.detenida_en;
-    var tieneOrdenDetenida=ord&&ord.detenida_en;
-    var sinOrden=!ord;
+    var evActual=(evsAbiertos||[]).find(e=>e.linea_id===l.id);
+    var tipoEvActual=evActual?evActual.tipo:null;
+    // Estado real: evento abierto es la fuente de verdad
+    var estaActiva=tipoEvActual&&['corriendo','pp','pnp'].includes(tipoEvActual);
+    var estaDetenida=tipoEvActual==='detenida'||(ord&&ord.detenida_en&&!estaActiva);
+    var implicitCorriendo=ord&&!estaDetenida&&!tipoEvActual;
+    var sinOrden=!ord&&!estaActiva;
 
-    // Determinar estado de la línea
-    var ev=(evsAbiertos||[]).find(e=>e.linea_id===l.id);
-    var tipo=tieneOrdenActiva?(ev?ev.tipo:'corriendo'):(tieneOrdenDetenida?'detenida':'sinorden');
+    var tipo=estaActiva?tipoEvActual:(implicitCorriendo?'corriendo':(estaDetenida?'detenida':'sinorden'));
     var colEstado={'corriendo':'#16a34a','pnp':'#dc2626','pp':'#ca8a04','idle':'#9ca3af','detenida':'#1a1a1a','sinorden':'#6b7280'}[tipo]||'#6b7280';
     var lblEstado={'corriendo':'▶ Corriendo','pnp':'🔴 PNP','pp':'🟡 PP','idle':'⬜ Idle','detenida':'⏹ Detenida','sinorden':'— Sin orden'}[tipo]||tipo;
 
-    // KPIs solo cuando hay orden activa corriendo
-    var kpisHTML='<div style="flex:1;display:flex;align-items:center;justify-content:center;padding:0 10px"><div style="font-size:11px;color:#9ca3af;text-align:center">'+(sinOrden?'Sin orden':'Detenida')+'</div></div>';
-    if(tieneOrdenActiva){
-      var winIni=Math.max(ord.ts_inicio,diaInicio);
+    var kpisHTML='<div style="flex:1;display:flex;align-items:center;justify-content:center;padding:0 10px"><div style="font-size:11px;color:#9ca3af;text-align:center">'+(sinOrden?'Sin orden':'—')+'</div></div>';
+    if(estaActiva||implicitCorriendo){
+      var ordTs=ord?(typeof ord.ts_inicio==='string'?new Date(ord.ts_inicio).getTime():Number(ord.ts_inicio)):diaInicio;
+      var winIni=Math.max(ordTs,diaInicio);
       var evsL=evsDia.filter(e=>e.linea_id===l.id);
       var k=calcKPIsLinea(evsL,winIni,ahora);
       var oAI=l.objetivo_ai!=null?l.objetivo_ai:85;
