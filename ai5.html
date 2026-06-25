@@ -85,12 +85,27 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
     <button class="topbar-back" onclick="go('s-home')">←</button>
     <div style="flex:1"><div class="topbar-title">📊 Line Summary</div></div>
   </div>
-  <div class="scroll" style="padding:20px">
-    <label style="font-size:.85rem;font-weight:700;display:block;margin-bottom:8px;color:#374151">Selecciona una línea para consultar</label>
-    <select id="consultas-sel" class="fc" onchange="if(this.value) irConsultaLinea(this.value)">
-      <option value="">— Elige una línea —</option>
-    </select>
+  <!-- Barra de filtros -->
+  <div style="background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:8px 12px">
+    <!-- Fila 1: Botones de periodo + flechas + refresh -->
+    <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <div style="display:flex;gap:3px">
+        <button onclick="lsNavegar(-1)" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;background:#fff;font-size:16px;font-weight:900;cursor:pointer">◄</button>
+        ${['T','D','S','M'].map(m=>`<button onclick="lsSetModo('${m}')" id="ls-modo-${m}" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000">${m}</button>`).join('')}
+        <button onclick="lsNavegar(1)" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;background:#fff;font-size:16px;font-weight:900;cursor:pointer">►</button>
+      </div>
+      <div id="ls-periodo-label" style="font-size:11px;font-weight:700;color:#374151;flex:1;text-align:center"></div>
+      <button onclick="cargarLineSummary()" style="padding:5px 12px;background:#0d2144;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">↻ Refresh</button>
+    </div>
+    <!-- Fila 2: Selector Desde / Hasta (solo en modo Rango) -->
+    <div id="ls-rango-row" style="display:none;margin-top:8px;display:flex;gap:8px;align-items:center">
+      <span style="font-size:11px;font-weight:700;color:#6b7280">Desde:</span>
+      <button id="ls-desde-btn" onclick="abrirCalendarioLS('desde',this)" style="padding:5px 10px;border:1.5px solid #000;border-radius:8px;font-size:11px;font-weight:700;background:#fff;cursor:pointer">Seleccionar</button>
+      <span style="font-size:11px;font-weight:700;color:#6b7280">Hasta:</span>
+      <button id="ls-hasta-btn" onclick="abrirCalendarioLS('hasta',this)" style="padding:5px 10px;border:1.5px solid #000;border-radius:8px;font-size:11px;font-weight:700;background:#fff;cursor:pointer">Seleccionar</button>
+    </div>
   </div>
+  <div class="scroll" id="ls-tabla-cont" style="padding:0"></div>
 </div>
 
 <!-- LISTA DE LÍNEAS (Dashboard) -->
@@ -393,18 +408,197 @@ function iniciarSesion(){
 function irDashboard(){
   cargarLista();
 }
+// ── LINE SUMMARY ─────────────────────────────────────────────
+var _lsModo='D', _lsOffset=0, _lsDesdeTs=null, _lsHastaTs=null;
+var _lsTooltips={
+  TO:'Tiempo Ocupado (min) = Corriendo + PP + PNP',
+  TC:'Tiempo Corriendo (min)',
+  PP:'Tiempo de Paro Planeado (min)',
+  '%PP':'% Paro Planeado sobre Tiempo Ocupado',
+  PNP:'Tiempo de Paro No Planeado (min)',
+  '%PNP':'% Paro No Planeado sobre Tiempo Ocupado',
+  Inexplicado:'Minutos de producción sin explicar: diferencia entre lo producido y lo esperado a velocidad nominal durante el tiempo corriendo. Negativo = faltaron piezas (registra más PNP). Positivo = se hizo más de lo esperado.',
+  AI:'Asset Intensity % = TC / TO × 100'
+};
 async function irConsultas(){
+  if(TIMER){clearInterval(TIMER);TIMER=null;}
   go('s-consultas');
-  var sel=document.getElementById('consultas-sel');
-  var lin=await db('ai_lineas','GET',null,'order=nombre.asc');
+  var lin=await db('ai_lineas','GET',null,'activa=eq.true&order=nombre.asc');
   LINEAS=lin||LINEAS;
-  sel.innerHTML='<option value="">— Elige una línea —</option>'+(lin||[]).map(l=>'<option value="'+l.id+'">'+l.nombre+'</option>').join('');
-  sel.value='';
+  lsSetModo('D');
 }
-function irConsultaLinea(id){
-  ORIGEN_LINEA='consultas';
-  abrirLinea(id);
+function lsSetModo(m){
+  _lsModo=m; _lsOffset=0;
+  ['T','D','S','M'].forEach(x=>{
+    var btn=document.getElementById('ls-modo-'+x);
+    if(btn){btn.style.background=x===m?'#0d2144':'#fff';btn.style.color=x===m?'#fff':'#000';}
+  });
+  var rangoRow=document.getElementById('ls-rango-row');
+  if(rangoRow) rangoRow.style.display='none';
+  lsActualizarRango();
+  cargarLineSummary();
 }
+function lsNavegar(dir){
+  _lsOffset+=dir;
+  lsActualizarRango();
+  cargarLineSummary();
+}
+function lsActualizarRango(){
+  var ahora=Date.now(), h=hoy();
+  var label='';
+  if(_lsModo==='T'){
+    var t=turno(), tI=tIni(t,h)+_lsOffset*8*3600000;
+    _lsDesdeTs=tI; _lsHastaTs=tI+8*3600000;
+    var d=new Date(tI);
+    label='Turno '+t+' · '+d.toLocaleDateString('es-MX',{day:'2-digit',month:'short'});
+  }else if(_lsModo==='D'){
+    var base=new Date(h+'T06:30:00').getTime()+_lsOffset*24*3600000;
+    _lsDesdeTs=base; _lsHastaTs=base+24*3600000;
+    label=new Date(base).toLocaleDateString('es-MX',{weekday:'short',day:'2-digit',month:'short',year:'numeric'});
+  }else if(_lsModo==='S'){
+    var lunes=lunesDeEstaFecha(new Date().getFullYear(),new Date().getMonth()+1,new Date().getDate());
+    var baseS=new Date(lunes.getFullYear(),lunes.getMonth(),lunes.getDate(),6,30,0).getTime()+_lsOffset*7*24*3600000;
+    _lsDesdeTs=baseS; _lsHastaTs=baseS+7*24*3600000;
+    label='Semana: '+new Date(baseS).toLocaleDateString('es-MX',{day:'2-digit',month:'short'})+' – '+new Date(_lsHastaTs-1).toLocaleDateString('es-MX',{day:'2-digit',month:'short'});
+  }else if(_lsModo==='M'){
+    var now=new Date(); var y=now.getFullYear(), mes=now.getMonth()+_lsOffset;
+    var d1=new Date(y,mes,1,6,30,0); var d2=new Date(y,mes+1,1,6,30,0);
+    _lsDesdeTs=d1.getTime(); _lsHastaTs=d2.getTime();
+    label=d1.toLocaleDateString('es-MX',{month:'long',year:'numeric'});
+  }
+  var lbl=document.getElementById('ls-periodo-label');
+  if(lbl) lbl.textContent=label;
+}
+function abrirCalendarioLS(tipo,btn){
+  document.querySelectorAll('.cal-popup').forEach(x=>x.remove());
+  var fA=new Date().getFullYear(), fM=new Date().getMonth()+1;
+  var mesesFull=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  _mostrarEtapa1Fecha(btn, fA, fM);
+  // Override confirmar para tipo desde/hasta
+  window._confirmarFecha=function(mes,año){
+    document.querySelectorAll('.cal-popup').forEach(x=>x.remove());
+    var dia=window._pfDiaSel||new Date().getDate();
+    var ts=new Date(año,mes-1,dia,6,30,0).getTime();
+    if(tipo==='desde'){
+      _lsDesdeTs=ts;
+      var b=document.getElementById('ls-desde-btn');
+      if(b) b.textContent=dia+' '+mesesFull[mes-1]+' '+año;
+    }else{
+      _lsHastaTs=ts+24*3600000;
+      var b=document.getElementById('ls-hasta-btn');
+      if(b) b.textContent=dia+' '+mesesFull[mes-1]+' '+año;
+    }
+  };
+}
+async function cargarLineSummary(){
+  var cont=document.getElementById('ls-tabla-cont');
+  if(!cont) return;
+  if(!_lsDesdeTs) lsActualizarRango();
+  cont.innerHTML='<div style="text-align:center;padding:40px;color:#9ca3af">Cargando...</div>';
+  // Cargar órdenes en el rango
+  var ords=await db('ai_ordenes','GET',null,
+    'ts_inicio=gte.'+_lsDesdeTs+'&ts_inicio=lt.'+_lsHastaTs+'&estado=in.(abierta,cerrada)&order=ts_inicio.asc')||[];
+  if(!ords.length){
+    cont.innerHTML='<div style="text-align:center;padding:40px;color:#9ca3af">Sin órdenes en este periodo</div>';
+    return;
+  }
+  // Cargar todos los eventos del periodo
+  var evsTodos=await db('ai_eventos','GET',null,
+    'ts_inicio=gte.'+(_lsDesdeTs-9*3600000)+'&ts_inicio=lt.'+_lsHastaTs+'&order=ts_inicio.asc')||[];
+  // Agrupar órdenes por línea
+  var porLinea={};
+  ords.forEach(o=>{
+    if(!porLinea[o.linea_id]) porLinea[o.linea_id]={nombre:o.linea_nombre||o.linea_id,ordenes:[]};
+    porLinea[o.linea_id].ordenes.push(o);
+  });
+  // Tooltip headers
+  var cols=['TO','TC','PP','%PP','PNP','%PNP','Inexplicado','Cant. actual','AI'];
+  var thStyle='padding:6px 8px;font-size:10px;font-weight:800;color:#374151;white-space:nowrap;border-bottom:2px solid #e5e7eb;cursor:help;text-align:right';
+  var ths=`<th style="${thStyle.replace('right','left')}">Orden</th>
+    <th style="${thStyle.replace('right','left')}">Inicio OP</th>
+    <th style="${thStyle.replace('right','left')}">Fin OP</th>`
+    +cols.map(c=>`<th title="${_lsTooltips[c]||c}" style="${thStyle}">${c}</th>`).join('');
+  var html='<div style="overflow-x:auto">';
+  Object.keys(porLinea).forEach(lineaId=>{
+    var linea=porLinea[lineaId];
+    var l=LINEAS.find(x=>x.id===lineaId);
+    // Calcular KPIs por orden
+    var rows=[]; var totTO=0,totTC=0,totPP=0,totPNP=0,totPzs=0;
+    linea.ordenes.forEach(o=>{
+      var evs=evsTodos.filter(e=>e.linea_id===lineaId&&e.ts_inicio>=o.ts_inicio&&(o.ts_fin?e.ts_inicio<=o.ts_fin:true));
+      var tsI=o.ts_inicio, tsF=o.ts_fin||o.detenida_en||Date.now();
+      var tC=0,tPP=0,tPNP=0,cur=tsI;
+      evs.forEach(e=>{
+        var i=Math.max(e.ts_inicio,tsI),f=e.ts_fin?Math.min(e.ts_fin,tsF):tsF,d=Math.max(0,f-i);
+        if(i>cur) tC+=(i-cur);
+        if(e.tipo==='corriendo') tC+=d;
+        else if(e.tipo==='pp') tPP+=d;
+        else if(e.tipo==='pnp') tPNP+=d;
+        cur=Math.max(cur,f);
+      });
+      if(cur<tsF) tC+=(tsF-cur);
+      var tO=tC+tPP+tPNP;
+      var ai=tO>0?Math.round(tC/tO*100):0;
+      var ppPct=tO>0?Math.round(tPP/tO*100):0;
+      var pnpPct=tO>0?Math.round(tPNP/tO*100):0;
+      var targetH=l?l.target_hora||0:0;
+      var pzAct=o.piezas_total||0;
+      var pzEsp=targetH*(tC/3600000);
+      var diffPz=pzAct-pzEsp;
+      var inexMin=targetH>0?Math.round(diffPz/targetH*60):0;
+      var toMin=Math.round(tO/60000), tcMin=Math.round(tC/60000);
+      var ppMin=Math.round(tPP/60000), pnpMin=Math.round(tPNP/60000);
+      totTO+=tO; totTC+=tC; totPP+=tPP; totPNP+=tPNP; totPzs+=pzAct;
+      var finStr=o.ts_fin?new Date(o.ts_fin).toLocaleString('es-MX',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}):o.detenida_en?'⏹ Detenida':'En curso';
+      rows.push(`<tr style="border-bottom:1px solid #f3f4f6">
+        <td style="padding:5px 8px;font-size:11px;font-weight:700;white-space:nowrap">${o.folio||'—'}</td>
+        <td style="padding:5px 8px;font-size:11px;color:#6b7280;white-space:nowrap">${new Date(o.ts_inicio).toLocaleString('es-MX',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})}</td>
+        <td style="padding:5px 8px;font-size:11px;color:#6b7280;white-space:nowrap">${finStr}</td>
+        <td style="padding:5px 8px;font-size:11px;text-align:right">${toMin}</td>
+        <td style="padding:5px 8px;font-size:11px;text-align:right">${tcMin}</td>
+        <td style="padding:5px 8px;font-size:11px;text-align:right">${ppMin}</td>
+        <td style="padding:5px 8px;font-size:11px;text-align:right;color:${ppPct>=(l?l.objetivo_pp||15:15)?'#dc2626':'#16a34a'}">${ppPct}%</td>
+        <td style="padding:5px 8px;font-size:11px;text-align:right">${pnpMin}</td>
+        <td style="padding:5px 8px;font-size:11px;text-align:right;color:${pnpPct>=(l?l.objetivo_pnp||10:10)?'#dc2626':'#16a34a'}">${pnpPct}%</td>
+        <td style="padding:5px 8px;font-size:11px;text-align:right;font-weight:700;color:${inexMin<0?'#dc2626':inexMin>0?'#16a34a':'#374151'}">${inexMin>0?'+':''}${inexMin} min</td>
+        <td style="padding:5px 8px;font-size:11px;text-align:right">${pzAct.toLocaleString()}</td>
+        <td style="padding:5px 8px;font-size:12px;font-weight:900;text-align:right;color:${ai>=(l?l.objetivo_ai||85:85)?'#16a34a':'#dc2626'}">${ai}%</td>
+      </tr>`);
+    });
+    // Total ponderado
+    var totO=totTO+0, totAI=totTO>0?Math.round(totTC/totTO*100):0;
+    var totPPpct=totTO>0?Math.round(totPP/totTO*100):0;
+    var totPNPpct=totTO>0?Math.round(totPNP/totTO*100):0;
+    var totToMin=Math.round(totTO/60000), totTcMin=Math.round(totTC/60000);
+    var totPpMin=Math.round(totPP/60000), totPnpMin=Math.round(totPNP/60000);
+    var pzEspTotal=(l?l.target_hora||0:0)*(totTC/3600000);
+    var diffTot=totPzs-pzEspTotal;
+    var inexTot=(l&&l.target_hora)?Math.round(diffTot/l.target_hora*60):0;
+    html+=`
+      <div style="background:#fff;border-bottom:3px solid #e5e7eb">
+        <div style="padding:10px 12px;background:#0d2144;color:#fff;font-weight:800;font-size:13px">${linea.nombre}</div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:#f9fafb">${ths}</tr></thead>
+          <tbody>${rows.join('')}</tbody>
+          <tfoot><tr style="background:#1a3c5e;color:#fff">
+            <td colspan="3" style="padding:6px 8px;font-size:11px;font-weight:800">Total</td>
+            <td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">${totToMin}</td>
+            <td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">${totTcMin}</td>
+            <td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">${totPpMin}</td>
+            <td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">${totPPpct}%</td>
+            <td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">${totPnpMin}</td>
+            <td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">${totPNPpct}%</td>
+            <td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">${inexTot>0?'+':''}${inexTot} min</td>
+            <td style="padding:6px 8px;font-size:11px;font-weight:800;text-align:right">${totPzs.toLocaleString()}</td>
+            <td style="padding:6px 8px;font-size:13px;font-weight:900;text-align:right">${totAI}%</td>
+          </tr></tfoot>
+        </table>
+      </div>`;
+  });
+  html+='</div>';
+  cont.innerHTML=html;
+}
+async function irConsultaLinea(id){LINEA_ID=id;ORIGEN_LINEA='consultas';abrirLinea(id);}
 async function irArrancar(){
   go('s-arrancar');
   var sel=document.getElementById('arrancar-sel');
@@ -614,7 +808,9 @@ async function renderLinea(){
 
   // ── Cálculos (tiempo ocupado excluye idle) ───────────────────
   // tsI0: inicio efectivo de la orden (no acumular corriendo antes de que arrancara)
-  var tsI0=ORDEN_ACTIVA&&ORDEN_ACTIVA.ts_inicio&&ORDEN_ACTIVA.ts_inicio>tsI?ORDEN_ACTIVA.ts_inicio:tsI;
+  // Normalizar ts_inicio a número (puede venir como string de Supabase)
+  var ordTs=ORDEN_ACTIVA&&ORDEN_ACTIVA.ts_inicio?(typeof ORDEN_ACTIVA.ts_inicio==='string'?new Date(ORDEN_ACTIVA.ts_inicio).getTime():Number(ORDEN_ACTIVA.ts_inicio)):null;
+  var tsI0=ordTs&&ordTs>tsI?ordTs:tsI;
   var tC=0,tPNP=0,tPP=0,tI=0,curC=tsI0;
   evs.forEach(e=>{
     var i=Math.max(e.ts_inicio,tsI0),f=e.ts_fin?Math.min(e.ts_fin,ahora):ahora,d=Math.max(0,f-i);
@@ -653,7 +849,9 @@ async function renderLinea(){
   // ── Segmentos (eventos reales + huecos 'corriendo') ───────────
   // Si no hay orden activa, la barra no debe mostrar corriendo sintético (línea parada)
   // tsIEfectivo: la orden empieza desde cuando se arrancó, no desde las 6:30
-  var tsIEfectivo=ORDEN_ACTIVA&&ORDEN_ACTIVA.ts_inicio&&ORDEN_ACTIVA.ts_inicio>tsI?ORDEN_ACTIVA.ts_inicio:tsI;
+  // Normalizar ts_inicio a número (puede venir como string de Supabase)
+  var ordTsB=ORDEN_ACTIVA&&ORDEN_ACTIVA.ts_inicio?(typeof ORDEN_ACTIVA.ts_inicio==='string'?new Date(ORDEN_ACTIVA.ts_inicio).getTime():Number(ORDEN_ACTIVA.ts_inicio)):null;
+  var tsIEfectivo=ordTsB&&ordTsB>tsI?ordTsB:tsI;
   var ahora_barra=(!ORDEN_ACTIVA)?tsI:(detenida&&tsDetencion?Math.min(tsDetencion,tsF):Math.min(Date.now(),tsF));
   var segmentos=segmentosConGaps(evs,tsIEfectivo,ahora_barra);
   window.AI_SEGS=segmentos;
@@ -1160,11 +1358,16 @@ async function _crearNuevaOrden(prod,area,l){
   var cls=await db('ai_checklists','GET',null,'linea_id=eq.'+LINEA_ID+'&requiere_antes_arranque=eq.true&activo=eq.true')||[];
   if(cls.length){
     window._ck_pendientes_arranque=cls;
-    window._ck_callback_arranque=async()=>{ await cambiarEstado('corriendo'); toast('▶ Orden '+folio+' iniciada','#16a34a'); };
+    window._ck_callback_arranque=async()=>{
+      await cambiarEstado('corriendo');
+      toast('▶ Orden '+folio+' iniciada','#16a34a');
+      renderLinea(); // garantizar render con ts_inicio correcto
+    };
     ejecutarChecklistArranque(cls,0,window._ck_callback_arranque);
   }else{
     await cambiarEstado('corriendo');
     toast('▶ Orden '+folio+' iniciada','#16a34a');
+    renderLinea(); // garantizar render con ts_inicio correcto
   }
 }
 
