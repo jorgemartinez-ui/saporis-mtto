@@ -94,7 +94,7 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
       <button onclick="lsSetModo('S')" id="ls-modo-S" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000">S</button>
       <button onclick="lsSetModo('M')" id="ls-modo-M" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000">M</button>
       <button onclick="lsNavegar(1)" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;background:#fff;font-size:16px;font-weight:900;cursor:pointer">►</button>
-      <button onclick="abrirSeleccionManualLS()" id="ls-manual-btn" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:11px;font-weight:800;cursor:pointer;background:#fff;color:#000;white-space:nowrap">Selección Manual</button>
+      <button onclick="abrirSeleccionManualLS()" id="ls-manual-btn" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000;min-width:80px">Manual</button>
       <div id="ls-periodo-label" style="font-size:11px;font-weight:700;color:#374151;flex:1;text-align:center;min-width:80px"></div>
       <button onclick="cargarLineSummary()" style="padding:5px 12px;background:#0d2144;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">↻</button>
     </div>
@@ -452,6 +452,9 @@ function lsSetModo(m){
     var btn=document.getElementById('ls-modo-'+x);
     if(btn){btn.style.background=x===m?'#0d2144':'#fff';btn.style.color=x===m?'#fff':'#000';}
   });
+  // Reset botón Manual
+  var bm=document.getElementById('ls-manual-btn');
+  if(bm){bm.style.background='#fff';bm.style.color='#000';bm.textContent='Manual';}
   lsActualizarRango();
   cargarLineSummary();
 }
@@ -490,11 +493,15 @@ async function cargarLineSummary(){
   // Líneas a mostrar (filtro)
   var lineasMostrar=_lsLineasSel.size===0?LINEAS:LINEAS.filter(l=>_lsLineasSel.has(l.id));
   if(!lineasMostrar.length){cont.innerHTML='<div style="text-align:center;padding:40px;color:#9ca3af">Sin líneas seleccionadas</div>';return;}
+  // Lookback máximo según modo (para no traer órdenes antiguas sin cerrar)
+  var lookbackMs={'T':2,'D':2,'S':14,'M':60,'R':90}[_lsModo]||2;
+  var queryDesde=_lsDesdeTs-lookbackMs*24*3600000;
   // Cargar órdenes del periodo — incluye órdenes que empezaron antes y siguen activas
-  var ordsAll=await db('ai_ordenes','GET',null,'ts_inicio=lt.'+_lsHastaTs+'&estado=in.(abierta,cerrada)&order=ts_inicio.asc')||[];
+  var ordsAll=await db('ai_ordenes','GET',null,'ts_inicio=gte.'+queryDesde+'&ts_inicio=lt.'+_lsHastaTs+'&estado=in.(abierta,cerrada)&order=ts_inicio.asc')||[];
   var ords=ordsAll.filter(o=>{
-    var fin=o.ts_fin;
-    return !fin||(typeof fin==='string'?new Date(fin).getTime():Number(fin))>=_lsDesdeTs;
+    var inicio=typeof o.ts_inicio==='string'?new Date(o.ts_inicio).getTime():Number(o.ts_inicio);
+    var fin=o.ts_fin?(typeof o.ts_fin==='string'?new Date(o.ts_fin).getTime():Number(o.ts_fin)):null;
+    return inicio<_lsHastaTs&&(!fin||fin>=_lsDesdeTs);
   });
   // Cargar eventos del periodo (extendido 9h para capturar los que cruzaron turno)
   var evsTodos=await db('ai_eventos','GET',null,'ts_inicio=gte.'+(_lsDesdeTs-9*3600000)+'&ts_inicio=lt.'+_lsHastaTs+'&order=ts_inicio.asc')||[];
@@ -607,17 +614,19 @@ function abrirSeleccionManualLS(){
   window.renderManualLS=renderManual;
   modal('📅 Selección Manual','<div id="ls-manual-cont" style="max-height:65vh;overflow-y:auto;padding:4px"></div>',
     (m)=>{
-      var s=window._lsManual;
+      var mesesFull=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
       if(!s.deDia||!s.hastaDia){toast('Selecciona día inicio y fin','#dc2626');return;}
       _lsDesdeTs=new Date(s.deA,s.deM-1,s.deDia,6,30,0).getTime();
       _lsHastaTs=new Date(s.hastaA,s.hastaM-1,s.hastaDia,6,30,0).getTime()+24*3600000;
       if(_lsHastaTs<=_lsDesdeTs){toast('La fecha fin debe ser posterior al inicio','#dc2626');return;}
       ['T','D','S','M'].forEach(x=>{var b=document.getElementById('ls-modo-'+x);if(b){b.style.background='#fff';b.style.color='#000';}});
       _lsModo='R';
+      var deStr=s.deDia+' '+mesesFull[s.deM-1]+' '+String(s.deA).slice(-2);
+      var hastaStr=s.hastaDia+' '+mesesFull[s.hastaM-1]+' '+String(s.hastaA).slice(-2);
       var lbl=document.getElementById('ls-periodo-label');
-      if(lbl) lbl.textContent='De: '+s.deDia+' '+mesesFull[s.deM-1]+' '+s.deA+' / A: '+s.hastaDia+' '+mesesFull[s.hastaM-1]+' '+s.hastaA;
+      if(lbl) lbl.textContent='De: '+deStr+' / A: '+hastaStr;
       var btn=document.getElementById('ls-manual-btn');
-      if(btn) btn.textContent=s.deDia+' '+mesesFull[s.deM-1]+' – '+s.hastaDia+' '+mesesFull[s.hastaM-1];
+      if(btn){btn.textContent=deStr+' – '+hastaStr;btn.style.background='#0d2144';btn.style.color='#fff';}
       m.remove(); cargarLineSummary();
     },'#0d2144','Guardar');
   setTimeout(renderManual,50);
