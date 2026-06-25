@@ -2612,46 +2612,64 @@ function iniciarMonitorChecklists(){
 }
 
 async function revisarAlertasChecklists(){
-  if(_ckAlertaActiva) return; // ya hay una alerta visible
+  if(_ckAlertaActiva) return;
+
+  // 1. Solo correr si el usuario está en la consola de la línea (s-linea)
+  var pantActiva=document.querySelector('.screen[style*="flex"]')||document.querySelector('.screen:not([style*="none"])');
+  if(!pantActiva||pantActiva.id!=='s-linea') return;
+
+  // 2. Solo para rol operador (no admin, no super)
+  if(!ME||ME.rol!=='operador') return;
+
+  // 3. Solo para la línea que tiene abierta
+  if(!LINEA_ID) return;
+
+  // 4. Solo si hay orden activa y no está detenida
+  if(!ORDEN_ACTIVA||ORDEN_ACTIVA.detenida_en) return;
+
   var ahora=Date.now();
+  var tsOrden=typeof ORDEN_ACTIVA.ts_inicio==='string'
+    ?new Date(ORDEN_ACTIVA.ts_inicio).getTime()
+    :Number(ORDEN_ACTIVA.ts_inicio);
+
   try{
-    var [lineas,ords]=await Promise.all([
-      db('ai_lineas','GET',null,'activa=eq.true'),
-      db('ai_ordenes','GET',null,'estado=eq.abierta')
-    ]);
-    if(!lineas||!ords) return;
-    for(var ord of ords){
-      var linea=lineas.find(l=>l.id===ord.linea_id); if(!linea) continue;
-      var cls=await db('ai_checklists','GET',null,'linea_id=eq.'+ord.linea_id+'&activo=eq.true')||[];
-      for(var c of cls){
-        var frec=c.frecuencia||(c.requiere_antes_arranque?'antes_arranque':'inicio_produccion');
-        if(frec==='antes_arranque') continue; // estos bloquean el arranque, no alertan aquí
-        var snoozeKey=c.id+'_'+ord.linea_id;
-        var snoozeTs=_ckSnooze[snoozeKey]||0;
-        if(ahora-snoozeTs<5*60*1000) continue; // snoozed, esperar 5 min
-        var debeMostrar=false;
-        var tsOrden=ord.ts_inicio||ahora;
-        if(frec==='inicio_produccion'){
-          // Verificar si ya fue ejecutado para esta orden
-          var execs=await db('ai_checklist_ejecuciones','GET',null,'checklist_id=eq.'+c.id+'&orden_id=eq.'+ord.id+'&completado=eq.true')||[];
+    var linea=LINEAS.find(l=>l.id===LINEA_ID);
+    if(!linea) return;
+    var cls=await db('ai_checklists','GET',null,'linea_id=eq.'+LINEA_ID+'&activo=eq.true')||[];
+
+    for(var c of cls){
+      var frec=c.frecuencia||(c.requiere_antes_arranque?'antes_arranque':'inicio_produccion');
+      if(frec==='antes_arranque') continue;
+
+      var snoozeKey=c.id+'_'+LINEA_ID;
+      if(_ckSnooze[snoozeKey]&&ahora-_ckSnooze[snoozeKey]<5*60*1000) continue;
+
+      var debeMostrar=false;
+
+      if(frec==='inicio_produccion'){
+        // Buscar ejecución completada DESDE que inició esta orden (no por orden_id que puede ser vacío)
+        var execs=await db('ai_checklist_ejecuciones','GET',null,
+          'checklist_id=eq.'+c.id+'&linea_id=eq.'+LINEA_ID+'&completado=eq.true&ts_fin=gte.'+tsOrden)||[];
+        debeMostrar=execs.length===0;
+
+      }else if(frec==='medio_turno'){
+        var tInicioTurno=tIni(turno(),hoy());
+        if(ahora>=tInicioTurno+4*3600000){
+          var execs=await db('ai_checklist_ejecuciones','GET',null,
+            'checklist_id=eq.'+c.id+'&linea_id=eq.'+LINEA_ID+'&completado=eq.true&ts_fin=gte.'+tInicioTurno)||[];
           debeMostrar=execs.length===0;
-        }else if(frec==='medio_turno'){
-          var tInicioTurno=tIni(turno(),hoy());
-          var mitad=tInicioTurno+4*3600000; // 4h = mitad de turno de 8h
-          if(ahora>=mitad){
-            var execs=await db('ai_checklist_ejecuciones','GET',null,'checklist_id=eq.'+c.id+'&orden_id=eq.'+ord.id+'&completado=eq.true')||[];
-            debeMostrar=execs.length===0;
-          }
-        }else if(frec==='cada_x_horas'&&c.intervalo_horas){
-          var intervMs=c.intervalo_horas*3600000;
-          var execs=await db('ai_checklist_ejecuciones','GET',null,'checklist_id=eq.'+c.id+'&orden_id=eq.'+ord.id+'&completado=eq.true&order=ts_fin.desc&limit=1')||[];
-          var ultimaTs=execs.length?execs[0].ts_fin:tsOrden;
-          debeMostrar=ahora-ultimaTs>=intervMs;
         }
-        if(debeMostrar){
-          mostrarAlertaChecklist(c,linea,ord);
-          return; // una alerta a la vez
-        }
+
+      }else if(frec==='cada_x_horas'&&c.intervalo_horas){
+        var execs=await db('ai_checklist_ejecuciones','GET',null,
+          'checklist_id=eq.'+c.id+'&linea_id=eq.'+LINEA_ID+'&completado=eq.true&order=ts_fin.desc&limit=1')||[];
+        var ultimaTs=execs.length?Number(execs[0].ts_fin):tsOrden;
+        debeMostrar=ahora-ultimaTs>=c.intervalo_horas*3600000;
+      }
+
+      if(debeMostrar){
+        mostrarAlertaChecklist(c,linea,ORDEN_ACTIVA);
+        return;
       }
     }
   }catch(e){console.warn('Monitor CK error',e);}
