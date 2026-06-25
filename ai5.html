@@ -614,6 +614,7 @@ function abrirSeleccionManualLS(){
   window.renderManualLS=renderManual;
   modal('📅 Selección Manual','<div id="ls-manual-cont" style="max-height:65vh;overflow-y:auto;padding:4px"></div>',
     (m)=>{
+      var s=window._lsManual;
       var mesesFull=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
       if(!s.deDia||!s.hastaDia){toast('Selecciona día inicio y fin','#dc2626');return;}
       _lsDesdeTs=new Date(s.deA,s.deM-1,s.deDia,6,30,0).getTime();
