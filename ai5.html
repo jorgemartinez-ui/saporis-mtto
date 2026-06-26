@@ -861,6 +861,7 @@ async function abrirLinea(id){
 }
 
 async function renderLinea(){
+  ocultarTipEvento(); // evitar tooltip congelado al regenerar HTML
   var cont=document.getElementById('linea-cont');
   var l=LINEAS.find(x=>x.id===LINEA_ID);
   if(!cont||!l) return;
@@ -912,9 +913,8 @@ async function renderLinea(){
   if(tsDetencion&&!(ORDEN_ACTIVA&&ORDEN_ACTIVA.estado==='cerrada')) tipoAct='detenida';
 
   // ── Cálculos (tiempo ocupado excluye idle) ───────────────────
-  // tsI0: inicio efectivo de la orden (no acumular corriendo antes de que arrancara)
-  // Normalizar ts_inicio a número (puede venir como string de Supabase)
-  var ordTs=ORDEN_ACTIVA&&ORDEN_ACTIVA.ts_inicio?(typeof ORDEN_ACTIVA.ts_inicio==='string'?new Date(ORDEN_ACTIVA.ts_inicio).getTime():Number(ORDEN_ACTIVA.ts_inicio)):null;
+  // tsI0: inicio efectivo de la orden — SOLO aplica cuando es hoy
+  var ordTs=esHoy&&ORDEN_ACTIVA&&ORDEN_ACTIVA.ts_inicio?(typeof ORDEN_ACTIVA.ts_inicio==='string'?new Date(ORDEN_ACTIVA.ts_inicio).getTime():Number(ORDEN_ACTIVA.ts_inicio)):null;
   var tsI0=ordTs&&ordTs>tsI?ordTs:tsI;
   var tC=0,tPNP=0,tPP=0,tI=0,curC=tsI0;
   evs.forEach(e=>{
@@ -953,9 +953,9 @@ async function renderLinea(){
 
   // ── Segmentos (eventos reales + huecos 'corriendo') ───────────
   // Si no hay orden activa, la barra no debe mostrar corriendo sintético (línea parada)
-  // tsIEfectivo: la orden empieza desde cuando se arrancó, no desde las 6:30
+  // tsIEfectivo: la orden empieza desde cuando se arrancó — SOLO aplica cuando es hoy
   // Normalizar ts_inicio a número (puede venir como string de Supabase)
-  var ordTsB=ORDEN_ACTIVA&&ORDEN_ACTIVA.ts_inicio?(typeof ORDEN_ACTIVA.ts_inicio==='string'?new Date(ORDEN_ACTIVA.ts_inicio).getTime():Number(ORDEN_ACTIVA.ts_inicio)):null;
+  var ordTsB=esHoy&&ORDEN_ACTIVA&&ORDEN_ACTIVA.ts_inicio?(typeof ORDEN_ACTIVA.ts_inicio==='string'?new Date(ORDEN_ACTIVA.ts_inicio).getTime():Number(ORDEN_ACTIVA.ts_inicio)):null;
   var tsIEfectivo=ordTsB&&ordTsB>tsI?ordTsB:tsI;
   var ahora_barra=(!ORDEN_ACTIVA&&esHoy)?tsI:(detenida&&tsDetencion?Math.min(tsDetencion,tsF):(!esHoy?tsF:Math.min(Date.now(),tsF)));
   var segmentos=segmentosConGaps(evs,tsIEfectivo,ahora_barra);
@@ -972,16 +972,21 @@ async function renderLinea(){
     return '<div onmouseenter="mostrarTipEvento(event,\''+seg.id+'\')" onmousemove="posicionarTip(event)" onmouseleave="ocultarTipEvento()" onclick="ocultarTipEvento();abrirEditorSegmento(\''+seg.id+'\')" style="width:'+p.toFixed(2)+'%;height:100%;background:'+COL[seg.tipo]+';cursor:pointer;flex-shrink:0" onmouseover="this.style.filter=\'brightness(.8)\'" onmouseout="this.style.filter=\'\'"></div>';
   }).join('');
   if(ahora_barra<tsF){var p=((tsF-ahora_barra)/dur*100).toFixed(2);segs+='<div style="flex:1;min-width:'+p+'%;height:100%;background:#e5e7eb"></div>';}
-  // Marcas de tiempo: 2 dígitos de hora; en semana solo mostrar nombre del día
+  // Marcas de tiempo: HH:MM para T/D, solo día para S
   var diasSem=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'];
   if(esSemana){
     for(var i=0;i<=7;i++){var p=(i/7*100).toFixed(1),dd=new Date(tsI+i*24*3600000);
       var lbl=i<7?diasSem[i]+'<br>'+dd.getDate():'';
       marcas+='<div style="position:absolute;left:'+p+'%;font-size:8px;color:#9ca3af;transform:translateX(-50%);text-align:center;line-height:1.3">'+lbl+'</div>';}
   }else{
-    var paso=nH>8?2:1; // en día completo solo marcar cada 2 horas
-    for(var i=0;i<=nH;i+=paso){var p=(i/nH*100).toFixed(1),hh=new Date(tsI+i*3600000).getHours();
-      marcas+='<div style="position:absolute;left:'+p+'%;font-size:9px;color:#9ca3af;transform:translateX(-50%)">'+String(hh).padStart(2,'0')+'</div>';}
+    var paso=nH>8?2:1;
+    for(var i=0;i<=nH;i+=paso){
+      var p=(i/nH*100).toFixed(1);
+      var tsMark=new Date(tsI+i*3600000);
+      var hh=tsMark.getHours(),mm=tsMark.getMinutes();
+      var lbl=String(hh).padStart(2,'0')+(mm>0?':'+String(mm).padStart(2,'0'):'');
+      marcas+='<div style="position:absolute;left:'+p+'%;font-size:9px;color:#9ca3af;transform:translateX(-50%)">'+lbl+'</div>';
+    }
   }
 
   // ── Gráfica piezas ───────────────────────────────────────────
@@ -1828,7 +1833,9 @@ function infoEvento(id){
 }
 
 // ── TOOLTIP DE LA BARRA DE TIEMPO ──────────────────────────────
+var _tipTimeout=null;
 function mostrarTipEvento(ev, id){
+  if(_tipTimeout){clearTimeout(_tipTimeout);_tipTimeout=null;}
   var seg=(window.AI_SEGS||[]).find(s=>s.id===id);
   if(!seg) return;
   var pc=parseMotivoComentario(seg);
@@ -1845,6 +1852,8 @@ function mostrarTipEvento(ev, id){
   tip.innerHTML=reclasTag+'<div style="font-weight:700">'+rango+' · '+durTip+'</div><div>'+pc.motivo+'</div>'+(pc.comentario!=='—'?'<div style="color:#d1d5db">'+pc.comentario+'</div>':'');
   tip.style.display='block';
   posicionarTip(ev);
+  // Auto-ocultar después de 4 segundos por si onmouseleave no dispara
+  _tipTimeout=setTimeout(ocultarTipEvento,4000);
 }
 function posicionarTip(ev){
   var tip=document.getElementById('ev-tip'); if(!tip) return;
@@ -1853,6 +1862,7 @@ function posicionarTip(ev){
   tip.style.top=(ev.clientY+16)+'px';
 }
 function ocultarTipEvento(){
+  if(_tipTimeout){clearTimeout(_tipTimeout);_tipTimeout=null;}
   var tip=document.getElementById('ev-tip'); if(tip) tip.style.display='none';
 }
 
