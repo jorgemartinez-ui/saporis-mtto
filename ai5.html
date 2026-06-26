@@ -167,10 +167,10 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
       <button onclick="kpiSetModo('D')" id="kpi-modo-D" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#7c3aed;color:#fff">D</button>
       <button onclick="kpiSetModo('S')" id="kpi-modo-S" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000">S</button>
       <button onclick="kpiSetModo('M')" id="kpi-modo-M" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000">M</button>
-      <button onclick="kpiNavegar(-1)" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;background:#fff;font-size:16px;font-weight:900;cursor:pointer">◄</button>
+      <button onclick="abrirSeleccionManualKPI()" id="kpi-manual-btn" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:11px;font-weight:800;cursor:pointer;background:#fff;color:#000">Manual</button>
+      <button onclick="kpiNavegar(-1)" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;background:#fff;font-size:14px;font-weight:900;cursor:pointer">◄</button>
       <div id="kpi-periodo-label" style="font-size:11px;font-weight:700;color:#374151;flex:1;text-align:center"></div>
-      <button onclick="kpiNavegar(1)" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;background:#fff;font-size:16px;font-weight:900;cursor:pointer">►</button>
-      <button onclick="abrirSeleccionManualKPI()" id="kpi-manual-btn" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000;min-width:70px">Manual</button>
+      <button onclick="kpiNavegar(1)" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;background:#fff;font-size:14px;font-weight:900;cursor:pointer">►</button>
     </div>
     <div style="display:flex;gap:8px;align-items:center">
       <select id="kpi-filtro-linea" onchange="cargarKPI()" style="padding:4px 8px;border:1.5px solid #000;border-radius:7px;font-size:11px;font-weight:700;font-family:Nunito,sans-serif;cursor:pointer;flex:1">
@@ -2738,7 +2738,7 @@ async function cargarKPI(){
   if(l){obj={objetivo_ai:l.objetivo_ai||85,objetivo_pp:l.objetivo_pp||10,objetivo_pnp:l.objetivo_pnp||10};}
   var data=await obtenerKPIData(_kpiDesde,_kpiHasta,lineaId);
   if(_kpiVista==='resumen') renderKPIResumen(data,obj);
-  else renderKPIDetalle(lineaId,obj);
+  else await renderKPIDetalle(lineaId,obj);
 }
 
 function renderKPIResumen(data,obj){
@@ -2858,22 +2858,24 @@ async function renderKPIDetalle(lineaId,obj){
       var val=data[key]; var ok=menorEsMejor?val<=objVal:val>=objVal;
       return '<div style="flex:1;text-align:center;font-size:9px;font-weight:800;color:'+(ok?'#16a34a':'#dc2626')+'">'+val+'%</div>';
     }).join('');
-    var barras=dias.map(({data,dayStart,dayEnd},i)=>{
+    // Píxeles directos (contenedor 100px) — evita problemas de height:% en flex
+    var barras=dias.map(({data},i)=>{
       var val=data[key]; var ok=menorEsMejor?val<=objVal:val>=objVal;
-      var pct=Math.max(val,2);
+      var pxH=val>0?Math.max(Math.round(val),4):0;
       var evs=key==='PP'?data.ppEvs:key==='PNP'?data.pnpEvs:null;
-      var clickStr=evs&&evs.length?'onclick="window._kpiClickDia('+i+',\''+key+'\')" style="cursor:pointer"':'style="cursor:default"';
-      return '<div '+clickStr+' style="flex:1;height:100%;display:flex;align-items:flex-end;padding:0 1px">'
-        +'<div style="width:100%;background:'+(ok?'#16a34a':'#dc2626')+';border-radius:3px 3px 0 0;height:'+pct+'%;min-height:4px"></div></div>';
+      var tieneClick=evs&&evs.length>0;
+      return '<div onclick="'+(tieneClick?'window._kpiClickDia('+i+',\''+key+'\')':'')
+        +'" style="flex:1;height:100px;display:flex;align-items:flex-end;padding:0 2px;cursor:'+(tieneClick?'pointer':'default')+';">'
+        +'<div style="width:100%;background:'+(ok?'#16a34a':'#dc2626')+';border-radius:3px 3px 0 0;height:'+pxH+'px"></div></div>';
     }).join('');
-    var lblsBottom=dias.map(({label})=>'<div style="flex:1;text-align:center;font-size:8px;color:#9ca3af;overflow:hidden">'+label+'</div>').join('');
-    return `<div style="background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,.08)">
-      <div style="font-size:13px;font-weight:800;color:#1a3c5e;margin-bottom:8px">${nombres[key]} <span style="font-size:11px;color:#6b7280;font-weight:600">Obj: ${menorEsMejor?'≤':'≥'}${objVal}%</span></div>
-      <div style="display:flex;margin-bottom:4px">${valsTop}</div>
-      <div style="display:flex;height:100px">${barras}</div>
-      <div style="display:flex;margin-top:4px">${lblsBottom}</div>
-      ${key!=='AI'?'<div style="font-size:10px;color:#9ca3af;margin-top:6px">Toca una barra para ver Pareto de ese día</div>':''}
-    </div>`;
+    var lblsBottom=dias.map(({label})=>'<div style="flex:1;text-align:center;font-size:8px;color:#9ca3af">'+label+'</div>').join('');
+    return '<div style="background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,.08)">'
+      +'<div style="font-size:13px;font-weight:800;color:#1a3c5e;margin-bottom:8px">'+nombres[key]+' <span style="font-size:11px;color:#6b7280;font-weight:600">Obj: '+(menorEsMejor?'≤':'≥')+objVal+'%</span></div>'
+      +'<div style="display:flex;margin-bottom:4px">'+valsTop+'</div>'
+      +'<div style="display:flex;height:100px;background:#f9fafb;border-radius:4px">'+barras+'</div>'
+      +'<div style="display:flex;margin-top:6px">'+lblsBottom+'</div>'
+      +(key!=='AI'?'<div style="font-size:10px;color:#9ca3af;margin-top:4px">Toca una barra para ver Pareto de ese día</div>':'')
+      +'</div>';
   }
 
   // Guardar función de click por día
