@@ -343,18 +343,16 @@ function calcKPIsLinea(evsList, tsI, ahora){
 function sem(d){var dt=new Date(d);dt.setHours(0,0,0,0);var j=new Date(dt.getFullYear(),0,1);return Math.ceil(((dt-j)/86400000+j.getDay()+1)/7);}
 function fmtFecha(ts){var d=new Date(ts);var dd=String(d.getDate()).padStart(2,'0'),mm=String(d.getMonth()+1).padStart(2,'0'),yy=String(d.getFullYear()).slice(2);return dd+mm+yy;}
 async function genFolio(lineaId){
-  // Buscar última orden del día para ESTA línea usando ts_inicio (no fecha column)
+  // Contador GLOBAL por día — todas las líneas comparten la secuencia
   var h=hoy();
   var tsHoyInicio=new Date(h+'T06:30:00').getTime();
   var tsHoyFin=tsHoyInicio+24*3600000;
   var rows=await db('ai_ordenes','GET',null,
-    'linea_id=eq.'+lineaId+'&ts_inicio=gte.'+tsHoyInicio+'&ts_inicio=lt.'+tsHoyFin+'&order=ts_inicio.desc&limit=1');
-  var prefix=fmtFecha(Date.now()); // YYMMDD
+    'ts_inicio=gte.'+tsHoyInicio+'&ts_inicio=lt.'+tsHoyFin+'&order=ts_inicio.desc&limit=1');
+  var prefix=fmtFecha(Date.now());
   var siguiente=1;
   if(rows&&rows.length){
-    var ultimo=rows[0].folio||'';
-    var partes=ultimo.split('-');
-    var n=parseInt(partes[partes.length-1]);
+    var n=parseInt((rows[0].folio||'').split('-').pop());
     if(!isNaN(n)) siguiente=n+1;
   }
   return prefix+'-'+String(siguiente).padStart(5,'0');
@@ -1401,6 +1399,9 @@ async function _crearNuevaOrden(prod,area,l){
     l._objetivo_pnp_orden=prod.objetivo_pnp;
   }
   await dbP('ai_ordenes','POST',orden,'');
+  // Cerrar cualquier orden anterior abierta de esta línea (no debe quedar más de una abierta)
+  await dbP('ai_ordenes','PATCH',{estado:'cerrada',ts_fin:ahora},
+    'linea_id=eq.'+lineaId+'&estado=eq.abierta&id=neq.'+ordId);
   ORDEN_ACTIVA=orden;
   localStorage.setItem('ai_orden_'+LINEA_ID,JSON.stringify(orden));
   // Verificar checklists requeridos antes de arrancar
