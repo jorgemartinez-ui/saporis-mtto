@@ -123,7 +123,6 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
     </div>
     <button id="btn-admin-usr" onclick="go('s-admin')" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:none">👥 Usuarios</button>
     <button id="btn-cfg" onclick="go('s-config')" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:none">⚙️</button>
-    <button onclick="cargarLista()" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:16px;cursor:pointer">↻</button>
     <button onclick="doLogout()" style="background:rgba(255,255,255,.1);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer">Salir</button>
   </div>
   <div class="scroll" id="lista-cont"></div>
@@ -721,8 +720,10 @@ async function cargarLista(){
   (ordsAbiertas||[]).forEach(o=>{ordenPorLinea[o.linea_id]=o;});
 
   // Filtros visuales (semántica: Activas=con orden corriendo, Inactivas=sin orden/detenida/idle)
-  var filtroHTML=`<div style="display:flex;gap:6px;padding:0 16px 10px">
+  var filtroHTML=`<div style="display:flex;gap:6px;padding:0 16px 10px;align-items:center">
     ${['activa','inactiva','todas'].map(f=>`<button onclick="window._dashFiltro='${f}';cargarLista()" style="padding:5px 12px;border:2px solid #000;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;background:${filtroActiva===f?'#0d2144':'#fff'};color:${filtroActiva===f?'#fff':'#000'}">${{activa:'Activas',inactiva:'Inactivas',todas:'Todas'}[f]}</button>`).join('')}
+    <div style="flex:1"></div>
+    <button onclick="cargarLista()" onmousedown="this.style.background='#e5e7eb';this.style.transform='scale(.9)'" onmouseup="this.style.background='#fff';this.style.transform=''" onmouseleave="this.style.background='#fff';this.style.transform=''" style="padding:5px 10px;border:2px solid #000;border-radius:8px;font-size:16px;font-weight:900;cursor:pointer;background:#fff;transition:transform .1s">↻</button>
   </div>`;
 
   if(!LINEAS.length){
@@ -978,19 +979,22 @@ async function renderLinea(){
   }
 
   // ── Gráfica piezas ───────────────────────────────────────────
-  var hrs=[],mx=Math.round(Math.max(l.target_hora||1,1)*1.1);
+  // Target: prioridad producto (piezas_objetivo de la orden) > línea
+  var targetH=(ORDEN_ACTIVA&&ORDEN_ACTIVA.piezas_objetivo&&ORDEN_ACTIVA.piezas_objetivo>0)
+    ?Number(ORDEN_ACTIVA.piezas_objetivo):(l.target_hora||0);
+  var hrs=[],mx=Math.round(Math.max(targetH||1,1)*1.1);
   for(var i=0;i<nH;i++){var ts_h=tsI+i*3600000,hh=new Date(ts_h).getHours(),p=pzs.find(x=>x.hora===hh)||null;hrs.push({h:hh,v:p?p.piezas:null,tn:turnoDe(ts_h),ts:ts_h});}
-  var pctTarget=Math.min(98,Math.max(2,(l.target_hora||0)/mx*100)).toFixed(1);
+  var pctTarget=Math.min(98,Math.max(2,(targetH||0)/mx*100)).toFixed(1);
   var lblsTop=esSemana?'':hrs.map(({v})=>'<div style="flex:1;text-align:center;font-size:9px;color:#374151;font-weight:700;height:14px">'+( v!==null?v:'' )+'</div>').join('');
   var barras=hrs.map(({h,v,tn,ts})=>{
     var pct=v!==null?Math.min(100,v/mx*100).toFixed(1):0;
-    var col=v===null?'#e5e7eb':(l.target_hora&&l.target_hora>0?(v>=l.target_hora?'#16a34a':'#dc2626'):'#9ca3af');
+    var col=v===null?'#e5e7eb':(targetH>0?(v>=targetH?'#16a34a':'#dc2626'):'#9ca3af');
     var dia=new Date(ts).toLocaleDateString('es-MX',{weekday:'short',day:'2-digit',month:'short'});
     var tooltipTxt=v!==null?(v+' '+unidad+' · '+dia+' '+String(h).padStart(2,'0')+':00'):(dia+' '+String(h).padStart(2,'0')+':00');
     return '<div onclick="editarPiezas('+h+','+v+',\''+tn+'\')" title="'+tooltipTxt+'" style="flex:1;height:100%;display:flex;align-items:flex-end;cursor:pointer">'
       +'<div style="width:100%;background:'+col+';border-radius:3px 3px 0 0;height:'+pct+'%;min-height:'+(v?3:0)+'px"></div></div>';
   }).join('');
-  // Eje X: en semana solo mostrar marcas de día, no las horas (demasiados números)
+  // Eje X: en semana solo marcas de día
   var lblsBottom=esSemana
     ? hrs.map(({ts},i)=>{var d=new Date(ts);return i%24===0?'<div style="flex:24;text-align:left;font-size:8px;color:#9ca3af;white-space:nowrap">'+d.toLocaleDateString('es-MX',{weekday:'short',day:'2-digit'})+'</div>':'';}).join('')
     : hrs.map(({h})=>'<div style="flex:1;text-align:center;font-size:9px;color:#9ca3af">'+String(h).padStart(2,'0')+'</div>').join('');
@@ -1037,7 +1041,7 @@ async function renderLinea(){
     +'<button onclick="setNavMode(\'d\')" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='d'?'#7f1d1d':'#fff')+';color:'+(window.AI_NAV_MODE==='d'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">D</button>'
     +'<button onclick="setNavMode(\'t\')" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='t'?'#7f1d1d':'#fff')+';color:'+(window.AI_NAV_MODE==='t'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">T</button>'
     +'<button onclick="navFecha(1)" onmousedown="this.style.transform=\'scale(.88)\';this.style.background=\'#e5e7eb\'" onmouseup="this.style.transform=\'\';this.style.background=\'#fff\'" onmouseleave="this.style.transform=\'\';this.style.background=\'#fff\'" style="padding:5px 9px;background:#fff;color:#000;border:2px solid #000;border-radius:7px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;transition:transform .1s;line-height:1">►</button>'
-    +'<button onclick="renderLinea()" style="padding:5px 9px;background:#fff;color:#000;border:2px solid #000;border-radius:7px;font-size:16px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;line-height:1">↻</button>'
+    +'<button onclick="renderLinea()" onmousedown="this.style.background=\'#e5e7eb\';this.style.transform=\'scale(.9)\'" onmouseup="this.style.background=\'#fff\';this.style.transform=\'\'" onmouseleave="this.style.background=\'#fff\';this.style.transform=\'\'" style="padding:5px 9px;background:#fff;color:#000;border:2px solid #000;border-radius:7px;font-size:16px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;line-height:1;transition:transform .1s">↻</button>'
     +'</div>'
     +'<select onchange="window.AI_F_TURNO=this.value;renderLinea()" style="flex:1;min-width:0;padding:7px 4px;border:1.5px solid #e5e7eb;border-radius:9px;font-family:Nunito,sans-serif;font-size:.78rem;background:#fff"><option value="turno_actual"'+(fT==='turno_actual'?' selected':'')+'>Turno actual</option><option value="T1"'+(fT==='T1'?' selected':'')+'>T1</option><option value="T2"'+(fT==='T2'?' selected':'')+'>T2</option><option value="T3"'+(fT==='T3'?' selected':'')+'>T3</option><option value="dia"'+(fT==='dia'?' selected':'')+'>Día completo</option></select>'
     +'</div>'
@@ -1069,7 +1073,7 @@ async function renderLinea(){
     +'<div style="padding:0 16px 10px">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'
     +'<div style="font-size:10px;font-weight:700;color:#374151">'+( unidad==='kg'?'Kg':'Piezas' )+' por hora · Total: '+(esHoy&&(detenida||ordenCerrada)?'<input id="pz-total-inp" type="number" value="'+pzTotalVal+'" '+(ordenCerrada?'disabled':'')+' style="width:75px;padding:3px 6px;border:1.5px solid #0891b2;border-radius:6px;font-family:Nunito,sans-serif;font-size:11px;font-weight:700;text-align:center">     '+ unidad :'<b>'+pzRegistradas+' '+unidad+'</b>')+'</div>'
-    +'<div style="font-size:10px;font-weight:700;color:#d97706;text-align:center">Objetivo/h: '+(l.target_hora||'—')+' '+unidad+'</div>'
+    +'<div style="font-size:10px;font-weight:700;color:#d97706;text-align:center">Objetivo/h: '+(targetH||'—')+' '+unidad+'</div>'
     +'<div style="display:flex;gap:5px">'
     +(esHoy&&detenida?'<button onclick="guardarOrden()" style="padding:4px 10px;background:#0891b2;color:#fff;border:none;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">💾 Guardar</button><button onclick="cerrarTecnico()" style="padding:4px 10px;background:#7c3aed;color:#fff;border:none;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">CTEC</button>':'')
     +(esHoy&&!detenida&&!ordenCerrada?'<button onclick="regPiezas()" style="padding:4px 10px;background:#0d2144;color:#fff;border:none;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">+ Registrar</button>':'')
@@ -1078,7 +1082,7 @@ async function renderLinea(){
     +'<div style="display:flex;gap:3px">'+lblsTop+'</div>'
     +'<div style="position:relative;height:150px;display:flex;gap:3px;margin-top:1px">'+barras
     +'<div style="position:absolute;bottom:'+pctTarget+'%;left:0;right:0;height:2px;background:#d97706;opacity:.9;pointer-events:none"></div>'
-    +'<div style="position:absolute;bottom:calc('+pctTarget+'% + 3px);right:4px;font-size:9px;color:#d97706;font-weight:700">'+l.target_hora+' '+unidad+'</div>'
+    +(targetH>0?'<div style="position:absolute;bottom:calc('+pctTarget+'% + 3px);right:4px;font-size:9px;color:#d97706;font-weight:700">'+targetH+' '+unidad+'</div>':'')
     +'</div>'
     +'<div style="display:flex;gap:3px;margin-top:1px">'+lblsBottom+'</div>'
     +'</div></div>'
