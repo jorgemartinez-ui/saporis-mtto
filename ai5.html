@@ -49,29 +49,30 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
 
 <!-- HOME (Dashboard / Consultas) -->
 <div id="s-home" class="screen">
-  <div class="topbar">
+  <div class="topbar" style="background:#1a1a2e">
     <div style="flex:1">
-      <div class="topbar-title">📈 Asset Intensity</div>
-      <div class="topbar-sub">Saporis Comercial — Producción</div>
+      <div style="font-size:22px;font-weight:900;font-family:Nunito,sans-serif;color:#fbbf24;letter-spacing:.5px">DMO Saporis</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.5);font-weight:600">Asset Intensity · Planta Michoacán</div>
     </div>
+    <span style="font-size:36px;margin-right:8px">📈</span>
     <button onclick="doLogout()" style="background:rgba(255,255,255,.1);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer">Salir</button>
   </div>
   <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;height:calc(100% - 56px)">
-    <button onclick="irDashboard()" style="background:#16a34a;color:#fff;border:none;border-right:2px solid rgba(255,255,255,.2);border-bottom:2px solid rgba(255,255,255,.2);font-size:20px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+    <button onclick="irDashboard()" style="background:#16a34a;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
       <span style="font-size:44px">📊</span>Dashboard
     </button>
-    <button onclick="irArrancar()" style="background:#0891b2;color:#fff;border:none;border-bottom:2px solid rgba(255,255,255,.2);font-size:20px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
-      <span style="font-size:44px">🖥️</span>Consola
+    <button onclick="irArrancar()" style="background:#0891b2;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:44px">🖥️</span>Consola del Operador
     </button>
-    <button onclick="irConsultas()" style="background:#0d2144;color:#fff;border:none;border-right:2px solid rgba(255,255,255,.2);font-size:20px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+    <button onclick="irConsultas()" style="background:#0d2144;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
       <span style="font-size:44px">📈</span>Line Summary
     </button>
-    <button id="btn-home-admin" onclick="go('s-admin-hub')" style="background:#374151;color:#fff;border:none;font-size:20px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+    <button id="btn-home-admin" onclick="go('s-admin-hub')" style="background:#374151;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
       <span style="font-size:44px">⚙️</span>Administración
     </button>
-    <div id="btn-home-placeholder" style="background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
-      <div style="font-size:32px">🏭</div>
-      <div style="color:rgba(255,255,255,.4);font-size:12px;font-weight:700;font-family:Nunito,sans-serif">Saporis</div>
+    <div id="btn-home-placeholder" style="background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;outline:2px solid rgba(0,0,0,.3)">
+      <div style="font-size:40px">🏭</div>
+      <div style="color:rgba(255,255,255,.3);font-size:13px;font-weight:700;font-family:Nunito,sans-serif">Saporis</div>
     </div>
   </div>
 </div>
