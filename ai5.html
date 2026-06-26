@@ -342,20 +342,17 @@ function calcKPIsLinea(evsList, tsI, ahora){
 }
 function sem(d){var dt=new Date(d);dt.setHours(0,0,0,0);var j=new Date(dt.getFullYear(),0,1);return Math.ceil(((dt-j)/86400000+j.getDay()+1)/7);}
 function fmtFecha(ts){var d=new Date(ts);var dd=String(d.getDate()).padStart(2,'0'),mm=String(d.getMonth()+1).padStart(2,'0'),yy=String(d.getFullYear()).slice(2);return dd+mm+yy;}
-async function genFolio(lineaId){
-  // Contador GLOBAL por día — todas las líneas comparten la secuencia
-  var h=hoy();
-  var tsHoyInicio=new Date(h+'T06:30:00').getTime();
-  var tsHoyFin=tsHoyInicio+24*3600000;
-  var rows=await db('ai_ordenes','GET',null,
-    'ts_inicio=gte.'+tsHoyInicio+'&ts_inicio=lt.'+tsHoyFin+'&order=ts_inicio.desc&limit=1');
-  var prefix=fmtFecha(Date.now());
-  var siguiente=1;
-  if(rows&&rows.length){
-    var n=parseInt((rows[0].folio||'').split('-').pop());
-    if(!isNaN(n)) siguiente=n+1;
-  }
-  return prefix+'-'+String(siguiente).padStart(5,'0');
+async function genFolio(){
+  // Usa función atómica en Supabase — garantiza unicidad aunque dos líneas llamen al mismo tiempo
+  var h=fmtFecha(Date.now());
+  try{
+    var r=await fetch(SB+'/rest/v1/rpc/ai_next_folio',{method:'POST',
+      headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'},
+      body:JSON.stringify({p_fecha:h})});
+    if(r.ok){var folio=await r.json();if(folio) return folio;}
+  }catch(e){}
+  // Fallback: timestamp único si falla el RPC
+  return h+'-T'+Date.now().toString().slice(-4);
 }
 
 function modal(titulo,body,onOk,color,label){
@@ -1339,19 +1336,18 @@ async function continuarOrden(){
 }
 
 async function iniciarNuevaOrden(){
-  // Verificar si la línea tiene productos configurados
-  var l=LINEAS.find(x=>x.id===LINEA_ID);
-  var area=l?l.area||'envasado':'envasado';
+  // Capturar lineaId y línea AHORA antes de cualquier await
+  var lineaIdCapturado=LINEA_ID;
+  var l=LINEAS.find(x=>x.id===lineaIdCapturado)||{id:lineaIdCapturado,nombre:'?',area:'envasado'};
+  var area=l.area||'envasado';
   var tipoProd=area==='envasado'?'Fert':'Halb';
-  var prods=await db('ai_productos','GET',null,'linea_id=eq.'+LINEA_ID+'&activo=eq.true&order=nombre.asc')||[];
+  var prods=await db('ai_productos','GET',null,'linea_id=eq.'+lineaIdCapturado+'&activo=eq.true&order=nombre.asc')||[];
   if(prods.length===0){
-    // Sin productos configurados, arrancar con objetivos de la línea (comportamiento anterior)
-    await _crearNuevaOrden(null,null,l);
+    await _crearNuevaOrden(null,null,l,lineaIdCapturado);
     return;
   }
-  // Pedir selección de producto
   modal('📦 Selecciona '+tipoProd,
-    `<div style="font-size:12px;color:#6b7280;margin-bottom:10px">Elige el ${tipoProd} que vas a producir en esta orden</div>
+    `<div style="font-size:12px;color:#6b7280;margin-bottom:10px">Elige el ${tipoProd} para esta orden</div>
     <select id="prod-sel" class="fc">
       <option value="">— Selecciona un ${tipoProd} —</option>
       ${prods.map(p=>'<option value="'+p.id+'">'+p.nombre+(p.codigo?' ('+p.codigo+')':'')+'</option>').join('')}
@@ -1361,13 +1357,13 @@ async function iniciarNuevaOrden(){
       if(!prodId){toast('Selecciona un '+tipoProd,'#dc2626');return;}
       var prod=prods.find(p=>p.id===prodId);
       m.remove();
-      await _crearNuevaOrden(prod,area,l);
+      await _crearNuevaOrden(prod,area,l,lineaIdCapturado);
     },'#16a34a','Arrancar');
 }
-async function _crearNuevaOrden(prod,area,l){
-  // Usar el ID de la línea del objeto l (no el global LINEA_ID que puede cambiar en carrera)
-  var lineaId=l?l.id:LINEA_ID;
-  var folio=await genFolio(lineaId);
+async function _crearNuevaOrden(prod,area,l,lineaIdExplicito){
+  // Usar siempre el lineaId capturado al inicio, nunca el global
+  var lineaId=lineaIdExplicito||(l?l.id:LINEA_ID);
+  var folio=await genFolio();
   var ahora=Date.now();
   // ID único con componente random para evitar colisión si dos líneas arrancan al mismo ms
   var ordId='aior_'+ahora+'_'+Math.random().toString(36).slice(2,7);
