@@ -343,17 +343,20 @@ function calcKPIsLinea(evsList, tsI, ahora){
 function sem(d){var dt=new Date(d);dt.setHours(0,0,0,0);var j=new Date(dt.getFullYear(),0,1);return Math.ceil(((dt-j)/86400000+j.getDay()+1)/7);}
 function fmtFecha(ts){var d=new Date(ts);var dd=String(d.getDate()).padStart(2,'0'),mm=String(d.getMonth()+1).padStart(2,'0'),yy=String(d.getFullYear()).slice(2);return dd+mm+yy;}
 async function genFolio(lineaId){
-  // Buscar último folio del día para ESTA LÍNEA (no global) — evita colisión entre líneas
+  // Buscar última orden del día para ESTA línea usando ts_inicio (no fecha column)
   var h=hoy();
-  var rows=await db('ai_ordenes','GET',null,'linea_id=eq.'+lineaId+'&fecha=eq.'+h+'&order=ts_inicio.desc&limit=1');
+  var tsHoyInicio=new Date(h+'T06:30:00').getTime();
+  var tsHoyFin=tsHoyInicio+24*3600000;
+  var rows=await db('ai_ordenes','GET',null,
+    'linea_id=eq.'+lineaId+'&ts_inicio=gte.'+tsHoyInicio+'&ts_inicio=lt.'+tsHoyFin+'&order=ts_inicio.desc&limit=1');
   var prefix=fmtFecha(Date.now()); // YYMMDD
   var siguiente=1;
   if(rows&&rows.length){
     var ultimo=rows[0].folio||'';
     var partes=ultimo.split('-');
-    if(partes.length>=2){var n=parseInt(partes[partes.length-1]);if(!isNaN(n)) siguiente=n+1;}
+    var n=parseInt(partes[partes.length-1]);
+    if(!isNaN(n)) siguiente=n+1;
   }
-  // Formato: YYMMDD-NNNNN (contador por línea por día, sin riesgo de duplicado entre líneas)
   return prefix+'-'+String(siguiente).padStart(5,'0');
 }
 
@@ -1364,14 +1367,17 @@ async function iniciarNuevaOrden(){
     },'#16a34a','Arrancar');
 }
 async function _crearNuevaOrden(prod,area,l){
-  var folio=await genFolio(LINEA_ID);
+  // Usar el ID de la línea del objeto l (no el global LINEA_ID que puede cambiar en carrera)
+  var lineaId=l?l.id:LINEA_ID;
+  var folio=await genFolio(lineaId);
   var ahora=Date.now();
-  // Usar objetivos del producto si existe, sino los de la línea
+  // ID único con componente random para evitar colisión si dos líneas arrancan al mismo ms
+  var ordId='aior_'+ahora+'_'+Math.random().toString(36).slice(2,7);
   var targetHora=prod?prod.target_hora:(l?l.target_hora:0);
   var orden={
-    id:'aior_'+ahora,
+    id:ordId,
     folio:folio,
-    linea_id:LINEA_ID,
+    linea_id:lineaId,
     linea_nombre:l?l.nombre:'—',
     ts_inicio:ahora,
     ts_fin:null,
