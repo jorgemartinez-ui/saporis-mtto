@@ -98,9 +98,16 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
       <div id="ls-periodo-label" style="font-size:11px;font-weight:700;color:#374151;flex:1;text-align:center;min-width:80px"></div>
       <button onclick="cargarLineSummary()" style="padding:5px 12px;background:#0d2144;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">↻</button>
     </div>
-    <!-- Filtro de líneas -->
-    <div style="margin-top:8px">
-      <div id="ls-lineas-filtro" style="display:flex;gap:5px;flex-wrap:wrap"></div>
+    <!-- Filtro de área y líneas -->
+    <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <select id="ls-filtro-area" onchange="lsFiltrarArea()" style="padding:4px 8px;border:1.5px solid #000;border-radius:7px;font-size:11px;font-weight:700;font-family:Nunito,sans-serif;cursor:pointer">
+        <option value="todas">Área: Todas</option>
+        <option value="envasado">Envasado</option>
+        <option value="fabricacion">Fabricación</option>
+      </select>
+      <select id="ls-filtro-linea" onchange="lsFiltrarLinea()" style="padding:4px 8px;border:1.5px solid #000;border-radius:7px;font-size:11px;font-weight:700;font-family:Nunito,sans-serif;cursor:pointer">
+        <option value="todas">Línea: Todas</option>
+      </select>
     </div>
   </div>
   <div class="scroll" id="ls-tabla-cont" style="padding:0"></div>
@@ -116,6 +123,7 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
     </div>
     <button id="btn-admin-usr" onclick="go('s-admin')" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:none">👥 Usuarios</button>
     <button id="btn-cfg" onclick="go('s-config')" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;display:none">⚙️</button>
+    <button onclick="cargarLista()" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:16px;cursor:pointer">↻</button>
     <button onclick="doLogout()" style="background:rgba(255,255,255,.1);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer">Salir</button>
   </div>
   <div class="scroll" id="lista-cont"></div>
@@ -430,9 +438,31 @@ async function irConsultas(){
   go('s-consultas');
   var lin=await db('ai_lineas','GET',null,'activa=eq.true&order=nombre.asc');
   LINEAS=lin||LINEAS;
-  _lsLineasSel=new Set(); // todas seleccionadas por default (set vacío = todas)
-  _renderFiltroLineas();
+  _lsLineasSel=new Set();
+  // Poblar dropdown de líneas
+  var sel=document.getElementById('ls-filtro-linea');
+  if(sel){
+    sel.innerHTML='<option value="todas">Línea: Todas</option>'
+      +LINEAS.map(l=>'<option value="'+l.id+'">'+l.nombre+'</option>').join('');
+  }
   lsSetModo('D');
+}
+function lsFiltrarArea(){
+  var area=document.getElementById('ls-filtro-area').value;
+  var sel=document.getElementById('ls-filtro-linea');
+  if(sel){
+    var filtradas=area==='todas'?LINEAS:LINEAS.filter(l=>(l.area||'envasado')===area);
+    sel.innerHTML='<option value="todas">Línea: Todas</option>'
+      +filtradas.map(l=>'<option value="'+l.id+'">'+l.nombre+'</option>').join('');
+    sel.value='todas';
+  }
+  _lsLineasSel=new Set();
+  cargarLineSummary();
+}
+function lsFiltrarLinea(){
+  var lineaId=document.getElementById('ls-filtro-linea').value;
+  _lsLineasSel=lineaId==='todas'?new Set():new Set([lineaId]);
+  cargarLineSummary();
 }
 function _renderFiltroLineas(){
   var cont=document.getElementById('ls-lineas-filtro');
@@ -677,12 +707,10 @@ async function cargarLista(){
   var cont=document.getElementById('lista-cont');
   cont.innerHTML='<div style="text-align:center;padding:40px;color:#9ca3af">Cargando...</div>';
 
-  // Filtro activa/inactiva (default: solo activas)
+  // Cargar todas las líneas activas y filtrar por estado después
   var filtroActiva=window._dashFiltro||'activa';
-
-  var qLineas=filtroActiva==='todas'?'order=nombre.asc':filtroActiva==='inactiva'?'activa=eq.false&order=nombre.asc':'activa=eq.true&order=nombre.asc';
   var [lin,evsAbiertos,ordsAbiertas]=await Promise.all([
-    db('ai_lineas','GET',null,qLineas),
+    db('ai_lineas','GET',null,'activa=eq.true&order=nombre.asc'),
     db('ai_eventos','GET',null,'ts_fin=is.null'),
     db('ai_ordenes','GET',null,'estado=eq.abierta')
   ]);
@@ -692,13 +720,13 @@ async function cargarLista(){
   var ordenPorLinea={};
   (ordsAbiertas||[]).forEach(o=>{ordenPorLinea[o.linea_id]=o;});
 
-  // Filtros visuales
+  // Filtros visuales (semántica: Activas=con orden corriendo, Inactivas=sin orden/detenida/idle)
   var filtroHTML=`<div style="display:flex;gap:6px;padding:0 16px 10px">
     ${['activa','inactiva','todas'].map(f=>`<button onclick="window._dashFiltro='${f}';cargarLista()" style="padding:5px 12px;border:2px solid #000;border-radius:8px;font-size:11px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;background:${filtroActiva===f?'#0d2144':'#fff'};color:${filtroActiva===f?'#fff':'#000'}">${{activa:'Activas',inactiva:'Inactivas',todas:'Todas'}[f]}</button>`).join('')}
   </div>`;
 
   if(!LINEAS.length){
-    cont.innerHTML=filtroHTML+'<div class="card" style="text-align:center;padding:32px"><div style="font-size:40px">🏭</div><div style="font-weight:800;margin-top:10px">Sin líneas en este filtro</div></div>';
+    cont.innerHTML=filtroHTML+'<div class="card" style="text-align:center;padding:32px"><div style="font-size:40px">🏭</div><div style="font-weight:800;margin-top:10px">Sin líneas configuradas</div></div>';
     TIMER=setInterval(cargarLista,30000);
     return;
   }
@@ -711,23 +739,31 @@ async function cargarLista(){
   ]):[[],[]];
   evsDia=evsDia||[]; evsRecientes=evsRecientes||[];
 
-  cont.innerHTML=filtroHTML+LINEAS.map(l=>{
+  // Calcular estado de cada línea ANTES de filtrar
+  var tarjetasLineas=LINEAS.map(l=>{
     var ord=ordenPorLinea[l.id];
     var evActual=(evsAbiertos||[]).find(e=>e.linea_id===l.id);
     var tipoEvActual=evActual?evActual.tipo:null;
-    // Si no hay evento abierto, revisar el evento más reciente de la última hora
     if(!tipoEvActual){
       var evRec=(evsRecientes||[]).find(e=>e.linea_id===l.id);
       if(evRec&&['corriendo','pp','pnp'].includes(evRec.tipo)) tipoEvActual=evRec.tipo;
     }
-    // Estado real: evento es la fuente de verdad
     var estaActiva=tipoEvActual&&['corriendo','pp','pnp'].includes(tipoEvActual);
-    // detenida solo si hay evento detenida abierto Y no hay orden sin detenida_en
     var estaDetenida=tipoEvActual==='detenida'||(ord&&ord.detenida_en&&!estaActiva&&!(ord&&!ord.detenida_en));
     var implicitCorriendo=ord&&!ord.detenida_en&&!estaActiva&&!estaDetenida;
     var sinOrden=!ord&&!estaActiva;
-
     var tipo=estaActiva?tipoEvActual:(implicitCorriendo?'corriendo':(estaDetenida?'detenida':'sinorden'));
+    return {l,ord,tipoEvActual,estaActiva,estaDetenida,implicitCorriendo,sinOrden,tipo};
+  });
+
+  // Aplicar filtro: Activas=corriendo/PP/PNP, Inactivas=sin orden/detenida
+  var lineasFiltradas=filtroActiva==='activa'
+    ? tarjetasLineas.filter(x=>x.estaActiva||x.implicitCorriendo)
+    : filtroActiva==='inactiva'
+      ? tarjetasLineas.filter(x=>!x.estaActiva&&!x.implicitCorriendo)
+      : tarjetasLineas;
+
+  cont.innerHTML=filtroHTML+(lineasFiltradas.length===0?'<div style="text-align:center;padding:32px;color:#9ca3af">Sin líneas en este filtro</div>':'')+lineasFiltradas.map(({l,ord,tipoEvActual,estaActiva,estaDetenida,implicitCorriendo,sinOrden,tipo})=>{
     var colEstado={'corriendo':'#16a34a','pnp':'#dc2626','pp':'#ca8a04','idle':'#9ca3af','detenida':'#1a1a1a','sinorden':'#6b7280'}[tipo]||'#6b7280';
     var lblEstado={'corriendo':'▶ Corriendo','pnp':'🔴 PNP','pp':'🟡 PP','idle':'⬜ Idle','detenida':'⏹ Detenida','sinorden':'— Sin orden'}[tipo]||tipo;
 
@@ -942,17 +978,22 @@ async function renderLinea(){
   }
 
   // ── Gráfica piezas ───────────────────────────────────────────
-  var hrs=[],mx=Math.round((l.target_hora||1)*1.1); // máximo = target + 10%
-  for(var i=0;i<nH;i++){var ts_h=tsI+i*3600000,hh=new Date(ts_h).getHours(),p=pzs.find(x=>x.hora===hh)||null;hrs.push({h:hh,v:p?p.piezas:null,tn:turnoDe(ts_h)});}
+  var hrs=[],mx=Math.round(Math.max(l.target_hora||1,1)*1.1);
+  for(var i=0;i<nH;i++){var ts_h=tsI+i*3600000,hh=new Date(ts_h).getHours(),p=pzs.find(x=>x.hora===hh)||null;hrs.push({h:hh,v:p?p.piezas:null,tn:turnoDe(ts_h),ts:ts_h});}
   var pctTarget=Math.min(98,Math.max(2,(l.target_hora||0)/mx*100)).toFixed(1);
-  var lblsTop=hrs.map(({v})=>'<div style="flex:1;text-align:center;font-size:9px;color:#374151;font-weight:700;height:14px">'+( v!==null?v:'' )+'</div>').join('');
-  var barras=hrs.map(({h,v,tn})=>{
+  var lblsTop=esSemana?'':hrs.map(({v})=>'<div style="flex:1;text-align:center;font-size:9px;color:#374151;font-weight:700;height:14px">'+( v!==null?v:'' )+'</div>').join('');
+  var barras=hrs.map(({h,v,tn,ts})=>{
     var pct=v!==null?Math.min(100,v/mx*100).toFixed(1):0;
-    var col=v===null?'#e5e7eb':v>=(l.target_hora||0)?'#16a34a':'#dc2626';
-    return '<div onclick="editarPiezas('+h+','+v+',\''+tn+'\')" style="flex:1;height:100%;display:flex;align-items:flex-end;cursor:pointer">'
+    var col=v===null?'#e5e7eb':(l.target_hora&&l.target_hora>0?(v>=l.target_hora?'#16a34a':'#dc2626'):'#9ca3af');
+    var dia=new Date(ts).toLocaleDateString('es-MX',{weekday:'short',day:'2-digit',month:'short'});
+    var tooltipTxt=v!==null?(v+' '+unidad+' · '+dia+' '+String(h).padStart(2,'0')+':00'):(dia+' '+String(h).padStart(2,'0')+':00');
+    return '<div onclick="editarPiezas('+h+','+v+',\''+tn+'\')" title="'+tooltipTxt+'" style="flex:1;height:100%;display:flex;align-items:flex-end;cursor:pointer">'
       +'<div style="width:100%;background:'+col+';border-radius:3px 3px 0 0;height:'+pct+'%;min-height:'+(v?3:0)+'px"></div></div>';
   }).join('');
-  var lblsBottom=hrs.map(({h})=>'<div style="flex:1;text-align:center;font-size:9px;color:#9ca3af">'+h+':30</div>').join('');
+  // Eje X: en semana solo mostrar marcas de día, no las horas (demasiados números)
+  var lblsBottom=esSemana
+    ? hrs.map(({ts},i)=>{var d=new Date(ts);return i%24===0?'<div style="flex:24;text-align:left;font-size:8px;color:#9ca3af;white-space:nowrap">'+d.toLocaleDateString('es-MX',{weekday:'short',day:'2-digit'})+'</div>':'';}).join('')
+    : hrs.map(({h})=>'<div style="flex:1;text-align:center;font-size:9px;color:#9ca3af">'+String(h).padStart(2,'0')+'</div>').join('');
 
   // ── Tabla eventos (con huecos 'corriendo' y filtro) ───────────
   var fEvTipo=window.AI_F_EVTIPO||'todos';
@@ -996,6 +1037,7 @@ async function renderLinea(){
     +'<button onclick="setNavMode(\'d\')" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='d'?'#7f1d1d':'#fff')+';color:'+(window.AI_NAV_MODE==='d'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">D</button>'
     +'<button onclick="setNavMode(\'t\')" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='t'?'#7f1d1d':'#fff')+';color:'+(window.AI_NAV_MODE==='t'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">T</button>'
     +'<button onclick="navFecha(1)" onmousedown="this.style.transform=\'scale(.88)\';this.style.background=\'#e5e7eb\'" onmouseup="this.style.transform=\'\';this.style.background=\'#fff\'" onmouseleave="this.style.transform=\'\';this.style.background=\'#fff\'" style="padding:5px 9px;background:#fff;color:#000;border:2px solid #000;border-radius:7px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;transition:transform .1s;line-height:1">►</button>'
+    +'<button onclick="renderLinea()" style="padding:5px 9px;background:#fff;color:#000;border:2px solid #000;border-radius:7px;font-size:16px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;line-height:1">↻</button>'
     +'</div>'
     +'<select onchange="window.AI_F_TURNO=this.value;renderLinea()" style="flex:1;min-width:0;padding:7px 4px;border:1.5px solid #e5e7eb;border-radius:9px;font-family:Nunito,sans-serif;font-size:.78rem;background:#fff"><option value="turno_actual"'+(fT==='turno_actual'?' selected':'')+'>Turno actual</option><option value="T1"'+(fT==='T1'?' selected':'')+'>T1</option><option value="T2"'+(fT==='T2'?' selected':'')+'>T2</option><option value="T3"'+(fT==='T3'?' selected':'')+'>T3</option><option value="dia"'+(fT==='dia'?' selected':'')+'>Día completo</option></select>'
     +'</div>'
@@ -1027,6 +1069,7 @@ async function renderLinea(){
     +'<div style="padding:0 16px 10px">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'
     +'<div style="font-size:10px;font-weight:700;color:#374151">'+( unidad==='kg'?'Kg':'Piezas' )+' por hora · Total: '+(esHoy&&(detenida||ordenCerrada)?'<input id="pz-total-inp" type="number" value="'+pzTotalVal+'" '+(ordenCerrada?'disabled':'')+' style="width:75px;padding:3px 6px;border:1.5px solid #0891b2;border-radius:6px;font-family:Nunito,sans-serif;font-size:11px;font-weight:700;text-align:center">     '+ unidad :'<b>'+pzRegistradas+' '+unidad+'</b>')+'</div>'
+    +'<div style="font-size:10px;font-weight:700;color:#d97706;text-align:center">Objetivo/h: '+(l.target_hora||'—')+' '+unidad+'</div>'
     +'<div style="display:flex;gap:5px">'
     +(esHoy&&detenida?'<button onclick="guardarOrden()" style="padding:4px 10px;background:#0891b2;color:#fff;border:none;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">💾 Guardar</button><button onclick="cerrarTecnico()" style="padding:4px 10px;background:#7c3aed;color:#fff;border:none;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">CTEC</button>':'')
     +(esHoy&&!detenida&&!ordenCerrada?'<button onclick="regPiezas()" style="padding:4px 10px;background:#0d2144;color:#fff;border:none;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">+ Registrar</button>':'')
