@@ -343,16 +343,24 @@ function calcKPIsLinea(evsList, tsI, ahora){
 function sem(d){var dt=new Date(d);dt.setHours(0,0,0,0);var j=new Date(dt.getFullYear(),0,1);return Math.ceil(((dt-j)/86400000+j.getDay()+1)/7);}
 function fmtFecha(ts){var d=new Date(ts);var dd=String(d.getDate()).padStart(2,'0'),mm=String(d.getMonth()+1).padStart(2,'0'),yy=String(d.getFullYear()).slice(2);return dd+mm+yy;}
 async function genFolio(){
-  // Usa función atómica en Supabase — garantiza unicidad aunque dos líneas llamen al mismo tiempo
   var h=fmtFecha(Date.now());
   try{
-    var r=await fetch(SB+'/rest/v1/rpc/ai_next_folio',{method:'POST',
-      headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'},
-      body:JSON.stringify({p_fecha:h})});
-    if(r.ok){var folio=await r.json();if(folio) return folio;}
-  }catch(e){}
-  // Fallback: timestamp único si falla el RPC
-  return h+'-T'+Date.now().toString().slice(-4);
+    // Intentar máximo 3 veces para evitar folio duplicado
+    for(var intento=0;intento<3;intento++){
+      var r=await fetch(SB+'/rest/v1/rpc/ai_next_folio',{method:'POST',
+        headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json'},
+        body:JSON.stringify({p_fecha:h})});
+      if(!r.ok) break;
+      var folio=await r.json();
+      if(!folio) break;
+      // Verificar que no existe ya
+      var existe=await db('ai_ordenes','GET',null,'folio=eq.'+folio);
+      if(!existe||!existe.length) return folio;
+      // Si existe, la próxima iteración del RPC dará el siguiente número
+    }
+  }catch(e){console.warn('genFolio RPC error',e);}
+  // Fallback único por timestamp
+  return h+'-'+Date.now().toString().slice(-5);
 }
 
 function modal(titulo,body,onOk,color,label){
@@ -781,11 +789,24 @@ async function abrirLinea(id){
   var l=LINEAS.find(x=>x.id===id);
   document.getElementById('linea-title').textContent=l?l.nombre:'—';
   // Cargar orden activa desde localStorage o Supabase
+  ORDEN_ACTIVA=null;
   var savedOrden=localStorage.getItem('ai_orden_'+id);
-  if(savedOrden){try{ORDEN_ACTIVA=JSON.parse(savedOrden);}catch(e){ORDEN_ACTIVA=null;}}
+  if(savedOrden){
+    try{
+      var parsed=JSON.parse(savedOrden);
+      // Solo usar si la orden pertenece a ESTA línea (no a otra)
+      if(parsed&&parsed.linea_id===id){
+        ORDEN_ACTIVA=parsed;
+      }else{
+        // Orden de otra línea guardada con esta clave → borrar
+        localStorage.removeItem('ai_orden_'+id);
+      }
+    }catch(e){ORDEN_ACTIVA=null;}
+  }
   if(!ORDEN_ACTIVA){
     var rows=await db('ai_ordenes','GET',null,'linea_id=eq.'+id+'&estado=eq.abierta&order=ts_inicio.desc&limit=1');
     ORDEN_ACTIVA=rows&&rows.length?rows[0]:null;
+    if(ORDEN_ACTIVA) localStorage.setItem('ai_orden_'+id,JSON.stringify(ORDEN_ACTIVA));
   }
   // Sincronizar _tsF desde detenida_en (persiste entre sesiones y dispositivos)
   if(ORDEN_ACTIVA&&ORDEN_ACTIVA.detenida_en&&!ORDEN_ACTIVA._tsF){
@@ -1363,6 +1384,8 @@ async function iniciarNuevaOrden(){
 async function _crearNuevaOrden(prod,area,l,lineaIdExplicito){
   // Usar siempre el lineaId capturado al inicio, nunca el global
   var lineaId=lineaIdExplicito||(l?l.id:LINEA_ID);
+  // DEBUG TEMPORAL: confirmar qué línea se va a usar
+  toast('⚙️ Creando orden para: '+lineaId.slice(-8),'#374151');
   var folio=await genFolio();
   var ahora=Date.now();
   // ID único con componente random para evitar colisión si dos líneas arrancan al mismo ms
