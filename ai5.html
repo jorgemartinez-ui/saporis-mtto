@@ -1384,8 +1384,6 @@ async function iniciarNuevaOrden(){
 async function _crearNuevaOrden(prod,area,l,lineaIdExplicito){
   // Usar siempre el lineaId capturado al inicio, nunca el global
   var lineaId=lineaIdExplicito||(l?l.id:LINEA_ID);
-  // DEBUG TEMPORAL: confirmar qué línea se va a usar
-  toast('⚙️ Creando orden para: '+lineaId.slice(-8),'#374151');
   var folio=await genFolio();
   var ahora=Date.now();
   // ID único con componente random para evitar colisión si dos líneas arrancan al mismo ms
