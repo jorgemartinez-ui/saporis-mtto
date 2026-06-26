@@ -2744,24 +2744,28 @@ async function cargarKPI(){
 function renderKPIResumen(data,obj){
   var cont=document.getElementById('kpi-cont');
   if(!cont) return;
+  window._kpiDataActual=data;
+  window._kpiObjActual=obj;
+  // Guardar clicks como funciones globales para que el onclick string funcione
+  window._kpiClicks={
+    PP:()=>mostrarParetoKPI(data.ppEvs,'PP',obj,null,'PP'),
+    PNP:()=>mostrarParetoKPI(data.pnpEvs,'PNP',obj,null,'PNP')
+  };
   var bars=[
-    {key:'AI',val:data.AI,obj:obj.objetivo_ai,ok:data.AI>=obj.objetivo_ai,click:null},
-    {key:'PP',val:data.PP,obj:obj.objetivo_pp,ok:data.PP<=obj.objetivo_pp,click:()=>mostrarParetoKPI(data.ppEvs,'PP',obj)},
-    {key:'PNP',val:data.PNP,obj:obj.objetivo_pnp,ok:data.PNP<=obj.objetivo_pnp,click:()=>mostrarParetoKPI(data.pnpEvs,'PNP',obj)},
+    {key:'AI',val:data.AI,obj:obj.objetivo_ai,ok:data.AI>=obj.objetivo_ai,tieneClick:false},
+    {key:'PP',val:data.PP,obj:obj.objetivo_pp,ok:data.PP<=obj.objetivo_pp,tieneClick:true},
+    {key:'PNP',val:data.PNP,obj:obj.objetivo_pnp,ok:data.PNP<=obj.objetivo_pnp,tieneClick:true},
   ];
   var nombres={AI:'Asset Intensity',PP:'Paro Planeado',PNP:'Paro No Planeado'};
   cont.innerHTML='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">'
-    +bars.map(b=>`<div onclick="${b.click?'mostrarParetoKPIActual()':''}" style="background:${b.ok?'#16a34a':'#dc2626'};border-radius:14px;padding:20px 10px;text-align:center;cursor:${b.click?'pointer':'default'};box-shadow:0 4px 12px rgba(0,0,0,.15)${b.click?';transition:filter .15s':''}" ${b.click?'onmousedown="this.style.filter=\'brightness(.85)\'" onmouseup="this.style.filter=\'\'" onmouseleave="this.style.filter=\'\'"':''}>
+    +bars.map(b=>`<div onclick="${b.tieneClick?'window._kpiClicks[\''+b.key+'\']()'  :''}" style="background:${b.ok?'#16a34a':'#dc2626'};border-radius:14px;padding:20px 10px;text-align:center;cursor:${b.tieneClick?'pointer':'default'};box-shadow:0 4px 12px rgba(0,0,0,.15);transition:filter .15s" ${b.tieneClick?'onmousedown="this.style.filter=\'brightness(.85)\'" onmouseup="this.style.filter=\'\'" onmouseleave="this.style.filter=\'\'"':''}>
       <div style="color:rgba(255,255,255,.8);font-size:11px;font-weight:700">${nombres[b.key]}</div>
       <div style="color:#fff;font-size:42px;font-weight:900;line-height:1;margin:10px 0">${b.val}%</div>
       <div style="color:rgba(255,255,255,.7);font-size:11px">Obj: ${b.key==='AI'?'≥':'≤'}${b.obj}%</div>
-      ${b.click?'<div style="color:rgba(255,255,255,.6);font-size:10px;margin-top:6px">Toca para Pareto →</div>':''}
+      ${b.tieneClick?'<div style="color:rgba(255,255,255,.6);font-size:10px;margin-top:6px">Toca para Pareto →</div>':''}
     </div>`).join('')
     +'</div>'
     +(data.TO>0?`<div style="text-align:center;font-size:12px;color:#6b7280">Tiempo Ocupado total: ${Math.round(data.TO/60000).toLocaleString()} min</div>`:'<div style="text-align:center;color:#9ca3af;padding:20px">Sin datos en este periodo</div>');
-  // Guardar referencia para callbacks
-  window._kpiDataActual=data;
-  window._kpiObjActual=obj;
 }
 
 function mostrarParetoKPIActual(){}  // placeholder
@@ -2835,41 +2839,56 @@ function kpiParetoBack(){
 async function renderKPIDetalle(lineaId,obj){
   var cont=document.getElementById('kpi-cont');
   if(!cont) return;
-  // Calcular por día dentro del rango
+  cont.innerHTML='<div style="text-align:center;padding:20px;color:#9ca3af">Calculando por día...</div>';
   var dias=[];
   var d=new Date(_kpiDesde);
   var mesesFull=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
   while(d.getTime()<_kpiHasta){
     var dayStart=d.getTime(), dayEnd=Math.min(dayStart+24*3600000,_kpiHasta);
     var data=await obtenerKPIData(dayStart,dayEnd,lineaId);
-    dias.push({label:d.getDate()+' '+mesesFull[d.getMonth()],data});
+    dias.push({label:d.getDate()+' '+mesesFull[d.getMonth()],data,dayStart,dayEnd});
     d.setDate(d.getDate()+1);
   }
   if(!dias.length){cont.innerHTML='<div style="text-align:center;padding:32px;color:#9ca3af">Sin datos</div>';return;}
-  var mx=Math.max(...dias.map(d=>Math.max(d.data.AI,d.data.PP,d.data.PNP,100)));
-  function chartDia(titulo,key,objVal,menorEsMejor,ppEvs,pnpEvs){
-    var bars=dias.map(({label,data})=>{
+  window._kpiObjActual=obj;
+
+  function chartBar(key,objVal,menorEsMejor){
+    var nombres={AI:'Asset Intensity %',PP:'Paro Planeado %',PNP:'Paro No Planeado %'};
+    var valsTop=dias.map(({data})=>{
       var val=data[key]; var ok=menorEsMejor?val<=objVal:val>=objVal;
-      var pct=(val/100*100).toFixed(0);
-      var evs=key==='PP'?data.ppEvs:key==='PNP'?data.pnpEvs:null;
-      var clickStr=evs?`onclick="mostrarParetoKPI(${JSON.stringify(evs)},'${key}',window._kpiObjActual)"`:''
-      return `<div style="flex:1;display:flex;flex-direction:column;align-items:center;cursor:${evs?'pointer':'default'}" ${clickStr}>
-        <div style="font-size:9px;font-weight:700;color:${ok?'#16a34a':'#dc2626'};margin-bottom:3px">${val}%</div>
-        <div style="flex:1;width:80%;display:flex;align-items:flex-end">
-          <div style="width:100%;background:${ok?'#16a34a':'#dc2626'};border-radius:3px 3px 0 0;height:${pct}%;min-height:${val>0?4:0}px;transition:height .3s"></div>
-        </div>
-        <div style="font-size:8px;color:#9ca3af;margin-top:3px;text-align:center">${label}</div>
-      </div>`;
+      return '<div style="flex:1;text-align:center;font-size:9px;font-weight:800;color:'+(ok?'#16a34a':'#dc2626')+'">'+val+'%</div>';
     }).join('');
+    var barras=dias.map(({data,dayStart,dayEnd},i)=>{
+      var val=data[key]; var ok=menorEsMejor?val<=objVal:val>=objVal;
+      var pct=Math.max(val,2);
+      var evs=key==='PP'?data.ppEvs:key==='PNP'?data.pnpEvs:null;
+      var clickStr=evs&&evs.length?'onclick="window._kpiClickDia('+i+',\''+key+'\')" style="cursor:pointer"':'style="cursor:default"';
+      return '<div '+clickStr+' style="flex:1;height:100%;display:flex;align-items:flex-end;padding:0 1px">'
+        +'<div style="width:100%;background:'+(ok?'#16a34a':'#dc2626')+';border-radius:3px 3px 0 0;height:'+pct+'%;min-height:4px"></div></div>';
+    }).join('');
+    var lblsBottom=dias.map(({label})=>'<div style="flex:1;text-align:center;font-size:8px;color:#9ca3af;overflow:hidden">'+label+'</div>').join('');
     return `<div style="background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,.08)">
-      <div style="font-size:13px;font-weight:800;color:#1a3c5e;margin-bottom:10px">${titulo} <span style="font-size:11px;color:#6b7280;font-weight:600">Obj: ${menorEsMejor?'≤':'≥'}${objVal}%</span></div>
-      <div style="display:flex;height:120px;gap:2px;align-items:flex-end">${bars}</div>
+      <div style="font-size:13px;font-weight:800;color:#1a3c5e;margin-bottom:8px">${nombres[key]} <span style="font-size:11px;color:#6b7280;font-weight:600">Obj: ${menorEsMejor?'≤':'≥'}${objVal}%</span></div>
+      <div style="display:flex;margin-bottom:4px">${valsTop}</div>
+      <div style="display:flex;height:100px">${barras}</div>
+      <div style="display:flex;margin-top:4px">${lblsBottom}</div>
+      ${key!=='AI'?'<div style="font-size:10px;color:#9ca3af;margin-top:6px">Toca una barra para ver Pareto de ese día</div>':''}
     </div>`;
   }
-  cont.innerHTML=chartDia('Asset Intensity %','AI',obj.objetivo_ai,false)
-    +chartDia('Paro Planeado %','PP',obj.objetivo_pp,true)
-    +chartDia('Paro No Planeado %','PNP',obj.objetivo_pnp,true);
-  window._kpiObjActual=obj;
+
+  // Guardar función de click por día
+  window._kpiClickDia=function(diaIdx,key){
+    var dia=dias[diaIdx];
+    if(!dia) return;
+    var evs=key==='PP'?dia.data.ppEvs:dia.data.pnpEvs;
+    if(!evs||!evs.length){toast('Sin datos de '+key+' en este día','#6b7280');return;}
+    _kpiParetoStack=[];
+    mostrarParetoKPI(evs,key,obj,null,key+' · '+dia.label);
+  };
+
+  cont.innerHTML=chartBar('AI',obj.objetivo_ai,false)
+    +chartBar('PP',obj.objetivo_pp,true)
+    +chartBar('PNP',obj.objetivo_pnp,true);
 }
 
 // Admin objetivos KPI fábrica
