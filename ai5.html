@@ -697,18 +697,28 @@ async function cargarLista(){
     return;
   }
 
-  // Cargar eventos del día para TODAS las líneas (no solo las con orden no-detenida)
+  // Cargar eventos del día y recientes para TODAS las líneas
   var todasLineasIds=LINEAS.map(l=>l.id).join(',');
-  var evsDia=todasLineasIds?await db('ai_eventos','GET',null,'linea_id=in.('+todasLineasIds+')&ts_inicio=gte.'+diaInicio+'&order=ts_inicio.asc')||[]:[];
+  var [evsDia,evsRecientes]=todasLineasIds?await Promise.all([
+    db('ai_eventos','GET',null,'linea_id=in.('+todasLineasIds+')&ts_inicio=gte.'+diaInicio+'&order=ts_inicio.asc'),
+    db('ai_eventos','GET',null,'linea_id=in.('+todasLineasIds+')&ts_inicio=gte.'+(Date.now()-3600000)+'&order=ts_inicio.desc')
+  ]):[[],[]];
+  evsDia=evsDia||[]; evsRecientes=evsRecientes||[];
 
   cont.innerHTML=filtroHTML+LINEAS.map(l=>{
     var ord=ordenPorLinea[l.id];
     var evActual=(evsAbiertos||[]).find(e=>e.linea_id===l.id);
     var tipoEvActual=evActual?evActual.tipo:null;
-    // Estado real: evento abierto es la fuente de verdad
+    // Si no hay evento abierto, revisar el evento más reciente de la última hora
+    if(!tipoEvActual){
+      var evRec=(evsRecientes||[]).find(e=>e.linea_id===l.id);
+      if(evRec&&['corriendo','pp','pnp'].includes(evRec.tipo)) tipoEvActual=evRec.tipo;
+    }
+    // Estado real: evento es la fuente de verdad
     var estaActiva=tipoEvActual&&['corriendo','pp','pnp'].includes(tipoEvActual);
-    var estaDetenida=tipoEvActual==='detenida'||(ord&&ord.detenida_en&&!estaActiva);
-    var implicitCorriendo=ord&&!estaDetenida&&!tipoEvActual;
+    // detenida solo si hay evento detenida abierto Y no hay orden sin detenida_en
+    var estaDetenida=tipoEvActual==='detenida'||(ord&&ord.detenida_en&&!estaActiva&&!(ord&&!ord.detenida_en));
+    var implicitCorriendo=ord&&!ord.detenida_en&&!estaActiva&&!estaDetenida;
     var sinOrden=!ord&&!estaActiva;
 
     var tipo=estaActiva?tipoEvActual:(implicitCorriendo?'corriendo':(estaDetenida?'detenida':'sinorden'));
