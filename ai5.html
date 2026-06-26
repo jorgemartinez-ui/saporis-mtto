@@ -56,11 +56,23 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
     </div>
     <button onclick="doLogout()" style="background:rgba(255,255,255,.1);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer">Salir</button>
   </div>
-  <div class="scroll" style="display:flex;flex-direction:column;justify-content:center;align-items:center;gap:18px;padding:32px">
-    <button onclick="irDashboard()" style="width:100%;max-width:340px;padding:28px;background:#16a34a;color:#fff;border:none;border-radius:18px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.12)">📊 Dashboard</button>
-    <button onclick="irArrancar()" style="width:100%;max-width:340px;padding:28px;background:#0891b2;color:#fff;border:none;border-radius:18px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.12)">🖥️ Consola del Operador</button>
-    <button onclick="irConsultas()" style="width:100%;max-width:340px;padding:28px;background:#0d2144;color:#fff;border:none;border-radius:18px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.12)">📊 Line Summary</button>
-    <button id="btn-home-admin" onclick="go('s-admin-hub')" style="width:100%;max-width:340px;padding:28px;background:#374151;color:#fff;border:none;border-radius:18px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.12);display:none">⚙️ Administración</button>
+  <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;height:calc(100% - 56px)">
+    <button onclick="irDashboard()" style="background:#16a34a;color:#fff;border:none;border-right:2px solid rgba(255,255,255,.2);border-bottom:2px solid rgba(255,255,255,.2);font-size:20px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:44px">📊</span>Dashboard
+    </button>
+    <button onclick="irArrancar()" style="background:#0891b2;color:#fff;border:none;border-bottom:2px solid rgba(255,255,255,.2);font-size:20px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:44px">🖥️</span>Consola
+    </button>
+    <button onclick="irConsultas()" style="background:#0d2144;color:#fff;border:none;border-right:2px solid rgba(255,255,255,.2);font-size:20px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:44px">📈</span>Line Summary
+    </button>
+    <button id="btn-home-admin" onclick="go('s-admin-hub')" style="background:#374151;color:#fff;border:none;font-size:20px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:none;flex-direction:column;align-items:center;justify-content:center;gap:12px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:44px">⚙️</span>Administración
+    </button>
+    <div id="btn-home-placeholder" style="background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+      <div style="font-size:32px">🏭</div>
+      <div style="color:rgba(255,255,255,.4);font-size:12px;font-weight:700;font-family:Nunito,sans-serif">Saporis</div>
+    </div>
   </div>
 </div>
 
@@ -413,7 +425,9 @@ function iniciarSesion(){
   var esAdmin=ME.rol==='admin'||ME.rol==='super';
   document.getElementById('btn-cfg').style.display=esAdmin?'':'none';
   document.getElementById('btn-admin-usr').style.display=esAdmin?'':'none';
-  document.getElementById('btn-home-admin').style.display=esAdmin?'':'none';
+  document.getElementById('btn-home-admin').style.display=esAdmin?'flex':'none';
+  var ph=document.getElementById('btn-home-placeholder');
+  if(ph) ph.style.display=esAdmin?'none':'flex';
   go('s-home');
   iniciarMonitorChecklists();
 }
@@ -672,21 +686,12 @@ async function irArrancar(){
   go('s-arrancar');
   var sel=document.getElementById('arrancar-sel');
   var msg=document.getElementById('arrancar-msg');
-  var [lin,ords]=await Promise.all([
-    db('ai_lineas','GET',null,'activa=eq.true&order=nombre.asc'),
-    db('ai_ordenes','GET',null,'estado=eq.abierta')
-  ]);
+  var lin=await db('ai_lineas','GET',null,'activa=eq.true&order=nombre.asc');
   LINEAS=lin||LINEAS;
-  // Excluir solo líneas CON ORDEN ACTIVA Y NO DETENIDA (detenida_en is null = corriendo ahora)
-  var enCurso=new Set((ords||[]).filter(o=>!o.detenida_en).map(o=>o.linea_id));
-  var disponibles=(lin||[]).filter(l=>!enCurso.has(l.id));
-  var conOrdenDetenida=new Set((ords||[]).filter(o=>o.detenida_en).map(o=>o.linea_id));
-  sel.innerHTML='<option value="">— Elige una línea —</option>'+disponibles.map(l=>{
-    var detenida=conOrdenDetenida.has(l.id);
-    return '<option value="'+l.id+'">'+(detenida?'⏸ ':'')+l.nombre+(detenida?' (orden detenida — pendiente CTEC)':'')+'</option>';
-  }).join('');
+  // Mostrar TODAS las líneas activas — el operador entra a la consola de la que necesite
+  sel.innerHTML='<option value="">— Elige una línea —</option>'+(LINEAS||[]).map(l=>'<option value="'+l.id+'">'+l.nombre+'</option>').join('');
   sel.value='';
-  msg.textContent=disponibles.length?'':'Todas las líneas tienen una orden corriendo. Ve a Dashboard para verlas.';
+  msg.textContent='';
 }
 function irArrancarLinea(id){
   ORIGEN_LINEA='arrancar';
