@@ -2811,7 +2811,7 @@ function renderKPIResumen(data,obj,lineaId){
 }
 function mostrarParetoKPIActual(){}  // placeholder
 
-function mostrarParetoKPI(evs,tipo,obj,nivel,titulo){
+function mostrarParetoKPI(evs,tipo,obj,groupBy,titulo){
   if(!evs||!evs.length){toast('Sin datos de '+tipo,'#6b7280');return;}
   var cont=document.getElementById('kpi-cont');
   if(!cont) return;
