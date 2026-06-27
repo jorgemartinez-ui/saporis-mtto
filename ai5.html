@@ -2611,42 +2611,37 @@ function irAdminHub(){
 // ── SVG Pareto chart ─────────────────────────────────────────
 function svgPareto(items,opts){
   opts=opts||{};
-  var n=items.length; if(!n) return '<div style="text-align:center;color:#9ca3af;padding:20px">Sin datos</div>';
-  var W=Math.max(n*44,280),H=180;
-  var pL=8,pR=24,pT=26,pB=34;
+  items=items.slice(0,10);
+  var n=items.length; if(!n) return '<div style="text-align:center;color:#9ca3af;padding:12px">Sin datos</div>';
+  var W=Math.max(n*34,200),H=126;
+  var pL=6,pR=18,pT=18,pB=24;
   var cW=W-pL-pR,cH=H-pT-pB;
   var maxVal=Math.max.apply(null,items.map(function(i){return i.value;}));if(maxVal<1)maxVal=1;
-  var barGap=cW/n,barW=Math.max(Math.floor(barGap*0.65),6);
+  var barGap=cW/n,barW=Math.max(Math.floor(barGap*0.65),5);
   var svg='<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block;overflow:visible;font-family:Nunito,sans-serif">';
   svg+='<g transform="translate('+pL+','+pT+')">';
-  // Fondo gris claro
   svg+='<rect x="0" y="0" width="'+cW+'" height="'+cH+'" fill="#f9fafb" rx="2"/>';
-  // Barras
   items.forEach(function(item,i){
     var bH=item.value>0?Math.max(item.value/maxVal*cH,3):0;
-    var x=i*barGap+(barGap-barW)/2;
-    var y=cH-bH;
+    var x=i*barGap+(barGap-barW)/2; var y=cH-bH;
     var col=item.color||'#3b82f6';
     if(bH>0) svg+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW+'" height="'+bH.toFixed(1)+'" fill="'+col+'" rx="2"/>';
-    // Valor encima
     var lbl=opts.showMin?(item.value+' min'):(item.value+(opts.pct!==false?'%':''));
-    if(item.value>0) svg+='<text x="'+(x+barW/2).toFixed(1)+'" y="'+(y-3).toFixed(1)+'" font-size="8" text-anchor="middle" fill="'+col+'" font-weight="700">'+lbl+'</text>';
-    // Etiqueta abajo
-    var lab=item.label.length>10?item.label.substring(0,9)+'…':item.label;
-    svg+='<text x="'+(x+barW/2).toFixed(1)+'" y="'+(cH+11).toFixed(1)+'" font-size="7" text-anchor="middle" fill="#9ca3af" transform="rotate(-30,'+(x+barW/2).toFixed(1)+','+(cH+11).toFixed(1)+')">'+lab+'</text>';
+    if(item.value>0) svg+='<text x="'+(x+barW/2).toFixed(1)+'" y="'+(y-2).toFixed(1)+'" font-size="7" text-anchor="middle" fill="'+col+'" font-weight="700">'+lbl+'</text>';
+    var lab=item.label.length>9?item.label.substring(0,8)+'…':item.label;
+    svg+='<text x="'+(x+barW/2).toFixed(1)+'" y="'+(cH+9).toFixed(1)+'" font-size="6" text-anchor="middle" fill="#9ca3af" transform="rotate(-30,'+(x+barW/2).toFixed(1)+','+(cH+9).toFixed(1)+')">'+lab+'</text>';
   });
-  // Línea Pareto (solo si hay cumPct)
   if(opts.showLine!==false&&items[0]&&items[0].cumPct!==undefined){
     var pts=items.map(function(item,i){var x=i*barGap+barGap/2;var y=cH-(item.cumPct/100*cH);return x.toFixed(1)+','+y.toFixed(1);});
-    svg+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="#ef4444" stroke-width="1.8"/>';
+    svg+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="#ef4444" stroke-width="1.5"/>';
     items.forEach(function(item,i){
       var x=i*barGap+barGap/2;var y=cH-(item.cumPct/100*cH);
-      svg+='<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="2.5" fill="#ef4444"/>';
-      svg+='<text x="'+x.toFixed(1)+'" y="'+(y-4).toFixed(1)+'" font-size="7" text-anchor="middle" fill="#ef4444">'+item.cumPct+'%</text>';
+      svg+='<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="2" fill="#ef4444"/>';
+      svg+='<text x="'+x.toFixed(1)+'" y="'+(y-3).toFixed(1)+'" font-size="6" text-anchor="middle" fill="#ef4444">'+item.cumPct+'%</text>';
     });
     var y80=cH*(1-0.8);
-    svg+='<line x1="0" y1="'+y80.toFixed(1)+'" x2="'+cW+'" y2="'+y80.toFixed(1)+'" stroke="#ef4444" stroke-width="0.8" stroke-dasharray="4,3" opacity="0.5"/>';
-    svg+='<text x="'+(cW+2)+'" y="'+(y80+3).toFixed(1)+'" font-size="7" fill="#ef4444" opacity="0.7">80%</text>';
+    svg+='<line x1="0" y1="'+y80.toFixed(1)+'" x2="'+cW+'" y2="'+y80.toFixed(1)+'" stroke="#ef4444" stroke-width="0.8" stroke-dasharray="3,2" opacity="0.5"/>';
+    svg+='<text x="'+(cW+2)+'" y="'+(y80+3).toFixed(1)+'" font-size="6" fill="#ef4444" opacity="0.7">80%</text>';
   }
   svg+='</g></svg>';
   return svg;
@@ -2753,8 +2748,8 @@ async function obtenerKPIData(desde,hasta,lineaId){
       if(d===0||e.tipo==='detenida'){if(d>0)cur=Math.max(cur,f);return;}
       if(i>cur)tC+=(i-cur);
       if(e.tipo==='corriendo')tC+=d;
-      else if(e.tipo==='pp'){tPP+=d;ppEvs.push({rc:e.reason_code||'Sin clasificar',com:e.comentario||'',min:Math.round(d/60000)});}
-      else if(e.tipo==='pnp'){tPNP+=d;pnpEvs.push({rc:e.reason_code||'Sin clasificar',com:e.comentario||'',min:Math.round(d/60000)});}
+      else if(e.tipo==='pp'){tPP+=d;ppEvs.push({rc:e.reason_code||'Sin clasificar',com:e.comentario||'',min:Math.round(d/60000),linea_id:o.linea_id,linea_nombre:o.linea_nombre||o.linea_id});}
+      else if(e.tipo==='pnp'){tPNP+=d;pnpEvs.push({rc:e.reason_code||'Sin clasificar',com:e.comentario||'',min:Math.round(d/60000),linea_id:o.linea_id,linea_nombre:o.linea_nombre||o.linea_id});}
       cur=Math.max(cur,f);
     });
     if(cur<tsF)tC+=(tsF-cur);
@@ -2779,19 +2774,21 @@ async function cargarKPI(){
   // Si es una línea específica, usar sus objetivos
   if(l){obj={objetivo_ai:l.objetivo_ai||85,objetivo_pp:l.objetivo_pp||10,objetivo_pnp:l.objetivo_pnp||10};}
   var data=await obtenerKPIData(_kpiDesde,_kpiHasta,lineaId);
-  if(_kpiVista==='resumen') renderKPIResumen(data,obj);
+  if(_kpiVista==='resumen') renderKPIResumen(data,obj,lineaId);
   else await renderKPIDetalle(lineaId,obj);
 }
 
-function renderKPIResumen(data,obj){
+function renderKPIResumen(data,obj,lineaId){
   var cont=document.getElementById('kpi-cont');
   if(!cont) return;
   window._kpiDataActual=data;
   window._kpiObjActual=obj;
-  // Guardar clicks como funciones globales para que el onclick string funcione
+  lineaId=lineaId||document.getElementById('kpi-filtro-linea')?.value||'fabrica';
+  var esFabrica=lineaId==='fabrica';
+  // Para Fábrica: primer nivel = por línea; para línea específica: por reason_code
   window._kpiClicks={
-    PP:()=>mostrarParetoKPI(data.ppEvs,'PP',obj,null,'PP'),
-    PNP:()=>mostrarParetoKPI(data.pnpEvs,'PNP',obj,null,'PNP')
+    PP:function(){mostrarParetoKPI(data.ppEvs,'PP',obj,esFabrica?'linea':'rc','PP');},
+    PNP:function(){mostrarParetoKPI(data.pnpEvs,'PNP',obj,esFabrica?'linea':'rc','PNP');}
   };
   var bars=[
     {key:'AI',val:data.AI,obj:obj.objetivo_ai,ok:data.AI>=obj.objetivo_ai,tieneClick:false},
@@ -2816,14 +2813,17 @@ function mostrarParetoKPI(evs,tipo,obj,nivel,titulo){
   if(!evs||!evs.length){toast('Sin datos de '+tipo,'#6b7280');return;}
   var cont=document.getElementById('kpi-cont');
   if(!cont) return;
-  // Calcular pareto
+  // Calcular pareto según groupBy
+  var keyFn=groupBy==='linea'?function(e){return e.linea_nombre||e.linea_id||'Sin línea';}:
+            groupBy==='comment'?function(e){return e.com||'Sin comentario';}:
+            function(e){return e.rc||'Sin clasificar';};
   var grupos={};
-  evs.forEach(function(e){var key=nivel?e.com||'Sin comentario':e.rc;if(!grupos[key])grupos[key]=0;grupos[key]+=e.min;});
+  evs.forEach(function(e){var key=keyFn(e);if(!grupos[key])grupos[key]=0;grupos[key]+=e.min;});
   var sorted=Object.entries(grupos).sort(function(a,b){return b[1]-a[1];});
   var total=sorted.reduce(function(s,arr){return s+arr[1];},0);
   var acum=0;
   var items=sorted.map(function(arr){var nombre=arr[0],min=arr[1];acum+=min;return{label:nombre,value:min,cumPct:Math.round(acum/total*100),color:'#3b82f6'};});
-  _kpiParetoStack.push({tipo:tipo,nivel:nivel||0,titulo:titulo||tipo,evs:evs});
+  _kpiParetoStack.push({tipo:tipo,groupBy:groupBy,titulo:titulo||tipo,evs:evs});
   var tituloMostrar=titulo||tipo;
   var chart=svgPareto(items,{showMin:true,showLine:true});
   var html='<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
@@ -2833,15 +2833,18 @@ function mostrarParetoKPI(evs,tipo,obj,nivel,titulo){
     +'</div>'
     +'<div style="background:#fff;border-radius:12px;padding:14px 14px 32px;box-shadow:0 2px 8px rgba(0,0,0,.08);overflow-x:auto">'+chart+'</div>'
     +'<div style="margin-top:8px;display:flex;align-items:center;gap:6px">'
-    +'<div style="width:16px;height:2px;background:#ef4444"></div>'
+    +'<div style="width:16px;height:2px;background:#ef4444;border-radius:2px"></div>'
     +'<div style="font-size:11px;color:#6b7280">Línea roja = % acumulado · Punteada = 80%</div>'
     +'</div>';
-  // Lista clickeable bajo la gráfica (solo nivel 0)
-  if(!nivel){
-    html+='<div style="margin-top:10px;background:#fff;border-radius:12px;padding:6px;box-shadow:0 2px 6px rgba(0,0,0,.06)">';
+  var nextGroupBy=groupBy==='linea'?'rc':groupBy==='rc'?'comment':null;
+  if(nextGroupBy){
+    var instruccion=groupBy==='linea'?'Toca una línea para ver sus paros principales':'Toca para ver comentarios';
+    html+='<div style="margin-top:10px;background:#fff;border-radius:12px;padding:6px;box-shadow:0 2px 6px rgba(0,0,0,.06)"><div style="font-size:10px;color:#9ca3af;padding:4px 10px">'+instruccion+'</div>';
+    window._kpiParetoCurrent={items:items,tipo:tipo,groupBy:groupBy};
     items.forEach(function(item,i){
-      var safe=item.label.replace(/'/g,"&#39;");
-      html+='<div onclick="mostrarParetoKPIDetalle(\''+safe+'\',\''+tipo+'\')" style="display:flex;justify-content:space-between;padding:6px 10px;border-bottom:1px solid #f3f4f6;cursor:pointer;font-size:11px" onmousedown="this.style.background=\'#f9fafb\'" onmouseup="this.style.background=\'\'" onmouseleave="this.style.background=\'\'">'
+      html+='<div onclick="kpiDrillDownIdx('+i+')" '
+        +'style="display:flex;justify-content:space-between;padding:6px 10px;border-bottom:1px solid #f3f4f6;cursor:pointer;font-size:11px" '
+        +'onmousedown="this.style.background=\'#f9fafb\'" onmouseup="this.style.background=\'\'\'" onmouseleave="this.style.background=\'\'\'>'
         +'<span style="font-weight:700">'+(i+1)+'. '+item.label+'</span>'
         +'<span style="color:#6b7280">'+item.value+' min · '+item.cumPct+'%'+(item.cumPct<=80?' 🔵':'')+'</span>'
         +'</div>';
@@ -2851,26 +2854,46 @@ function mostrarParetoKPI(evs,tipo,obj,nivel,titulo){
   cont.innerHTML=html;
 }
 
-function mostrarParetoKPIDetalle(rc,tipo){
+// Drill-down por índice (evita problemas de escape con nombres especiales)
+function kpiDrillDownIdx(idx){
+  var cur=window._kpiParetoCurrent;
+  if(!cur) return;
+  var item=cur.items[idx];
+  if(!item) return;
+  kpiDrillDown(item.label,cur.tipo,cur.groupBy);
+}
+// Drill-down genérico
+function kpiDrillDown(nombre,tipo,currentGroupBy){
   var data=window._kpiDataActual;
   if(!data) return;
-  var evs=tipo==='PP'?data.ppEvs:data.pnpEvs;
-  var filtrados=evs.filter(e=>e.rc===rc);
-  mostrarParetoKPI(filtrados,tipo,window._kpiObjActual,1,tipo+' › '+rc);
+  var evsTodos=tipo==='PP'?data.ppEvs:data.pnpEvs;
+  var nextGroupBy=currentGroupBy==='linea'?'rc':'comment';
+  // Filtrar eventos por el valor actual
+  var filtrados=evsTodos.filter(function(e){
+    if(currentGroupBy==='linea') return (e.linea_nombre||e.linea_id||'Sin línea')===nombre;
+    if(currentGroupBy==='rc') return (e.rc||'Sin clasificar')===nombre;
+    return false;
+  });
+  // Buscar el título de la ruta
+  var prevTitulo=_kpiParetoStack.length?_kpiParetoStack[_kpiParetoStack.length-1].titulo:'';
+  mostrarParetoKPI(filtrados,tipo,window._kpiObjActual,nextGroupBy,prevTitulo+' › '+nombre);
+}
+
+function mostrarParetoKPIDetalle(rc,tipo){
+  kpiDrillDown(rc,tipo,'rc');
 }
 
 function kpiParetoBack(){
   _kpiParetoStack.pop();
   if(!_kpiParetoStack.length){
-    // Volver al resumen
-    var data=window._kpiDataActual;
-    var obj=window._kpiObjActual;
-    if(data&&obj) renderKPIResumen(data,obj);
+    var data=window._kpiDataActual, obj=window._kpiObjActual;
+    var lineaId=document.getElementById('kpi-filtro-linea')?.value||'fabrica';
+    if(data&&obj) renderKPIResumen(data,obj,lineaId);
     return;
   }
   var prev=_kpiParetoStack[_kpiParetoStack.length-1];
   _kpiParetoStack.pop();
-  mostrarParetoKPI(prev.evs,prev.tipo,window._kpiObjActual,prev.nivel>0?1:null,prev.titulo);
+  mostrarParetoKPI(prev.evs,prev.tipo,window._kpiObjActual,prev.groupBy,prev.titulo);
 }
 
 async function renderKPIDetalle(lineaId,obj){
