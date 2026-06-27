@@ -2785,11 +2785,11 @@ function renderKPIResumen(data,obj,lineaId){
   window._kpiObjActual=obj;
   lineaId=lineaId||document.getElementById('kpi-filtro-linea')?.value||'fabrica';
   var esFabrica=lineaId==='fabrica';
-  // Para Fábrica: primer nivel = por línea; para línea específica: por reason_code
-  window._kpiClicks={
-    PP:function(){mostrarParetoKPI(data.ppEvs,'PP',obj,esFabrica?'linea':'rc','PP');},
-    PNP:function(){mostrarParetoKPI(data.pnpEvs,'PNP',obj,esFabrica?'linea':'rc','PNP');}
-  };
+  // Funciones globales directas — evita problemas con template literals anidados
+  window._kpiClickPP=function(){mostrarParetoKPI(data.ppEvs,'PP',obj,esFabrica?'linea':'rc','PP');};
+  window._kpiClickPNP=function(){mostrarParetoKPI(data.pnpEvs,'PNP',obj,esFabrica?'linea':'rc','PNP');};
+  // Compatibilidad con _kpiClicks
+  window._kpiClicks={PP:window._kpiClickPP,PNP:window._kpiClickPNP};
   var bars=[
     {key:'AI',val:data.AI,obj:obj.objetivo_ai,ok:data.AI>=obj.objetivo_ai,tieneClick:false},
     {key:'PP',val:data.PP,obj:obj.objetivo_pp,ok:data.PP<=obj.objetivo_pp,tieneClick:true},
@@ -2797,16 +2797,18 @@ function renderKPIResumen(data,obj,lineaId){
   ];
   var nombres={AI:'Asset Intensity',PP:'Paro Planeado',PNP:'Paro No Planeado'};
   cont.innerHTML='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">'
-    +bars.map(b=>`<div onclick="${b.tieneClick?'window._kpiClicks[\''+b.key+'\']()'  :''}" style="background:${b.ok?'#16a34a':'#dc2626'};border-radius:14px;padding:20px 10px;text-align:center;cursor:${b.tieneClick?'pointer':'default'};box-shadow:0 4px 12px rgba(0,0,0,.15);transition:filter .15s" ${b.tieneClick?'onmousedown="this.style.filter=\'brightness(.85)\'" onmouseup="this.style.filter=\'\'" onmouseleave="this.style.filter=\'\'"':''}>
-      <div style="color:rgba(255,255,255,.8);font-size:11px;font-weight:700">${nombres[b.key]}</div>
-      <div style="color:#fff;font-size:42px;font-weight:900;line-height:1;margin:10px 0">${b.val}%</div>
-      <div style="color:rgba(255,255,255,.7);font-size:11px">Obj: ${b.key==='AI'?'≥':'≤'}${b.obj}%</div>
-      ${b.tieneClick?'<div style="color:rgba(255,255,255,.6);font-size:10px;margin-top:6px">Toca para Pareto →</div>':''}
-    </div>`).join('')
+    +bars.map(function(b){
+      var fn=b.key==='PP'?'window._kpiClickPP()':b.key==='PNP'?'window._kpiClickPNP()':'';
+      return '<div onclick="'+fn+'" style="background:'+(b.ok?'#16a34a':'#dc2626')+';border-radius:14px;padding:20px 10px;text-align:center;cursor:'+(b.tieneClick?'pointer':'default')+';box-shadow:0 4px 12px rgba(0,0,0,.15);transition:filter .15s" '+(b.tieneClick?'onmousedown="this.style.filter=\'brightness(.85)\'" onmouseup="this.style.filter=\'\'" onmouseleave="this.style.filter=\'\'"':'')+' >'
+        +'<div style="color:rgba(255,255,255,.8);font-size:11px;font-weight:700">'+nombres[b.key]+'</div>'
+        +'<div style="color:#fff;font-size:42px;font-weight:900;line-height:1;margin:10px 0">'+b.val+'%</div>'
+        +'<div style="color:rgba(255,255,255,.7);font-size:11px">Obj: '+(b.key==='AI'?'≥':'≤')+b.obj+'%</div>'
+        +(b.tieneClick?'<div style="color:rgba(255,255,255,.6);font-size:10px;margin-top:6px">Toca para Pareto →</div>':'')
+        +'</div>';
+    }).join('')
     +'</div>'
-    +(data.TO>0?`<div style="text-align:center;font-size:12px;color:#6b7280">Tiempo Ocupado total: ${Math.round(data.TO/60000).toLocaleString()} min</div>`:'<div style="text-align:center;color:#9ca3af;padding:20px">Sin datos en este periodo</div>');
+    +(data.TO>0?'<div style="text-align:center;font-size:12px;color:#6b7280">Tiempo Ocupado total: '+Math.round(data.TO/60000).toLocaleString()+' min</div>':'<div style="text-align:center;color:#9ca3af;padding:20px">Sin datos en este periodo</div>');
 }
-
 function mostrarParetoKPIActual(){}  // placeholder
 
 function mostrarParetoKPI(evs,tipo,obj,nivel,titulo){
@@ -2827,7 +2829,7 @@ function mostrarParetoKPI(evs,tipo,obj,nivel,titulo){
   var tituloMostrar=titulo||tipo;
   var chart=svgPareto(items,{showMin:true,showLine:true});
   var html='<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
-    +(_kpiParetoStack.length>1?'<button onclick="kpiParetoBack()" style="padding:6px 12px;background:#f3f4f6;border:1.5px solid #000;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">← Volver</button>':'')
+    +'<button onclick="kpiParetoBack()" style="padding:6px 12px;background:#f3f4f6;border:1.5px solid #000;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">← Volver</button>'
     +'<div style="font-size:15px;font-weight:900;color:#1a3c5e">Pareto '+tituloMostrar+'</div>'
     +'<div style="font-size:11px;color:#6b7280">Total: '+total+' min</div>'
     +'</div>'
