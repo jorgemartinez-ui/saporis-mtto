@@ -2613,8 +2613,8 @@ function svgPareto(items,opts){
   opts=opts||{};
   items=items.slice(0,10);
   var n=items.length; if(!n) return '<div style="text-align:center;color:#9ca3af;padding:12px">Sin datos</div>';
-  var W=Math.max(n*34,200),H=126;
-  var pL=6,pR=18,pT=18,pB=24;
+  var W=Math.max(n*24,160),H=88;
+  var pL=4,pR=14,pT=14,pB=18;
   var cW=W-pL-pR,cH=H-pT-pB;
   var maxVal=Math.max.apply(null,items.map(function(i){return i.value;}));if(maxVal<1)maxVal=1;
   var barGap=cW/n,barW=Math.max(Math.floor(barGap*0.65),5);
