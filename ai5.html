@@ -2608,7 +2608,49 @@ function irAdminHub(){
 // ── FIX AUTO-ARRANQUE: cuando no hay orden activa, acotar barra a tsI ─────────
 // (ver uso en renderLinea: if(!ORDEN_ACTIVA) ahora_barra=tsI)
 
-// ── KPI ──────────────────────────────────────────────────────
+// ── SVG Pareto chart ─────────────────────────────────────────
+function svgPareto(items,opts){
+  opts=opts||{};
+  var n=items.length; if(!n) return '<div style="text-align:center;color:#9ca3af;padding:20px">Sin datos</div>';
+  var W=Math.max(n*44,280),H=180;
+  var pL=8,pR=24,pT=26,pB=34;
+  var cW=W-pL-pR,cH=H-pT-pB;
+  var maxVal=Math.max.apply(null,items.map(function(i){return i.value;}));if(maxVal<1)maxVal=1;
+  var barGap=cW/n,barW=Math.max(Math.floor(barGap*0.65),6);
+  var svg='<svg viewBox="0 0 '+W+' '+H+'" width="100%" style="display:block;overflow:visible;font-family:Nunito,sans-serif">';
+  svg+='<g transform="translate('+pL+','+pT+')">';
+  // Fondo gris claro
+  svg+='<rect x="0" y="0" width="'+cW+'" height="'+cH+'" fill="#f9fafb" rx="2"/>';
+  // Barras
+  items.forEach(function(item,i){
+    var bH=item.value>0?Math.max(item.value/maxVal*cH,3):0;
+    var x=i*barGap+(barGap-barW)/2;
+    var y=cH-bH;
+    var col=item.color||'#3b82f6';
+    if(bH>0) svg+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW+'" height="'+bH.toFixed(1)+'" fill="'+col+'" rx="2"/>';
+    // Valor encima
+    var lbl=opts.showMin?(item.value+' min'):(item.value+(opts.pct!==false?'%':''));
+    if(item.value>0) svg+='<text x="'+(x+barW/2).toFixed(1)+'" y="'+(y-3).toFixed(1)+'" font-size="8" text-anchor="middle" fill="'+col+'" font-weight="700">'+lbl+'</text>';
+    // Etiqueta abajo
+    var lab=item.label.length>10?item.label.substring(0,9)+'…':item.label;
+    svg+='<text x="'+(x+barW/2).toFixed(1)+'" y="'+(cH+11).toFixed(1)+'" font-size="7" text-anchor="middle" fill="#9ca3af" transform="rotate(-30,'+(x+barW/2).toFixed(1)+','+(cH+11).toFixed(1)+')">'+lab+'</text>';
+  });
+  // Línea Pareto (solo si hay cumPct)
+  if(opts.showLine!==false&&items[0]&&items[0].cumPct!==undefined){
+    var pts=items.map(function(item,i){var x=i*barGap+barGap/2;var y=cH-(item.cumPct/100*cH);return x.toFixed(1)+','+y.toFixed(1);});
+    svg+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="#ef4444" stroke-width="1.8"/>';
+    items.forEach(function(item,i){
+      var x=i*barGap+barGap/2;var y=cH-(item.cumPct/100*cH);
+      svg+='<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="2.5" fill="#ef4444"/>';
+      svg+='<text x="'+x.toFixed(1)+'" y="'+(y-4).toFixed(1)+'" font-size="7" text-anchor="middle" fill="#ef4444">'+item.cumPct+'%</text>';
+    });
+    var y80=cH*(1-0.8);
+    svg+='<line x1="0" y1="'+y80.toFixed(1)+'" x2="'+cW+'" y2="'+y80.toFixed(1)+'" stroke="#ef4444" stroke-width="0.8" stroke-dasharray="4,3" opacity="0.5"/>';
+    svg+='<text x="'+(cW+2)+'" y="'+(y80+3).toFixed(1)+'" font-size="7" fill="#ef4444" opacity="0.7">80%</text>';
+  }
+  svg+='</g></svg>';
+  return svg;
+}
 var _kpiModo='D',_kpiOffset=0,_kpiDesde=null,_kpiHasta=null,_kpiVista='resumen';
 var _kpiParetoStack=[]; // historial de drill-down en pareto
 
@@ -2776,41 +2818,36 @@ function mostrarParetoKPI(evs,tipo,obj,nivel,titulo){
   if(!cont) return;
   // Calcular pareto
   var grupos={};
-  evs.forEach(e=>{var key=nivel?e.com||'Sin comentario':e.rc;if(!grupos[key])grupos[key]=0;grupos[key]+=e.min;});
-  var sorted=Object.entries(grupos).sort((a,b)=>b[1]-a[1]);
-  var total=sorted.reduce((s,[,v])=>s+v,0);
+  evs.forEach(function(e){var key=nivel?e.com||'Sin comentario':e.rc;if(!grupos[key])grupos[key]=0;grupos[key]+=e.min;});
+  var sorted=Object.entries(grupos).sort(function(a,b){return b[1]-a[1];});
+  var total=sorted.reduce(function(s,arr){return s+arr[1];},0);
   var acum=0;
-  var items=sorted.map(([nombre,min])=>{acum+=min;return{nombre,min,pct:Math.round(min/total*100),acumPct:Math.round(acum/total*100)};});
-  var mx=items[0]?items[0].min:1;
-  // Push al stack
-  _kpiParetoStack.push({tipo,nivel:nivel||0,titulo:titulo||tipo,evs});
+  var items=sorted.map(function(arr){var nombre=arr[0],min=arr[1];acum+=min;return{label:nombre,value:min,cumPct:Math.round(acum/total*100),color:'#3b82f6'};});
+  _kpiParetoStack.push({tipo:tipo,nivel:nivel||0,titulo:titulo||tipo,evs:evs});
   var tituloMostrar=titulo||tipo;
-  var html=`<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">
-    ${_kpiParetoStack.length>1?`<button onclick="kpiParetoBack()" style="padding:6px 12px;background:#f3f4f6;border:1.5px solid #000;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">← Volver</button>`:''}
-    <div style="font-size:15px;font-weight:900;color:#1a3c5e">Pareto ${tituloMostrar}</div>
-    <div style="font-size:11px;color:#6b7280">Total: ${total} min</div>
-  </div>
-  <div style="border-radius:12px;overflow:hidden;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.08)">`;
-  items.forEach((item,i)=>{
-    var esPaso2=!!nivel;
-    var onClick=!esPaso2&&item.nombre!=='Sin clasificar'
-      ?`onclick="mostrarParetoKPIDetalle('${item.nombre.replace(/'/g,"\\'")}','${tipo}')"`:'';
-    html+=`<div ${onClick} style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid #f3f4f6;cursor:${onClick?'pointer':'default'};${onClick?'transition:background .15s':''}${onClick?';hover:background:#f9fafb':''}" ${onClick?'onmousedown="this.style.background=\'#f3f4f6\'" onmouseup="this.style.background=\'\'" onmouseleave="this.style.background=\'\'"':''}>
-      <div style="width:32px;text-align:center;font-size:11px;font-weight:800;color:#6b7280">${i+1}</div>
-      <div style="flex:1">
-        <div style="font-size:12px;font-weight:700">${item.nombre}</div>
-        <div style="margin-top:4px;height:8px;background:#f3f4f6;border-radius:4px;overflow:hidden">
-          <div style="height:100%;width:${(item.min/mx*100).toFixed(1)}%;background:${item.acumPct<=80?'#7c3aed':'#d1d5db'};border-radius:4px"></div>
-        </div>
-      </div>
-      <div style="text-align:right;min-width:80px">
-        <div style="font-size:13px;font-weight:900">${item.min} min</div>
-        <div style="font-size:10px;color:#6b7280">${item.pct}% · acum ${item.acumPct}%</div>
-      </div>
-      ${item.acumPct<=80?'<div style="width:6px;height:6px;background:#7c3aed;border-radius:50%"></div>':'<div style="width:6px"></div>'}
-    </div>`;
-  });
-  html+='</div><div style="margin-top:8px;display:flex;align-items:center;gap:6px"><div style="width:10px;height:10px;background:#7c3aed;border-radius:50%"></div><div style="font-size:11px;color:#6b7280">Barras moradas = 80% del tiempo de paro</div></div>';
+  var chart=svgPareto(items,{showMin:true,showLine:true});
+  var html='<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
+    +(_kpiParetoStack.length>1?'<button onclick="kpiParetoBack()" style="padding:6px 12px;background:#f3f4f6;border:1.5px solid #000;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">← Volver</button>':'')
+    +'<div style="font-size:15px;font-weight:900;color:#1a3c5e">Pareto '+tituloMostrar+'</div>'
+    +'<div style="font-size:11px;color:#6b7280">Total: '+total+' min</div>'
+    +'</div>'
+    +'<div style="background:#fff;border-radius:12px;padding:14px 14px 32px;box-shadow:0 2px 8px rgba(0,0,0,.08);overflow-x:auto">'+chart+'</div>'
+    +'<div style="margin-top:8px;display:flex;align-items:center;gap:6px">'
+    +'<div style="width:16px;height:2px;background:#ef4444"></div>'
+    +'<div style="font-size:11px;color:#6b7280">Línea roja = % acumulado · Punteada = 80%</div>'
+    +'</div>';
+  // Lista clickeable bajo la gráfica (solo nivel 0)
+  if(!nivel){
+    html+='<div style="margin-top:10px;background:#fff;border-radius:12px;padding:6px;box-shadow:0 2px 6px rgba(0,0,0,.06)">';
+    items.forEach(function(item,i){
+      var safe=item.label.replace(/'/g,"&#39;");
+      html+='<div onclick="mostrarParetoKPIDetalle(\''+safe+'\',\''+tipo+'\')" style="display:flex;justify-content:space-between;padding:6px 10px;border-bottom:1px solid #f3f4f6;cursor:pointer;font-size:11px" onmousedown="this.style.background=\'#f9fafb\'" onmouseup="this.style.background=\'\'" onmouseleave="this.style.background=\'\'">'
+        +'<span style="font-weight:700">'+(i+1)+'. '+item.label+'</span>'
+        +'<span style="color:#6b7280">'+item.value+' min · '+item.cumPct+'%'+(item.cumPct<=80?' 🔵':'')+'</span>'
+        +'</div>';
+    });
+    html+='</div>';
+  }
   cont.innerHTML=html;
 }
 
@@ -2854,26 +2891,15 @@ async function renderKPIDetalle(lineaId,obj){
 
   function chartBar(key,objVal,menorEsMejor){
     var nombres={AI:'Asset Intensity %',PP:'Paro Planeado %',PNP:'Paro No Planeado %'};
-    var valsTop=dias.map(({data})=>{
-      var val=data[key]; var ok=menorEsMejor?val<=objVal:val>=objVal;
-      return '<div style="flex:1;text-align:center;font-size:9px;font-weight:800;color:'+(ok?'#16a34a':'#dc2626')+'">'+val+'%</div>';
-    }).join('');
-    // Píxeles directos (contenedor 100px) — evita problemas de height:% en flex
-    var barras=dias.map(({data},i)=>{
-      var val=data[key]; var ok=menorEsMejor?val<=objVal:val>=objVal;
-      var pxH=val>0?Math.max(Math.round(val),4):0;
-      var evs=key==='PP'?data.ppEvs:key==='PNP'?data.pnpEvs:null;
-      var tieneClick=evs&&evs.length>0;
-      return '<div onclick="'+(tieneClick?'window._kpiClickDia('+i+',\''+key+'\')':'')
-        +'" style="flex:1;height:100px;display:flex;align-items:flex-end;padding:0 2px;cursor:'+(tieneClick?'pointer':'default')+';">'
-        +'<div style="width:100%;background:'+(ok?'#16a34a':'#dc2626')+';border-radius:3px 3px 0 0;height:'+pxH+'px"></div></div>';
-    }).join('');
-    var lblsBottom=dias.map(({label})=>'<div style="flex:1;text-align:center;font-size:8px;color:#9ca3af">'+label+'</div>').join('');
-    return '<div style="background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,.08)">'
+    var ok_col=menorEsMejor?function(v){return v<=objVal;}:function(v){return v>=objVal;};
+    // Barras azules en detalle, sin Pareto line, sin color segun objetivo
+    var items=dias.map(function({data,label},i){
+      return {label:label,value:data[key],color:'#3b82f6',idx:i};
+    });
+    var chart=svgPareto(items,{showLine:false,pct:true});
+    return '<div style="background:#fff;border-radius:12px;padding:14px 14px 24px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,.08)">'
       +'<div style="font-size:13px;font-weight:800;color:#1a3c5e;margin-bottom:8px">'+nombres[key]+' <span style="font-size:11px;color:#6b7280;font-weight:600">Obj: '+(menorEsMejor?'≤':'≥')+objVal+'%</span></div>'
-      +'<div style="display:flex;margin-bottom:4px">'+valsTop+'</div>'
-      +'<div style="display:flex;height:100px;background:#f9fafb;border-radius:4px">'+barras+'</div>'
-      +'<div style="display:flex;margin-top:6px">'+lblsBottom+'</div>'
+      +chart
       +(key!=='AI'?'<div style="font-size:10px;color:#9ca3af;margin-top:4px">Toca una barra para ver Pareto de ese día</div>':'')
       +'</div>';
   }
