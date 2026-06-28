@@ -2613,55 +2613,67 @@ function svgPareto(items,opts){
   opts=opts||{};
   items=items.slice(0,10);
   var n=items.length; if(!n) return '<div style="text-align:center;color:#9ca3af;padding:12px">Sin datos</div>';
-  // Dimensiones fijas en píxeles — sin scaling ni distorsión
-  var BAR_W=60, BAR_GAP=20, PAD_L=20, PAD_R=40, PAD_T=40, PAD_B=60;
+  var BAR_W=60,BAR_GAP=20,PAD_L=20,PAD_R=40,PAD_T=40,PAD_B=60;
   var cW=n*(BAR_W+BAR_GAP)-BAR_GAP;
   var pixW=cW+PAD_L+PAD_R;
-  var pixH=480;
-  var cH=pixH-PAD_T-PAD_B; // 380px área de barras
+  var pixH=opts.pixH||_kpiChartH||480;
+  var cH=pixH-PAD_T-PAD_B;
   var maxVal=Math.max.apply(null,items.map(function(i){return i.value;}));if(maxVal<1)maxVal=1;
   var svg='<div style="width:100%;overflow-x:auto"><svg width="'+pixW+'" height="'+pixH+'" style="display:block;font-family:Nunito,sans-serif">';
   svg+='<g transform="translate('+PAD_L+','+PAD_T+')">';
-  // Fondo
   svg+='<rect x="0" y="0" width="'+cW+'" height="'+cH+'" fill="#f9fafb" rx="4"/>';
-  // Barras
   items.forEach(function(item,i){
     var bH=item.value>0?Math.max(Math.round(item.value/maxVal*cH),4):0;
     var x=i*(BAR_W+BAR_GAP);
     var y=cH-bH;
     var col=item.color||'#3b82f6';
-    if(bH>0) svg+='<rect x="'+x+'" y="'+y+'" width="'+BAR_W+'" height="'+bH+'" fill="'+col+'" rx="4"/>';
-    // Valor encima de la barra
+    if(bH>0) svg+='<rect x="'+x+'" y="'+y+'" width="'+BAR_W+'" height="'+bH+'" fill="'+col+'" rx="4"'
+      +' style="cursor:pointer" onclick="kpiDrillDownIdx('+i+')"'
+      +' onmouseenter="mostrarTipKPIBar(event,'+i+')" onmouseleave="ocultarTipKPI()"/>';
     var lbl=opts.showMin?(item.value+' min'):(item.value+(opts.pct!==false?'%':''));
-    if(item.value>0) svg+='<text x="'+(x+BAR_W/2)+'" y="'+(y-6)+'" font-size="12" text-anchor="middle" fill="'+col+'" font-weight="700">'+lbl+'</text>';
-    // Etiqueta X rotada
+    if(item.value>0) svg+='<text x="'+(x+BAR_W/2)+'" y="'+(y-6)+'" font-size="12" text-anchor="middle" fill="'+col+'" font-weight="700" style="pointer-events:none">'+lbl+'</text>';
     var lab=item.label.length>12?item.label.substring(0,11)+'…':item.label;
     svg+='<text x="'+(x+BAR_W/2)+'" y="'+(cH+14)+'" font-size="11" text-anchor="end" fill="#6b7280" transform="rotate(-35,'+(x+BAR_W/2)+','+(cH+14)+')">'+lab+'</text>';
   });
-  // Línea Pareto
   if(opts.showLine!==false&&items[0]&&items[0].cumPct!==undefined){
-    var pts=items.map(function(item,i){
-      var x=i*(BAR_W+BAR_GAP)+BAR_W/2;
-      var y=cH-(item.cumPct/100*cH);
-      return x+','+y;
-    });
-    svg+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="#ef4444" stroke-width="2"/>';
+    var pts=items.map(function(item,i){var x=i*(BAR_W+BAR_GAP)+BAR_W/2;var y=cH-(item.cumPct/100*cH);return x+','+y;});
+    svg+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="#ef4444" stroke-width="2" style="pointer-events:none"/>';
     items.forEach(function(item,i){
-      var x=i*(BAR_W+BAR_GAP)+BAR_W/2;
-      var y=cH-(item.cumPct/100*cH);
-      svg+='<circle cx="'+x+'" cy="'+y+'" r="4" fill="#ef4444"/>';
-      svg+='<text x="'+x+'" y="'+(y-8)+'" font-size="11" text-anchor="middle" fill="#ef4444" font-weight="700">'+item.cumPct+'%</text>';
+      var x=i*(BAR_W+BAR_GAP)+BAR_W/2;var y=cH-(item.cumPct/100*cH);
+      svg+='<circle cx="'+x+'" cy="'+y+'" r="4" fill="#ef4444" style="pointer-events:none"/>';
+      svg+='<text x="'+x+'" y="'+(y-8)+'" font-size="11" text-anchor="middle" fill="#ef4444" font-weight="700" style="pointer-events:none">'+item.cumPct+'%</text>';
     });
-    // Línea 80%
     var y80=cH*(1-0.8);
-    svg+='<line x1="0" y1="'+y80+'" x2="'+cW+'" y2="'+y80+'" stroke="#ef4444" stroke-width="1" stroke-dasharray="6,4" opacity="0.5"/>';
-    svg+='<text x="'+(cW+4)+'" y="'+(y80+4)+'" font-size="11" fill="#ef4444" opacity="0.7">80%</text>';
+    svg+='<line x1="0" y1="'+y80+'" x2="'+cW+'" y2="'+y80+'" stroke="#ef4444" stroke-width="1" stroke-dasharray="6,4" opacity="0.5" style="pointer-events:none"/>';
+    svg+='<text x="'+(cW+4)+'" y="'+(y80+4)+'" font-size="11" fill="#ef4444" opacity="0.7" style="pointer-events:none">80%</text>';
   }
   svg+='</g></svg></div>';
   return svg;
 }
 var _kpiModo='D',_kpiOffset=0,_kpiDesde=null,_kpiHasta=null,_kpiVista='resumen';
-var _kpiParetoStack=[]; // historial de drill-down en pareto
+var _kpiChartH=480; // altura de gráfica ajustable
+
+function mostrarTipKPIBar(ev,idx){
+  var cur=window._kpiParetoCurrent; if(!cur||!cur.items[idx]) return;
+  var item=cur.items[idx];
+  var tip=document.getElementById('kpi-bar-tip');
+  if(!tip){tip=document.createElement('div');tip.id='kpi-bar-tip';
+    tip.style.cssText='position:fixed;z-index:9999;background:#1a1a2e;color:#fff;padding:8px 12px;border-radius:8px;font-size:12px;font-family:Nunito,sans-serif;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.3);';
+    document.body.appendChild(tip);}
+  tip.innerHTML='<b>'+item.label+'</b><br>'+item.value+(cur.tipo?(' min · Acum: '+item.cumPct+'%'):'%');
+  tip.style.display='block';
+  tip.style.left=Math.min(ev.clientX+12,window.innerWidth-180)+'px';
+  tip.style.top=(ev.clientY-50)+'px';
+}
+function ocultarTipKPI(){var tip=document.getElementById('kpi-bar-tip');if(tip)tip.style.display='none';}
+function ajustarGraficaKPI(delta){
+  _kpiChartH=Math.max(200,Math.min(800,_kpiChartH+delta));
+  // Re-renderizar la vista actual
+  var cont=document.getElementById('kpi-cont');
+  if(!cont) return;
+  var cur=window._kpiParetoCurrent;
+  if(cur) mostrarParetoKPI(cur.evs,cur.tipo,window._kpiObjActual,cur.groupBy,cur.titulo);
+}
 
 async function irKPI(){
   if(TIMER){clearInterval(TIMER);TIMER=null;}
@@ -2673,6 +2685,8 @@ async function irKPI(){
   var env=LINEAS.filter(l=>(l.area||'envasado')==='envasado');
   var sel=document.getElementById('kpi-filtro-linea');
   if(sel) sel.innerHTML='<option value="fabrica">🏭 Fábrica (todas)</option>'
+    +'<option value="fabricacion">⚙️ Fabricación (dept.)</option>'
+    +'<option value="envasado">📦 Envasado (dept.)</option>'
     +(fab.length?'<optgroup label="— Fabricación">'+fab.map(l=>'<option value="'+l.id+'">'+l.nombre+'</option>').join('')+'</optgroup>':'')
     +(env.length?'<optgroup label="— Envasado">'+env.map(l=>'<option value="'+l.id+'">'+l.nombre+'</option>').join('')+'</optgroup>':'');
   kpiSetModo('D');
@@ -2742,10 +2756,15 @@ async function obtenerKPIData(desde,hasta,lineaId){
   // Cargar órdenes del periodo
   var lookback=7*24*3600000;
   var ordsAll=await db('ai_ordenes','GET',null,'ts_inicio=gte.'+(desde-lookback)+'&ts_inicio=lt.'+hasta+'&estado=in.(abierta,cerrada)&order=ts_inicio.asc')||[];
+  var isDept=lineaId==='fabrica'||lineaId==='fabricacion'||lineaId==='envasado';
   var ords=ordsAll.filter(o=>{
     var inicio=typeof o.ts_inicio==='string'?new Date(o.ts_inicio).getTime():Number(o.ts_inicio);
     var fin=o.ts_fin?(typeof o.ts_fin==='string'?new Date(o.ts_fin).getTime():Number(o.ts_fin)):Date.now();
-    return inicio<hasta&&fin>=desde&&(lineaId==='fabrica'||o.linea_id===lineaId);
+    if(!(inicio<hasta&&fin>=desde)) return false;
+    if(!isDept) return o.linea_id===lineaId;
+    if(lineaId==='fabrica') return true;
+    var l=LINEAS.find(x=>x.id===o.linea_id);
+    return l&&(l.area||'envasado')===lineaId;
   });
   if(!ords.length) return {AI:0,PP:0,PNP:0,TO:0,ppEvs:[],pnpEvs:[]};
   var lineaIds=[...new Set(ords.map(o=>o.linea_id))];
@@ -2782,11 +2801,12 @@ async function cargarKPI(){
   document.getElementById('kpi-sub').textContent=lineaId==='fabrica'?'Fábrica (todas las líneas)':(l?l.nombre:'—');
   cont.innerHTML='<div style="text-align:center;padding:32px;color:#9ca3af">Cargando...</div>';
   _kpiParetoStack=[];
-  // Cargar objetivos de fábrica
-  var objs=await db('ai_kpi_objetivos','GET',null,'id=eq.fabrica')||[];
+  var isDept=lineaId==='fabrica'||lineaId==='fabricacion'||lineaId==='envasado';
+  var objs=await db('ai_kpi_objetivos','GET',null,'id=eq.'+(isDept?lineaId:'fabrica'))||[];
+  if(!objs.length) objs=await db('ai_kpi_objetivos','GET',null,'id=eq.fabrica')||[];
   var obj=objs.length?objs[0]:{objetivo_ai:85,objetivo_pp:10,objetivo_pnp:10};
-  // Si es una línea específica, usar sus objetivos
-  if(l){obj={objetivo_ai:l.objetivo_ai||85,objetivo_pp:l.objetivo_pp||10,objetivo_pnp:l.objetivo_pnp||10};}
+  if(!isDept&&l){obj={objetivo_ai:l.objetivo_ai||obj.objetivo_ai,objetivo_pp:l.objetivo_pp||obj.objetivo_pp,objetivo_pnp:l.objetivo_pnp||obj.objetivo_pnp};}
+  var esDept=isDept;
   var data=await obtenerKPIData(_kpiDesde,_kpiHasta,lineaId);
   if(_kpiVista==='resumen') renderKPIResumen(data,obj,lineaId);
   else await renderKPIDetalle(lineaId,obj);
@@ -2798,10 +2818,9 @@ function renderKPIResumen(data,obj,lineaId){
   window._kpiDataActual=data;
   window._kpiObjActual=obj;
   lineaId=lineaId||document.getElementById('kpi-filtro-linea')?.value||'fabrica';
-  var esFabrica=lineaId==='fabrica';
-  // Funciones globales directas — evita problemas con template literals anidados
-  window._kpiClickPP=function(){mostrarParetoKPI(data.ppEvs,'PP',obj,esFabrica?'linea':'rc','PP');};
-  window._kpiClickPNP=function(){mostrarParetoKPI(data.pnpEvs,'PNP',obj,esFabrica?'linea':'rc','PNP');};
+  var esDeptOFabrica=lineaId==='fabrica'||lineaId==='fabricacion'||lineaId==='envasado';
+  window._kpiClickPP=function(){mostrarParetoKPI(data.ppEvs,'PP',obj,esDeptOFabrica?'linea':'rc','PP');};
+  window._kpiClickPNP=function(){mostrarParetoKPI(data.pnpEvs,'PNP',obj,esDeptOFabrica?'linea':'rc','PNP');};
   // Compatibilidad con _kpiClicks
   window._kpiClicks={PP:window._kpiClickPP,PNP:window._kpiClickPNP};
   var bars=[
@@ -2827,9 +2846,7 @@ function mostrarParetoKPIActual(){}  // placeholder
 
 function mostrarParetoKPI(evs,tipo,obj,groupBy,titulo){
   if(!evs||!evs.length){toast('Sin datos de '+tipo,'#6b7280');return;}
-  var cont=document.getElementById('kpi-cont');
-  if(!cont) return;
-  // Calcular pareto según groupBy
+  var cont=document.getElementById('kpi-cont'); if(!cont) return;
   var keyFn=groupBy==='linea'?function(e){return e.linea_nombre||e.linea_id||'Sin línea';}:
             groupBy==='comment'?function(e){return e.com||'Sin comentario';}:
             function(e){return e.rc||'Sin clasificar';};
@@ -2839,14 +2856,20 @@ function mostrarParetoKPI(evs,tipo,obj,groupBy,titulo){
   var total=sorted.reduce(function(s,arr){return s+arr[1];},0);
   var acum=0;
   var items=sorted.map(function(arr){var nombre=arr[0],min=arr[1];acum+=min;return{label:nombre,value:min,cumPct:Math.round(acum/total*100),color:'#3b82f6'};});
+  // Guardar ANTES del SVG para que onclicks de barras funcionen
+  window._kpiParetoCurrent={items:items,tipo:tipo,groupBy:groupBy,evs:evs};
   _kpiParetoStack.push({tipo:tipo,groupBy:groupBy,titulo:titulo||tipo,evs:evs});
   var tituloMostrar=titulo||tipo;
   var chart=svgPareto(items,{showMin:true,showLine:true});
-  var html='<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">'
+  var html='<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">'
     +'<button onclick="kpiParetoBack()" style="padding:6px 12px;background:#f3f4f6;border:1.5px solid #000;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">← Volver</button>'
-    +'<div style="font-size:15px;font-weight:900;color:#1a3c5e">Pareto '+tituloMostrar+'</div>'
+    +'<div style="font-size:15px;font-weight:900;color:#1a3c5e;flex:1">Pareto '+tituloMostrar+'</div>'
     +'<div style="font-size:11px;color:#6b7280">Total: '+total+' min</div>'
-    +'</div>'
+    +'<div style="display:flex;gap:4px;align-items:center">'
+    +'<span style="font-size:10px;color:#9ca3af">Tamaño:</span>'
+    +'<button onclick="ajustarGraficaKPI(-80)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;font-weight:900;cursor:pointer;background:#fff">−</button>'
+    +'<button onclick="ajustarGraficaKPI(80)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;font-weight:900;cursor:pointer;background:#fff">+</button>'
+    +'</div></div>'
     +'<div style="background:#fff;border-radius:12px;padding:14px 14px 32px;box-shadow:0 2px 8px rgba(0,0,0,.08);overflow-x:auto">'+chart+'</div>'
     +'<div style="margin-top:8px;display:flex;align-items:center;gap:6px">'
     +'<div style="width:16px;height:2px;background:#ef4444;border-radius:2px"></div>'
@@ -2856,11 +2879,8 @@ function mostrarParetoKPI(evs,tipo,obj,groupBy,titulo){
   if(nextGroupBy){
     var instruccion=groupBy==='linea'?'Toca una línea para ver sus paros principales':'Toca para ver comentarios';
     html+='<div style="margin-top:10px;background:#fff;border-radius:12px;padding:6px;box-shadow:0 2px 6px rgba(0,0,0,.06)"><div style="font-size:10px;color:#9ca3af;padding:4px 10px">'+instruccion+'</div>';
-    window._kpiParetoCurrent={items:items,tipo:tipo,groupBy:groupBy};
     items.forEach(function(item,i){
-      html+='<div onclick="kpiDrillDownIdx('+i+')" '
-        +'style="display:flex;justify-content:space-between;padding:6px 10px;border-bottom:1px solid #f3f4f6;cursor:pointer;font-size:11px" '
-        +'onmousedown="this.style.background=\'#f9fafb\'" onmouseup="this.style.background=\'\'\'" onmouseleave="this.style.background=\'\'\'>'
+      html+='<div onclick="kpiDrillDownIdx('+i+')" style="display:flex;justify-content:space-between;padding:6px 10px;border-bottom:1px solid #f3f4f6;cursor:pointer;font-size:11px" onmousedown="this.style.background=\'#f9fafb\'" onmouseup="this.style.background=\'\'" onmouseleave="this.style.background=\'\'">'
         +'<span style="font-weight:700">'+(i+1)+'. '+item.label+'</span>'
         +'<span style="color:#6b7280">'+item.value+' min · '+item.cumPct+'%'+(item.cumPct<=80?' 🔵':'')+'</span>'
         +'</div>';
@@ -2960,23 +2980,37 @@ async function renderKPIDetalle(lineaId,obj){
 
 // Admin objetivos KPI fábrica
 async function irObjetivosKPI(){
-  var objs=await db('ai_kpi_objetivos','GET',null,'id=eq.fabrica')||[];
-  var obj=objs.length?objs[0]:{objetivo_ai:85,objetivo_pp:10,objetivo_pnp:10};
-  modal('🎯 Objetivos KPI Fábrica',
-    `<div style="font-size:12px;color:#6b7280;margin-bottom:12px">Estos objetivos aplican cuando seleccionas "Fábrica" en la pantalla de KPI.</div>
-    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Objetivo AI% (mínimo)</label>
-    <input type="number" id="kpi-obj-ai" class="fc" min="0" max="100" value="${obj.objetivo_ai}">
-    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Objetivo PP% (máximo)</label>
-    <input type="number" id="kpi-obj-pp" class="fc" min="0" max="100" value="${obj.objetivo_pp}">
-    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Objetivo PNP% (máximo)</label>
-    <input type="number" id="kpi-obj-pnp" class="fc" min="0" max="100" value="${obj.objetivo_pnp}">`,
+  var ids=['fabrica','fabricacion','envasado'];
+  var labels={fabrica:'🏭 Fábrica (todas)',fabricacion:'⚙️ Fabricación',envasado:'📦 Envasado'};
+  var objs={};
+  await Promise.all(ids.map(async id=>{
+    var r=await db('ai_kpi_objetivos','GET',null,'id=eq.'+id)||[];
+    objs[id]=r.length?r[0]:{objetivo_ai:85,objetivo_pp:10,objetivo_pnp:10};
+  }));
+  function filas(id){
+    var o=objs[id];
+    return '<div style="background:#f9fafb;border-radius:10px;padding:12px;margin-bottom:12px">'
+      +'<div style="font-size:13px;font-weight:800;margin-bottom:8px;color:#1a3c5e">'+labels[id]+'</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
+      +'<div><label style="font-size:10px;font-weight:700;display:block;margin-bottom:3px">AI% mín.</label>'
+      +'<input type="number" id="kpi-ai-'+id+'" class="fc" min="0" max="100" value="'+o.objetivo_ai+'" style="font-size:13px;padding:4px 6px"></div>'
+      +'<div><label style="font-size:10px;font-weight:700;display:block;margin-bottom:3px">PP% máx.</label>'
+      +'<input type="number" id="kpi-pp-'+id+'" class="fc" min="0" max="100" value="'+o.objetivo_pp+'" style="font-size:13px;padding:4px 6px"></div>'
+      +'<div><label style="font-size:10px;font-weight:700;display:block;margin-bottom:3px">PNP% máx.</label>'
+      +'<input type="number" id="kpi-pnp-'+id+'" class="fc" min="0" max="100" value="'+o.objetivo_pnp+'" style="font-size:13px;padding:4px 6px"></div>'
+      +'</div></div>';
+  }
+  modal('🎯 Objetivos KPI por Departamento',
+    ids.map(filas).join(''),
     async(m)=>{
-      var ai=parseFloat(document.getElementById('kpi-obj-ai').value)||85;
-      var pp=parseFloat(document.getElementById('kpi-obj-pp').value)||10;
-      var pnp=parseFloat(document.getElementById('kpi-obj-pnp').value)||10;
-      await fetch(SB+'/rest/v1/ai_kpi_objetivos',{method:'POST',
-        headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
-        body:JSON.stringify({id:'fabrica',objetivo_ai:ai,objetivo_pp:pp,objetivo_pnp:pnp,updated_at:new Date().toISOString(),updated_by:ME.nombre})});
+      await Promise.all(ids.map(id=>{
+        var ai=parseFloat(document.getElementById('kpi-ai-'+id)?.value)||85;
+        var pp=parseFloat(document.getElementById('kpi-pp-'+id)?.value)||10;
+        var pnp=parseFloat(document.getElementById('kpi-pnp-'+id)?.value)||10;
+        return fetch(SB+'/rest/v1/ai_kpi_objetivos',{method:'POST',
+          headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+          body:JSON.stringify({id,objetivo_ai:ai,objetivo_pp:pp,objetivo_pnp:pnp,updated_at:new Date().toISOString(),updated_by:ME.nombre})});
+      }));
       m.remove(); toast('✅ Objetivos guardados','#16a34a');
     },'#7c3aed','Guardar');
 }
