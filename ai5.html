@@ -2919,26 +2919,6 @@ async function obtenerKPIData(desde,hasta,lineaId){
   return{AI:tO>0?Math.round(totTC/tO*100):0,PP:tO>0?Math.round(totPP/tO*100):0,PNP:tO>0?Math.round(totPNP/tO*100):0,TO:tO,ppEvs,pnpEvs,lineaStats:Object.values(lineaStats)};
 }
 
-async function cargarKPI(){
-  if(!_kpiDesde) kpiActualizarRango();
-  var cont=document.getElementById('kpi-cont');
-  if(!cont) return;
-  var lineaId=document.getElementById('kpi-filtro-linea')?.value||'fabrica';
-  var l=LINEAS.find(x=>x.id===lineaId);
-  document.getElementById('kpi-sub').textContent=lineaId==='fabrica'?'Fábrica (todas las líneas)':(l?l.nombre:'—');
-  cont.innerHTML='<div style="text-align:center;padding:32px;color:#9ca3af">Cargando...</div>';
-  _kpiParetoStack=[];
-  var isDept=lineaId==='fabrica'||lineaId==='fabricacion'||lineaId==='envasado';
-  var objs=await db('ai_kpi_objetivos','GET',null,'id=eq.'+(isDept?lineaId:'fabrica'))||[];
-  if(!objs.length) objs=await db('ai_kpi_objetivos','GET',null,'id=eq.fabrica')||[];
-  var obj=objs.length?objs[0]:{objetivo_ai:85,objetivo_pp:10,objetivo_pnp:10};
-  if(!isDept&&l){obj={objetivo_ai:l.objetivo_ai||obj.objetivo_ai,objetivo_pp:l.objetivo_pp||obj.objetivo_pp,objetivo_pnp:l.objetivo_pnp||obj.objetivo_pnp};}
-  var esDept=isDept;
-  var data=await obtenerKPIData(_kpiDesde,_kpiHasta,lineaId);
-  if(_kpiVista==='resumen') renderKPIResumen(data,obj,lineaId);
-  else await renderKPIDetalle(lineaId,obj);
-}
-
 function renderKPIHome(entidades){
   var cont=document.getElementById('kpi-cont'); if(!cont) return;
   function tarjeta(ent,esPrincipal){
