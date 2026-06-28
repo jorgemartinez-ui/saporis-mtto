@@ -2613,7 +2613,7 @@ function svgPareto(items,opts){
   opts=opts||{};
   items=items.slice(0,10);
   var n=items.length; if(!n) return '<div style="text-align:center;color:#9ca3af;padding:12px">Sin datos</div>';
-  var BAR_W=60,BAR_GAP=20,PAD_L=20,PAD_R=40,PAD_T=40,PAD_B=60;
+  var BAR_W=opts.barW||_kpiBarW||60,BAR_GAP=Math.max(8,Math.round(BAR_W*0.3));
   var cW=n*(BAR_W+BAR_GAP)-BAR_GAP;
   var pixW=cW+PAD_L+PAD_R;
   var pixH=opts.pixH||_kpiChartH||480;
@@ -2652,6 +2652,7 @@ function svgPareto(items,opts){
 }
 var _kpiModo='D',_kpiOffset=0,_kpiDesde=null,_kpiHasta=null,_kpiVista='resumen';
 var _kpiChartH=480; // altura de gráfica ajustable
+var _kpiBarW=60;    // ancho de barra ajustable
 
 function mostrarTipKPIBar(ev,idx){
   var cur=window._kpiParetoCurrent; if(!cur||!cur.items[idx]) return;
@@ -2666,11 +2667,9 @@ function mostrarTipKPIBar(ev,idx){
   tip.style.top=(ev.clientY-50)+'px';
 }
 function ocultarTipKPI(){var tip=document.getElementById('kpi-bar-tip');if(tip)tip.style.display='none';}
-function ajustarGraficaKPI(delta){
-  _kpiChartH=Math.max(200,Math.min(800,_kpiChartH+delta));
-  // Re-renderizar la vista actual
-  var cont=document.getElementById('kpi-cont');
-  if(!cont) return;
+function ajustarGraficaKPI(eje,delta){
+  if(eje==='H') _kpiChartH=Math.max(200,Math.min(900,_kpiChartH+delta));
+  else _kpiBarW=Math.max(20,Math.min(200,_kpiBarW+delta));
   var cur=window._kpiParetoCurrent;
   if(cur) mostrarParetoKPI(cur.evs,cur.tipo,window._kpiObjActual,cur.groupBy,cur.titulo);
 }
@@ -2865,10 +2864,13 @@ function mostrarParetoKPI(evs,tipo,obj,groupBy,titulo){
     +'<button onclick="kpiParetoBack()" style="padding:6px 12px;background:#f3f4f6;border:1.5px solid #000;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">← Volver</button>'
     +'<div style="font-size:15px;font-weight:900;color:#1a3c5e;flex:1">Pareto '+tituloMostrar+'</div>'
     +'<div style="font-size:11px;color:#6b7280">Total: '+total+' min</div>'
-    +'<div style="display:flex;gap:4px;align-items:center">'
-    +'<span style="font-size:10px;color:#9ca3af">Tamaño:</span>'
-    +'<button onclick="ajustarGraficaKPI(-80)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;font-weight:900;cursor:pointer;background:#fff">−</button>'
-    +'<button onclick="ajustarGraficaKPI(80)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;font-weight:900;cursor:pointer;background:#fff">+</button>'
+    +'<div style="display:flex;gap:10px;align-items:center">'
+    +'<div style="display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:#6b7280;font-weight:700">Alto:</span>'
+    +'<button onclick="ajustarGraficaKPI(\'H\',-80)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;font-weight:900;cursor:pointer;background:#fff">−</button>'
+    +'<button onclick="ajustarGraficaKPI(\'H\',80)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;font-weight:900;cursor:pointer;background:#fff">+</button></div>'
+    +'<div style="display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:#6b7280;font-weight:700">Ancho:</span>'
+    +'<button onclick="ajustarGraficaKPI(\'W\',-10)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;font-weight:900;cursor:pointer;background:#fff">−</button>'
+    +'<button onclick="ajustarGraficaKPI(\'W\',10)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;font-weight:900;cursor:pointer;background:#fff">+</button></div>'
     +'</div></div>'
     +'<div style="background:#fff;border-radius:12px;padding:14px 14px 32px;box-shadow:0 2px 8px rgba(0,0,0,.08);overflow-x:auto">'+chart+'</div>'
     +'<div style="margin-top:8px;display:flex;align-items:center;gap:6px">'
@@ -2951,9 +2953,11 @@ async function renderKPIDetalle(lineaId,obj){
   function chartBar(key,objVal,menorEsMejor){
     var nombres={AI:'Asset Intensity %',PP:'Paro Planeado %',PNP:'Paro No Planeado %'};
     var ok_col=menorEsMejor?function(v){return v<=objVal;}:function(v){return v>=objVal;};
-    // Barras azules en detalle, sin Pareto line, sin color segun objetivo
-    var items=dias.map(function({data,label},i){
-      return {label:label,value:data[key],color:'#3b82f6',idx:i};
+    // En detalle: verde/rojo según objetivo
+    var items=dias.map(function(dia,i){
+      var val=dia.data[key];
+      var ok=menorEsMejor?val<=objVal:val>=objVal;
+      return {label:dia.label,value:val,color:ok?'#16a34a':'#dc2626',idx:i};
     });
     var chart=svgPareto(items,{showLine:false,pct:true});
     return '<div style="background:#fff;border-radius:12px;padding:14px 14px 24px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,.08)">'
