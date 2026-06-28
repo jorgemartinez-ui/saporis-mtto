@@ -2773,7 +2773,14 @@ function ajustarGraficaKPI(eje,delta){
   if(eje==='H') _kpiChartH=Math.max(200,Math.min(900,_kpiChartH+delta));
   else _kpiBarW=Math.max(20,Math.min(200,_kpiBarW+delta));
   var cur=window._kpiParetoCurrent;
-  if(cur) mostrarParetoKPI(cur.evs,cur.tipo,window._kpiObjActual,cur.groupBy,cur.titulo);
+  if(!cur) return;
+  if(cur.groupBy==='linea_stats'){
+    // Re-renderizar Pareto de líneas sin volver a cargar datos
+    _renderParetoLineas(cur.tipo,cur.lineaItems,window._kpiObjActual);
+  } else {
+    // Re-renderizar Pareto normal
+    mostrarParetoKPI(cur.evs,cur.tipo,window._kpiObjActual,cur.groupBy,_kpiParetoStack.length?_kpiParetoStack[_kpiParetoStack.length-1].titulo:cur.tipo);
+  }
 }
 
 async function irKPI(){
@@ -3044,10 +3051,15 @@ function mostrarParetoLineas(tipo,data,obj){
 function _renderParetoLineas(tipo,items,obj){
   var cont=document.getElementById('kpi-cont');if(!cont)return;
   var modo=_kpiLineaModo;
-  var svgItems=items.map(function(item){
-    return{label:item.label,value:modo==='pct'?item.pct:item.min,cumPct:item.cumPct,color:item.color};
+  // Re-ordenar de mayor a menor según el modo activo y recalcular cumPct
+  var sorted=[].concat(items).sort(function(a,b){return modo==='pct'?b.pct-a.pct:b.min-a.min;});
+  var totalMin=sorted.reduce(function(s,i){return s+i.min;},0);
+  var acum=0;
+  sorted.forEach(function(item){acum+=item.min;item.cumPct=totalMin>0?Math.round(acum/totalMin*100):0;});
+  var svgItems=sorted.map(function(item){
+    return{label:item.label,value:modo==='pct'?item.pct:item.min,cumPct:item.cumPct,color:item.color,comments:item.comments||[]};
   });
-  window._kpiParetoCurrent={items:svgItems,tipo,groupBy:'linea_stats',evs:[],lineaItems:items};
+  window._kpiParetoCurrent={items:svgItems,tipo,groupBy:'linea_stats',evs:[],lineaItems:sorted};
   var chart=svgPareto(svgItems,{showMin:modo==='min',showLine:true,pct:modo==='pct'});
   var btnS='padding:4px 10px;border:1.5px solid #000;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer';
   var html='<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">'
