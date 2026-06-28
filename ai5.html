@@ -3060,8 +3060,8 @@ function mostrarParetoLineas(tipo,data,obj){
 function _renderParetoLineas(tipo,items,obj){
   var cont=document.getElementById('kpi-cont');if(!cont)return;
   var modo=_kpiLineaModo;
-  // Siempre ordenar por minutos descendente — mismo orden en % y min (Pareto real)
-  var sorted=[].concat(items).sort(function(a,b){return b.min-a.min;});
+  // Ordenar por el valor que se muestra — barras siempre de mayor a menor
+  var sorted=[].concat(items).sort(function(a,b){return modo==='pct'?b.pct-a.pct:b.min-a.min;});
   var totalMin=sorted.reduce(function(s,i){return s+i.min;},0);
   var acum=0;
   sorted.forEach(function(item){acum+=item.min;item.cumPct=totalMin>0?Math.round(acum/totalMin*100):0;});
