@@ -57,7 +57,31 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
     <span style="font-size:36px;margin-right:8px">📈</span>
     <button onclick="doLogout()" style="background:rgba(255,255,255,.1);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer">Salir</button>
   </div>
-  <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr 1fr;height:calc(100% - 56px)">
+  <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr;height:calc(100% - 56px)">
+    <button onclick="irDashboard()" style="background:#16a34a;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:16px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:38px">📊</span>Dashboard
+    </button>
+    <button onclick="irArrancar()" style="background:#0891b2;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:16px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:38px">🖥️</span>Consola del Operador
+    </button>
+    <button onclick="irDashConsola()" style="background:#0f766e;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:14px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:38px">📺</span>Dashboard Consola del Operador
+    </button>
+    <button onclick="irKPI()" style="background:#7c3aed;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:16px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:38px">🎯</span>KPI
+    </button>
+    <button onclick="irConsultas()" style="background:#0d2144;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:16px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:38px">📈</span>Line Summary
+    </button>
+    <button id="btn-home-admin" onclick="go('s-admin-hub')" style="background:#374151;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:16px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:38px">⚙️</span>Administración
+    </button>
+    <div id="btn-home-placeholder" style="background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;outline:2px solid rgba(0,0,0,.3)">
+      <div style="font-size:36px">🏭</div>
+      <div style="color:rgba(255,255,255,.3);font-size:12px;font-weight:700;font-family:Nunito,sans-serif">Saporis</div>
+    </div>
+  </div>
+</div>
     <button onclick="irDashboard()" style="background:#16a34a;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:15px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
       <span style="font-size:32px">📊</span>Dashboard
     </button>
@@ -794,7 +818,7 @@ function irArrancarLinea(id){
   abrirLinea(id);
 }
 function volverDesdeLinea(){
-  go(ORIGEN_LINEA==='consultas'?'s-consultas':ORIGEN_LINEA==='arrancar'?'s-arrancar':'s-lista');
+  go(ORIGEN_LINEA==='consultas'?'s-consultas':ORIGEN_LINEA==='arrancar'?'s-arrancar':ORIGEN_LINEA==='dash-consola'?'s-dash-consola':'s-lista');
 }
 
 // ── LISTA DE LÍNEAS ───────────────────────────────────────────
@@ -3118,15 +3142,26 @@ async function irDashConsola(){
   await renderDashConsola();
   TIMER=setInterval(renderDashConsola,30000);
 }
+function mostrarTipDC(ev,tipo,rc,com,durMin){
+  var tip=document.getElementById('kpi-bar-tip');
+  if(!tip){tip=document.createElement('div');tip.id='kpi-bar-tip';
+    tip.style.cssText='position:fixed;z-index:9999;background:#1a1a2e;color:#fff;padding:8px 12px;border-radius:8px;font-size:12px;font-family:Nunito,sans-serif;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.3);max-width:200px;line-height:1.4';
+    document.body.appendChild(tip);}
+  var tipos={corriendo:'▶ Corriendo',pp:'⏸ Paro Planeado',pnp:'⛔ Paro No Planeado',detenida:'🔧 Detenida'};
+  tip.innerHTML='<b>'+(tipos[tipo]||tipo)+'</b><br>'+(rc&&rc!=='Sin clasificar'?rc+'<br>':'')+(com?'<span style="color:#d1d5db">'+com+'</span><br>':'')+'<span style="color:#9ca3af">'+durMin+' min</span>';
+  tip.style.display='block';
+  tip.style.left=Math.min(ev.clientX+12,window.innerWidth-220)+'px';
+  tip.style.top=(ev.clientY-60)+'px';
+}
 async function renderDashConsola(){
   var cont=document.getElementById('dash-consola-cont'); if(!cont) return;
   var lin=await db('ai_lineas','GET',null,'activa=eq.true&order=area.asc,nombre.asc');
   LINEAS=lin||LINEAS;
   var h=hoy(),t=turno(),tsI=tIni(t,h),tsF=tsI+8*3600000,ahora=Math.min(Date.now(),tsF),dur=ahora-tsI;
   var sub=document.getElementById('dash-consola-sub');
-  if(sub) sub.textContent='Turno '+t+' · '+new Date(tsI).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+' – '+new Date(tsF).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
+  if(sub) sub.textContent='Turno '+t+' \xb7 '+new Date(tsI).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+' \u2013 '+new Date(tsF).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
   var ords=await db('ai_ordenes','GET',null,'estado=eq.abierta')||[];
-  var ids=LINEAS.map(l=>l.id);
+  var ids=LINEAS.map(function(l){return l.id;});
   var evsTodos=ids.length?await db('ai_eventos','GET',null,'linea_id=in.('+ids.join(',')+')'+'&ts_inicio=gte.'+(tsI-9*3600000)+'&ts_inicio=lt.'+tsF+'&order=ts_inicio.asc')||[]:[];
   var html='';
   LINEAS.forEach(function(l){
@@ -3148,7 +3183,6 @@ async function renderDashConsola(){
     }
     var tO=tC+tPP+tPNP,ai=tO>0?Math.round(tC/tO*100):0,pp=tO>0?Math.round(tPP/tO*100):0,pnp=tO>0?Math.round(tPNP/tO*100):0;
     var oAI=l.objetivo_ai||85,oPP=l.objetivo_pp||10,oPNP=l.objetivo_pnp||10;
-    // Timeline
     var tlSegs=ord?segmentosConGaps(lEvs,tsIef,ahora):[];
     var tlHTML='';
     if(dur>0){
@@ -3156,15 +3190,18 @@ async function renderDashConsola(){
       tlSegs.forEach(function(seg){
         var si=Math.max(Number(seg.ts_inicio),tsIef),sf=Math.min(seg._dfin||ahora,ahora),d=Math.max(0,sf-si);
         var p=(d/dur*100).toFixed(2); if(parseFloat(p)<0.05) return;
-        var col=seg.tipo==='corriendo'?'#16a34a':seg.tipo==='pp'?'#3b82f6':seg.tipo==='pnp'?'#ef4444':'#9ca3af';
-        tlHTML+='<div style="width:'+p+'%;background:'+col+';height:100%"></div>';
+        var col=seg.tipo==='corriendo'?'#16a34a':seg.tipo==='pp'?'#f59e0b':seg.tipo==='pnp'?'#ef4444':'#9ca3af';
+        var rc=(seg.reason_code||'Sin clasificar').replace(/'/g,"&#39;");
+        var com=(seg.comentario||'').replace(/'/g,"&#39;");
+        var durMin=Math.round(d/60000);
+        tlHTML+='<div onmouseenter="mostrarTipDC(event,\''+seg.tipo+'\',\''+rc+'\',\''+com+'\','+durMin+')" onmouseleave="ocultarTipKPI()" style="width:'+p+'%;background:'+col+';height:100%;cursor:default"></div>';
       });
       if(ahora<tsF){var pRem=((tsF-ahora)/dur*100).toFixed(2);tlHTML+='<div style="width:'+pRem+'%;background:#e5e7eb;height:100%"></div>';}
     }
-    html+='<div onclick="abrirLinea(\''+l.id+'\')" style="margin-bottom:8px;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.08);cursor:pointer;transition:box-shadow .15s" onmousedown="this.style.boxShadow=\'0 0 0 2px #0f766e\'" onmouseup="this.style.boxShadow=\'0 2px 6px rgba(0,0,0,.08)\'" onmouseleave="this.style.boxShadow=\'0 2px 6px rgba(0,0,0,.08)\'">'
+    html+='<div onclick="ORIGEN_LINEA=\'dash-consola\';abrirLinea(\''+l.id+'\')" style="margin-bottom:8px;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.08);cursor:pointer;transition:box-shadow .15s" onmousedown="this.style.boxShadow=\'0 0 0 2px #0f766e\'" onmouseup="this.style.boxShadow=\'0 2px 6px rgba(0,0,0,.08)\'" onmouseleave="this.style.boxShadow=\'0 2px 6px rgba(0,0,0,.08)\'">'
       +'<div style="background:#0d2144;color:#fff;padding:5px 12px;font-size:12px;font-weight:800;display:flex;justify-content:space-between;align-items:center">'
       +'<span>'+l.nombre+'</span>'
-      +'<span style="opacity:.65;font-size:10px">'+(ord?'Folio: '+(ord.folio||'—')+(ord.producto_nombre?' · '+ord.producto_nombre:''):'Sin orden')+'</span>'
+      +'<span style="opacity:.65;font-size:10px">'+(ord?'Folio: '+(ord.folio||'\u2014')+(ord.producto_nombre?' \xb7 '+ord.producto_nombre:''):'Sin orden')+'</span>'
       +'</div>'
       +'<div style="display:flex;align-items:center;gap:8px;padding:7px 10px">'
       +'<div style="display:flex;gap:3px;flex-shrink:0">'
@@ -3174,11 +3211,9 @@ async function renderDashConsola(){
       +'</div>'
       +'<div style="flex:1;height:22px;border-radius:4px;overflow:hidden;display:flex;min-width:0">'
       +(tlHTML||'<div style="width:100%;background:#e5e7eb;height:100%"></div>')
-      +'</div>'
-      +'</div>'
-      +'</div>';
+      +'</div></div></div>';
   });
-  if(!html) html='<div style="text-align:center;padding:32px;color:#9ca3af">No hay líneas activas</div>';
+  if(!html) html='<div style="text-align:center;padding:32px;color:#9ca3af">No hay l\xedneas activas</div>';
   cont.innerHTML=html;
 }
 
