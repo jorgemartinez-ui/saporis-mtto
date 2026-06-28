@@ -2614,6 +2614,7 @@ function svgPareto(items,opts){
   items=items.slice(0,10);
   var n=items.length; if(!n) return '<div style="text-align:center;color:#9ca3af;padding:12px">Sin datos</div>';
   var BAR_W=opts.barW||_kpiBarW||60,BAR_GAP=Math.max(8,Math.round(BAR_W*0.3));
+  var PAD_L=20,PAD_R=40,PAD_T=40,PAD_B=60;
   var cW=n*(BAR_W+BAR_GAP)-BAR_GAP;
   var pixW=cW+PAD_L+PAD_R;
   var pixH=opts.pixH||_kpiChartH||480;
