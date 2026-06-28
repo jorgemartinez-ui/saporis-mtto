@@ -57,7 +57,34 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
     <span style="font-size:36px;margin-right:8px">📈</span>
     <button onclick="doLogout()" style="background:rgba(255,255,255,.1);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer">Salir</button>
   </div>
-  <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr;height:calc(100% - 56px)">
+  <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr 1fr;height:calc(100% - 56px)">
+    <button onclick="irDashboard()" style="background:#16a34a;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:15px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:32px">📊</span>Dashboard
+    </button>
+    <button onclick="irArrancar()" style="background:#0891b2;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:15px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:32px">🖥️</span>Consola del Operador
+    </button>
+    <button onclick="irConsultas()" style="background:#0d2144;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:15px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:32px">📈</span>Line Summary
+    </button>
+    <button onclick="irKPI()" style="background:#7c3aed;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:15px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:32px">🎯</span>KPI
+    </button>
+    <button onclick="irDashConsola()" style="background:#0f766e;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:13px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:32px">📺</span>Dashboard Consola del Operador
+    </button>
+    <button id="btn-home-admin" onclick="go('s-admin-hub')" style="background:#374151;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:15px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:32px">⚙️</span>Administración
+    </button>
+    <div id="btn-home-placeholder" style="background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;outline:2px solid rgba(0,0,0,.3)">
+      <div style="font-size:32px">🏭</div>
+      <div style="color:rgba(255,255,255,.3);font-size:12px;font-weight:700;font-family:Nunito,sans-serif">Saporis</div>
+    </div>
+    <div style="background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;outline:2px solid rgba(0,0,0,.3)">
+      <div style="color:rgba(255,255,255,.15);font-size:11px;font-weight:700;font-family:Nunito,sans-serif">Saporis Comercial</div>
+    </div>
+  </div>
+</div>>
     <button onclick="irDashboard()" style="background:#16a34a;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:17px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
       <span style="font-size:38px">📊</span>Dashboard
     </button>
@@ -152,6 +179,16 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
     <button onclick="recargarSHO()" style="background:rgba(255,255,255,.2);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer">↻</button>
   </div>
   <div class="scroll" id="sho-cont" style="padding:10px"></div>
+</div>
+
+<!-- Dashboard Consola del Operador -->
+<div id="s-dash-consola" class="screen">
+  <div class="topbar" style="background:#0f766e">
+    <button class="topbar-back" onclick="go('s-home');if(TIMER){clearInterval(TIMER);TIMER=null;}">←</button>
+    <div style="flex:1"><div class="topbar-title">📺 Dashboard Consola</div><div class="topbar-sub" id="dash-consola-sub">Turno actual · todas las líneas</div></div>
+    <button onclick="renderDashConsola()" style="background:rgba(255,255,255,.15);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:16px;cursor:pointer">↻</button>
+  </div>
+  <div class="scroll" id="dash-consola-cont" style="padding:8px 10px"></div>
 </div>
 
 <!-- KPI -->
@@ -596,6 +633,8 @@ async function cargarLineSummary(){
   var ths='<th style="'+thS+';text-align:left">Orden</th><th style="'+thS+';text-align:left">Inicio OP</th><th style="'+thS+';text-align:left">Fin OP</th>'
     +cols.map(c=>'<th title="'+(_lsTooltips[c]||c)+'" style="'+thS+';text-align:right">'+c+'</th>').join('');
   var html='<div style="overflow-x:auto">';
+  // Acumuladores Total Fábrica
+  var gTO=0,gTC=0,gPP=0,gPNP=0,gPzs=0;
   lineasMostrar.forEach(l=>{
     var ordsL=ords.filter(o=>o.linea_id===l.id);
     if(!ordsL.length){
@@ -647,6 +686,7 @@ async function cargarLineSummary(){
     });
     var totAI=totTO>0?Math.round(totTC/totTO*100):0, totPPp=totTO>0?Math.round(totPP/totTO*100):0, totPNPp=totTO>0?Math.round(totPNP/totTO*100):0;
     var totInex=l.target_hora>0?Math.round((totPzs-(l.target_hora*(totTC/3600000)))/l.target_hora*60):0;
+    gTO+=totTO; gTC+=totTC; gPP+=totPP; gPNP+=totPNP; gPzs+=totPzs;
     html+='<div style="background:#fff;border-bottom:3px solid #e5e7eb">'
       +'<div style="padding:10px 12px;background:#0d2144;color:#fff;font-weight:800;font-size:13px">'+l.nombre+'</div>'
       +'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#f9fafb">'+ths+'</tr></thead><tbody>'+rows.join('')+'</tbody>'
@@ -663,6 +703,26 @@ async function cargarLineSummary(){
       +'<td style="padding:6px 8px;font-size:13px;font-weight:900;text-align:right">'+totAI+'%</td>'
       +'</tr></tfoot></table></div>';
   });
+  // ── Total Fábrica ─────────────────────────────────────────
+  if(gTO>0){
+    var gAI=Math.round(gTC/gTO*100), gPPp=Math.round(gPP/gTO*100), gPNPp=Math.round(gPNP/gTO*100);
+    var oAI=lineasMostrar[0]?.objetivo_ai||85, oPP=lineasMostrar[0]?.objetivo_pp||10, oPNP=lineasMostrar[0]?.objetivo_pnp||10;
+    html+='<div style="background:#fff;border-top:3px solid #1a3c5e;margin-top:4px">'
+      +'<div style="padding:10px 12px;background:#0d2144;color:#fbbf24;font-weight:900;font-size:14px;letter-spacing:.5px">🏭 TOTAL FÁBRICA</div>'
+      +'<table style="width:100%;border-collapse:collapse"><thead><tr style="background:#f9fafb">'+ths+'</tr></thead>'
+      +'<tbody><tr style="background:#f0f4ff">'
+      +'<td colspan="3" style="padding:8px 10px;font-size:12px;font-weight:800;color:#1a3c5e">Todas las líneas · ponderado por TO</td>'
+      +'<td style="padding:8px 10px;font-size:12px;font-weight:800;text-align:right">'+Math.round(gTO/60000)+'</td>'
+      +'<td style="padding:8px 10px;font-size:12px;font-weight:800;text-align:right">'+Math.round(gTC/60000)+'</td>'
+      +'<td style="padding:8px 10px;font-size:12px;font-weight:800;text-align:right">'+Math.round(gPP/60000)+'</td>'
+      +'<td style="padding:8px 10px;font-size:12px;font-weight:800;text-align:right;color:'+(gPPp>=oPP?'#dc2626':'#16a34a')+'">'+gPPp+'%</td>'
+      +'<td style="padding:8px 10px;font-size:12px;font-weight:800;text-align:right">'+Math.round(gPNP/60000)+'</td>'
+      +'<td style="padding:8px 10px;font-size:12px;font-weight:800;text-align:right;color:'+(gPNPp>=oPNP?'#dc2626':'#16a34a')+'">'+gPNPp+'%</td>'
+      +'<td style="padding:8px 10px;font-size:12px;font-weight:800;text-align:right">—</td>'
+      +'<td style="padding:8px 10px;font-size:12px;font-weight:800;text-align:right">'+gPzs.toLocaleString()+'</td>'
+      +'<td style="padding:8px 10px;font-size:14px;font-weight:900;text-align:right;color:'+(gAI>=oAI?'#16a34a':'#dc2626')+'">'+gAI+'%</td>'
+      +'</tr></tbody></table></div>';
+  }
   html+='</div>';
   cont.innerHTML=html;
 }
@@ -2770,7 +2830,7 @@ async function obtenerKPIData(desde,hasta,lineaId){
   var lineaIds=[...new Set(ords.map(o=>o.linea_id))];
   var evsTodos=await db('ai_eventos','GET',null,'linea_id=in.('+lineaIds.join(',')+')'+'&ts_inicio=gte.'+(desde-9*3600000)+'&ts_inicio=lt.'+hasta+'&order=ts_inicio.asc')||[];
   var totTC=0,totPP=0,totPNP=0;
-  var ppEvs=[],pnpEvs=[];
+  var ppEvs=[],pnpEvs=[],lineaStats={};
   ords.forEach(o=>{
     var tsI=Math.max(typeof o.ts_inicio==='string'?new Date(o.ts_inicio).getTime():Number(o.ts_inicio),desde);
     var tsF=o.ts_fin?Math.min(typeof o.ts_fin==='string'?new Date(o.ts_fin).getTime():Number(o.ts_fin),hasta):Math.min(Date.now(),hasta);
@@ -2787,9 +2847,13 @@ async function obtenerKPIData(desde,hasta,lineaId){
     });
     if(cur<tsF)tC+=(tsF-cur);
     totTC+=tC;totPP+=tPP;totPNP+=tPNP;
+    // Per-line stats para Pareto por línea en Detalle
+    var lid=o.linea_id,lnm=o.linea_nombre||o.linea_id;
+    if(!lineaStats[lid]) lineaStats[lid]={nombre:lnm,TC:0,PP:0,PNP:0};
+    lineaStats[lid].TC+=tC; lineaStats[lid].PP+=tPP; lineaStats[lid].PNP+=tPNP;
   });
   var tO=totTC+totPP+totPNP;
-  return{AI:tO>0?Math.round(totTC/tO*100):0,PP:tO>0?Math.round(totPP/tO*100):0,PNP:tO>0?Math.round(totPNP/tO*100):0,TO:tO,ppEvs,pnpEvs};
+  return{AI:tO>0?Math.round(totTC/tO*100):0,PP:tO>0?Math.round(totPP/tO*100):0,PNP:tO>0?Math.round(totPNP/tO*100):0,TO:tO,ppEvs,pnpEvs,lineaStats:Object.values(lineaStats)};
 }
 
 async function cargarKPI(){
@@ -2949,38 +3013,58 @@ async function renderKPIDetalle(lineaId,obj){
     d.setDate(d.getDate()+1);
   }
   if(!dias.length){cont.innerHTML='<div style="text-align:center;padding:32px;color:#9ca3af">Sin datos</div>';return;}
+  // Total del periodo completo para la barra acumulada
+  var totalData=await obtenerKPIData(_kpiDesde,_kpiHasta,lineaId);
   window._kpiObjActual=obj;
 
   function chartBar(key,objVal,menorEsMejor){
     var nombres={AI:'Asset Intensity %',PP:'Paro Planeado %',PNP:'Paro No Planeado %'};
-    var ok_col=menorEsMejor?function(v){return v<=objVal;}:function(v){return v>=objVal;};
-    // En detalle: verde/rojo según objetivo
+    // Calcular total del periodo para la barra acumulada
+    var totVal=totalData[key];
+    var totOk=menorEsMejor?totVal<=objVal:totVal>=objVal;
+    // Items de días + barra Total al final
     var items=dias.map(function(dia,i){
       var val=dia.data[key];
       var ok=menorEsMejor?val<=objVal:val>=objVal;
       return {label:dia.label,value:val,color:ok?'#16a34a':'#dc2626',idx:i};
     });
+    items.push({label:'Total',value:totVal,color:totOk?'#16a34a':'#dc2626',isTotal:true,idx:dias.length});
+    // Guardar para que kpiDrillDownIdx funcione desde barra Total
     var chart=svgPareto(items,{showLine:false,pct:true});
     return '<div style="background:#fff;border-radius:12px;padding:14px 14px 24px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,.08)">'
       +'<div style="font-size:13px;font-weight:800;color:#1a3c5e;margin-bottom:8px">'+nombres[key]+' <span style="font-size:11px;color:#6b7280;font-weight:600">Obj: '+(menorEsMejor?'≤':'≥')+objVal+'%</span></div>'
       +chart
-      +(key!=='AI'?'<div style="font-size:10px;color:#9ca3af;margin-top:4px">Toca una barra para ver Pareto de ese día</div>':'')
+      +'<div style="font-size:10px;color:#9ca3af;margin-top:4px">Toca una barra para ver por línea · Barra derecha = total periodo</div>'
       +'</div>';
   }
 
-  // Guardar función de click por día
+  // Click en Detalle → Pareto por LÍNEA (no por paros)
   window._kpiClickDia=function(diaIdx,key){
-    var dia=dias[diaIdx];
-    if(!dia) return;
-    var evs=key==='PP'?dia.data.ppEvs:dia.data.pnpEvs;
-    if(!evs||!evs.length){toast('Sin datos de '+key+' en este día','#6b7280');return;}
+    var data=diaIdx>=dias.length?totalData:dias[diaIdx]?.data;
+    var label=diaIdx>=dias.length?'Total periodo':(dias[diaIdx]?.label||'');
+    if(!data){return;}
+    var lineaData=data.lineaStats||[];
+    if(!lineaData.length){toast('Sin datos por línea','#6b7280');return;}
+    // Construir eventos sintéticos agrupados por línea para mostrarParetoKPI
+    var evsSinteticos=[];
+    lineaData.forEach(function(l){
+      var min=key==='AI'?Math.round(l.TC/60000):key==='PP'?Math.round(l.PP/60000):Math.round(l.PNP/60000);
+      if(min>0) evsSinteticos.push({rc:l.nombre,com:'',min:min,linea_id:'',linea_nombre:l.nombre});
+    });
+    if(!evsSinteticos.length){toast('Sin datos de '+key+' en este período','#6b7280');return;}
     _kpiParetoStack=[];
-    mostrarParetoKPI(evs,key,obj,null,key+' · '+dia.label);
+    mostrarParetoKPI(evsSinteticos,key,obj,'rc',key+' por línea · '+label);
   };
+  // Asignar _kpiParetoCurrent para cada chartBar (necesario para kpiDrillDownIdx)
+  // Se hace al renderizar; el último chartBar sobrescribirá; usamos función wrapper
+  window._kpiDetalleDias=dias;
+  window._kpiDetalleTotal=totalData;
 
   cont.innerHTML=chartBar('AI',obj.objetivo_ai,false)
     +chartBar('PP',obj.objetivo_pp,true)
     +chartBar('PNP',obj.objetivo_pnp,true);
+  // Después de renderizar, asignar _kpiParetoCurrent con items del último chart activo
+  // Los clicks usan _kpiClickDia directamente
 }
 
 // Admin objetivos KPI fábrica
@@ -3026,6 +3110,78 @@ mostrarParetoKPIActual=function(){
   var obj=window._kpiObjActual;
   // no action — las barras de PP y PNP ya tienen su propio onclick
 };
+
+// ── Dashboard Consola del Operador ───────────────────────────
+async function irDashConsola(){
+  if(TIMER){clearInterval(TIMER);TIMER=null;}
+  go('s-dash-consola');
+  await renderDashConsola();
+  TIMER=setInterval(renderDashConsola,30000);
+}
+async function renderDashConsola(){
+  var cont=document.getElementById('dash-consola-cont'); if(!cont) return;
+  var lin=await db('ai_lineas','GET',null,'activa=eq.true&order=area.asc,nombre.asc');
+  LINEAS=lin||LINEAS;
+  var h=hoy(),t=turno(),tsI=tIni(t,h),tsF=tsI+8*3600000,ahora=Math.min(Date.now(),tsF),dur=ahora-tsI;
+  var sub=document.getElementById('dash-consola-sub');
+  if(sub) sub.textContent='Turno '+t+' · '+new Date(tsI).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+' – '+new Date(tsF).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});
+  var ords=await db('ai_ordenes','GET',null,'estado=eq.abierta')||[];
+  var ids=LINEAS.map(l=>l.id);
+  var evsTodos=ids.length?await db('ai_eventos','GET',null,'linea_id=in.('+ids.join(',')+')'+'&ts_inicio=gte.'+(tsI-9*3600000)+'&ts_inicio=lt.'+tsF+'&order=ts_inicio.asc')||[]:[];
+  var html='';
+  LINEAS.forEach(function(l){
+    var ord=ords.find(function(o){return o.linea_id===l.id;});
+    var lEvs=evsTodos.filter(function(e){return e.linea_id===l.id;});
+    var ordTsI=ord?(typeof ord.ts_inicio==='string'?new Date(ord.ts_inicio).getTime():Number(ord.ts_inicio)):null;
+    var tsIef=ordTsI&&ordTsI>tsI?ordTsI:tsI;
+    var tC=0,tPP=0,tPNP=0,cur=tsIef;
+    if(ord){
+      var segs=segmentosConGaps(lEvs.filter(function(e){return !ordTsI||Number(e.ts_inicio)>=ordTsI;}),tsIef,ahora);
+      segs.forEach(function(seg){
+        var si=Math.max(Number(seg.ts_inicio),tsIef),sf=Math.min(seg._dfin||ahora,ahora),d=Math.max(0,sf-si);
+        if(d===0||seg.tipo==='detenida'){if(d>0)cur=Math.max(cur,sf);return;}
+        if(si>cur)tC+=(si-cur);
+        if(seg.tipo==='corriendo')tC+=d; else if(seg.tipo==='pp')tPP+=d; else if(seg.tipo==='pnp')tPNP+=d;
+        cur=Math.max(cur,sf);
+      });
+      if(cur<ahora)tC+=(ahora-cur);
+    }
+    var tO=tC+tPP+tPNP,ai=tO>0?Math.round(tC/tO*100):0,pp=tO>0?Math.round(tPP/tO*100):0,pnp=tO>0?Math.round(tPNP/tO*100):0;
+    var oAI=l.objetivo_ai||85,oPP=l.objetivo_pp||10,oPNP=l.objetivo_pnp||10;
+    // Timeline
+    var tlSegs=ord?segmentosConGaps(lEvs,tsIef,ahora):[];
+    var tlHTML='';
+    if(dur>0){
+      if(tsIef>tsI){var pPre=((tsIef-tsI)/dur*100).toFixed(2);tlHTML+='<div style="width:'+pPre+'%;background:#e5e7eb;height:100%"></div>';}
+      tlSegs.forEach(function(seg){
+        var si=Math.max(Number(seg.ts_inicio),tsIef),sf=Math.min(seg._dfin||ahora,ahora),d=Math.max(0,sf-si);
+        var p=(d/dur*100).toFixed(2); if(parseFloat(p)<0.05) return;
+        var col=seg.tipo==='corriendo'?'#16a34a':seg.tipo==='pp'?'#3b82f6':seg.tipo==='pnp'?'#ef4444':'#9ca3af';
+        tlHTML+='<div style="width:'+p+'%;background:'+col+';height:100%"></div>';
+      });
+      if(ahora<tsF){var pRem=((tsF-ahora)/dur*100).toFixed(2);tlHTML+='<div style="width:'+pRem+'%;background:#e5e7eb;height:100%"></div>';}
+    }
+    html+='<div onclick="abrirLinea(\''+l.id+'\')" style="margin-bottom:8px;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.08);cursor:pointer;transition:box-shadow .15s" onmousedown="this.style.boxShadow=\'0 0 0 2px #0f766e\'" onmouseup="this.style.boxShadow=\'0 2px 6px rgba(0,0,0,.08)\'" onmouseleave="this.style.boxShadow=\'0 2px 6px rgba(0,0,0,.08)\'">'
+      +'<div style="background:#0d2144;color:#fff;padding:5px 12px;font-size:12px;font-weight:800;display:flex;justify-content:space-between;align-items:center">'
+      +'<span>'+l.nombre+'</span>'
+      +'<span style="opacity:.65;font-size:10px">'+(ord?'Folio: '+(ord.folio||'—')+(ord.producto_nombre?' · '+ord.producto_nombre:''):'Sin orden')+'</span>'
+      +'</div>'
+      +'<div style="display:flex;align-items:center;gap:8px;padding:7px 10px">'
+      +'<div style="display:flex;gap:3px;flex-shrink:0">'
+      +'<div style="background:'+(ai>=oAI?'#16a34a':'#dc2626')+';color:#fff;padding:3px 6px;border-radius:6px;font-size:10px;font-weight:900;white-space:nowrap">AI '+ai+'%</div>'
+      +'<div style="background:'+(pp<=oPP?'#16a34a':'#dc2626')+';color:#fff;padding:3px 6px;border-radius:6px;font-size:10px;font-weight:900;white-space:nowrap">PP '+pp+'%</div>'
+      +'<div style="background:'+(pnp<=oPNP?'#16a34a':'#dc2626')+';color:#fff;padding:3px 6px;border-radius:6px;font-size:10px;font-weight:900;white-space:nowrap">PNP '+pnp+'%</div>'
+      +'</div>'
+      +'<div style="flex:1;height:22px;border-radius:4px;overflow:hidden;display:flex;min-width:0">'
+      +(tlHTML||'<div style="width:100%;background:#e5e7eb;height:100%"></div>')
+      +'</div>'
+      +'</div>'
+      +'</div>';
+  });
+  if(!html) html='<div style="text-align:center;padding:32px;color:#9ca3af">No hay líneas activas</div>';
+  cont.innerHTML=html;
+}
+
 function irSHO(){
   var l=LINEAS.find(x=>x.id===LINEA_ID);
   document.getElementById('sho-sub').textContent=l?l.nombre:'—';
