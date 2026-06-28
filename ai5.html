@@ -2619,8 +2619,8 @@ function svgPareto(items,opts){
   var maxVal=Math.max.apply(null,items.map(function(i){return i.value;}));if(maxVal<1)maxVal=1;
   var barGap=cW/n,barW=Math.max(Math.floor(barGap*0.65),5);
   // Wrapper con altura fija — el SVG se escala dentro sin desbordarse
-  var svg='<div style="width:100%;height:220px;overflow:hidden">'
-    +'<svg viewBox="0 0 '+W+' '+H+'" width="100%" height="220" preserveAspectRatio="none" style="display:block;font-family:Nunito,sans-serif">';
+  var svg='<div style="width:100%;height:300px;overflow:hidden">'
+    +'<svg viewBox="0 0 '+W+' '+H+'" width="90%" height="300" preserveAspectRatio="none" style="display:block;font-family:Nunito,sans-serif">';
   svg+='<g transform="translate('+pL+','+pT+')">';
   svg+='<rect x="0" y="0" width="'+cW+'" height="'+cH+'" fill="#f9fafb" rx="2"/>';
   items.forEach(function(item,i){
