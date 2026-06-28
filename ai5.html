@@ -2613,37 +2613,49 @@ function svgPareto(items,opts){
   opts=opts||{};
   items=items.slice(0,10);
   var n=items.length; if(!n) return '<div style="text-align:center;color:#9ca3af;padding:12px">Sin datos</div>';
-  var W=Math.max(n*28,200),H=88;
-  var pL=4,pR=14,pT=14,pB=18;
-  var cW=W-pL-pR,cH=H-pT-pB;
+  // Dimensiones fijas en píxeles — sin scaling ni distorsión
+  var BAR_W=60, BAR_GAP=20, PAD_L=20, PAD_R=40, PAD_T=40, PAD_B=60;
+  var cW=n*(BAR_W+BAR_GAP)-BAR_GAP;
+  var pixW=cW+PAD_L+PAD_R;
+  var pixH=480;
+  var cH=pixH-PAD_T-PAD_B; // 380px área de barras
   var maxVal=Math.max.apply(null,items.map(function(i){return i.value;}));if(maxVal<1)maxVal=1;
-  var barGap=cW/n,barW=Math.max(Math.floor(barGap*0.65),5);
-  // Wrapper con altura fija — el SVG se escala dentro sin desbordarse
-  var svg='<div style="width:100%;height:400px;overflow:hidden">'
-    +'<svg viewBox="0 0 '+W+' '+H+'" width="90%" height="400" preserveAspectRatio="none" style="display:block;font-family:Nunito,sans-serif">';
-  svg+='<g transform="translate('+pL+','+pT+')">';
-  svg+='<rect x="0" y="0" width="'+cW+'" height="'+cH+'" fill="#f9fafb" rx="2"/>';
+  var svg='<div style="width:100%;overflow-x:auto"><svg width="'+pixW+'" height="'+pixH+'" style="display:block;font-family:Nunito,sans-serif">';
+  svg+='<g transform="translate('+PAD_L+','+PAD_T+')">';
+  // Fondo
+  svg+='<rect x="0" y="0" width="'+cW+'" height="'+cH+'" fill="#f9fafb" rx="4"/>';
+  // Barras
   items.forEach(function(item,i){
-    var bH=item.value>0?Math.max(item.value/maxVal*cH,3):0;
-    var x=i*barGap+(barGap-barW)/2; var y=cH-bH;
+    var bH=item.value>0?Math.max(Math.round(item.value/maxVal*cH),4):0;
+    var x=i*(BAR_W+BAR_GAP);
+    var y=cH-bH;
     var col=item.color||'#3b82f6';
-    if(bH>0) svg+='<rect x="'+x.toFixed(1)+'" y="'+y.toFixed(1)+'" width="'+barW+'" height="'+bH.toFixed(1)+'" fill="'+col+'" rx="2"/>';
+    if(bH>0) svg+='<rect x="'+x+'" y="'+y+'" width="'+BAR_W+'" height="'+bH+'" fill="'+col+'" rx="4"/>';
+    // Valor encima de la barra
     var lbl=opts.showMin?(item.value+' min'):(item.value+(opts.pct!==false?'%':''));
-    if(item.value>0) svg+='<text x="'+(x+barW/2).toFixed(1)+'" y="'+(y+12).toFixed(1)+'" font-size="7" text-anchor="middle" fill="'+col+'" font-weight="700">'+lbl+'</text>';
-    var lab=item.label.length>9?item.label.substring(0,8)+'…':item.label;
-    svg+='<text x="'+(x+barW/2).toFixed(1)+'" y="'+(cH+9).toFixed(1)+'" font-size="6" text-anchor="middle" fill="#9ca3af" transform="rotate(-30,'+(x+barW/2).toFixed(1)+','+(cH+9).toFixed(1)+')">'+lab+'</text>';
+    if(item.value>0) svg+='<text x="'+(x+BAR_W/2)+'" y="'+(y-6)+'" font-size="12" text-anchor="middle" fill="'+col+'" font-weight="700">'+lbl+'</text>';
+    // Etiqueta X rotada
+    var lab=item.label.length>12?item.label.substring(0,11)+'…':item.label;
+    svg+='<text x="'+(x+BAR_W/2)+'" y="'+(cH+14)+'" font-size="11" text-anchor="end" fill="#6b7280" transform="rotate(-35,'+(x+BAR_W/2)+','+(cH+14)+')">'+lab+'</text>';
   });
+  // Línea Pareto
   if(opts.showLine!==false&&items[0]&&items[0].cumPct!==undefined){
-    var pts=items.map(function(item,i){var x=i*barGap+barGap/2;var y=cH-(item.cumPct/100*cH);return x.toFixed(1)+','+y.toFixed(1);});
-    svg+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="#ef4444" stroke-width="1.5"/>';
-    items.forEach(function(item,i){
-      var x=i*barGap+barGap/2;var y=cH-(item.cumPct/100*cH);
-      svg+='<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="2" fill="#ef4444"/>';
-      svg+='<text x="'+x.toFixed(1)+'" y="'+(y-3).toFixed(1)+'" font-size="6" text-anchor="middle" fill="#ef4444">'+item.cumPct+'%</text>';
+    var pts=items.map(function(item,i){
+      var x=i*(BAR_W+BAR_GAP)+BAR_W/2;
+      var y=cH-(item.cumPct/100*cH);
+      return x+','+y;
     });
+    svg+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="#ef4444" stroke-width="2"/>';
+    items.forEach(function(item,i){
+      var x=i*(BAR_W+BAR_GAP)+BAR_W/2;
+      var y=cH-(item.cumPct/100*cH);
+      svg+='<circle cx="'+x+'" cy="'+y+'" r="4" fill="#ef4444"/>';
+      svg+='<text x="'+x+'" y="'+(y-8)+'" font-size="11" text-anchor="middle" fill="#ef4444" font-weight="700">'+item.cumPct+'%</text>';
+    });
+    // Línea 80%
     var y80=cH*(1-0.8);
-    svg+='<line x1="0" y1="'+y80.toFixed(1)+'" x2="'+cW+'" y2="'+y80.toFixed(1)+'" stroke="#ef4444" stroke-width="0.8" stroke-dasharray="3,2" opacity="0.5"/>';
-    svg+='<text x="'+(cW+2)+'" y="'+(y80+3).toFixed(1)+'" font-size="6" fill="#ef4444" opacity="0.7">80%</text>';
+    svg+='<line x1="0" y1="'+y80+'" x2="'+cW+'" y2="'+y80+'" stroke="#ef4444" stroke-width="1" stroke-dasharray="6,4" opacity="0.5"/>';
+    svg+='<text x="'+(cW+4)+'" y="'+(y80+4)+'" font-size="11" fill="#ef4444" opacity="0.7">80%</text>';
   }
   svg+='</g></svg></div>';
   return svg;
