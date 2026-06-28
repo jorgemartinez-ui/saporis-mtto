@@ -229,27 +229,22 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
   <div class="topbar" style="background:#7c3aed">
     <button class="topbar-back" onclick="go('s-home')">←</button>
     <div style="flex:1"><div class="topbar-title">🎯 KPI</div><div class="topbar-sub" id="kpi-sub">—</div></div>
-    <button onclick="cargarKPI()" onmousedown="this.style.background='rgba(0,0,0,.2)'" onmouseup="this.style.background='rgba(255,255,255,.15)'" style="background:rgba(255,255,255,.15);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:16px;cursor:pointer;transition:background .1s">↻</button>
+    <button onclick="cargarKPI()" style="background:rgba(255,255,255,.15);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:16px;cursor:pointer">↻</button>
   </div>
-  <div style="background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:8px 12px">
-    <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;margin-bottom:8px">
+  <div style="background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:7px 12px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:4px">
       <button onclick="kpiSetModo('T')" id="kpi-modo-T" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000">T</button>
-      <button onclick="kpiSetModo('D')" id="kpi-modo-D" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#7c3aed;color:#fff">D</button>
-      <button onclick="kpiSetModo('S')" id="kpi-modo-S" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000">S</button>
+      <button onclick="kpiSetModo('D')" id="kpi-modo-D" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000">D</button>
+      <button onclick="kpiSetModo('S')" id="kpi-modo-S" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#7c3aed;color:#fff">S</button>
       <button onclick="kpiSetModo('M')" id="kpi-modo-M" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000">M</button>
       <button onclick="abrirSeleccionManualKPI()" id="kpi-manual-btn" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:11px;font-weight:800;cursor:pointer;background:#fff;color:#000">Manual</button>
       <button onclick="kpiNavegar(-1)" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;background:#fff;font-size:14px;font-weight:900;cursor:pointer">◄</button>
-      <div id="kpi-periodo-label" style="font-size:11px;font-weight:700;color:#374151;flex:1;text-align:center"></div>
+      <div id="kpi-periodo-label" style="font-size:11px;font-weight:700;color:#374151;padding:0 4px"></div>
       <button onclick="kpiNavegar(1)" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;background:#fff;font-size:14px;font-weight:900;cursor:pointer">►</button>
     </div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <select id="kpi-filtro-linea" onchange="cargarKPI()" style="padding:4px 8px;border:1.5px solid #000;border-radius:7px;font-size:11px;font-weight:700;font-family:Nunito,sans-serif;cursor:pointer;flex:1">
-        <option value="fabrica">🏭 Fábrica (todas)</option>
-      </select>
-      <div style="display:flex;gap:4px">
-        <button onclick="kpiSetVista('resumen')" id="kpi-v-resumen" style="padding:5px 12px;border:1.5px solid #000;border-radius:7px;font-size:11px;font-weight:800;cursor:pointer;background:#7c3aed;color:#fff">Resumen</button>
-        <button onclick="kpiSetVista('detalle')" id="kpi-v-detalle" style="padding:5px 12px;border:1.5px solid #000;border-radius:7px;font-size:11px;font-weight:800;cursor:pointer;background:#fff;color:#000">Detalle</button>
-      </div>
+    <div style="display:flex;gap:4px">
+      <button onclick="kpiSetVista('resumen')" id="kpi-v-resumen" style="padding:5px 12px;border:1.5px solid #000;border-radius:7px;font-size:11px;font-weight:800;cursor:pointer;background:#7c3aed;color:#fff">Resumen</button>
+      <button onclick="kpiSetVista('detalle')" id="kpi-v-detalle" style="padding:5px 12px;border:1.5px solid #000;border-radius:7px;font-size:11px;font-weight:800;cursor:pointer;background:#fff;color:#000">Detalle</button>
     </div>
   </div>
   <div class="scroll" id="kpi-cont" style="padding:16px"></div>
@@ -2731,15 +2726,15 @@ function svgPareto(items,opts){
   });
   if(opts.showLine!==false&&items[0]&&items[0].cumPct!==undefined){
     var pts=items.map(function(item,i){var x=i*(BAR_W+BAR_GAP)+BAR_W/2;var y=cH-(item.cumPct/100*cH);return x+','+y;});
-    svg+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="#ef4444" stroke-width="2" style="pointer-events:none"/>';
+    svg+='<polyline points="'+pts.join(' ')+'" fill="none" stroke="#111" stroke-width="2" style="pointer-events:none"/>';
     items.forEach(function(item,i){
       var x=i*(BAR_W+BAR_GAP)+BAR_W/2;var y=cH-(item.cumPct/100*cH);
-      svg+='<circle cx="'+x+'" cy="'+y+'" r="4" fill="#ef4444" style="pointer-events:none"/>';
-      svg+='<text x="'+x+'" y="'+(y-8)+'" font-size="11" text-anchor="middle" fill="#ef4444" font-weight="700" style="pointer-events:none">'+item.cumPct+'%</text>';
+      svg+='<circle cx="'+x+'" cy="'+y+'" r="4" fill="#111" style="pointer-events:none"/>';
+      svg+='<text x="'+x+'" y="'+(y-8)+'" font-size="11" text-anchor="middle" fill="#111" font-weight="700" style="pointer-events:none">'+item.cumPct+'%</text>';
     });
     var y80=cH*(1-0.8);
-    svg+='<line x1="0" y1="'+y80+'" x2="'+cW+'" y2="'+y80+'" stroke="#ef4444" stroke-width="1" stroke-dasharray="6,4" opacity="0.5" style="pointer-events:none"/>';
-    svg+='<text x="'+(cW+4)+'" y="'+(y80+4)+'" font-size="11" fill="#ef4444" opacity="0.7" style="pointer-events:none">80%</text>';
+    svg+='<line x1="0" y1="'+y80+'" x2="'+cW+'" y2="'+y80+'" stroke="#666" stroke-width="1" stroke-dasharray="6,4" style="pointer-events:none"/>';
+    svg+='<text x="'+(cW+4)+'" y="'+(y80+4)+'" font-size="11" fill="#666" style="pointer-events:none">80%</text>';
   }
   svg+='</g></svg></div>';
   return svg;
@@ -2786,18 +2781,38 @@ function ajustarGraficaKPI(eje,delta){
 async function irKPI(){
   if(TIMER){clearInterval(TIMER);TIMER=null;}
   go('s-kpi');
-  var lin=await db('ai_lineas','GET',null,'activa=eq.true&order=area.asc,nombre.asc');
-  LINEAS=lin||LINEAS;
-  // Dropdown: Fábrica primero, luego Fabricación, luego Envasado
-  var fab=LINEAS.filter(l=>(l.area||'envasado')==='fabricacion');
-  var env=LINEAS.filter(l=>(l.area||'envasado')==='envasado');
-  var sel=document.getElementById('kpi-filtro-linea');
-  if(sel) sel.innerHTML='<option value="fabrica">🏭 Fábrica (todas)</option>'
-    +'<option value="fabricacion">⚙️ Fabricación (dept.)</option>'
-    +'<option value="envasado">📦 Envasado (dept.)</option>'
-    +(fab.length?'<optgroup label="— Fabricación">'+fab.map(l=>'<option value="'+l.id+'">'+l.nombre+'</option>').join('')+'</optgroup>':'')
-    +(env.length?'<optgroup label="— Envasado">'+env.map(l=>'<option value="'+l.id+'">'+l.nombre+'</option>').join('')+'</optgroup>':'');
-  kpiSetModo('D');
+  kpiSetModo('S'); // Default: semanal
+}
+
+async function cargarKPI(){
+  if(!_kpiDesde) kpiActualizarRango();
+  var cont=document.getElementById('kpi-cont');
+  if(!cont) return;
+  _kpiParetoStack=[];
+  cont.innerHTML='<div style="text-align:center;padding:32px;color:#9ca3af">Cargando...</div>';
+  // Cargar datos para Fábrica, Fabricación y Envasado en paralelo
+  var [dataFab,dataFabr,dataEnv,objsFab,objsFabr,objsEnv]=await Promise.all([
+    obtenerKPIData(_kpiDesde,_kpiHasta,'fabrica'),
+    obtenerKPIData(_kpiDesde,_kpiHasta,'fabricacion'),
+    obtenerKPIData(_kpiDesde,_kpiHasta,'envasado'),
+    db('ai_kpi_objetivos','GET',null,'id=eq.fabrica'),
+    db('ai_kpi_objetivos','GET',null,'id=eq.fabricacion'),
+    db('ai_kpi_objetivos','GET',null,'id=eq.envasado')
+  ]);
+  var defObj={objetivo_ai:85,objetivo_pp:10,objetivo_pnp:10};
+  var objFab=objsFab&&objsFab.length?objsFab[0]:defObj;
+  var objFabr=objsFabr&&objsFabr.length?objsFabr[0]:objFab;
+  var objEnv=objsEnv&&objsEnv.length?objsEnv[0]:objFab;
+  window._kpiEntidades={
+    fabrica:{data:dataFab,obj:objFab,id:'fabrica'},
+    fabricacion:{data:dataFabr,obj:objFabr,id:'fabricacion'},
+    envasado:{data:dataEnv,obj:objEnv,id:'envasado'}
+  };
+  window._kpiDataActual=dataFab;
+  window._kpiObjActual=objFab;
+  document.getElementById('kpi-sub').textContent='Semana actual · Fábrica / Fabricación / Envasado';
+  if(_kpiVista==='resumen') renderKPIHome(window._kpiEntidades);
+  else await renderKPIDetalle('fabrica',objFab);
 }
 function kpiSetModo(m){
   _kpiModo=m; _kpiOffset=0;
@@ -2924,41 +2939,50 @@ async function cargarKPI(){
   else await renderKPIDetalle(lineaId,obj);
 }
 
-function renderKPIResumen(data,obj,lineaId){
-  var cont=document.getElementById('kpi-cont');
-  if(!cont) return;
-  window._kpiDataActual=data;
-  window._kpiObjActual=obj;
-  lineaId=lineaId||document.getElementById('kpi-filtro-linea')?.value||'fabrica';
-  var esDeptOFabrica=lineaId==='fabrica'||lineaId==='fabricacion'||lineaId==='envasado';
-  window._kpiClickPP=function(){
-    if(esDeptOFabrica) mostrarParetoLineas('PP',data,obj);
-    else mostrarParetoKPI(data.ppEvs,'PP',obj,'rc','PP');
-  };
-  window._kpiClickPNP=function(){
-    if(esDeptOFabrica) mostrarParetoLineas('PNP',data,obj);
-    else mostrarParetoKPI(data.pnpEvs,'PNP',obj,'rc','PNP');
-  };
-  // Compatibilidad con _kpiClicks
-  window._kpiClicks={PP:window._kpiClickPP,PNP:window._kpiClickPNP};
-  var bars=[
-    {key:'AI',val:data.AI,obj:obj.objetivo_ai,ok:data.AI>=obj.objetivo_ai,tieneClick:false},
-    {key:'PP',val:data.PP,obj:obj.objetivo_pp,ok:data.PP<=obj.objetivo_pp,tieneClick:true},
-    {key:'PNP',val:data.PNP,obj:obj.objetivo_pnp,ok:data.PNP<=obj.objetivo_pnp,tieneClick:true},
-  ];
-  var nombres={AI:'Asset Intensity',PP:'Paro Planeado',PNP:'Paro No Planeado'};
-  cont.innerHTML='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px">'
-    +bars.map(function(b){
-      var fn=b.key==='PP'?'window._kpiClickPP()':b.key==='PNP'?'window._kpiClickPNP()':'';
-      return '<div onclick="'+fn+'" style="background:'+(b.ok?'#16a34a':'#dc2626')+';border-radius:14px;padding:20px 10px;text-align:center;cursor:'+(b.tieneClick?'pointer':'default')+';box-shadow:0 4px 12px rgba(0,0,0,.15);transition:filter .15s" '+(b.tieneClick?'onmousedown="this.style.filter=\'brightness(.85)\'" onmouseup="this.style.filter=\'\'" onmouseleave="this.style.filter=\'\'"':'')+' >'
-        +'<div style="color:rgba(255,255,255,.8);font-size:11px;font-weight:700">'+nombres[b.key]+'</div>'
-        +'<div style="color:#fff;font-size:42px;font-weight:900;line-height:1;margin:10px 0">'+b.val+'%</div>'
-        +'<div style="color:rgba(255,255,255,.7);font-size:11px">Obj: '+(b.key==='AI'?'≥':'≤')+b.obj+'%</div>'
-        +(b.tieneClick?'<div style="color:rgba(255,255,255,.6);font-size:10px;margin-top:6px">Toca para Pareto →</div>':'')
-        +'</div>';
-    }).join('')
-    +'</div>'
-    +(data.TO>0?'<div style="text-align:center;font-size:12px;color:#6b7280">Tiempo Ocupado total: '+Math.round(data.TO/60000).toLocaleString()+' min</div>':'<div style="text-align:center;color:#9ca3af;padding:20px">Sin datos en este periodo</div>');
+function renderKPIHome(entidades){
+  var cont=document.getElementById('kpi-cont'); if(!cont) return;
+  function tarjeta(ent,esPrincipal){
+    var d=ent.data,obj=ent.obj,id=ent.id;
+    var labels={fabrica:'🏭 Fábrica (todas)',fabricacion:'⚙️ Fabricación',envasado:'📦 Envasado'};
+    var aiOk=d.AI>=obj.objetivo_ai,ppOk=d.PP<=obj.objetivo_pp,pnpOk=d.PNP<=obj.objetivo_pnp;
+    var pad=esPrincipal?'20px':'14px', fsTit=esPrincipal?'15px':'12px';
+    var fsBig=esPrincipal?'38px':'26px', fsLbl=esPrincipal?'11px':'10px';
+    var gap=esPrincipal?'10px':'6px';
+    return '<div style="background:#fff;border-radius:16px;padding:'+pad+';box-shadow:0 2px 10px rgba(0,0,0,.09);margin-bottom:12px">'
+      +'<div style="font-size:'+fsTit+';font-weight:900;color:#1a3c5e;margin-bottom:'+gap+'">'+labels[id]+'</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:'+gap+'">'
+      // AI
+      +'<div onclick="kpiCardClick(\''+id+'\',\'AI\')" style="background:'+(aiOk?'#16a34a':'#dc2626')+';border-radius:12px;padding:'+pad+';text-align:center;cursor:default">'
+        +'<div style="color:rgba(255,255,255,.8);font-size:'+fsLbl+';font-weight:700">Asset Intensity</div>'
+        +'<div style="color:#fff;font-size:'+fsBig+';font-weight:900;line-height:1.1;margin:4px 0">'+d.AI+'%</div>'
+        +'<div style="color:rgba(255,255,255,.7);font-size:10px">Obj ≥'+obj.objetivo_ai+'%</div>'
+      +'</div>'
+      // PP
+      +'<div onclick="kpiCardClick(\''+id+'\',\'PP\')" style="background:'+(ppOk?'#16a34a':'#dc2626')+';border-radius:12px;padding:'+pad+';text-align:center;cursor:pointer;transition:filter .15s" onmousedown="this.style.filter=\'brightness(.85)\'" onmouseup="this.style.filter=\'\'" onmouseleave="this.style.filter=\'\'">'
+        +'<div style="color:rgba(255,255,255,.8);font-size:'+fsLbl+';font-weight:700">Paro Planeado</div>'
+        +'<div style="color:#fff;font-size:'+fsBig+';font-weight:900;line-height:1.1;margin:4px 0">'+d.PP+'%</div>'
+        +'<div style="color:rgba(255,255,255,.7);font-size:10px">Obj ≤'+obj.objetivo_pp+'% · Toca →</div>'
+      +'</div>'
+      // PNP
+      +'<div onclick="kpiCardClick(\''+id+'\',\'PNP\')" style="background:'+(pnpOk?'#16a34a':'#dc2626')+';border-radius:12px;padding:'+pad+';text-align:center;cursor:pointer;transition:filter .15s" onmousedown="this.style.filter=\'brightness(.85)\'" onmouseup="this.style.filter=\'\'" onmouseleave="this.style.filter=\'\'">'
+        +'<div style="color:rgba(255,255,255,.8);font-size:'+fsLbl+';font-weight:700">Paro No Planeado</div>'
+        +'<div style="color:#fff;font-size:'+fsBig+';font-weight:900;line-height:1.1;margin:4px 0">'+d.PNP+'%</div>'
+        +'<div style="color:rgba(255,255,255,.7);font-size:10px">Obj ≤'+obj.objetivo_pnp+'% · Toca →</div>'
+      +'</div>'
+      +'</div>'+(d.TO>0?'<div style="font-size:10px;color:#9ca3af;margin-top:8px;text-align:right">TO: '+Math.round(d.TO/60000).toLocaleString()+' min</div>':'')
+      +'</div>';
+  }
+  cont.innerHTML=tarjeta(entidades.fabrica,true)+tarjeta(entidades.fabricacion,false)+tarjeta(entidades.envasado,false);
+}
+
+function kpiCardClick(entId,tipo){
+  if(tipo==='AI') return; // AI no tiene drill-down
+  var ent=window._kpiEntidades&&window._kpiEntidades[entId];
+  if(!ent) return;
+  window._kpiDataActual=ent.data;
+  window._kpiObjActual=ent.obj;
+  _kpiParetoStack=[];
+  mostrarParetoLineas(tipo,ent.data,ent.obj);
 }
 function mostrarParetoKPIActual(){}  // placeholder
 
@@ -3051,8 +3075,8 @@ function mostrarParetoLineas(tipo,data,obj){
 function _renderParetoLineas(tipo,items,obj){
   var cont=document.getElementById('kpi-cont');if(!cont)return;
   var modo=_kpiLineaModo;
-  // Re-ordenar de mayor a menor según el modo activo y recalcular cumPct
-  var sorted=[].concat(items).sort(function(a,b){return modo==='pct'?b.pct-a.pct:b.min-a.min;});
+  // Siempre ordenar por minutos descendente — mismo orden en % y min (Pareto real)
+  var sorted=[].concat(items).sort(function(a,b){return b.min-a.min;});
   var totalMin=sorted.reduce(function(s,i){return s+i.min;},0);
   var acum=0;
   sorted.forEach(function(item){acum+=item.min;item.cumPct=totalMin>0?Math.round(acum/totalMin*100):0;});
@@ -3131,14 +3155,20 @@ function mostrarParetoKPIDetalle(rc,tipo){
 function kpiParetoBack(){
   _kpiParetoStack.pop();
   if(!_kpiParetoStack.length){
-    var data=window._kpiDataActual, obj=window._kpiObjActual;
-    var lineaId=document.getElementById('kpi-filtro-linea')?.value||'fabrica';
-    if(data&&obj) renderKPIResumen(data,obj,lineaId);
+    // Volver a la vista home de 3 tarjetas
+    var cont=document.getElementById('kpi-cont');
+    if(cont&&window._kpiEntidades) renderKPIHome(window._kpiEntidades);
+    else cargarKPI();
     return;
   }
   var prev=_kpiParetoStack[_kpiParetoStack.length-1];
   _kpiParetoStack.pop();
-  mostrarParetoKPI(prev.evs,prev.tipo,window._kpiObjActual,prev.groupBy,prev.titulo);
+  if(prev.groupBy==='linea_stats'){
+    window._kpiDataActual=prev.dataActual||window._kpiDataActual;
+    _renderParetoLineas(prev.tipo,prev.lineaItems,window._kpiObjActual);
+  } else {
+    mostrarParetoKPI(prev.evs,prev.tipo,window._kpiObjActual,prev.groupBy,prev.titulo);
+  }
 }
 
 async function renderKPIDetalle(lineaId,obj){
