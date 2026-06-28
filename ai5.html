@@ -2790,6 +2790,11 @@ async function cargarKPI(){
   if(!cont) return;
   _kpiParetoStack=[];
   cont.innerHTML='<div style="text-align:center;padding:32px;color:#9ca3af">Cargando...</div>';
+  // Asegurar que LINEAS esté cargado para el filtro por área
+  if(!LINEAS.length){
+    var lin=await db('ai_lineas','GET',null,'activa=eq.true&order=area.asc,nombre.asc');
+    LINEAS=lin||[];
+  }
   // Cargar datos para Fábrica, Fabricación y Envasado en paralelo
   var [dataFab,dataFabr,dataEnv,objsFab,objsFabr,objsEnv]=await Promise.all([
     obtenerKPIData(_kpiDesde,_kpiHasta,'fabrica'),
