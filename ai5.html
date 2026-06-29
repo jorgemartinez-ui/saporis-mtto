@@ -3109,9 +3109,13 @@ function kpiDrillDownIdx(idx){
     _kpiParetoStack.push({tipo:cur.tipo,groupBy:'linea_stats',titulo:cur.tipo,lineaItems:window._kpiLineaItems});
     var evsFilt=(cur.tipo==='PP'?window._kpiDataActual.ppEvs:window._kpiDataActual.pnpEvs)||[];
     var linEvs=evsFilt.filter(function(e){return e.linea_id===linItem.linea_id||e.linea_nombre===linItem.nombre;});
-    kpiDrillDown(linItem.nombre,cur.tipo,'rc',linEvs);
-  } else {
-    kpiDrillDown(item.label,cur.tipo,cur.groupBy==='rc'?'comment':null,cur.evs);
+    if(!linEvs.length){toast('Sin datos '+cur.tipo+' para '+linItem.nombre,'#6b7280');return;}
+    mostrarParetoKPI(linEvs,cur.tipo,window._kpiObjActual,'rc',linItem.nombre);
+  } else if(cur.groupBy==='rc'){
+    var rcEvs=(cur.evs||[]).filter(function(e){return (e.rc||'Sin clasificar')===item.label;});
+    if(!rcEvs.length){toast('Sin comentarios','#6b7280');return;}
+    _kpiParetoStack.push({tipo:cur.tipo,groupBy:'rc',titulo:cur.titulo||'',evs:cur.evs||[]});
+    mostrarParetoKPI(rcEvs,cur.tipo,window._kpiObjActual,'comment',item.label);
   }
 }
 function kpiDrillDown(nombre,tipo,currentGroupBy,evs){
