@@ -215,8 +215,6 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
   <div style="background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:6px 10px;display:flex;align-items:center;gap:5px">
     <button onclick="dcSetModo('T')" id="dc-modo-T" style="padding:4px 9px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#0f766e;color:#fff">T</button>
     <button onclick="dcSetModo('D')" id="dc-modo-D" style="padding:4px 9px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000">D</button>
-    <button onclick="dcSetModo('S')" id="dc-modo-S" style="padding:4px 9px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000">S</button>
-    <button onclick="dcSetModo('M')" id="dc-modo-M" style="padding:4px 9px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000">M</button>
     <button onclick="dcNavegar(-1)" style="padding:4px 9px;border:1.5px solid #000;border-radius:7px;background:#fff;font-size:14px;font-weight:900;cursor:pointer">◄</button>
     <div id="dc-periodo" style="font-size:11px;font-weight:700;color:#374151;flex:1;text-align:center"></div>
     <button onclick="dcNavegar(1)" style="padding:4px 9px;border:1.5px solid #000;border-radius:7px;background:#fff;font-size:14px;font-weight:900;cursor:pointer">►</button>
@@ -2902,7 +2900,9 @@ async function obtenerKPIData(desde,hasta,lineaId){
   ords.forEach(o=>{
     var tsI=Math.max(typeof o.ts_inicio==='string'?new Date(o.ts_inicio).getTime():Number(o.ts_inicio),desde);
     var tsF=o.ts_fin?Math.min(typeof o.ts_fin==='string'?new Date(o.ts_fin).getTime():Number(o.ts_fin),hasta):Math.min(Date.now(),hasta);
-    var oEvs=evsTodos.filter(e=>e.linea_id===o.linea_id&&Number(e.ts_inicio)>=Number(o.ts_inicio));
+    var ordStartMs=typeof o.ts_inicio==='string'?new Date(o.ts_inicio).getTime():Number(o.ts_inicio);
+    var ordEndMs=o.ts_fin?(typeof o.ts_fin==='string'?new Date(o.ts_fin).getTime():Number(o.ts_fin)):hasta;
+    var oEvs=evsTodos.filter(function(e){var ets=Number(e.ts_inicio);return e.linea_id===o.linea_id&&ets>=ordStartMs&&ets<ordEndMs;});
     var tC=0,tPP=0,tPNP=0,cur=tsI;
     oEvs.forEach(e=>{
       var i=Math.max(Number(e.ts_inicio),tsI),f=e.ts_fin?Math.min(Number(e.ts_fin),tsF):tsF,d=Math.max(0,f-i);
@@ -3118,19 +3118,19 @@ function kpiDrillDownIdx(idx){
 }
 // Drill-down genérico
 function kpiDrillDown(nombre,tipo,currentGroupBy){
-  var data=window._kpiDataActual;
-  if(!data) return;
-  var evsTodos=tipo==='PP'?data.ppEvs:data.pnpEvs;
-  var nextGroupBy=currentGroupBy==='linea'?'rc':'comment';
-  // Filtrar eventos por el valor actual
+  var cur=window._kpiParetoCurrent;
+  // Usar evs del contexto actual (ya filtrados a la linea), no los globales de fabrica
+  var evsTodos=cur&&cur.evs&&cur.evs.length?cur.evs:
+    (tipo==='PP'?(window._kpiDataActual&&window._kpiDataActual.ppEvs||[]):(window._kpiDataActual&&window._kpiDataActual.pnpEvs||[]));
+  var nextGroupBy=currentGroupBy==='linea'?'rc':currentGroupBy==='rc'?'comment':null;
+  if(!nextGroupBy) return;
   var filtrados=evsTodos.filter(function(e){
-    if(currentGroupBy==='linea') return (e.linea_nombre||e.linea_id||'Sin línea')===nombre;
+    if(currentGroupBy==='linea') return (e.linea_nombre||e.linea_id||'Sin linea')===nombre;
     if(currentGroupBy==='rc') return (e.rc||'Sin clasificar')===nombre;
     return false;
   });
-  // Buscar el título de la ruta
   var prevTitulo=_kpiParetoStack.length?_kpiParetoStack[_kpiParetoStack.length-1].titulo:'';
-  mostrarParetoKPI(filtrados,tipo,window._kpiObjActual,nextGroupBy,prevTitulo+' › '+nombre);
+  mostrarParetoKPI(filtrados,tipo,window._kpiObjActual,nextGroupBy,prevTitulo+' > '+nombre);
 }
 
 function mostrarParetoKPIDetalle(rc,tipo){
