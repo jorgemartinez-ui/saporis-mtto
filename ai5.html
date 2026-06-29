@@ -2974,9 +2974,7 @@ function mostrarParetoKPIActual(){}  // placeholder
 function mostrarParetoKPI(evs,tipo,obj,groupBy,titulo){
   if(!evs||!evs.length){toast('Sin datos de '+tipo,'#6b7280');return;}
   var cont=document.getElementById('kpi-cont'); if(!cont) return;
-  var keyFn=groupBy==='linea'?function(e){return e.linea_nombre||e.linea_id||'Sin línea';}:
-            groupBy==='comment'?function(e){return e.com||'Sin comentario';}:
-            function(e){return e.rc||'Sin clasificar';};
+  var keyFn=groupBy==='comment'?function(e){return e.com||'Sin comentario';}:function(e){return e.rc||'Sin clasificar';};
   var grupos={};
   evs.forEach(function(e){
     var key=keyFn(e);
@@ -2986,58 +2984,44 @@ function mostrarParetoKPI(evs,tipo,obj,groupBy,titulo){
     if(com&&!grupos[key].comments.includes(com)) grupos[key].comments.push(com);
   });
   var sorted=Object.entries(grupos).sort(function(a,b){return b[1].min-a[1].min;});
-  var total=sorted.reduce(function(s,arr){return s+arr[1].min;},0);
+  var total=sorted.reduce(function(s,arr){return s+arr[1].min;},0)||1;
   var acum=0;
   var items=sorted.map(function(arr){
     var nombre=arr[0],gd=arr[1];acum+=gd.min;
-    return{label:nombre,value:gd.min,cumPct:Math.round(acum/total*100),color:'#3b82f6',comments:gd.comments};
+    return{label:nombre,value:gd.min,min:gd.min,pct:Math.round(gd.min/total*100),cumPct:Math.round(acum/total*100),color:'#3b82f6',comments:gd.comments};
   });
-  // Guardar ANTES del SVG para que onclicks de barras funcionen
-  window._kpiParetoCurrent={items:items,tipo:tipo,groupBy:groupBy,evs:evs};
-  _kpiParetoStack.push({tipo:tipo,groupBy:groupBy,titulo:titulo||tipo,evs:evs});
-  var tituloMostrar=titulo||tipo;
+  window._kpiParetoCurrent={items:items,tipo:tipo,groupBy:groupBy,evs:evs,titulo:titulo};
+  _kpiRcModo='min';
+  if(groupBy==='rc') window._kpiRcCtx={items:items,tipo:tipo,obj:obj,evs:evs};
   var chart=svgPareto(items,{showMin:true,showLine:true});
+  var tituloMostrar=titulo||tipo;
+  var b='padding:4px 10px;border:1.5px solid #000;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer';
   var html='<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">'
     +'<button onclick="kpiParetoBack()" style="padding:6px 12px;background:#f3f4f6;border:1.5px solid #000;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">← Volver</button>'
-    +'<div style="font-size:15px;font-weight:900;color:#1a3c5e;flex:1">Pareto '+tituloMostrar+'</div>'
-    +'<div style="font-size:11px;color:#6b7280">Total: '+total+' min</div>'
-    +'<div style="display:flex;gap:10px;align-items:center">'
-    +'<div style="display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:#6b7280;font-weight:700">Alto:</span>'
-    +'<button onclick="ajustarGraficaKPI(\'H\',-80)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;font-weight:900;cursor:pointer;background:#fff">−</button>'
-    +'<button onclick="ajustarGraficaKPI(\'H\',80)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;font-weight:900;cursor:pointer;background:#fff">+</button></div>'
-    +'<div style="display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:#6b7280;font-weight:700">Ancho:</span>'
-    +'<button onclick="ajustarGraficaKPI(\'W\',-10)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;font-weight:900;cursor:pointer;background:#fff">−</button>'
-    +'<button onclick="ajustarGraficaKPI(\'W\',10)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;font-weight:900;cursor:pointer;background:#fff">+</button></div>'
-    +'</div></div>'
+    +'<div style="font-size:15px;font-weight:900;color:#1a3c5e;flex:1">'+tituloMostrar+'</div>'
+    +(groupBy==='rc'
+      ?'<button onclick="_kpiRcSetModo(\'min\')" id="kpi-rc-btn-min" style="'+b+';background:#7c3aed;color:#fff">Minutos</button>'
+       +'<button onclick="_kpiRcSetModo(\'pct\')" id="kpi-rc-btn-pct" style="'+b+';background:#fff;color:#000">Porcentaje</button>'
+      :'')
+    +'</div>'
+    +'<div style="display:flex;gap:3px;align-items:center;margin-bottom:8px">'
+    +'<span style="font-size:10px;color:#6b7280;font-weight:700">Alto:</span>'
+    +'<button onclick="ajustarGraficaKPI(\'H\',-80)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;cursor:pointer;background:#fff">−</button>'
+    +'<button onclick="ajustarGraficaKPI(\'H\',80)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;cursor:pointer;background:#fff">+</button>'
+    +'<span style="font-size:10px;color:#6b7280;font-weight:700;margin-left:6px">Ancho:</span>'
+    +'<button onclick="ajustarGraficaKPI(\'W\',-10)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;cursor:pointer;background:#fff">−</button>'
+    +'<button onclick="ajustarGraficaKPI(\'W\',10)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;cursor:pointer;background:#fff">+</button>'
+    +'</div>'
     +'<div id="kpi-rc-chart"><div style="background:#fff;border-radius:12px;padding:14px 14px 32px;box-shadow:0 2px 8px rgba(0,0,0,.08);overflow-x:auto">'+chart+'</div></div>'
-    +'<div style="margin-top:8px;display:flex;align-items:center;gap:6px">'
-    +'<div style="width:16px;height:2px;background:#111;border-radius:2px"></div>'
-    +'<div style="font-size:11px;color:#6b7280">Línea negra = % acumulado · Punteada = 80%</div>'
-    +'</div>';
-  var nextGroupBy=groupBy==='linea'?'rc':groupBy==='rc'?'comment':null;
-  if(nextGroupBy){
-    var instruccion=groupBy==='linea'?'Toca una línea para ver sus paros principales':'Toca para ver comentarios';
-    // Nivel RC: agregar botones % / Minutos y guardar contexto para re-render
-    if(groupBy==='rc'){
-      var totalRcMin=items.reduce(function(s,i){return s+i.value;},0)||1;
-      items.forEach(function(item){item.min=item.value;item.pct=Math.round(item.value/totalRcMin*100);});
-      window._kpiRcCtx={items:items,tipo:tipo,obj:obj,evs:evs};
-      var b='padding:4px 10px;border:1.5px solid #000;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer';
-      html+='<div style="display:flex;gap:6px;align-items:center;margin:8px 0" id="kpi-rc-toggle">'
-        +'<button onclick="_kpiRcSetModo(\'min\')" style="'+b+';background:#7c3aed;color:#fff">Minutos</button>'
-        +'<button onclick="_kpiRcSetModo(\'pct\')" style="'+b+';background:#fff;color:#000">Porcentaje</button>'
-        +'</div>';
-      _kpiRcModo='min';
-    }
-    html+='<div id="kpi-rc-list" style="margin-top:6px;background:#fff;border-radius:12px;padding:6px;box-shadow:0 2px 6px rgba(0,0,0,.06)"><div style="font-size:10px;color:#9ca3af;padding:4px 10px">Toca para ver comentarios del operador</div>';
-    items.forEach(function(item,i){
-      html+='<div onclick="kpiDrillDownIdx('+i+')" style="display:flex;justify-content:space-between;padding:6px 10px;border-bottom:1px solid #f3f4f6;cursor:pointer;font-size:11px" onmousedown="this.style.background=\'#f9fafb\'" onmouseup="this.style.background=\'\'" onmouseleave="this.style.background=\'\'">'
-        +'<span style="font-weight:700">'+(i+1)+'. '+item.label+'</span>'
-        +'<span style="color:#6b7280">'+item.value+' min · '+item.cumPct+'%'+(item.cumPct<=80?' 🔵':'')+'</span>'
-        +'</div>';
-    });
-    html+='</div>';
-  }
+    +'<div id="kpi-rc-list" style="margin-top:6px;background:#fff;border-radius:12px;padding:6px;box-shadow:0 2px 6px rgba(0,0,0,.06)">'
+    +'<div style="font-size:10px;color:#9ca3af;padding:4px 10px">'+(groupBy==='rc'?'Toca para ver comentarios del operador':'Comentarios')+'</div>';
+  items.forEach(function(item,i){
+    html+='<div onclick="kpiDrillDownIdx('+i+')" style="display:flex;justify-content:space-between;padding:6px 10px;border-bottom:1px solid #f3f4f6;cursor:pointer;font-size:11px" onmousedown="this.style.background=\'#f9fafb\'" onmouseup="this.style.background=\'\'" onmouseleave="this.style.background=\'\'">'
+      +'<span style="font-weight:700">'+(i+1)+'. '+item.label+'</span>'
+      +'<span style="color:#6b7280">'+item.value+' min · '+item.cumPct+'%'+(item.cumPct<=80?' 🔵':'')+'</span>'
+      +'</div>';
+  });
+  html+='</div>';
   cont.innerHTML=html;
 }
 var _kpiLineaModo='pct';
@@ -3190,15 +3174,14 @@ function _kpiRcSetModo(modo){
     acum+=item.min;
     return{label:item.label,value:modo==='pct'?item.pct:item.min,cumPct:Math.round(acum/totalMin*100),color:'#3b82f6',comments:item.comments||[]};
   });
-  window._kpiParetoCurrent={items:svgItems,tipo:ctx.tipo,groupBy:'rc',evs:ctx.evs};
+  window._kpiParetoCurrent.items=svgItems;
   var chart=svgPareto(svgItems,{showMin:modo==='min',showLine:true,pct:modo==='pct'});
-  var b='padding:4px 10px;border:1.5px solid #000;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer';
-  var pB=modo==='pct'?'#7c3aed':'#fff',pC=modo==='pct'?'#fff':'#000';
-  var mB=modo==='min'?'#7c3aed':'#fff',mC=modo==='min'?'#fff':'#000';
-  var tog=document.getElementById('kpi-rc-toggle');
-  if(tog) tog.innerHTML='<button onclick="_kpiRcSetModo(\'pct\')" style="'+b+';background:'+pB+';color:'+pC+'">Porcentaje</button> <button onclick="_kpiRcSetModo(\'min\')" style="'+b+';background:'+mB+';color:'+mC+'">Minutos</button>';
   var ch=document.getElementById('kpi-rc-chart');
   if(ch) ch.innerHTML='<div style="background:#fff;border-radius:12px;padding:14px 14px 32px;box-shadow:0 2px 8px rgba(0,0,0,.08);overflow-x:auto">'+chart+'</div>';
+  var bMin=document.getElementById('kpi-rc-btn-min');
+  var bPct=document.getElementById('kpi-rc-btn-pct');
+  if(bMin){bMin.style.background=modo==='min'?'#7c3aed':'#fff';bMin.style.color=modo==='min'?'#fff':'#000';}
+  if(bPct){bPct.style.background=modo==='pct'?'#7c3aed':'#fff';bPct.style.color=modo==='pct'?'#fff':'#000';}
   var lst=document.getElementById('kpi-rc-list'); if(!lst) return;
   var lh='<div style="font-size:10px;color:#9ca3af;padding:4px 10px">Toca para ver comentarios del operador</div>';
   ctx.items.forEach(function(item,i){
