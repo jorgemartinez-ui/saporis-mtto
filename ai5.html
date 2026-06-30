@@ -1613,7 +1613,9 @@ async function _crearNuevaOrden(prod,area,l,lineaIdExplicito){
   }else{
     await cambiarEstado('corriendo');
     toast('▶ Orden '+folio+' iniciada','#16a34a');
-    renderLinea(); // garantizar render con ts_inicio correcto
+    if(TIMER) clearInterval(TIMER);
+    TIMER=setInterval(renderLinea,30000);
+    renderLinea();
   }
 }
 
@@ -1655,6 +1657,7 @@ async function pararLinea(){
       operador:ME.nombre,historial:[]},'');
   }
   renderLinea();
+  if(!TIMER) TIMER=setInterval(renderLinea,30000);
   toast('⏹ Orden detenida — ingresa piezas totales y guarda','#1a1a1a');
 }
 
@@ -1911,6 +1914,8 @@ async function confirmarParticion(segId,tsInicio,tsFinEfectivo,tsFinReal,esSinte
   if(!corteStr){errEl.textContent='Ingresa la hora de corte';errEl.style.display='block';return;}
   var base=new Date(tsInicio); base.setHours(0,0,0,0);
   var corteMs=base.getTime()+horaAMs(corteStr);
+  // Si el evento cruza medianoche (ej. T3: 22:30-6:30) y el corte queda antes del inicio, sumar 24h
+  if(corteMs<=tsInicio) corteMs+=24*3600000;
   if(corteMs<=tsInicio){errEl.textContent='La hora de corte debe ser después del inicio ('+new Date(tsInicio).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+')';errEl.style.display='block';return;}
   if(corteMs>=tsFinEfectivo){errEl.textContent='La hora de corte debe ser antes del final ('+new Date(tsFinEfectivo).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+')';errEl.style.display='block';return;}
   // Todo correcto
@@ -3052,33 +3057,37 @@ function mostrarParetoLineas(tipo,data,obj){
 function _renderParetoLineas(tipo,items,obj){
   var modo=_kpiLineaModo||'pct';
   var cont=document.getElementById('kpi-cont'); if(!cont) return;
-  var total=items.reduce(function(s,i){return s+i.min;},0);
   var svgItems=items.map(function(item){
     return{label:item.label,value:modo==='pct'?item.pct:item.min,cumPct:item.cumPct,color:item.color,comments:[]};
   });
-  window._kpiParetoCurrent={items:svgItems,tipo:tipo,groupBy:'linea_stats',lineaItems:items};
+  window._kpiParetoCurrent={items:svgItems,tipo:tipo,groupBy:'linea_stats',lineaItems:items,titulo:tipo};
   var chart=svgPareto(svgItems,{showMin:modo==='min',showLine:true,pct:modo==='pct'});
+  var b='padding:4px 10px;border:1.5px solid #000;border-radius:6px;font-size:11px;font-weight:800;cursor:pointer';
   var html='<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-wrap:wrap">'
     +'<button onclick="kpiParetoBack()" style="padding:6px 12px;background:#f3f4f6;border:1.5px solid #000;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer">← Volver</button>'
     +'<div style="font-size:14px;font-weight:900;color:#1a3c5e;flex:1">Pareto '+tipo+' por Línea</div>'
-    +'<div style="display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:#6b7280;font-weight:700">Alto:</span>'
-    +'<button onclick="ajustarGraficaKPI(\'H\',-80)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;font-weight:900;cursor:pointer;background:#fff">−</button>'
-    +'<button onclick="ajustarGraficaKPI(\'H\',80)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;font-weight:900;cursor:pointer;background:#fff">+</button></div>'
-    +'<div style="display:flex;gap:3px;align-items:center"><span style="font-size:10px;color:#6b7280;font-weight:700">Ancho:</span>'
-    +'<button onclick="ajustarGraficaKPI(\'W\',-10)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;font-weight:900;cursor:pointer;background:#fff">−</button>'
-    +'<button onclick="ajustarGraficaKPI(\'W\',10)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;font-weight:900;cursor:pointer;background:#fff">+</button></div>'
+    +'<button onclick="_kpiLineaModo=\'pct\';_renderParetoLineas(window._kpiLineaTipo,window._kpiLineaItems,window._kpiLineaObj)" id="kpi-l1-btn-pct" style="'+b+';background:'+(modo==='pct'?'#7c3aed':'#fff')+';color:'+(modo==='pct'?'#fff':'#000')+'">Porcentaje</button>'
+    +'<button onclick="_kpiLineaModo=\'min\';_renderParetoLineas(window._kpiLineaTipo,window._kpiLineaItems,window._kpiLineaObj)" id="kpi-l1-btn-min" style="'+b+';background:'+(modo==='min'?'#7c3aed':'#fff')+';color:'+(modo==='min'?'#fff':'#000')+'">Minutos</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:3px;align-items:center;margin-bottom:8px">'
+    +'<span style="font-size:10px;color:#6b7280;font-weight:700">Alto:</span>'
+    +'<button onclick="ajustarGraficaKPI(\'H\',-80)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;cursor:pointer;background:#fff">−</button>'
+    +'<button onclick="ajustarGraficaKPI(\'H\',80)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;cursor:pointer;background:#fff">+</button>'
+    +'<span style="font-size:10px;color:#6b7280;font-weight:700;margin-left:6px">Ancho:</span>'
+    +'<button onclick="ajustarGraficaKPI(\'W\',-10)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;cursor:pointer;background:#fff">−</button>'
+    +'<button onclick="ajustarGraficaKPI(\'W\',10)" style="padding:2px 8px;border:1.5px solid #000;border-radius:6px;font-size:14px;cursor:pointer;background:#fff">+</button>'
     +'</div>'
     +'<div style="background:#fff;border-radius:12px;padding:14px 14px 32px;box-shadow:0 2px 8px rgba(0,0,0,.08);overflow-x:auto">'+chart+'</div>'
     +'<div style="margin-top:8px;display:flex;align-items:center;gap:6px">'
     +'<div style="width:16px;height:2px;background:#111;border-radius:2px"></div>'
-    +'<div style="font-size:11px;color:#6b7280">Línea negra = % acumulado · Punteada = 80% · Verde/Rojo = vs. objetivo</div>'
+    +'<div style="font-size:11px;color:#6b7280">Línea negra = % acumulado · Verde/Rojo = vs. objetivo</div>'
     +'</div>'
     +'<div style="margin-top:10px;background:#fff;border-radius:12px;padding:6px;box-shadow:0 2px 6px rgba(0,0,0,.06)">'
     +'<div style="font-size:10px;color:#9ca3af;padding:4px 10px">Toca una línea para ver sus paros principales</div>';
   items.forEach(function(item,i){
-    html+='<div onclick="kpiDrillDownIdx('+i+')" style="display:flex;justify-content:space-between;padding:6px 10px;border-bottom:1px solid #f3f4f6;cursor:pointer;font-size:11px" onmousedown="this.style.background=\'#f9fafb\'" onmouseup="this.style.background=\'\'" onmouseleave="this.style.background=\'\'">' 
+    html+='<div onclick="kpiDrillDownIdx('+i+')" style="display:flex;justify-content:space-between;padding:6px 10px;border-bottom:1px solid #f3f4f6;cursor:pointer;font-size:11px" onmousedown="this.style.background=\'#f9fafb\'" onmouseup="this.style.background=\'\'" onmouseleave="this.style.background=\'\'">'
       +'<span style="font-weight:700">'+(i+1)+'. '+item.label+'</span>'
-      +'<span style="color:#6b7280">'+(modo==='pct'?item.pct+'% fábrica ('+item.pctPropio+'% propio)':item.min+' min')+' · Acum '+item.cumPct+'%'+(item.cumPct<=80?' 🔵':'')+'</span>'
+      +'<span style="color:#6b7280">'+(modo==='pct'?item.pct+'% fábrica ('+item.pctPropio+'% propio)':item.min+' min')+' · Acum '+item.cumPct+'%'+(item.cumPct<=80?' \U0001f535':'')+'</span>'
       +'</div>';
   });
   html+='</div>';
