@@ -2464,7 +2464,7 @@ function abrirNuevoUsuario(){
       var r=await fetch(SB+'/rest/v1/ai_usuarios',{method:'POST',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'return=minimal'},
         body:JSON.stringify({id:'aiusr_'+Date.now(),username:user,nombre,password:pass,rol,activo:true})});
       if(r.ok||r.status===201||r.status===204){m.remove();toast('✅ Usuario creado','#16a34a');cargarAdmin();}
-      else{var t=await r.text();toast('Error: '+JSON.parse(t).message,'#dc2626');}
+      else{var t=await r.text();var msg=t;try{msg=JSON.parse(t).message||t;}catch(e){}toast('Error: '+msg,'#dc2626');}
     },'#16a34a','Crear usuario');
 }
 
@@ -2951,9 +2951,8 @@ async function irKPI(){
   var env=LINEAS.filter(l=>(l.area||'envasado')==='envasado');
   var sel=document.getElementById('kpi-filtro-linea');
   if(sel) sel.innerHTML='<option value="general">🏭 General (Fábrica/Fabricación/Envasado)</option>'
-    +'<option value="fabrica">🏭 Fábrica (todas las líneas)</option>'
-    +(fab.length?'<optgroup label="— Fabricación">'+fab.map(l=>'<option value="'+l.id+'">'+l.nombre+'</option>').join('')+'</optgroup>':'')
-    +(env.length?'<optgroup label="— Envasado">'+env.map(l=>'<option value="'+l.id+'">'+l.nombre+'</option>').join('')+'</optgroup>':'');
+    +(fab.length?'<optgroup label="— Fabricación"><option value="fabricacion">⚙️ Fabricación (todas)</option>'+fab.map(l=>'<option value="'+l.id+'">　'+l.nombre+'</option>').join('')+'</optgroup>':'')
+    +(env.length?'<optgroup label="— Envasado"><option value="envasado">📦 Envasado (todas)</option>'+env.map(l=>'<option value="'+l.id+'">　'+l.nombre+'</option>').join('')+'</optgroup>':'');
   _kpiFiltro='general';
   kpiSetModo('S'); // Default: semanal
 }
@@ -3001,16 +3000,19 @@ async function cargarKPI(){
     return;
   }
 
-  // Filtro = 'fabrica' o una línea específica
+  // Filtro = 'fabricacion'/'envasado' (departamento) o una línea específica
   var lineaId=_kpiFiltro;
-  var esLinea=lineaId!=='fabrica';
+  var esDept=lineaId==='fabricacion'||lineaId==='envasado';
+  var esLinea=!esDept;
   var l=esLinea?LINEAS.find(x=>x.id===lineaId):null;
-  var objQuery=esLinea?null:await db('ai_kpi_objetivos','GET',null,'id=eq.fabrica');
+  var objQuery=esLinea?null:await db('ai_kpi_objetivos','GET',null,'id=eq.'+lineaId);
+  var objFabFallback=esDept&&(!objQuery||!objQuery.length)?await db('ai_kpi_objetivos','GET',null,'id=eq.fabrica'):null;
   var obj=esLinea
     ?{objetivo_ai:(l&&l.objetivo_ai)||defObj.objetivo_ai,objetivo_pp:(l&&l.objetivo_pp)||defObj.objetivo_pp,objetivo_pnp:(l&&l.objetivo_pnp)||defObj.objetivo_pnp}
-    :(objQuery&&objQuery.length?objQuery[0]:defObj);
+    :(objQuery&&objQuery.length?objQuery[0]:(objFabFallback&&objFabFallback.length?objFabFallback[0]:defObj));
   var data=await obtenerKPIData(_kpiDesde,_kpiHasta,lineaId);
-  var label=esLinea?(l?l.nombre:'—'):'Fábrica (todas las líneas)';
+  var labels={fabricacion:'⚙️ Fabricación (todas las líneas)',envasado:'📦 Envasado (todas las líneas)'};
+  var label=esLinea?(l?l.nombre:'—'):labels[lineaId];
   window._kpiEntidades={};
   window._kpiEntidades[lineaId]={data:data,obj:obj,id:lineaId,label:label};
   window._kpiDataActual=data;
@@ -3396,8 +3398,9 @@ async function renderKPIDetalle(lineaId,obj){
       var val=dia.data[key]; var ok=menorEsMejor?val<=objVal:val>=objVal;
       var pct=Math.max(val,2);
       var evs=key==='PP'?dia.data.ppEvs:key==='PNP'?dia.data.pnpEvs:null;
-      var clickStr=evs&&evs.length?'onclick="window._kpiClickDia('+i+',\''+key+'\')" style="cursor:pointer"':'style="cursor:default"';
-      return '<div '+clickStr+' style="flex:1;height:100%;display:flex;align-items:flex-end;padding:0 1px">'
+      var cursor=evs&&evs.length?'pointer':'default';
+      var clickAttr=evs&&evs.length?'onclick="window._kpiClickDia('+i+',\''+key+'\')"':'';
+      return '<div '+clickAttr+' style="flex:1;height:100%;display:flex;align-items:flex-end;padding:0 1px;cursor:'+cursor+'">'
         +'<div style="width:100%;background:'+(ok?'#16a34a':'#dc2626')+';border-radius:3px 3px 0 0;height:'+pct+'%;min-height:4px"></div></div>';
     }).join('');
     var lblsBottom=dias.map(function(dia){return '<div style="flex:1;text-align:center;font-size:8px;color:#9ca3af;overflow:hidden">'+dia.label+'</div>';}).join('');
