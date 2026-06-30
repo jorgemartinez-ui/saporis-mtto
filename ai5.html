@@ -82,55 +82,6 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
     </div>
   </div>
 </div>
-    <button onclick="irDashboard()" style="background:#16a34a;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:15px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
-      <span style="font-size:32px">📊</span>Dashboard
-    </button>
-    <button onclick="irArrancar()" style="background:#0891b2;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:15px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
-      <span style="font-size:32px">🖥️</span>Consola del Operador
-    </button>
-    <button onclick="irConsultas()" style="background:#0d2144;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:15px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
-      <span style="font-size:32px">📈</span>Line Summary
-    </button>
-    <button onclick="irKPI()" style="background:#7c3aed;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:15px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
-      <span style="font-size:32px">🎯</span>KPI
-    </button>
-    <button onclick="irDashConsola()" style="background:#0f766e;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:13px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
-      <span style="font-size:32px">📺</span>Dashboard Consola del Operador
-    </button>
-    <button id="btn-home-admin" onclick="go('s-admin-hub')" style="background:#374151;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:15px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:none;flex-direction:column;align-items:center;justify-content:center;gap:8px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
-      <span style="font-size:32px">⚙️</span>Administración
-    </button>
-    <div id="btn-home-placeholder" style="background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;outline:2px solid rgba(0,0,0,.3)">
-      <div style="font-size:32px">🏭</div>
-      <div style="color:rgba(255,255,255,.3);font-size:12px;font-weight:700;font-family:Nunito,sans-serif">Saporis</div>
-    </div>
-    <div style="background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;outline:2px solid rgba(0,0,0,.3)">
-      <div style="color:rgba(255,255,255,.15);font-size:11px;font-weight:700;font-family:Nunito,sans-serif">Saporis Comercial</div>
-    </div>
-  </div>
-</div>>
-    <button onclick="irDashboard()" style="background:#16a34a;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:17px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
-      <span style="font-size:38px">📊</span>Dashboard
-    </button>
-    <button onclick="irArrancar()" style="background:#0891b2;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:17px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
-      <span style="font-size:38px">🖥️</span>Consola del Operador
-    </button>
-    <button onclick="irConsultas()" style="background:#0d2144;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:17px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
-      <span style="font-size:38px">📈</span>Line Summary
-    </button>
-    <button onclick="irKPI()" style="background:#7c3aed;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:17px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
-      <span style="font-size:38px">🎯</span>KPI
-    </button>
-    <button id="btn-home-admin" onclick="go('s-admin-hub')" style="background:#374151;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:17px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
-      <span style="font-size:38px">⚙️</span>Administración
-    </button>
-    <div id="btn-home-placeholder" style="background:#1a1a2e;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;outline:2px solid rgba(0,0,0,.3)">
-      <div style="font-size:36px">🏭</div>
-      <div style="color:rgba(255,255,255,.3);font-size:13px;font-weight:700;font-family:Nunito,sans-serif">Saporis</div>
-    </div>
-  </div>
-</div>
-
 <!-- ARRANCAR LÍNEA -->
 <div id="s-arrancar" class="screen">
   <div class="topbar">
@@ -361,6 +312,8 @@ const SK='sb_publishable_bMC14dd2RT3n0Ka3Mwb8Yg_JRXlz-OE';
 
 // ── Estado ────────────────────────────────────────────────────
 var ME=null, LINEAS=[], RCODES=[], LINEA_ID=null, TIMER=null, ORIGEN_LINEA='dashboard';
+function esSoloLectura(){return ME&&ME.rol==='consultor';}
+function bloqueadoLectura(){if(esSoloLectura()){toast('👁️ Modo solo lectura — Consultor no puede modificar','#92400e');return true;}return false;}
 var COL={corriendo:'#16a34a',pnp:'#dc2626',pp:'#ca8a04',idle:'#9ca3af',detenida:'#64748b'};
 var LBL={corriendo:'▶ Corriendo',pnp:'🔴 Paro No Planeado',pp:'🟡 Paro Planeado',idle:'⬜ Idle',detenida:'⏹ Línea detenida'};
 var ICO={corriendo:'▶',pnp:'🔴',pp:'🟡',idle:'⬜',detenida:'⏹'};
@@ -1248,6 +1201,7 @@ async function renderLinea(){
 
 // ── PLAY — iniciar o continuar orden ─────────────────────────
 async function accionPlay(){
+  if(bloqueadoLectura())return;
   if(ORDEN_ACTIVA&&ORDEN_ACTIVA.estado==='abierta'&&!ORDEN_ACTIVA._tsF){
     // Viene de PNP/PP/Idle sin haber presionado Detener: pasar directo a Corriendo
     await cambiarEstado('corriendo');
@@ -1371,6 +1325,7 @@ async function eliminarChecklist(clId,nombre){
   renderLogsheet();
 }
 async function ejecutarChecklistManual(clId){
+  if(bloqueadoLectura())return;
   var cls=await db('ai_checklists','GET',null,'id=eq.'+clId)||[];
   if(!cls.length) return;
   window._ck_pendientes_arranque=[cls[0]];
@@ -1527,6 +1482,7 @@ async function guardarEjecucionChecklist(clId,puntosIds,idx,total){
 }
 
 async function continuarOrden(){
+  if(bloqueadoLectura())return;
   if(ORDEN_ACTIVA){
     ORDEN_ACTIVA._tsF=null;
     localStorage.setItem('ai_orden_'+LINEA_ID,JSON.stringify(ORDEN_ACTIVA));
@@ -1536,6 +1492,7 @@ async function continuarOrden(){
 }
 
 async function iniciarNuevaOrden(){
+  if(bloqueadoLectura())return;
   // Capturar lineaId y línea AHORA antes de cualquier await
   var lineaIdCapturado=LINEA_ID;
   var l=LINEAS.find(x=>x.id===lineaIdCapturado)||{id:lineaIdCapturado,nombre:'?',area:'envasado'};
@@ -1599,14 +1556,16 @@ async function _crearNuevaOrden(prod,area,l,lineaIdExplicito){
   await dbP('ai_ordenes','PATCH',{estado:'cerrada',ts_fin:ahora},
     'linea_id=eq.'+lineaId+'&estado=eq.abierta&id=neq.'+ordId);
   ORDEN_ACTIVA=orden;
-  localStorage.setItem('ai_orden_'+LINEA_ID,JSON.stringify(orden));
+  localStorage.setItem('ai_orden_'+lineaId,JSON.stringify(orden));
   // Verificar checklists requeridos antes de arrancar
-  var cls=await db('ai_checklists','GET',null,'linea_id=eq.'+LINEA_ID+'&requiere_antes_arranque=eq.true&activo=eq.true')||[];
+  var cls=await db('ai_checklists','GET',null,'linea_id=eq.'+lineaId+'&requiere_antes_arranque=eq.true&activo=eq.true')||[];
   if(cls.length){
     window._ck_pendientes_arranque=cls;
     window._ck_callback_arranque=async()=>{
       await cambiarEstado('corriendo');
       toast('▶ Orden '+folio+' iniciada','#16a34a');
+      if(TIMER) clearInterval(TIMER);
+      TIMER=setInterval(renderLinea,30000);
       renderLinea(); // garantizar render con ts_inicio correcto
     };
     ejecutarChecklistArranque(cls,0,window._ck_callback_arranque);
@@ -1621,16 +1580,19 @@ async function _crearNuevaOrden(prod,area,l,lineaIdExplicito){
 
 // ── DETENER — calcular AI real ────────────────────────────────
 async function pararLinea(){
+  if(bloqueadoLectura())return;
   if(!confirm('¿Detener la orden de producción y calcular Asset Intensity real?')) return;
+  var lineaIdCap=LINEA_ID;
+  var ordenCap=ORDEN_ACTIVA;
   var ahora=Date.now();
   // Cerrar evento activo
-  var evs=await db('ai_eventos','GET',null,'linea_id=eq.'+LINEA_ID+'&ts_fin=is.null')||[];
+  var evs=await db('ai_eventos','GET',null,'linea_id=eq.'+lineaIdCap+'&ts_fin=is.null')||[];
   for(var e of evs) await dbP('ai_eventos','PATCH',{ts_fin:ahora},'id=eq.'+e.id);
   if(TIMER) clearInterval(TIMER);
   // Calcular tiempo ocupado real de la orden
-  if(ORDEN_ACTIVA){
-    var tsI=ORDEN_ACTIVA.ts_inicio;
-    var allEvs=await db('ai_eventos','GET',null,'linea_id=eq.'+LINEA_ID+'&ts_inicio=gte.'+tsI+'&order=ts_inicio.asc')||[];
+  if(ordenCap){
+    var tsI=ordenCap.ts_inicio;
+    var allEvs=await db('ai_eventos','GET',null,'linea_id=eq.'+lineaIdCap+'&ts_inicio=gte.'+tsI+'&order=ts_inicio.asc')||[];
     var tC=0,tPNP=0,tPP=0,curC=tsI;
     allEvs.forEach(e=>{
       var i=Math.max(e.ts_inicio,tsI),f=e.ts_fin?Math.min(e.ts_fin,ahora):ahora,d=Math.max(0,f-i);
@@ -1642,27 +1604,32 @@ async function pararLinea(){
     var tOcupMs=tC+tPNP+tPP;
     var tOcupMin=Math.round(tOcupMs/60000);
     var tOcupHr=tOcupMs/3600000;
-    var l=LINEAS.find(x=>x.id===LINEA_ID);
+    var l=LINEAS.find(x=>x.id===lineaIdCap);
     var pzObjetivo=l?(l.target_hora||0)*(tC/3600000):0; // solo tiempo corriendo
-    ORDEN_ACTIVA._tOcupMin=tOcupMin;
-    ORDEN_ACTIVA._pzObjetivo=Math.round(pzObjetivo);
-    ORDEN_ACTIVA._tC=tC;
-    ORDEN_ACTIVA._tsF=ahora;
-    localStorage.setItem('ai_orden_'+LINEA_ID,JSON.stringify(ORDEN_ACTIVA));
-    await dbP('ai_ordenes','PATCH',{detenida_en:ahora},'id=eq.'+ORDEN_ACTIVA.id);
+    ordenCap._tOcupMin=tOcupMin;
+    ordenCap._pzObjetivo=Math.round(pzObjetivo);
+    ordenCap._tC=tC;
+    ordenCap._tsF=ahora;
+    localStorage.setItem('ai_orden_'+lineaIdCap,JSON.stringify(ordenCap));
+    await dbP('ai_ordenes','PATCH',{detenida_en:ahora},'id=eq.'+ordenCap.id);
     // Crear evento 'detenida' para marcar el lapso de inactividad en la barra
-    await dbP('ai_eventos','POST',{id:'aiev_det_'+ahora,linea_id:LINEA_ID,tipo:'detenida',
+    await dbP('ai_eventos','POST',{id:'aiev_det_'+ahora,linea_id:lineaIdCap,tipo:'detenida',
       reason_code:null,comentario:null,ts_inicio:ahora,ts_fin:null,
       turno:turno(),fecha:hoy(),año:new Date().getFullYear(),semana:sem(hoy()),
       operador:ME.nombre,historial:[]},'');
+    // Solo actualizar el estado en memoria si el usuario sigue en la misma línea
+    if(LINEA_ID===lineaIdCap) ORDEN_ACTIVA=ordenCap;
   }
-  renderLinea();
-  if(!TIMER) TIMER=setInterval(renderLinea,30000);
+  if(LINEA_ID===lineaIdCap){
+    renderLinea();
+    if(!TIMER) TIMER=setInterval(renderLinea,30000);
+  }
   toast('⏹ Orden detenida — ingresa piezas totales y guarda','#1a1a1a');
 }
 
 // ── GUARDAR ORDEN ─────────────────────────────────────────────
 async function guardarOrden(){
+  if(bloqueadoLectura())return;
   if(!ORDEN_ACTIVA) return;
   var inp=document.getElementById('pz-total-inp');
   var pzTotal=inp?parseInt(inp.value)||0:0;
@@ -1730,6 +1697,7 @@ function selRCConCom(tipo, rc){
 // ── EDITAR PIEZAS ─────────────────────────────────────────────
 function editarPiezas(hNum, valorActual, turnoSlot){
   if(window.AI_MODO_HISTORIAL){toast('📖 Modo consulta — no se puede editar','#92400e');return;}
+  if(bloqueadoLectura())return;
   var l=LINEAS.find(x=>x.id===LINEA_ID);
   var t=turnoSlot||turno();
   var hNumFin=(hNum+1)%24;
@@ -1773,6 +1741,7 @@ async function cambiarEstado(tipo, rc, comentario){
 }
 
 async function selRC(tipo){
+  if(bloqueadoLectura())return;
   var rcs=await db('ai_reason_codes','GET',null,'tipo=eq.'+tipo+'&activo=eq.true&order=nombre.asc')||[];
   var btns=rcs.map(r=>`<button onclick="selRCConCom('${tipo}','${r.nombre}')" 
     style="width:100%;padding:14px;background:${COL[tipo]};color:#fff;border:none;border-radius:14px;font-size:15px;font-weight:800;cursor:pointer;margin-bottom:10px;font-family:Nunito,sans-serif">${r.nombre}</button>`).join('');
@@ -1794,6 +1763,7 @@ async function selRC(tipo){
 // ── UNIR EVENTOS ──────────────────────────────────────────────
 function unirEventos(){
   if(window.AI_MODO_HISTORIAL){toast('📖 Modo consulta — no se puede editar','#92400e');return;}
+  if(bloqueadoLectura())return;
   var chks=Array.from(document.querySelectorAll('.ev-chk:checked'));
   if(chks.length<2){toast('Selecciona al menos 2 eventos para unir','#dc2626');return;}
   var ids=chks.map(c=>c.dataset.id);
@@ -1842,6 +1812,7 @@ async function ejecutarUnion(segs,tipo,motivo,com){
 
 // ── PARTIR EVENTO ─────────────────────────────────────────────
 function partirSegmento(id){
+  if(bloqueadoLectura())return;
   // Partir directo desde el editor de segmento (sin necesitar checkbox)
   var seg=(window.AI_SEGS||[]).find(s=>s.id===id);
   if(!seg){toast('Evento no encontrado','#dc2626');return;}
@@ -1851,6 +1822,7 @@ function partirSegmento(id){
 }
 function partirEvento(){
   if(window.AI_MODO_HISTORIAL){toast('📖 Modo consulta — no se puede editar','#92400e');return;}
+  if(bloqueadoLectura())return;
   var chks=Array.from(document.querySelectorAll('.ev-chk:checked'));
   if(chks.length!==1){toast('Selecciona exactamente 1 evento para partir','#dc2626');return;}
   var seg=(window.AI_SEGS||[]).find(s=>s.id===chks[0].dataset.id);
@@ -1859,14 +1831,26 @@ function partirEvento(){
   var finEfectivo=seg._dfin||seg.ts_fin||Date.now();
   _abrirModalPartir(seg,finEfectivo);
 }
-function _abrirModalPartir(seg,finEfectivo){
+async function _abrirModalPartir(seg,finEfectivo){
+  var [rcsPP,rcsPNP]=await Promise.all([
+    db('ai_reason_codes','GET',null,'tipo=eq.pp&activo=eq.true&order=nombre.asc'),
+    db('ai_reason_codes','GET',null,'tipo=eq.pnp&activo=eq.true&order=nombre.asc')
+  ]);
+  window._partirRCs={pp:rcsPP||[],pnp:rcsPNP||[]};
   var tH=t=>String(new Date(t).getHours()).padStart(2,'0')+':'+String(new Date(t).getMinutes()).padStart(2,'0');
   var tipos=['corriendo','pnp','pp','idle'];
   var tipoBtns=(pref,tipoActual)=>tipos.map(t=>`<button onclick="
     document.querySelectorAll('.pt-${pref}').forEach(b=>{b.style.background='#f9fafb';b.style.color='#374151';b.style.borderColor='#e5e7eb'});
     this.style.background='${COL[t]||'#9ca3af'}';this.style.color='#fff';this.style.borderColor='${COL[t]||'#9ca3af'}';
-    document.getElementById('${pref}-tipo').value='${t}'"
+    document.getElementById('${pref}-tipo').value='${t}';
+    _partirActualizarRC('${pref}','${t}')"
     class="pt-${pref}" style="flex:1;padding:5px 2px;border:2px solid ${t===tipoActual?COL[t]:'#e5e7eb'};background:${t===tipoActual?COL[t]:'#f9fafb'};color:${t===tipoActual?'#fff':'#374151'};border-radius:7px;font-weight:800;font-size:9px;cursor:pointer;font-family:Nunito,sans-serif">${LBL[t]}</button>`).join('');
+  var rcBlock=(pref)=>`<div id="${pref}-rc-block" style="display:none;margin-top:8px">
+      <div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:2px">Motivo</div>
+      <select id="${pref}-rc" class="fc" style="margin-bottom:6px"><option value="">— Selecciona —</option></select>
+      <div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:2px">Comentario</div>
+      <textarea id="${pref}-com" class="fc" style="height:50px;resize:none" placeholder="Describe brevemente..."></textarea>
+    </div>`;
   var m=document.createElement('div');
   m.className='m-partir';
   m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
@@ -1887,6 +1871,7 @@ function _abrirModalPartir(seg,finEfectivo){
         <div style="background:#f3f4f6;border-radius:8px;padding:8px;text-align:center;font-weight:700;font-size:13px;margin-bottom:8px;color:#6b7280">${tH(seg.ts_inicio)}</div>
         <div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:2px">Hora de corte</div>
         <input type="time" id="pt-corte" class="fc" style="margin-bottom:0" value="${tH(Math.round((seg.ts_inicio+finEfectivo)/2/60000)*60000)}">
+        ${rcBlock('pt1')}
       </div>
       <div style="flex:1;border:2px solid #e5e7eb;border-radius:12px;padding:12px">
         <div style="font-weight:900;font-size:12px;color:#7c3aed;margin-bottom:8px">Parte 2</div>
@@ -1896,6 +1881,7 @@ function _abrirModalPartir(seg,finEfectivo){
         <div style="background:#f3f4f6;border-radius:8px;padding:8px;text-align:center;font-size:11px;color:#9ca3af;margin-bottom:8px">= Hora de corte</div>
         <div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:2px">Final (fijo)</div>
         <div style="background:#f3f4f6;border-radius:8px;padding:8px;text-align:center;font-weight:700;font-size:13px;color:#6b7280">${tH(finEfectivo)}</div>
+        ${rcBlock('pt2')}
       </div>
     </div>
     <div id="pt-error" style="color:#dc2626;font-size:11px;font-weight:700;margin-top:10px;display:none"></div>
@@ -1905,6 +1891,21 @@ function _abrirModalPartir(seg,finEfectivo){
     </div>
   </div>`;
   document.body.appendChild(m);
+  _partirActualizarRC('pt1',seg.tipo);
+  _partirActualizarRC('pt2','corriendo');
+}
+function _partirActualizarRC(pref,tipo){
+  var block=document.getElementById(pref+'-rc-block');
+  var sel=document.getElementById(pref+'-rc');
+  if(!block||!sel) return;
+  if(tipo==='pp'||tipo==='pnp'){
+    block.style.display='block';
+    var rcs=(window._partirRCs&&window._partirRCs[tipo])||[];
+    sel.innerHTML='<option value="">— Selecciona —</option>'+rcs.map(r=>'<option value="'+r.nombre+'">'+r.nombre+'</option>').join('');
+  }else{
+    block.style.display='none';
+    sel.innerHTML='<option value="">— Selecciona —</option>';
+  }
 }
 async function confirmarParticion(segId,tsInicio,tsFinEfectivo,tsFinReal,esSintetico){
   var corteStr=document.getElementById('pt-corte').value;
@@ -1918,6 +1919,20 @@ async function confirmarParticion(segId,tsInicio,tsFinEfectivo,tsFinReal,esSinte
   if(corteMs<=tsInicio) corteMs+=24*3600000;
   if(corteMs<=tsInicio){errEl.textContent='La hora de corte debe ser después del inicio ('+new Date(tsInicio).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+')';errEl.style.display='block';return;}
   if(corteMs>=tsFinEfectivo){errEl.textContent='La hora de corte debe ser antes del final ('+new Date(tsFinEfectivo).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'})+')';errEl.style.display='block';return;}
+  // Validar motivo y comentario obligatorios cuando la parte es PP o PNP
+  var rc1=null,com1=null,rc2=null,com2=null;
+  if(tipo1==='pp'||tipo1==='pnp'){
+    rc1=document.getElementById('pt1-rc').value;
+    com1=document.getElementById('pt1-com').value.trim();
+    if(!rc1){errEl.textContent='Selecciona el motivo de Parte 1';errEl.style.display='block';return;}
+    if(!com1){errEl.textContent='Ingresa el comentario de Parte 1';errEl.style.display='block';return;}
+  }
+  if(tipo2==='pp'||tipo2==='pnp'){
+    rc2=document.getElementById('pt2-rc').value;
+    com2=document.getElementById('pt2-com').value.trim();
+    if(!rc2){errEl.textContent='Selecciona el motivo de Parte 2';errEl.style.display='block';return;}
+    if(!com2){errEl.textContent='Ingresa el comentario de Parte 2';errEl.style.display='block';return;}
+  }
   // Todo correcto
   document.querySelectorAll('.m-partir').forEach(x=>x.remove());
   var histBase=[];
@@ -1928,9 +1943,9 @@ async function confirmarParticion(segId,tsInicio,tsFinEfectivo,tsFinReal,esSinte
     await fetch(SB+'/rest/v1/ai_eventos?id=eq.'+segId,{method:'DELETE',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Prefer':'return=minimal'}});
   }
   var ahora=Date.now();
-  await dbP('ai_eventos','POST',{id:'aiev_p1_'+ahora,linea_id:LINEA_ID,tipo:tipo1,reason_code:null,comentario:null,
+  await dbP('ai_eventos','POST',{id:'aiev_p1_'+ahora,linea_id:LINEA_ID,tipo:tipo1,reason_code:rc1,comentario:com1,
     ts_inicio:tsInicio,ts_fin:corteMs,turno:turno(),fecha:hoy(),año:new Date().getFullYear(),semana:sem(hoy()),operador:ME.nombre,historial:histBase},'');
-  await dbP('ai_eventos','POST',{id:'aiev_p2_'+ahora,linea_id:LINEA_ID,tipo:tipo2,reason_code:null,comentario:null,
+  await dbP('ai_eventos','POST',{id:'aiev_p2_'+ahora,linea_id:LINEA_ID,tipo:tipo2,reason_code:rc2,comentario:com2,
     ts_inicio:corteMs,ts_fin:tsFinReal||null,turno:turno(),fecha:hoy(),año:new Date().getFullYear(),semana:sem(hoy()),operador:ME.nombre,historial:[{ts:Date.now(),usuario:ME.nombre,accion:'Creado al partir evento'}]},'');
   toast('✂️ Evento partido en 2','#0891b2');
   renderLinea();
@@ -1995,6 +2010,7 @@ function ocultarTipEvento(){
 // ── EDITAR SEGMENTO (tipo y/o horas) ───────────────────────────
 function abrirEditorSegmento(id){
   if(window.AI_MODO_HISTORIAL){toast('📖 Modo consulta — no se puede editar','#92400e');return;}
+  if(bloqueadoLectura())return;
   var full=window.AI_SEGS||[];
   var idx=full.findIndex(s=>s.id===id);
   if(idx<0) return;
@@ -2028,7 +2044,7 @@ function abrirEditorSegmento(id){
   document.body.appendChild(m);
 }
 function horaAMs(hhmm){var p=hhmm.split(':');return (+p[0])*3600000+(+p[1])*60000;}
-function confirmarEdicionSegmento(id){
+async function confirmarEdicionSegmento(id){
   var full=window.AI_SEGS||[];
   var idx=full.findIndex(s=>s.id===id);
   if(idx<0) return;
@@ -2048,13 +2064,53 @@ function confirmarEdicionSegmento(id){
   if(nuevoFin && nuevoFin<=nuevoInicio){toast('La hora final debe ser después de la hora inicio','#dc2626');return;}
   if(nuevoInicio===seg.ts_inicio && nuevoFin===seg.ts_fin && nuevoTipo===seg.tipo){toast('No hay cambios para guardar','#9ca3af');return;}
   document.querySelectorAll('.m-edseg').forEach(x=>x.remove());
+  // Si el nuevo tipo es PP/PNP y cambió de tipo (o no tenía motivo), pedir reason_code + comentario
+  if((nuevoTipo==='pp'||nuevoTipo==='pnp')&&(nuevoTipo!==seg.tipo||!seg.reason_code)){
+    var rcs=await db('ai_reason_codes','GET',null,'tipo=eq.'+nuevoTipo+'&activo=eq.true&order=nombre.asc')||[];
+    var mm=document.createElement('div');
+    mm.className='m-edrc';
+    mm.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+    mm.innerHTML=`<div style="background:#fff;border-radius:22px 22px 0 0;padding:28px 20px 40px;width:100%;max-width:480px">
+      <div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 16px"></div>
+      <div style="font-size:16px;font-weight:900;color:${COL[nuevoTipo]};margin-bottom:14px">${LBL[nuevoTipo]} · Clasificación requerida</div>
+      <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Motivo</label>
+      <select id="edrc-rc" class="fc"><option value="">— Selecciona —</option>${rcs.map(r=>'<option value="'+r.nombre+'">'+r.nombre+'</option>').join('')}</select>
+      <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Comentario</label>
+      <textarea id="edrc-com" class="fc" style="height:70px;resize:none" placeholder="Describe brevemente el motivo..."></textarea>
+      <div id="edrc-err" style="color:#dc2626;font-size:11px;font-weight:700;margin-top:6px;display:none"></div>
+      <div style="display:flex;gap:10px;margin-top:14px">
+        <button onclick="document.querySelectorAll('.m-edrc').forEach(x=>x.remove())" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:12px;cursor:pointer;font-weight:700;font-family:Nunito,sans-serif">Cancelar</button>
+        <button onclick="_confirmarRCEdicion('${id}',${idx},'${nuevoTipo}',${nuevoInicio},${nuevoFin||'null'})" style="flex:2;padding:13px;background:${COL[nuevoTipo]};color:#fff;border:none;border-radius:12px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">Continuar</button>
+      </div>
+    </div>`;
+    document.body.appendChild(mm);
+    return;
+  }
   modal('⚠️ Confirmar cambio',
     `<div style="font-size:13px;color:#374151;margin-bottom:10px">Vas a modificar este evento. Si le quitas o agregas tiempo a la hora de inicio o final, se ajustará automáticamente el evento anterior o siguiente para que no se traslapen ni queden huecos sin sentido.</div>
      <div style="font-size:13px;color:#374151;font-weight:700">¿Confirmas el cambio?</div>`,
-    async(m)=>{ m.remove(); await aplicarEdicionSegmento(seg,prev,next,nuevoTipo,nuevoInicio,nuevoFin); },
+    async(m)=>{ m.remove(); await aplicarEdicionSegmento(seg,prev,next,nuevoTipo,nuevoInicio,nuevoFin,seg.reason_code,seg.comentario); },
     '#0d2144','Confirmar');
 }
-async function aplicarEdicionSegmento(seg,prev,next,nuevoTipo,nuevoInicio,nuevoFin){
+function _confirmarRCEdicion(id,idx,nuevoTipo,nuevoInicio,nuevoFin){
+  var rc=document.getElementById('edrc-rc').value;
+  var com=document.getElementById('edrc-com').value.trim();
+  var errEl=document.getElementById('edrc-err');
+  if(!rc){errEl.textContent='Selecciona el motivo';errEl.style.display='block';return;}
+  if(!com){errEl.textContent='Ingresa el comentario';errEl.style.display='block';return;}
+  document.querySelectorAll('.m-edrc').forEach(x=>x.remove());
+  var full=window.AI_SEGS||[];
+  var seg=full.find(s=>s.id===id);
+  if(!seg) return;
+  var prev=idx>0?full[idx-1]:null;
+  var next=idx<full.length-1?full[idx+1]:null;
+  modal('⚠️ Confirmar cambio',
+    `<div style="font-size:13px;color:#374151;margin-bottom:10px">Vas a modificar este evento. Si le quitas o agregas tiempo a la hora de inicio o final, se ajustará automáticamente el evento anterior o siguiente para que no se traslapen ni queden huecos sin sentido.</div>
+     <div style="font-size:13px;color:#374151;font-weight:700">¿Confirmas el cambio?</div>`,
+    async(m)=>{ m.remove(); await aplicarEdicionSegmento(seg,prev,next,nuevoTipo,nuevoInicio,nuevoFin,rc,com); },
+    '#0d2144','Confirmar');
+}
+async function aplicarEdicionSegmento(seg,prev,next,nuevoTipo,nuevoInicio,nuevoFin,reasonCode,comentario){
   var historialPrevio=(seg.sintetico?[]:(seg.historial||[])).slice();
   var cambios=[];
   if(nuevoTipo!==seg.tipo) cambios.push('tipo de '+LBL[seg.tipo]+' a '+LBL[nuevoTipo]);
@@ -2068,7 +2124,7 @@ async function aplicarEdicionSegmento(seg,prev,next,nuevoTipo,nuevoInicio,nuevoF
     await dbP('ai_eventos','PATCH',{ts_inicio:nuevoFin},'id=eq.'+next.id);
   }
   if(!seg.sintetico) await fetch(SB+'/rest/v1/ai_eventos?id=eq.'+seg.id,{method:'DELETE',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Prefer':'return=minimal'}});
-  await dbP('ai_eventos','POST',{id:'aiev_'+Date.now(),linea_id:LINEA_ID,tipo:nuevoTipo,reason_code:seg.reason_code||null,comentario:seg.comentario||null,
+  await dbP('ai_eventos','POST',{id:'aiev_'+Date.now(),linea_id:LINEA_ID,tipo:nuevoTipo,reason_code:(nuevoTipo==='pp'||nuevoTipo==='pnp')?(reasonCode||null):null,comentario:(nuevoTipo==='pp'||nuevoTipo==='pnp')?(comentario||null):null,
     ts_inicio:nuevoInicio,ts_fin:nuevoFin||null,turno:turno(),fecha:hoy(),año:new Date().getFullYear(),semana:sem(hoy()),operador:ME.nombre,historial:historialPrevio},'');
   toast('✅ Evento actualizado','#16a34a');
   renderLinea();
@@ -2076,6 +2132,7 @@ async function aplicarEdicionSegmento(seg,prev,next,nuevoTipo,nuevoInicio,nuevoF
 
 // ── PIEZAS ────────────────────────────────────────────────────
 function regPiezas(){
+  if(bloqueadoLectura())return;
   var l=LINEAS.find(x=>x.id===LINEA_ID);
   var t=turno(), tsI=tIni(t,hoy()), hAct=new Date().getHours();
   var opts=Array.from({length:8},(_,i)=>{var h=new Date(tsI+i*3600000).getHours();return`<option value="${h}"${h===hAct?' selected':''}>${h}:00 – ${h+1}:00</option>`;}).join('');
@@ -2382,7 +2439,7 @@ async function cargarAdmin(){
 }
 
 function rolOpts(sel){
-  return['super','admin','operador'].map(r=>`<option value="${r}"${sel===r?' selected':''}>${r}</option>`).join('');
+  return['super','admin','operador','consultor'].map(r=>`<option value="${r}"${sel===r?' selected':''}>${r}</option>`).join('');
 }
 
 function abrirNuevoUsuario(){
@@ -2767,6 +2824,104 @@ function mostrarTipKPIBar(ev,idx){
   tip.style.top=(ev.clientY-60)+'px';
 }
 function ocultarTipKPI(){var tip=document.getElementById('kpi-bar-tip');if(tip)tip.style.display='none';}
+var _dcModo='T',_dcOffset=0;
+function dcSetModo(m){
+  _dcModo=m;_dcOffset=0;
+  ['T','D'].forEach(function(x){var b=document.getElementById('dc-modo-'+x);if(b){b.style.background=x===m?'#0f766e':'#fff';b.style.color=x===m?'#fff':'#000';}});
+  renderDashConsola();
+}
+function dcNavegar(d){_dcOffset+=d;renderDashConsola();}
+function dcPeriodo(){
+  var h=hoy(),t=turno();
+  if(_dcModo==='T'){var tsI=tIni(t,h)+_dcOffset*8*3600000;return{tsI:tsI,tsF:tsI+8*3600000,label:'Turno '+t+' · '+new Date(tsI).toLocaleDateString('es-MX',{day:'2-digit',month:'short'})};}
+  var tsI2=new Date(h+'T06:30:00').getTime()+_dcOffset*24*3600000;return{tsI:tsI2,tsF:tsI2+24*3600000,label:new Date(tsI2).toLocaleDateString('es-MX',{weekday:'short',day:'2-digit',month:'short'})};
+}
+async function irDashConsola(){
+  if(TIMER){clearInterval(TIMER);TIMER=null;}
+  go('s-dash-consola');
+  dcSetModo('T');
+}
+function mostrarTipDC(ev,tipo,rc,com,durMin){
+  var tip=document.getElementById('kpi-bar-tip');
+  if(!tip){tip=document.createElement('div');tip.id='kpi-bar-tip';
+    tip.style.cssText='position:fixed;z-index:9999;background:#1a1a2e;color:#fff;padding:8px 12px;border-radius:8px;font-size:12px;font-family:Nunito,sans-serif;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.3);max-width:200px;line-height:1.4';
+    document.body.appendChild(tip);}
+  var tipos={corriendo:'▶ Corriendo',pp:'⏸ Paro Planeado',pnp:'⛔ Paro No Planeado',detenida:'🔧 Detenida'};
+  tip.innerHTML='<b>'+(tipos[tipo]||tipo)+'</b><br>'+(rc&&rc!=='Sin clasificar'?rc+'<br>':'')+(com?'<span style="color:#d1d5db">'+com+'</span><br>':'')+'<span style="color:#9ca3af">'+durMin+' min</span>';
+  tip.style.display='block';
+  tip.style.left=Math.min(ev.clientX+12,window.innerWidth-220)+'px';
+  tip.style.top=(ev.clientY-60)+'px';
+}
+async function renderDashConsola(){
+  var cont=document.getElementById('dash-consola-cont'); if(!cont) return;
+  var per=dcPeriodo();
+  var lbl=document.getElementById('dc-periodo'); if(lbl) lbl.textContent=per.label;
+  var sub=document.getElementById('dash-consola-sub'); if(sub) sub.textContent=per.label+' · todas las líneas';
+  var lin=await db('ai_lineas','GET',null,'activa=eq.true&order=area.asc,nombre.asc');
+  LINEAS=lin||LINEAS;
+  var tsI=per.tsI,tsF=per.tsF,ahora=Math.min(Date.now(),tsF),dur=ahora-tsI;
+  var esHoy=Date.now()<tsF&&Date.now()>tsI;
+  var ords=await db('ai_ordenes','GET',null,'ts_inicio=gte.'+(tsI-7*24*3600000)+'&estado=in.(abierta,cerrada)&order=ts_inicio.asc')||[];
+  var ids=LINEAS.map(function(l){return l.id;});
+  var evsTodos=ids.length?await db('ai_eventos','GET',null,'linea_id=in.('+ids.join(',')+')'+'&ts_inicio=gte.'+(tsI-9*3600000)+'&ts_inicio=lt.'+tsF+'&order=ts_inicio.asc')||[]:[];
+  var html='';
+  for(var li=0;li<LINEAS.length;li++){
+    var l=LINEAS[li];
+    var lOrds=ords.filter(function(o){return o.linea_id===l.id;});
+    var lEvs=evsTodos.filter(function(e){return e.linea_id===l.id;});
+    var ai=0,pp=0,pnp=0;
+    var oAI=l.objetivo_ai||85,oPP=l.objetivo_pp||10,oPNP=l.objetivo_pnp||10;
+    var tlHTML='';
+    var ord=lOrds.find(function(o){var s=typeof o.ts_inicio==='string'?new Date(o.ts_inicio).getTime():Number(o.ts_inicio);var f=o.ts_fin?(typeof o.ts_fin==='string'?new Date(o.ts_fin).getTime():Number(o.ts_fin)):Date.now();return s<tsF&&f>=tsI;});
+    var ordTsI=ord?(typeof ord.ts_inicio==='string'?new Date(ord.ts_inicio).getTime():Number(ord.ts_inicio)):null;
+    var tsIef=ordTsI&&ordTsI>tsI?ordTsI:tsI;
+    var tC=0,tPP=0,tPNP=0,cur=tsIef;
+    if(ord){
+      var segs=segmentosConGaps(lEvs.filter(function(e){return !ordTsI||Number(e.ts_inicio)>=ordTsI;}),tsIef,ahora);
+      segs.forEach(function(seg){
+        var si=Math.max(Number(seg.ts_inicio),tsIef),sf=Math.min(seg._dfin||ahora,ahora),d=Math.max(0,sf-si);
+        if(d===0||seg.tipo==='detenida'){if(d>0)cur=Math.max(cur,sf);return;}
+        if(si>cur)tC+=(si-cur);
+        if(seg.tipo==='corriendo')tC+=d; else if(seg.tipo==='pp')tPP+=d; else if(seg.tipo==='pnp')tPNP+=d;
+        cur=Math.max(cur,sf);
+      });
+      if(cur<ahora)tC+=(ahora-cur);
+    }
+    var tO=tC+tPP+tPNP;
+    ai=tO>0?Math.round(tC/tO*100):0; pp=tO>0?Math.round(tPP/tO*100):0; pnp=tO>0?Math.round(tPNP/tO*100):0;
+    if(dur>0){
+      var tlSegs=ord?segmentosConGaps(lEvs,tsIef,ahora):[];
+      if(tsIef>tsI){var pPre=((tsIef-tsI)/dur*100).toFixed(2);tlHTML+='<div style="width:'+pPre+'%;background:#e5e7eb;height:100%"></div>';}
+      tlSegs.forEach(function(seg){
+        var si=Math.max(Number(seg.ts_inicio),tsIef),sf=Math.min(seg._dfin||ahora,ahora),d=Math.max(0,sf-si);
+        var p=(d/dur*100).toFixed(2); if(parseFloat(p)<0.05) return;
+        var col=seg.tipo==='corriendo'?'#16a34a':seg.tipo==='pp'?'#f59e0b':seg.tipo==='pnp'?'#ef4444':'#9ca3af';
+        var rc=(seg.reason_code||'Sin clasificar').replace(/'/g,"&#39;");
+        var com=(seg.comentario||'').replace(/'/g,"&#39;");
+        var durMin=Math.round(d/60000);
+        tlHTML+='<div onmouseenter="mostrarTipDC(event,\''+seg.tipo+'\',\''+rc+'\',\''+com+'\','+durMin+')" onmouseleave="ocultarTipKPI()" style="width:'+p+'%;background:'+col+';height:100%;cursor:default"></div>';
+      });
+      if(ahora<tsF){var pRem=((tsF-ahora)/dur*100).toFixed(2);tlHTML+='<div style="width:'+pRem+'%;background:#e5e7eb;height:100%"></div>';}
+    }
+    html+='<div onclick="ORIGEN_LINEA=\'dash-consola\';abrirLinea(\''+l.id+'\')" style="margin-bottom:8px;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.08);cursor:pointer">'
+      +'<div style="background:#0d2144;color:#fff;padding:5px 12px;font-size:12px;font-weight:800;display:flex;justify-content:space-between;align-items:center">'
+      +'<span>'+l.nombre+'</span>'
+      +'<span style="opacity:.65;font-size:10px">'+(l.area?l.area.charAt(0).toUpperCase()+l.area.slice(1):'')+'</span>'
+      +'</div>'
+      +'<div style="display:flex;align-items:center;gap:8px;padding:7px 10px">'
+      +'<div style="display:flex;gap:3px;flex-shrink:0">'
+      +'<div style="background:'+(ai>=oAI?'#16a34a':'#dc2626')+';color:#fff;padding:3px 6px;border-radius:6px;font-size:10px;font-weight:900;white-space:nowrap">AI '+ai+'%</div>'
+      +'<div style="background:'+(pp<=oPP?'#16a34a':'#dc2626')+';color:#fff;padding:3px 6px;border-radius:6px;font-size:10px;font-weight:900;white-space:nowrap">PP '+pp+'%</div>'
+      +'<div style="background:'+(pnp<=oPNP?'#16a34a':'#dc2626')+';color:#fff;padding:3px 6px;border-radius:6px;font-size:10px;font-weight:900;white-space:nowrap">PNP '+pnp+'%</div>'
+      +'</div>'
+      +'<div style="flex:1;height:22px;border-radius:4px;overflow:hidden;display:flex;min-width:0">'
+      +(tlHTML||'<div style="width:100%;background:#e5e7eb;height:100%"></div>')
+      +'</div></div></div>';
+  }
+  if(!html) html='<div style="text-align:center;padding:32px;color:#9ca3af">No hay líneas activas</div>';
+  cont.innerHTML=html;
+  if(esHoy&&!TIMER) TIMER=setInterval(renderDashConsola,30000);
+}
 function ajustarGraficaKPI(eje,delta){
   if(eje==='H') _kpiChartH=Math.max(200,Math.min(900,_kpiChartH+delta));
   else _kpiBarW=Math.max(20,Math.min(200,_kpiBarW+delta));
@@ -3139,7 +3294,59 @@ function kpiParetoBack(){
     mostrarParetoKPI(prev.evs,prev.tipo,window._kpiObjActual,prev.groupBy,prev.titulo);
   }
 }
-async function renderKPIDetalle(lineaId,obj){}
+async function renderKPIDetalle(lineaId,obj){
+  var cont=document.getElementById('kpi-cont');
+  if(!cont) return;
+  cont.innerHTML='<div style="text-align:center;padding:32px;color:#9ca3af">Calculando por día...</div>';
+  var dias=[];
+  var d=new Date(_kpiDesde);
+  var mesesFull=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  while(d.getTime()<_kpiHasta){
+    var dayStart=d.getTime(), dayEnd=Math.min(dayStart+24*3600000,_kpiHasta);
+    var dData=await obtenerKPIData(dayStart,dayEnd,lineaId);
+    dias.push({label:d.getDate()+' '+mesesFull[d.getMonth()],data:dData});
+    d.setDate(d.getDate()+1);
+  }
+  if(!dias.length){cont.innerHTML='<div style="text-align:center;padding:32px;color:#9ca3af">Sin datos</div>';return;}
+  window._kpiObjActual=obj;
+
+  function chartBar(key,objVal,menorEsMejor){
+    var nombres={AI:'Asset Intensity %',PP:'Paro Planeado %',PNP:'Paro No Planeado %'};
+    var valsTop=dias.map(function(dia){
+      var val=dia.data[key]; var ok=menorEsMejor?val<=objVal:val>=objVal;
+      return '<div style="flex:1;text-align:center;font-size:9px;font-weight:800;color:'+(ok?'#16a34a':'#dc2626')+'">'+val+'%</div>';
+    }).join('');
+    var barras=dias.map(function(dia,i){
+      var val=dia.data[key]; var ok=menorEsMejor?val<=objVal:val>=objVal;
+      var pct=Math.max(val,2);
+      var evs=key==='PP'?dia.data.ppEvs:key==='PNP'?dia.data.pnpEvs:null;
+      var clickStr=evs&&evs.length?'onclick="window._kpiClickDia('+i+',\''+key+'\')" style="cursor:pointer"':'style="cursor:default"';
+      return '<div '+clickStr+' style="flex:1;height:100%;display:flex;align-items:flex-end;padding:0 1px">'
+        +'<div style="width:100%;background:'+(ok?'#16a34a':'#dc2626')+';border-radius:3px 3px 0 0;height:'+pct+'%;min-height:4px"></div></div>';
+    }).join('');
+    var lblsBottom=dias.map(function(dia){return '<div style="flex:1;text-align:center;font-size:8px;color:#9ca3af;overflow:hidden">'+dia.label+'</div>';}).join('');
+    return '<div style="background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,.08)">'
+      +'<div style="font-size:13px;font-weight:800;color:#1a3c5e;margin-bottom:8px">'+nombres[key]+' <span style="font-size:11px;color:#6b7280;font-weight:600">Obj: '+(menorEsMejor?'≤':'≥')+objVal+'%</span></div>'
+      +'<div style="display:flex;margin-bottom:4px">'+valsTop+'</div>'
+      +'<div style="display:flex;height:100px">'+barras+'</div>'
+      +'<div style="display:flex;margin-top:4px">'+lblsBottom+'</div>'
+      +(key!=='AI'?'<div style="font-size:10px;color:#9ca3af;margin-top:6px">Toca una barra para ver Pareto de ese día</div>':'')
+      +'</div>';
+  }
+
+  window._kpiClickDia=function(diaIdx,key){
+    var dia=dias[diaIdx];
+    if(!dia) return;
+    var evs=key==='PP'?dia.data.ppEvs:dia.data.pnpEvs;
+    if(!evs||!evs.length){toast('Sin datos de '+key+' en este día','#6b7280');return;}
+    _kpiParetoStack=[];
+    mostrarParetoKPI(evs,key,obj,'rc',key+' · '+dia.label);
+  };
+
+  cont.innerHTML=chartBar('AI',obj.objetivo_ai,false)
+    +chartBar('PP',obj.objetivo_pp,true)
+    +chartBar('PNP',obj.objetivo_pnp,true);
+}
 async function irObjetivosKPI(){
   go('s-objetivos-kpi');
   var cont=document.getElementById('objetivos-kpi-cont');
@@ -3342,6 +3549,7 @@ async function recargarSHO(){
     </div>`;
 }
 function editarSHOAccidentes(){
+  if(bloqueadoLectura())return;
   var cfg={}; // se cargar\u00e1 del estado actual en el DOM
   modal('\u270f\ufe0f D\u00edas sin accidentes',
     `<label style=\"font-size:.82rem;font-weight:700;display:block;margin-bottom:4px\">Fecha del \u00faltimo accidente</label>
@@ -3359,6 +3567,7 @@ function editarSHOAccidentes(){
     },'#16a34a','Guardar');
 }
 function editarSHOReclamos(){
+  if(bloqueadoLectura())return;
   modal('\u270f\ufe0f N\u00famero de reclamos',
     `<label style=\"font-size:.82rem;font-weight:700;display:block;margin-bottom:4px\">N\u00famero de reclamos</label>
     <input type=\"number\" id=\"sho-rec-num\" class=\"fc\" min=\"0\" value=\"0\">
@@ -3374,6 +3583,7 @@ function editarSHOReclamos(){
     },'#0891b2','Guardar');
 }
 function editarSHOPrioridades(){
+  if(bloqueadoLectura())return;
   modal('\u270f\ufe0f Prioridades',
     `<label style=\"font-size:.82rem;font-weight:700;display:block;margin-bottom:4px\">Prioridad 1</label>
     <input type=\"text\" id=\"sho-p1\" class=\"fc\" placeholder=\"\">
