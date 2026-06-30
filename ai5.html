@@ -196,6 +196,9 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
       <button onclick="kpiSetVista('detalle')" id="kpi-v-detalle" style="padding:5px 12px;border:1.5px solid #000;border-radius:7px;font-size:11px;font-weight:800;cursor:pointer;background:#fff;color:#000">Detalle</button>
     </div>
   </div>
+  <div style="background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:6px 12px">
+    <select id="kpi-filtro-linea" onchange="kpiSetFiltro(this.value)" class="fc" style="margin-bottom:0;font-size:12px;padding:6px 8px"></select>
+  </div>
   <div class="scroll" id="kpi-cont" style="padding:16px"></div>
 </div>
 
@@ -2936,10 +2939,27 @@ function ajustarGraficaKPI(eje,delta){
   }
 }
 
+var _kpiFiltro='general';
 async function irKPI(){
   if(TIMER){clearInterval(TIMER);TIMER=null;}
   go('s-kpi');
+  if(!LINEAS.length){
+    var lin=await db('ai_lineas','GET',null,'activa=eq.true&order=area.asc,nombre.asc');
+    LINEAS=lin||[];
+  }
+  var fab=LINEAS.filter(l=>(l.area||'envasado')==='fabricacion');
+  var env=LINEAS.filter(l=>(l.area||'envasado')==='envasado');
+  var sel=document.getElementById('kpi-filtro-linea');
+  if(sel) sel.innerHTML='<option value="general">🏭 General (Fábrica/Fabricación/Envasado)</option>'
+    +'<option value="fabrica">🏭 Fábrica (todas las líneas)</option>'
+    +(fab.length?'<optgroup label="— Fabricación">'+fab.map(l=>'<option value="'+l.id+'">'+l.nombre+'</option>').join('')+'</optgroup>':'')
+    +(env.length?'<optgroup label="— Envasado">'+env.map(l=>'<option value="'+l.id+'">'+l.nombre+'</option>').join('')+'</optgroup>':'');
+  _kpiFiltro='general';
   kpiSetModo('S'); // Default: semanal
+}
+function kpiSetFiltro(v){
+  _kpiFiltro=v;
+  cargarKPI();
 }
 
 async function cargarKPI(){
@@ -2953,29 +2973,51 @@ async function cargarKPI(){
     var lin=await db('ai_lineas','GET',null,'activa=eq.true&order=area.asc,nombre.asc');
     LINEAS=lin||[];
   }
-  // Cargar datos para Fábrica, Fabricación y Envasado en paralelo
-  var [dataFab,dataFabr,dataEnv,objsFab,objsFabr,objsEnv]=await Promise.all([
-    obtenerKPIData(_kpiDesde,_kpiHasta,'fabrica'),
-    obtenerKPIData(_kpiDesde,_kpiHasta,'fabricacion'),
-    obtenerKPIData(_kpiDesde,_kpiHasta,'envasado'),
-    db('ai_kpi_objetivos','GET',null,'id=eq.fabrica'),
-    db('ai_kpi_objetivos','GET',null,'id=eq.fabricacion'),
-    db('ai_kpi_objetivos','GET',null,'id=eq.envasado')
-  ]);
   var defObj={objetivo_ai:85,objetivo_pp:10,objetivo_pnp:10};
-  var objFab=objsFab&&objsFab.length?objsFab[0]:defObj;
-  var objFabr=objsFabr&&objsFabr.length?objsFabr[0]:objFab;
-  var objEnv=objsEnv&&objsEnv.length?objsEnv[0]:objFab;
-  window._kpiEntidades={
-    fabrica:{data:dataFab,obj:objFab,id:'fabrica'},
-    fabricacion:{data:dataFabr,obj:objFabr,id:'fabricacion'},
-    envasado:{data:dataEnv,obj:objEnv,id:'envasado'}
-  };
-  window._kpiDataActual=dataFab;
-  window._kpiObjActual=objFab;
-  document.getElementById('kpi-sub').textContent='Semana actual · Fábrica / Fabricación / Envasado';
-  if(_kpiVista==='resumen') renderKPIHome(window._kpiEntidades);
-  else await renderKPIDetalle('fabrica',objFab);
+
+  if(_kpiFiltro==='general'){
+    // Cargar datos para Fábrica, Fabricación y Envasado en paralelo
+    var [dataFab,dataFabr,dataEnv,objsFab,objsFabr,objsEnv]=await Promise.all([
+      obtenerKPIData(_kpiDesde,_kpiHasta,'fabrica'),
+      obtenerKPIData(_kpiDesde,_kpiHasta,'fabricacion'),
+      obtenerKPIData(_kpiDesde,_kpiHasta,'envasado'),
+      db('ai_kpi_objetivos','GET',null,'id=eq.fabrica'),
+      db('ai_kpi_objetivos','GET',null,'id=eq.fabricacion'),
+      db('ai_kpi_objetivos','GET',null,'id=eq.envasado')
+    ]);
+    var objFab=objsFab&&objsFab.length?objsFab[0]:defObj;
+    var objFabr=objsFabr&&objsFabr.length?objsFabr[0]:objFab;
+    var objEnv=objsEnv&&objsEnv.length?objsEnv[0]:objFab;
+    window._kpiEntidades={
+      fabrica:{data:dataFab,obj:objFab,id:'fabrica'},
+      fabricacion:{data:dataFabr,obj:objFabr,id:'fabricacion'},
+      envasado:{data:dataEnv,obj:objEnv,id:'envasado'}
+    };
+    window._kpiDataActual=dataFab;
+    window._kpiObjActual=objFab;
+    document.getElementById('kpi-sub').textContent='Semana actual · Fábrica / Fabricación / Envasado';
+    if(_kpiVista==='resumen') renderKPIHome(window._kpiEntidades);
+    else await renderKPIDetalle('fabrica',objFab);
+    return;
+  }
+
+  // Filtro = 'fabrica' o una línea específica
+  var lineaId=_kpiFiltro;
+  var esLinea=lineaId!=='fabrica';
+  var l=esLinea?LINEAS.find(x=>x.id===lineaId):null;
+  var objQuery=esLinea?null:await db('ai_kpi_objetivos','GET',null,'id=eq.fabrica');
+  var obj=esLinea
+    ?{objetivo_ai:(l&&l.objetivo_ai)||defObj.objetivo_ai,objetivo_pp:(l&&l.objetivo_pp)||defObj.objetivo_pp,objetivo_pnp:(l&&l.objetivo_pnp)||defObj.objetivo_pnp}
+    :(objQuery&&objQuery.length?objQuery[0]:defObj);
+  var data=await obtenerKPIData(_kpiDesde,_kpiHasta,lineaId);
+  var label=esLinea?(l?l.nombre:'—'):'Fábrica (todas las líneas)';
+  window._kpiEntidades={};
+  window._kpiEntidades[lineaId]={data:data,obj:obj,id:lineaId,label:label};
+  window._kpiDataActual=data;
+  window._kpiObjActual=obj;
+  document.getElementById('kpi-sub').textContent='Semana actual · '+label;
+  if(_kpiVista==='resumen') renderKPIHomeSingle(window._kpiEntidades[lineaId]);
+  else await renderKPIDetalle(lineaId,obj);
 }
 function kpiSetModo(m){
   _kpiModo=m; _kpiOffset=0;
@@ -3120,6 +3162,33 @@ function renderKPIHome(entidades){
   cont.innerHTML=tarjeta(entidades.fabrica,true)+tarjeta(entidades.fabricacion,false)+tarjeta(entidades.envasado,false);
 }
 
+function renderKPIHomeSingle(ent){
+  var cont=document.getElementById('kpi-cont'); if(!cont) return;
+  var d=ent.data,obj=ent.obj,id=ent.id;
+  var label=ent.label||(id==='fabrica'?'🏭 Fábrica (todas)':id);
+  var aiOk=d.AI>=obj.objetivo_ai,ppOk=d.PP<=obj.objetivo_pp,pnpOk=d.PNP<=obj.objetivo_pnp;
+  cont.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;box-shadow:0 2px 10px rgba(0,0,0,.09);margin-bottom:12px">'
+    +'<div style="font-size:15px;font-weight:900;color:#1a3c5e;margin-bottom:10px">'+label+'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px">'
+    +'<div onclick="kpiCardClick(\''+id+'\',\'AI\')" style="background:'+(aiOk?'#16a34a':'#dc2626')+';border-radius:12px;padding:20px;text-align:center;cursor:default">'
+      +'<div style="color:rgba(255,255,255,.8);font-size:11px;font-weight:700">Asset Intensity</div>'
+      +'<div style="color:#fff;font-size:38px;font-weight:900;line-height:1.1;margin:4px 0">'+d.AI+'%</div>'
+      +'<div style="color:rgba(255,255,255,.7);font-size:10px">Obj ≥'+obj.objetivo_ai+'%</div>'
+    +'</div>'
+    +'<div onclick="kpiCardClick(\''+id+'\',\'PP\')" style="background:'+(ppOk?'#16a34a':'#dc2626')+';border-radius:12px;padding:20px;text-align:center;cursor:pointer;transition:filter .15s" onmousedown="this.style.filter=\'brightness(.85)\'" onmouseup="this.style.filter=\'\'" onmouseleave="this.style.filter=\'\'">'
+      +'<div style="color:rgba(255,255,255,.8);font-size:11px;font-weight:700">Paro Planeado</div>'
+      +'<div style="color:#fff;font-size:38px;font-weight:900;line-height:1.1;margin:4px 0">'+d.PP+'%</div>'
+      +'<div style="color:rgba(255,255,255,.7);font-size:10px">Obj ≤'+obj.objetivo_pp+'% · Toca →</div>'
+    +'</div>'
+    +'<div onclick="kpiCardClick(\''+id+'\',\'PNP\')" style="background:'+(pnpOk?'#16a34a':'#dc2626')+';border-radius:12px;padding:20px;text-align:center;cursor:pointer;transition:filter .15s" onmousedown="this.style.filter=\'brightness(.85)\'" onmouseup="this.style.filter=\'\'" onmouseleave="this.style.filter=\'\'">'
+      +'<div style="color:rgba(255,255,255,.8);font-size:11px;font-weight:700">Paro No Planeado</div>'
+      +'<div style="color:#fff;font-size:38px;font-weight:900;line-height:1.1;margin:4px 0">'+d.PNP+'%</div>'
+      +'<div style="color:rgba(255,255,255,.7);font-size:10px">Obj ≤'+obj.objetivo_pnp+'% · Toca →</div>'
+    +'</div>'
+    +'</div>'+(d.TO>0?'<div style="font-size:10px;color:#9ca3af;margin-top:8px;text-align:right">TO: '+Math.round(d.TO/60000).toLocaleString()+' min</div>':'')
+    +'</div>';
+}
+
 function kpiCardClick(entId,tipo){
   if(tipo==='AI') return; // AI no tiene drill-down
   var ent=window._kpiEntidades&&window._kpiEntidades[entId];
@@ -3127,7 +3196,14 @@ function kpiCardClick(entId,tipo){
   window._kpiDataActual=ent.data;
   window._kpiObjActual=ent.obj;
   _kpiParetoStack=[];
-  mostrarParetoLineas(tipo,ent.data,ent.obj);
+  var esDept=entId==='fabrica'||entId==='fabricacion'||entId==='envasado';
+  if(esDept){
+    mostrarParetoLineas(tipo,ent.data,ent.obj);
+  }else{
+    // Línea individual: ir directo al Pareto por motivo (no tiene sentido Pareto de 1 sola línea)
+    var evs=tipo==='PP'?ent.data.ppEvs:ent.data.pnpEvs;
+    mostrarParetoKPI(evs,tipo,ent.obj,'rc',tipo+' · '+(ent.label||entId));
+  }
 }
 function mostrarParetoKPIActual(){}  // placeholder
 
@@ -3601,6 +3677,16 @@ function editarSHOPrioridades(){
       m.remove();toast('\u2705 Actualizado','#374151');recargarSHO();
     },'#374151','Guardar');
 }
+var _ckMonitorTimer=null;
+var _ckSnooze={};   // {checklist_id+'_'+linea_id: timestamp_snooze}
+var _ckAlertaActiva=false;
+
+function iniciarMonitorChecklists(){
+  if(_ckMonitorTimer) clearInterval(_ckMonitorTimer);
+  _ckMonitorTimer=setInterval(revisarAlertasChecklists,60000);
+  setTimeout(revisarAlertasChecklists,3000); // primera revisión a los 3s
+}
+
 async function revisarAlertasChecklists(){
   if(_ckAlertaActiva) return;
 
@@ -3663,6 +3749,44 @@ async function revisarAlertasChecklists(){
       }
     }
   }catch(e){console.warn('Monitor CK error',e);}
+}
+function mostrarAlertaChecklist(ck,linea,ord){
+  _ckAlertaActiva=true;
+  var snoozeKey=ck.id+'_'+linea.id;
+  var m=document.createElement('div');
+  m.id='ck-alerta-overlay';
+  m.className='ck-alerta-blink';
+  m.style.cssText='position:fixed;inset:0;background:#dc2626;z-index:99999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:32px;text-align:center';
+  m.innerHTML=`
+    <div style="font-size:64px;margin-bottom:16px">⚠️</div>
+    <div style="font-size:22px;font-weight:900;color:#000;margin-bottom:8px">CHECK LIST PENDIENTE</div>
+    <div style="font-size:18px;font-weight:800;color:#000;margin-bottom:6px">${ck.nombre}</div>
+    <div style="font-size:14px;color:#000;opacity:.8;margin-bottom:32px">Línea: ${linea.nombre}</div>
+    <div style="display:flex;gap:14px;flex-wrap:wrap;justify-content:center">
+      <button onclick="cerrarAlertaCK('${snoozeKey}')" style="padding:16px 28px;background:#000;color:#fff;border:none;border-radius:14px;font-weight:900;font-size:16px;cursor:pointer;font-family:Nunito,sans-serif">✕ Cerrar</button>
+      <button onclick="ejecutarDesdeAlerta('${ck.id}','${snoozeKey}')" style="padding:16px 28px;background:#fff;color:#dc2626;border:none;border-radius:14px;font-weight:900;font-size:16px;cursor:pointer;font-family:Nunito,sans-serif">▶ Ejecutar ahora</button>
+    </div>
+    <div style="font-size:11px;color:#000;opacity:.6;margin-top:20px">Si cierras sin ejecutar, esta alerta volverá en 5 minutos</div>`;
+  document.body.appendChild(m);
+}
+function cerrarAlertaCK(snoozeKey){
+  _ckSnooze[snoozeKey]=Date.now();
+  _ckAlertaActiva=false;
+  var el=document.getElementById('ck-alerta-overlay');
+  if(el) el.remove();
+}
+async function ejecutarDesdeAlerta(clId,snoozeKey){
+  var el=document.getElementById('ck-alerta-overlay');
+  if(el) el.remove();
+  _ckAlertaActiva=false;
+  var cls=await db('ai_checklists','GET',null,'id=eq.'+clId)||[];
+  if(!cls.length) return;
+  window._ck_pendientes_arranque=[cls[0]];
+  window._ck_callback_arranque=()=>{
+    delete _ckSnooze[snoozeKey];
+    toast('✅ Checklist completado','#16a34a');
+  };
+  ejecutarChecklistArranque([cls[0]],0,window._ck_callback_arranque);
 }
 (function(){
   var s=localStorage.getItem('ai_me');
