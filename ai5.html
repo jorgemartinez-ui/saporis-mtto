@@ -1022,7 +1022,7 @@ async function renderLinea(){
   var pzTotalVal=esHoy&&ORDEN_ACTIVA&&ORDEN_ACTIVA.piezas_total?ORDEN_ACTIVA.piezas_total:pzRegistradas;
 
   // ── Topbar con color de estado ───────────────────────────────
-  document.getElementById('linea-title').textContent=(l?l.nombre:'—')+(ORDEN_ACTIVA?' · '+(ORDEN_ACTIVA.folio||''):'');
+  document.getElementById('linea-title').textContent=(l?l.nombre:'—')+(ORDEN_ACTIVA?' · Folio '+(ORDEN_ACTIVA.folio||''):'');
   document.getElementById('linea-sub').textContent=fT==='turno_actual'?'Turno '+turno():fT==='dia'?'Día completo':'Turno '+fT;
   var topbar=document.querySelector('#s-linea .topbar');
   var colTopbar=tipoAct==='detenida'?'#16a34a':tipoAct==='idle'?'#6b7280':COL[tipoAct]||COL.corriendo;
@@ -1153,7 +1153,7 @@ async function renderLinea(){
     :'<div style="padding:0 16px 8px"><div style="background:#fef3c7;color:#92400e;border-radius:9px;padding:8px 12px;font-size:11px;font-weight:700;text-align:center">📖 Modo consulta — viendo historial de '+hFiltro+' (solo lectura)</div></div>')
     // Barra de tiempo
     +'<div style="padding:0 16px 8px">'
-    +'<div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:3px">Línea de tiempo'+(ORDEN_ACTIVA&&esHoy?' - Orden: '+ORDEN_ACTIVA.folio:'')+'</div>'
+    +'<div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:3px">Línea de tiempo'+(ORDEN_ACTIVA&&esHoy?' - Folio: '+ORDEN_ACTIVA.folio:'')+'</div>'
     +'<div style="height:52px;border-radius:10px;overflow:hidden;display:flex;box-shadow:0 1px 4px rgba(0,0,0,.15)">'+segs+'</div>'
     +'<div style="position:relative;height:16px;margin-top:1px">'+marcas+'</div>'
     +'</div>'
@@ -1200,6 +1200,8 @@ async function renderLinea(){
     +'<th style="text-align:left;padding:5px 6px;font-size:10px;color:#6b7280;white-space:nowrap">Duración</th>'
     +'</tr></thead>'
     +'<tbody>'+(tbEv||'<tr><td colspan="7" style="text-align:center;padding:16px;color:#9ca3af;font-size:11px">Sin eventos</td></tr>')+'</tbody></table></div></div>';
+  // Alerta 30 min antes del fin de turno si hay folio activo
+  if(esHoy&&ORDEN_ACTIVA&&!ORDEN_ACTIVA._tsF) _checkFlujAlerta();
 }
 
 // ── PLAY — iniciar o continuar orden ─────────────────────────
@@ -1217,9 +1219,9 @@ async function accionPlay(){
     m.innerHTML='<div style="background:#fff;border-radius:22px 22px 0 0;padding:28px 20px 40px;width:100%;max-width:480px">'
       +'<div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 16px"></div>'
       +'<div style="font-size:16px;font-weight:900;color:#1a3c5e;margin-bottom:4px">▶ Iniciar línea</div>'
-      +'<div style="font-size:13px;color:#6b7280;margin-bottom:20px">Orden activa: <b>'+ORDEN_ACTIVA.folio+'</b></div>'
-      +'<button onclick="this.closest(\'div\').parentElement.remove();continuarOrden()" style="width:100%;padding:14px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif;margin-bottom:10px">▶ Continuar misma orden</button>'
-      +'<button onclick="this.closest(\'div\').parentElement.remove();iniciarNuevaOrden()" style="width:100%;padding:14px;background:#0d2144;color:#fff;border:none;border-radius:12px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif;margin-bottom:10px">🆕 Nueva orden</button>'
+      +'<div style="font-size:13px;color:#6b7280;margin-bottom:20px">Folio activo: <b>'+ORDEN_ACTIVA.folio+'</b></div>'
+      +'<button onclick="this.closest(\'div\').parentElement.remove();continuarOrden()" style="width:100%;padding:14px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif;margin-bottom:10px">▶ Continuar mismo folio</button>'
+      +'<button onclick="this.closest(\'div\').parentElement.remove();iniciarNuevaOrden()" style="width:100%;padding:14px;background:#0d2144;color:#fff;border:none;border-radius:12px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif;margin-bottom:10px">🆕 Nuevo folio</button>'
       +'<button onclick="this.closest(\'div\').parentElement.remove()" style="width:100%;padding:12px;background:#f3f4f6;border:none;border-radius:12px;cursor:pointer;font-weight:700;font-family:Nunito,sans-serif">Cancelar</button>'
       +'</div>';
     document.body.appendChild(m);
@@ -1496,38 +1498,49 @@ async function continuarOrden(){
 
 async function iniciarNuevaOrden(){
   if(bloqueadoLectura())return;
-  // Capturar lineaId y línea AHORA antes de cualquier await
   var lineaIdCapturado=LINEA_ID;
   var l=LINEAS.find(x=>x.id===lineaIdCapturado)||{id:lineaIdCapturado,nombre:'?',area:'envasado'};
   var area=l.area||'envasado';
   var tipoProd=area==='envasado'?'Fert':'Halb';
-  var prods=await db('ai_productos','GET',null,'linea_id=eq.'+lineaIdCapturado+'&activo=eq.true&order=nombre.asc')||[];
-  if(prods.length===0){
-    await _crearNuevaOrden(null,null,l,lineaIdCapturado);
-    return;
-  }
-  modal('📦 Selecciona '+tipoProd,
-    `<div style="font-size:12px;color:#6b7280;margin-bottom:10px">Elige el ${tipoProd} para esta orden</div>
-    <select id="prod-sel" class="fc">
-      <option value="">— Selecciona un ${tipoProd} —</option>
-      ${prods.map(p=>'<option value="'+p.id+'">'+p.nombre+(p.codigo?' ('+p.codigo+')':'')+'</option>').join('')}
-    </select>`,
+  // ── Paso 1: Folio + Flujómetro inicial ──
+  modal('📋 Nuevo Folio',
+    `<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Número de Folio</label>
+    <input type="number" id="nf-folio" class="fc" placeholder="Ej: 12345" min="1" inputmode="numeric">
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Lectura inicial de Flujómetro</label>
+    <input type="number" id="nf-flujo" class="fc" placeholder="Ej: 98500.0" step="any" inputmode="decimal">`,
     async(m)=>{
-      var prodId=document.getElementById('prod-sel').value;
-      if(!prodId){toast('Selecciona un '+tipoProd,'#dc2626');return;}
-      var prod=prods.find(p=>p.id===prodId);
+      var folio=document.getElementById('nf-folio').value.trim();
+      var flujo=parseFloat(document.getElementById('nf-flujo').value);
+      if(!folio||isNaN(parseInt(folio))||parseInt(folio)<=0){toast('Ingresa un número de folio válido','#dc2626');return;}
+      if(isNaN(flujo)){toast('Ingresa la lectura del flujómetro','#dc2626');return;}
       m.remove();
-      await _crearNuevaOrden(prod,area,l,lineaIdCapturado);
-    },'#16a34a','Arrancar');
+      // ── Paso 2: Producto ──
+      var prods=await db('ai_productos','GET',null,'linea_id=eq.'+lineaIdCapturado+'&activo=eq.true&order=nombre.asc')||[];
+      if(!prods.length){
+        await _crearNuevaOrden(parseInt(folio),flujo,null,area,l,lineaIdCapturado);
+        return;
+      }
+      modal('📦 Selecciona '+tipoProd,
+        `<div style="font-size:12px;color:#6b7280;margin-bottom:10px">Elige el ${tipoProd} para este folio</div>
+        <select id="prod-sel" class="fc">
+          <option value="">— Selecciona un ${tipoProd} —</option>
+          ${prods.map(p=>'<option value="'+p.id+'">'+p.nombre+(p.codigo?' ('+p.codigo+')':'')+'</option>').join('')}
+        </select>`,
+        async(m2)=>{
+          var prodId=document.getElementById('prod-sel').value;
+          if(!prodId){toast('Selecciona un '+tipoProd,'#dc2626');return;}
+          var prod=prods.find(p=>p.id===prodId);
+          m2.remove();
+          await _crearNuevaOrden(parseInt(folio),flujo,prod,area,l,lineaIdCapturado);
+        },'#16a34a','Arrancar');
+    },'#0d2144','Siguiente →');
 }
-async function _crearNuevaOrden(prod,area,l,lineaIdExplicito){
-  // Usar siempre el lineaId capturado al inicio, nunca el global
+async function _crearNuevaOrden(folio,flujoInicial,prod,area,l,lineaIdExplicito){
   var lineaId=lineaIdExplicito||(l?l.id:LINEA_ID);
-  var folio=await genFolio();
   var ahora=Date.now();
-  // ID único con componente random para evitar colisión si dos líneas arrancan al mismo ms
   var ordId='aior_'+ahora+'_'+Math.random().toString(36).slice(2,7);
   var targetHora=prod?prod.target_hora:(l?l.target_hora:0);
+  var lecInicial={ts:ahora,valor:flujoInicial,tipo:'inicio',turno:turno(),fecha:hoy()};
   var orden={
     id:ordId,
     folio:folio,
@@ -1543,38 +1556,39 @@ async function _crearNuevaOrden(prod,area,l,lineaIdExplicito){
     tiempo_ocupado_min:0,
     ai_real:null,
     estado:'abierta',
-    detenida_en:null,
     producto_id:prod?prod.id:null,
-    producto_nombre:prod?prod.nombre:null
+    producto_nombre:prod?prod.nombre:null,
+    flujometro_lecturas:[lecInicial],
+    _flujoAlertas:{}
   };
-  // Aplicar objetivos del producto a la línea en memoria (para cálculos del turno)
-  if(prod&&l){
-    l._target_hora_orden=prod.target_hora;
-    l._objetivo_ai_orden=prod.objetivo_ai;
-    l._objetivo_pp_orden=prod.objetivo_pp;
-    l._objetivo_pnp_orden=prod.objetivo_pnp;
-  }
-  await dbP('ai_ordenes','POST',orden,'');
-  // Cerrar cualquier orden anterior abierta de esta línea (no debe quedar más de una abierta)
-  await dbP('ai_ordenes','PATCH',{estado:'cerrada',ts_fin:ahora},
-    'linea_id=eq.'+lineaId+'&estado=eq.abierta&id=neq.'+ordId);
   ORDEN_ACTIVA=orden;
   localStorage.setItem('ai_orden_'+lineaId,JSON.stringify(orden));
-  // Verificar checklists requeridos antes de arrancar
+  await dbP('ai_ordenes','POST',{
+    id:ordId,folio:folio,linea_id:lineaId,linea_nombre:l?l.nombre:'—',
+    ts_inicio:ahora,turno:turno(),fecha:hoy(),operador:ME.nombre,
+    piezas_objetivo:targetHora,tiempo_ocupado_min:0,estado:'abierta',
+    producto_id:prod?prod.id:null,producto_nombre:prod?prod.nombre:null,
+    flujometro_lecturas:[lecInicial]
+  },'');
   var cls=await db('ai_checklists','GET',null,'linea_id=eq.'+lineaId+'&requiere_antes_arranque=eq.true&activo=eq.true')||[];
-  if(cls.length){
-    window._ck_pendientes_arranque=cls;
+  var pendientes=[];
+  for(var ck of cls){
+    var execs=await db('ai_checklist_ejecuciones','GET',null,'checklist_id=eq.'+ck.id+'&linea_id=eq.'+lineaId+'&ts_fin=gte.'+ORDEN_ACTIVA.ts_inicio)||[];
+    if(!execs||!execs.length) pendientes.push(ck);
+  }
+  if(pendientes.length){
+    window._ck_pendientes_arranque=pendientes;
     window._ck_callback_arranque=async()=>{
       await cambiarEstado('corriendo');
-      toast('▶ Orden '+folio+' iniciada','#16a34a');
+      toast('▶ Folio '+folio+' iniciado','#16a34a');
       if(TIMER) clearInterval(TIMER);
       TIMER=setInterval(renderLinea,30000);
-      renderLinea(); // garantizar render con ts_inicio correcto
+      renderLinea();
     };
-    ejecutarChecklistArranque(cls,0,window._ck_callback_arranque);
+    ejecutarChecklistArranque(pendientes,0,window._ck_callback_arranque);
   }else{
     await cambiarEstado('corriendo');
-    toast('▶ Orden '+folio+' iniciada','#16a34a');
+    toast('▶ Folio '+folio+' iniciado','#16a34a');
     if(TIMER) clearInterval(TIMER);
     TIMER=setInterval(renderLinea,30000);
     renderLinea();
@@ -1584,15 +1598,42 @@ async function _crearNuevaOrden(prod,area,l,lineaIdExplicito){
 // ── DETENER — calcular AI real ────────────────────────────────
 async function pararLinea(){
   if(bloqueadoLectura())return;
-  if(!confirm('¿Detener la orden de producción y calcular Asset Intensity real?')) return;
+  if(!ORDEN_ACTIVA){toast('No hay folio activo','#dc2626');return;}
+  // Pedir lectura final de flujómetro antes de detener
+  var ultimaLectura=null;
+  if(ORDEN_ACTIVA.flujometro_lecturas&&ORDEN_ACTIVA.flujometro_lecturas.length){
+    ultimaLectura=ORDEN_ACTIVA.flujometro_lecturas[ORDEN_ACTIVA.flujometro_lecturas.length-1].valor;
+  }
+  modal('📊 Lectura Final de Flujómetro',
+    `<div style="font-size:13px;color:#374151;margin-bottom:10px">Ingresa la lectura actual del flujómetro para calcular la producción total del folio <b>${ORDEN_ACTIVA.folio}</b>.</div>
+    ${ultimaLectura!=null?'<div style="font-size:11px;color:#6b7280;margin-bottom:10px">Última lectura registrada: <b>'+ultimaLectura.toLocaleString()+'</b></div>':''}
+    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Lectura final de Flujómetro</label>
+    <input type="number" id="flujo-final" class="fc" placeholder="Ej: 103200.0" step="any" inputmode="decimal">`,
+    async(m)=>{
+      var flujoFinal=parseFloat(document.getElementById('flujo-final').value);
+      if(isNaN(flujoFinal)){toast('Ingresa la lectura del flujómetro','#dc2626');return;}
+      m.remove();
+      await _ejecutarPararLinea(flujoFinal);
+    },'#dc2626','Detener folio');
+}
+
+async function _ejecutarPararLinea(flujoFinal){
   var lineaIdCap=LINEA_ID;
   var ordenCap=ORDEN_ACTIVA;
   var ahora=Date.now();
+  // Registrar lectura final
+  var lecFinal={ts:ahora,valor:flujoFinal,tipo:'fin',turno:turno(),fecha:hoy()};
+  if(!ordenCap.flujometro_lecturas) ordenCap.flujometro_lecturas=[];
+  ordenCap.flujometro_lecturas.push(lecFinal);
+  // Calcular producción total
+  var lecs=ordenCap.flujometro_lecturas;
+  var flujoInicial=lecs[0]?lecs[0].valor:flujoFinal;
+  var prodTotal=Math.round(flujoFinal-flujoInicial);
   // Cerrar evento activo
   var evs=await db('ai_eventos','GET',null,'linea_id=eq.'+lineaIdCap+'&ts_fin=is.null')||[];
   for(var e of evs) await dbP('ai_eventos','PATCH',{ts_fin:ahora},'id=eq.'+e.id);
   if(TIMER) clearInterval(TIMER);
-  // Calcular tiempo ocupado real de la orden
+  // Calcular AI
   if(ordenCap){
     var tsI=ordenCap.ts_inicio;
     var allEvs=await db('ai_eventos','GET',null,'linea_id=eq.'+lineaIdCap+'&ts_inicio=gte.'+tsI+'&order=ts_inicio.asc')||[];
@@ -1606,28 +1647,29 @@ async function pararLinea(){
     if(curC<ahora) tC+=(ahora-curC);
     var tOcupMs=tC+tPNP+tPP;
     var tOcupMin=Math.round(tOcupMs/60000);
-    var tOcupHr=tOcupMs/3600000;
     var l=LINEAS.find(x=>x.id===lineaIdCap);
-    var pzObjetivo=l?(l.target_hora||0)*(tC/3600000):0; // solo tiempo corriendo
     ordenCap._tOcupMin=tOcupMin;
-    ordenCap._pzObjetivo=Math.round(pzObjetivo);
+    ordenCap._pzObjetivo=Math.round((l?(l.target_hora||0):0)*(tC/3600000));
     ordenCap._tC=tC;
     ordenCap._tsF=ahora;
+    ordenCap.piezas_total=prodTotal;
     localStorage.setItem('ai_orden_'+lineaIdCap,JSON.stringify(ordenCap));
-    await dbP('ai_ordenes','PATCH',{detenida_en:ahora},'id=eq.'+ordenCap.id);
-    // Crear evento 'detenida' para marcar el lapso de inactividad en la barra
+    await dbP('ai_ordenes','PATCH',{
+      detenida_en:ahora,
+      flujometro_lecturas:ordenCap.flujometro_lecturas,
+      piezas_total:prodTotal
+    },'id=eq.'+ordenCap.id);
     await dbP('ai_eventos','POST',{id:'aiev_det_'+ahora,linea_id:lineaIdCap,tipo:'detenida',
       reason_code:null,comentario:null,ts_inicio:ahora,ts_fin:null,
       turno:turno(),fecha:hoy(),año:new Date().getFullYear(),semana:sem(hoy()),
       operador:ME.nombre,historial:[]},'');
-    // Solo actualizar el estado en memoria si el usuario sigue en la misma línea
     if(LINEA_ID===lineaIdCap) ORDEN_ACTIVA=ordenCap;
   }
   if(LINEA_ID===lineaIdCap){
     renderLinea();
     if(!TIMER) TIMER=setInterval(renderLinea,30000);
   }
-  toast('⏹ Orden detenida — ingresa piezas totales y guarda','#1a1a1a');
+  toast('⏹ Folio detenido · Producción: '+prodTotal.toLocaleString()+' uds','#1a1a1a');
 }
 
 // ── GUARDAR ORDEN ─────────────────────────────────────────────
@@ -1672,7 +1714,7 @@ async function cerrarTecnico(){
   ORDEN_ACTIVA.estado='cerrada';
   ORDEN_ACTIVA.ai_real=aiReal;
   localStorage.removeItem('ai_orden_'+LINEA_ID);
-  toast('✅ Orden '+ORDEN_ACTIVA.folio+' cerrada — AI Real: '+aiReal+'%','#16a34a');
+  toast('✅ Folio '+ORDEN_ACTIVA.folio+' cerrado — AI Real: '+aiReal+'%','#16a34a');
   renderLinea();
 }
 
@@ -3688,6 +3730,55 @@ function iniciarMonitorChecklists(){
   if(_ckMonitorTimer) clearInterval(_ckMonitorTimer);
   _ckMonitorTimer=setInterval(revisarAlertasChecklists,60000);
   setTimeout(revisarAlertasChecklists,3000); // primera revisión a los 3s
+}
+
+
+// ── FLUJÓMETRO ────────────────────────────────────────────────
+async function _registrarLecturaFlujo(valor, tipo){
+  if(!ORDEN_ACTIVA) return;
+  var lec={ts:Date.now(),valor,tipo,turno:turno(),fecha:hoy()};
+  if(!ORDEN_ACTIVA.flujometro_lecturas) ORDEN_ACTIVA.flujometro_lecturas=[];
+  ORDEN_ACTIVA.flujometro_lecturas.push(lec);
+  localStorage.setItem('ai_orden_'+LINEA_ID,JSON.stringify(ORDEN_ACTIVA));
+  await dbP('ai_ordenes','PATCH',{flujometro_lecturas:ORDEN_ACTIVA.flujometro_lecturas},'id=eq.'+ORDEN_ACTIVA.id);
+}
+
+var _flujAlertaActiva=false;
+function _checkFlujAlerta(){
+  if(!ORDEN_ACTIVA||_flujAlertaActiva) return;
+  if(ORDEN_ACTIVA._tsF) return; // folio ya detenido
+  if(!ORDEN_ACTIVA.flujometro_lecturas) return;
+  var ahora=Date.now();
+  var t=turno(), h=hoy();
+  var tsFinTurno=tIni(t,h)+8*3600000;
+  var ventana=tsFinTurno-30*60000;
+  if(ahora<ventana||ahora>=tsFinTurno) return; // fuera de ventana
+  // Verificar si ya se mostró alerta para este fin de turno
+  if(!ORDEN_ACTIVA._flujoAlertas) ORDEN_ACTIVA._flujoAlertas={};
+  var alertaKey=t+'_'+h;
+  if(ORDEN_ACTIVA._flujoAlertas[alertaKey]) return; // ya mostrada
+  // Marcar como mostrada ANTES de mostrar el modal
+  ORDEN_ACTIVA._flujoAlertas[alertaKey]=true;
+  localStorage.setItem('ai_orden_'+LINEA_ID,JSON.stringify(ORDEN_ACTIVA));
+  _flujAlertaActiva=true;
+  var lecs=ORDEN_ACTIVA.flujometro_lecturas;
+  var ultimaLec=lecs.length?lecs[lecs.length-1]:null;
+  var min30=Math.round((tsFinTurno-ahora)/60000);
+  modal('📊 Lectura de Flujómetro — Turno '+t,
+    '<div style="background:#fef3c7;border-radius:10px;padding:10px;margin-bottom:12px;font-size:12px;font-weight:700;color:#92400e">⏰ Faltan aprox. '+min30+' min para el fin del Turno '+t+'</div>'
+    +(ultimaLec!=null?'<div style="font-size:11px;color:#6b7280;margin-bottom:10px">Última lectura: <b>'+ultimaLec.valor.toLocaleString()+'</b> ('+ultimaLec.tipo+')</div>':'')
+    +'<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Lectura actual de Flujómetro</label>'
+    +'<input type="number" id="flujo-turno" class="fc" placeholder="Ej: 101500.0" step="any" inputmode="decimal">',
+    async(m)=>{
+      var val=parseFloat(document.getElementById('flujo-turno').value);
+      if(isNaN(val)){toast('Ingresa la lectura del flujómetro','#dc2626');return;}
+      m.remove();
+      _flujAlertaActiva=false;
+      await _registrarLecturaFlujo(val,'turno');
+      var base=ultimaLec?ultimaLec.valor:(ORDEN_ACTIVA.flujometro_lecturas[0]?ORDEN_ACTIVA.flujometro_lecturas[0].valor:val);
+      var prod=Math.round(val-base);
+      toast('✅ Producción T'+t+': '+prod.toLocaleString()+' uds','#16a34a');
+    },'#7c3aed','Registrar',()=>{_flujAlertaActiva=false;});
 }
 
 async function revisarAlertasChecklists(){
