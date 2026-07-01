@@ -1014,6 +1014,16 @@ async function renderLinea(){
   var diffLabel=pzDiff>=0?'+'+diffMin+' min':'-'+diffMin+' min';
   var diffCol=pzDiff>=0?'#16a34a':'#dc2626';
   var unidad=l.unidad||'pzs';
+  var tiene_flujo=!!(l&&l.tiene_flujometro);
+  // Calcular minutos PP/PNP vs objetivo para líneas sin flujómetro
+  var ppObjPct=l.objetivo_pp||10, pnpObjPct=l.objetivo_pnp||10;
+  var ppPermMin=Math.round(tOcup*ppObjPct/100/60000);
+  var pnpPermMin=Math.round(tOcup*pnpObjPct/100/60000);
+  var ppRealMin=Math.round(tPP/60000), pnpRealMin=Math.round(tPNP/60000);
+  var ppDiffMin=ppRealMin-ppPermMin; // + = exceso = malo
+  var pnpDiffMin=pnpRealMin-pnpPermMin;
+  window._lineaTCorriendoHr=tCorriendoHr;
+  window._lineaTargetH=targetH;
 
   // AI real si orden cerrada
   var ordenCerrada=esHoy&&ORDEN_ACTIVA&&ORDEN_ACTIVA.estado==='cerrada';
@@ -1138,7 +1148,10 @@ async function renderLinea(){
     +'<div style="background:'+(aiMostrar>=(l.objetivo_ai!=null?l.objetivo_ai:85)?'#16a34a':'#dc2626')+';border-radius:10px;padding:10px;color:#fff;text-align:center"><div style="font-size:8px;font-weight:700;opacity:.85">Asset Intensity</div><div style="font-size:20px;font-weight:900;line-height:1.1">'+ aiMostrar +'%</div>'+(ordenCerrada?'<div style="font-size:8px;opacity:.8">Real</div>':'')+'</div>'
     +'<div style="background:#dc2626;border-radius:10px;padding:10px;color:#fff;text-align:center"><div style="font-size:8px;font-weight:700;opacity:.85">%PNP</div><div style="font-size:20px;font-weight:900;line-height:1.1">'+PNP+'%</div></div>'
     +'<div style="background:#ca8a04;border-radius:10px;padding:10px;color:#fff;text-align:center"><div style="font-size:8px;font-weight:700;opacity:.85">%PP</div><div style="font-size:20px;font-weight:900;line-height:1.1">'+PP+'%</div></div>'
-    +'<div style="background:'+diffCol+';border-radius:10px;padding:10px;color:#fff;text-align:center"><div style="font-size:8px;font-weight:700;opacity:.85">Piezas</div><div style="font-size:17px;font-weight:900;line-height:1.1">'+ diffLabel +'</div><div style="font-size:7px;opacity:.8">'+ pzRegistradas +'/'+ pzEsperadas +'</div></div>'
+    +(tiene_flujo
+      ? '<div style="background:'+diffCol+';border-radius:10px;padding:10px;color:#fff;text-align:center"><div style="font-size:8px;font-weight:700;opacity:.85">Piezas</div><div style="font-size:17px;font-weight:900;line-height:1.1">'+ diffLabel +'</div><div style="font-size:7px;opacity:.8">'+ pzRegistradas +'/'+ pzEsperadas +'</div></div>'
+      : '<div style="border-radius:10px;padding:7px 6px;background:#0d2144;color:#fff;text-align:center"><div style="font-size:7px;font-weight:700;opacity:.7;margin-bottom:3px">Paros vs Obj</div><div style="font-size:10px;font-weight:900;line-height:1.5;color:'+(ppDiffMin>0?'#fca5a5':'#86efac')+'">' +'PP: '+(ppDiffMin>0?'+':'')+ppDiffMin+' min</div><div style="font-size:10px;font-weight:900;line-height:1.5;color:'+(pnpDiffMin>0?'#fca5a5':'#86efac')+'">'+'PNP: '+(pnpDiffMin>0?'+':'')+pnpDiffMin+' min</div></div>'
+    )
     +'</div>'
     // Botones
     +(esHoy?'<div style="padding:0 16px 8px"><div style="display:flex;gap:5px;align-items:center">'
@@ -1157,22 +1170,42 @@ async function renderLinea(){
     +'<div style="height:52px;border-radius:10px;overflow:hidden;display:flex;box-shadow:0 1px 4px rgba(0,0,0,.15)">'+segs+'</div>'
     +'<div style="position:relative;height:16px;margin-top:1px">'+marcas+'</div>'
     +'</div>'
-    // Gráfica piezas
-    +'<div style="padding:0 16px 10px">'
-    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'
-    +'<div style="font-size:10px;font-weight:700;color:#374151">'+( unidad==='kg'?'Kg':'Piezas' )+' por hora · Total: '+(esHoy&&(detenida||ordenCerrada)?'<input id="pz-total-inp" type="number" value="'+pzTotalVal+'" '+(ordenCerrada?'disabled':'')+' style="width:75px;padding:3px 6px;border:1.5px solid #0891b2;border-radius:6px;font-family:Nunito,sans-serif;font-size:11px;font-weight:700;text-align:center">     '+ unidad :'<b>'+pzRegistradas+' '+unidad+'</b>')+'</div>'
-    +'<div style="font-size:10px;font-weight:700;color:#d97706;text-align:center">Objetivo/h: '+(targetH||'—')+' '+unidad+'</div>'
-    +'<div style="display:flex;gap:5px">'
-    +(esHoy&&detenida?'<button onclick="guardarOrden()" style="padding:4px 10px;background:#0891b2;color:#fff;border:none;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">💾 Guardar</button><button onclick="cerrarTecnico()" style="padding:4px 10px;background:#7c3aed;color:#fff;border:none;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">CTEC</button>':'')
-    +(esHoy&&!detenida&&!ordenCerrada?'<button onclick="regPiezas()" style="padding:4px 10px;background:#0d2144;color:#fff;border:none;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">+ Registrar</button>':'')
-    +'</div></div>'
-    +'<div style="background:#f9fafb;border-radius:12px;padding:10px">'
-    +'<div style="display:flex;gap:3px">'+lblsTop+'</div>'
-    +'<div style="position:relative;height:150px;display:flex;gap:3px;margin-top:1px">'+barras
-    +'<div style="position:absolute;bottom:'+pctTarget+'%;left:0;right:0;height:2px;background:#d97706;opacity:.9;pointer-events:none"></div>'
-    +(targetH>0?'<div style="position:absolute;bottom:calc('+pctTarget+'% + 3px);right:4px;font-size:9px;color:#d97706;font-weight:700">'+targetH+' '+unidad+'</div>':'')
-    +'</div>'
-    +'<div style="display:flex;gap:3px;margin-top:1px">'+lblsBottom+'</div>'
+    // Gráfica piezas — barras para flujo; Kg fabricados+Calcular para sin flujo
+    +(tiene_flujo
+      ? '<div style="padding:0 16px 10px">'
+        +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px">'
+        +'<div style="font-size:10px;font-weight:700;color:#374151">'+(unidad==='kg'?'Kg':'Piezas')+' por hora · Total: '+(esHoy&&(detenida||ordenCerrada)?'<input id="pz-total-inp" type="number" value="'+pzTotalVal+'" '+(ordenCerrada?'disabled':'')+' style="width:75px;padding:3px 6px;border:1.5px solid #0891b2;border-radius:6px;font-family:Nunito,sans-serif;font-size:11px;font-weight:700;text-align:center">     '+unidad:'<b>'+pzRegistradas+' '+unidad+'</b>')+'</div>'
+        +'<div style="font-size:10px;font-weight:700;color:#d97706">Obj/h: '+(targetH||'—')+' '+unidad+'</div>'
+        +'<div style="display:flex;gap:5px">'
+        +(esHoy&&detenida?'<button onclick="guardarOrden()" style="padding:4px 10px;background:#0891b2;color:#fff;border:none;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">💾 Guardar</button><button onclick="cerrarTecnico()" style="padding:4px 10px;background:#7c3aed;color:#fff;border:none;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">CTEC</button>':'')
+        +(esHoy&&!detenida&&!ordenCerrada?'<button onclick="regPiezas()" style="padding:4px 10px;background:#0d2144;color:#fff;border:none;border-radius:7px;font-size:.72rem;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">+ Registrar</button>':'')
+        +'</div></div>'
+        +'<div style="background:#f9fafb;border-radius:12px;padding:10px">'
+        +'<div style="display:flex;gap:3px">'+lblsTop+'</div>'
+        +'<div style="position:relative;height:150px;display:flex;gap:3px;margin-top:1px">'+barras
+        +'<div style="position:absolute;bottom:'+pctTarget+'%;left:0;right:0;height:2px;background:#d97706;opacity:.9;pointer-events:none"></div>'
+        +(targetH>0?'<div style="position:absolute;bottom:calc('+pctTarget+'% + 3px);right:4px;font-size:9px;color:#d97706;font-weight:700">'+targetH+' '+unidad+'</div>':'')
+        +'</div><div style="display:flex;gap:3px;margin-top:1px">'+lblsBottom+'</div>'
+        +'</div></div>'
+      : '<div style="padding:0 16px 10px">'
+        +'<div style="background:#f9fafb;border-radius:12px;padding:12px">'
+        +'<div style="font-size:11px;font-weight:800;color:#374151;margin-bottom:8px">📊 Producción ('+unidad+')</div>'
+        +(esHoy&&detenida
+          ?'<div style="display:flex;gap:5px;align-items:center;margin-bottom:6px">'
+            +'<input type="number" id="pz-total-inp" value="'+pzTotalVal+'" '+(ordenCerrada?'disabled':'')+' placeholder="Kg fabricados" style="flex:1;padding:8px 10px;border:1.5px solid #0891b2;border-radius:8px;font-family:Nunito,sans-serif;font-size:14px;font-weight:700">'
+            +'<button onclick="guardarOrden()" style="padding:8px 14px;background:#0891b2;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif">💾 Guardar</button>'
+            +'<button onclick="cerrarTecnico()" style="padding:8px 10px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif">CTEC</button>'
+            +'</div>'
+          :'')
+        +(esHoy&&!detenida&&!ordenCerrada
+          ?'<div style="display:flex;gap:8px;align-items:center">'
+            +'<input type="number" id="kg-fabricados" class="fc" placeholder="Kg fabricados" style="flex:1;margin-bottom:0">'
+            +'<button onclick="calcularKgSinFlujo()" style="padding:10px 16px;background:#0d2144;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif;white-space:nowrap">Calcular</button>'
+            +'</div><div id="kg-resultado" style="margin-top:8px"></div>'
+          :(!detenida&&!ordenCerrada?'':
+            '<div style="font-size:13px;font-weight:700;color:#374151">Total: <b>'+pzTotalVal+' '+unidad+'</b></div>'))
+        +'</div></div>'
+    )
     +'</div></div>'
     // Tabla eventos
     +'<div style="padding:0 16px 16px">'
@@ -1502,17 +1535,21 @@ async function iniciarNuevaOrden(){
   var l=LINEAS.find(x=>x.id===lineaIdCapturado)||{id:lineaIdCapturado,nombre:'?',area:'envasado'};
   var area=l.area||'envasado';
   var tipoProd=area==='envasado'?'Fert':'Halb';
-  // ── Paso 1: Folio + Flujómetro inicial ──
+  var pedirFlujo=!!(l&&l.tiene_flujometro);
+  // ── Paso 1: Folio (+ Flujómetro inicial solo si la línea lo tiene) ──
   modal('📋 Nuevo Folio',
     `<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Número de Folio</label>
     <input type="number" id="nf-folio" class="fc" placeholder="Ej: 12345" min="1" inputmode="numeric">
-    <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Lectura inicial de Flujómetro</label>
-    <input type="number" id="nf-flujo" class="fc" placeholder="Ej: 98500.0" step="any" inputmode="decimal">`,
+    ${pedirFlujo?`<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Lectura inicial de Flujómetro</label>
+    <input type="number" id="nf-flujo" class="fc" placeholder="Ej: 98500.0" step="any" inputmode="decimal">`:''}`,
     async(m)=>{
       var folio=document.getElementById('nf-folio').value.trim();
-      var flujo=parseFloat(document.getElementById('nf-flujo').value);
       if(!folio||isNaN(parseInt(folio))||parseInt(folio)<=0){toast('Ingresa un número de folio válido','#dc2626');return;}
-      if(isNaN(flujo)){toast('Ingresa la lectura del flujómetro','#dc2626');return;}
+      var flujo=null;
+      if(pedirFlujo){
+        flujo=parseFloat(document.getElementById('nf-flujo').value);
+        if(isNaN(flujo)){toast('Ingresa la lectura del flujómetro','#dc2626');return;}
+      }
       m.remove();
       // ── Paso 2: Producto ──
       var prods=await db('ai_productos','GET',null,'linea_id=eq.'+lineaIdCapturado+'&activo=eq.true&order=nombre.asc')||[];
@@ -1540,7 +1577,7 @@ async function _crearNuevaOrden(folio,flujoInicial,prod,area,l,lineaIdExplicito)
   var ahora=Date.now();
   var ordId='aior_'+ahora+'_'+Math.random().toString(36).slice(2,7);
   var targetHora=prod?prod.target_hora:(l?l.target_hora:0);
-  var lecInicial={ts:ahora,valor:flujoInicial,tipo:'inicio',turno:turno(),fecha:hoy()};
+  var lecInicial=flujoInicial!=null?[{ts:ahora,valor:flujoInicial,tipo:'inicio',turno:turno(),fecha:hoy()}]:[];
   var orden={
     id:ordId,
     folio:folio,
@@ -1558,7 +1595,7 @@ async function _crearNuevaOrden(folio,flujoInicial,prod,area,l,lineaIdExplicito)
     estado:'abierta',
     producto_id:prod?prod.id:null,
     producto_nombre:prod?prod.nombre:null,
-    flujometro_lecturas:[lecInicial],
+    flujometro_lecturas:lecInicial,
     _flujoAlertas:{}
   };
   ORDEN_ACTIVA=orden;
@@ -1599,7 +1636,15 @@ async function _crearNuevaOrden(folio,flujoInicial,prod,area,l,lineaIdExplicito)
 async function pararLinea(){
   if(bloqueadoLectura())return;
   if(!ORDEN_ACTIVA){toast('No hay folio activo','#dc2626');return;}
-  // Pedir lectura final de flujómetro antes de detener
+  var l=LINEAS.find(x=>x.id===LINEA_ID);
+  var pedirFlujo=!!(l&&l.tiene_flujometro);
+  if(!pedirFlujo){
+    // Sin flujómetro: confirmación simple y detener
+    if(!confirm('¿Detener el folio '+ORDEN_ACTIVA.folio+'?')) return;
+    await _ejecutarPararLinea(null);
+    return;
+  }
+  // Con flujómetro: pedir lectura final
   var ultimaLectura=null;
   if(ORDEN_ACTIVA.flujometro_lecturas&&ORDEN_ACTIVA.flujometro_lecturas.length){
     ultimaLectura=ORDEN_ACTIVA.flujometro_lecturas[ORDEN_ACTIVA.flujometro_lecturas.length-1].valor;
@@ -1621,14 +1666,16 @@ async function _ejecutarPararLinea(flujoFinal){
   var lineaIdCap=LINEA_ID;
   var ordenCap=ORDEN_ACTIVA;
   var ahora=Date.now();
-  // Registrar lectura final
-  var lecFinal={ts:ahora,valor:flujoFinal,tipo:'fin',turno:turno(),fecha:hoy()};
-  if(!ordenCap.flujometro_lecturas) ordenCap.flujometro_lecturas=[];
-  ordenCap.flujometro_lecturas.push(lecFinal);
-  // Calcular producción total
-  var lecs=ordenCap.flujometro_lecturas;
-  var flujoInicial=lecs[0]?lecs[0].valor:flujoFinal;
-  var prodTotal=Math.round(flujoFinal-flujoInicial);
+  // Registrar lectura final si hay flujómetro
+  var prodTotal=null;
+  if(flujoFinal!=null){
+    var lecFinal={ts:ahora,valor:flujoFinal,tipo:'fin',turno:turno(),fecha:hoy()};
+    if(!ordenCap.flujometro_lecturas) ordenCap.flujometro_lecturas=[];
+    ordenCap.flujometro_lecturas.push(lecFinal);
+    var lecs=ordenCap.flujometro_lecturas;
+    var flujoInicial=lecs[0]?lecs[0].valor:flujoFinal;
+    prodTotal=Math.round(flujoFinal-flujoInicial);
+  }
   // Cerrar evento activo
   var evs=await db('ai_eventos','GET',null,'linea_id=eq.'+lineaIdCap+'&ts_fin=is.null')||[];
   for(var e of evs) await dbP('ai_eventos','PATCH',{ts_fin:ahora},'id=eq.'+e.id);
@@ -3733,7 +3780,30 @@ function iniciarMonitorChecklists(){
 }
 
 
-// ── FLUJÓMETRO ────────────────────────────────────────────────
+// ── CALCULAR KG SIN FLUJÓMETRO ────────────────────────────────
+function calcularKgSinFlujo(){
+  var kgInput=document.getElementById('kg-fabricados');
+  var res=document.getElementById('kg-resultado');
+  if(!kgInput||!res) return;
+  var kgReal=parseFloat(kgInput.value);
+  if(isNaN(kgReal)||kgReal<0){toast('Ingresa los Kg fabricados','#dc2626');return;}
+  var targetH=window._lineaTargetH||0;
+  var tCorriendoHr=window._lineaTCorriendoHr||0;
+  var kgEsperados=Math.round(targetH*tCorriendoHr);
+  var diff=Math.round(kgReal-kgEsperados);
+  var ok=diff>=0;
+  var diffLabel=(ok?'+':'')+diff+' kg '+(ok?'(adelante)':'(atrás)');
+  var tCorriendoMin=Math.round(tCorriendoHr*60);
+  res.innerHTML=
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:4px">'
+    +'<div style="background:#f3f4f6;border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#6b7280;font-weight:700">Esperado</div><div style="font-size:16px;font-weight:900">'+kgEsperados+'</div><div style="font-size:8px;color:#9ca3af">kg</div></div>'
+    +'<div style="background:#f3f4f6;border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#6b7280;font-weight:700">Real</div><div style="font-size:16px;font-weight:900">'+kgReal+'</div><div style="font-size:8px;color:#9ca3af">kg</div></div>'
+    +'<div style="background:'+(ok?'#dcfce7':'#fee2e2')+';border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#374151;font-weight:700">Diferencia</div><div style="font-size:14px;font-weight:900;color:'+(ok?'#16a34a':'#dc2626')+'">'+diffLabel+'</div></div>'
+    +'</div>'
+    +'<div style="font-size:10px;color:#9ca3af;margin-top:6px">Tiempo corriendo: '+tCorriendoMin+' min · Velocidad obj: '+(targetH||'—')+' kg/h</div>';
+}
+
+// ── MONITOR CHECKLISTS ────────────────────────────────────────
 async function _registrarLecturaFlujo(valor, tipo){
   if(!ORDEN_ACTIVA) return;
   var lec={ts:Date.now(),valor,tipo,turno:turno(),fecha:hoy()};
@@ -3746,7 +3816,9 @@ async function _registrarLecturaFlujo(valor, tipo){
 var _flujAlertaActiva=false;
 function _checkFlujAlerta(){
   if(!ORDEN_ACTIVA||_flujAlertaActiva) return;
-  if(ORDEN_ACTIVA._tsF) return; // folio ya detenido
+  if(ORDEN_ACTIVA._tsF) return;
+  var lActual=LINEAS.find(x=>x.id===LINEA_ID);
+  if(!lActual||!lActual.tiene_flujometro) return; // solo para líneas con flujómetro
   if(!ORDEN_ACTIVA.flujometro_lecturas) return;
   var ahora=Date.now();
   var t=turno(), h=hoy();
