@@ -57,7 +57,7 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
     <span style="font-size:36px;margin-right:8px">📈</span>
     <button onclick="doLogout()" style="background:rgba(255,255,255,.1);border:none;color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;cursor:pointer">Salir</button>
   </div>
-  <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr;height:calc(100% - 56px)">
+  <div style="flex:1;display:grid;grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr auto;height:calc(100% - 56px)">
     <button onclick="irDashboard()" style="background:#16a34a;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:16px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
       <span style="font-size:38px">📊</span>Dashboard
     </button>
@@ -80,6 +80,53 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
       <div style="font-size:36px">🏭</div>
       <div style="color:rgba(255,255,255,.3);font-size:12px;font-weight:700;font-family:Nunito,sans-serif">Saporis</div>
     </div>
+  </div>
+    <button onclick="irCipCop()" style="grid-column:1/-1;background:#b45309;color:#fff;border:none;outline:2px solid rgba(0,0,0,.3);font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;align-items:center;justify-content:center;gap:12px;padding:20px;transition:filter .15s" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:30px">🧴</span>CIP / COP
+    </button>
+</div>
+<!-- CIP / COP -->
+<div id="s-cip-cop" class="screen">
+  <div class="topbar" style="background:#b45309">
+    <button class="topbar-back" onclick="go('s-home')">←</button>
+    <div><div class="topbar-title">🧴 CIP / COP</div></div>
+  </div>
+  <div style="padding:24px 16px;display:flex;flex-direction:column;gap:16px;height:calc(100% - 56px);box-sizing:border-box">
+    <button onclick="irCip()" style="flex:1;background:#0d2144;color:#fff;border:none;border-radius:16px;font-size:22px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:48px">🔵</span>CIP
+    </button>
+    <button onclick="go('s-cop')" style="flex:1;background:#7c3aed;color:#fff;border:none;border-radius:16px;font-size:22px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:48px">🟣</span>COP
+    </button>
+  </div>
+</div>
+<!-- CIP -->
+<div id="s-cip" class="screen">
+  <div class="topbar" style="background:#0d2144">
+    <button class="topbar-back" onclick="go('s-cip-cop')">←</button>
+    <div><div class="topbar-title">🔵 CIP</div></div>
+  </div>
+  <div style="padding:24px 16px;display:flex;flex-direction:column;gap:16px;height:calc(100% - 56px);box-sizing:border-box">
+    <button onclick="irCipLavar()" style="flex:1;background:#16a34a;color:#fff;border:none;border-radius:16px;font-size:20px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:40px">🚿</span>Lavar
+    </button>
+    <button onclick="toast('Consultar — próximamente','#6b7280')" style="flex:1;background:#0891b2;color:#fff;border:none;border-radius:16px;font-size:20px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:40px">🔍</span>Consultar
+    </button>
+    <button onclick="toast('Administración — próximamente','#6b7280')" style="flex:1;background:#374151;color:#fff;border:none;border-radius:16px;font-size:20px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:40px">⚙️</span>Administración
+    </button>
+  </div>
+</div>
+<!-- CIP LAVAR - selección de línea -->
+<div id="s-cip-lavar" class="screen">
+  <div class="topbar" style="background:#16a34a">
+    <button class="topbar-back" onclick="go('s-cip')">←</button>
+    <div><div class="topbar-title">🚿 CIP · Selecciona línea</div></div>
+  </div>
+  <div style="padding:16px;height:calc(100% - 56px);box-sizing:border-box;display:flex;flex-direction:column;gap:12px;overflow-y:auto">
+    <div id="cip-lineas-cont" style="flex:1;display:flex;flex-direction:column;gap:10px;overflow-y:auto"></div>
+    <button id="btn-cip-iniciar" onclick="irCipIniciar()" disabled style="padding:18px;background:#e5e7eb;color:#9ca3af;border:none;border-radius:14px;font-size:18px;font-weight:900;cursor:not-allowed;font-family:Nunito,sans-serif;flex-shrink:0">Iniciar</button>
   </div>
 </div>
 <!-- ARRANCAR LÍNEA -->
@@ -470,6 +517,44 @@ async function doLogin(){
   localStorage.setItem('ai_me',JSON.stringify(ME));
   iniciarSesion();
 }
+// ── CIP / COP ─────────────────────────────────────────────────
+function irCipCop(){go('s-cip-cop');}
+function irCip(){go('s-cip');}
+var _cipLineaSel=null;
+function irCipLavar(){
+  _cipLineaSel=null;
+  go('s-cip-lavar');
+  var cont=document.getElementById('cip-lineas-cont');
+  var btn=document.getElementById('btn-cip-iniciar');
+  if(!cont) return;
+  var lineas=LINEAS.filter(function(l){return l.activa!==false;});
+  if(!lineas.length){cont.innerHTML='<div style="text-align:center;padding:32px;color:#9ca3af">Sin líneas activas</div>';return;}
+  cont.innerHTML=lineas.map(function(l){
+    return '<button onclick="_cipSelLinea(\''+l.id+'\',\''+l.nombre.replace(/'/g,"&#39;")+'\',this)" style="padding:16px;background:#fff;border:2px solid #e5e7eb;border-radius:12px;font-size:16px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;text-align:left;color:#0d2144;transition:border-color .15s">'
+      +'<span style="opacity:.5;margin-right:8px">●</span>'+l.nombre
+      +(l.area?'<span style="float:right;font-size:11px;color:#9ca3af;font-weight:600">'+l.area+'</span>':'')
+      +'</button>';
+  }).join('');
+  if(btn){btn.disabled=true;btn.style.background='#e5e7eb';btn.style.color='#9ca3af';btn.style.cursor='not-allowed';}
+}
+function _cipSelLinea(id,nombre,el){
+  _cipLineaSel={id:id,nombre:nombre};
+  // Highlight seleccionado
+  var cont=document.getElementById('cip-lineas-cont');
+  if(cont) cont.querySelectorAll('button').forEach(function(b){
+    b.style.borderColor='#e5e7eb';b.style.background='#fff';b.style.color='#0d2144';
+  });
+  el.style.borderColor='#16a34a';el.style.background='#f0fdf4';el.style.color='#15803d';
+  // Habilitar Iniciar
+  var btn=document.getElementById('btn-cip-iniciar');
+  if(btn){btn.disabled=false;btn.style.background='#16a34a';btn.style.color='#fff';btn.style.cursor='pointer';}
+}
+function irCipIniciar(){
+  if(!_cipLineaSel){toast('Selecciona una línea','#dc2626');return;}
+  // Por ahora solo navega — se expandirá después
+  toast('CIP iniciado en '+_cipLineaSel.nombre+' — próximamente','#16a34a');
+}
+
 function doLogout(){
   localStorage.removeItem('ai_me');
   ME=null;
