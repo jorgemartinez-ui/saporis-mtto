@@ -107,14 +107,14 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
   <div style="background:#f9fafb;border-bottom:1px solid #e5e7eb;padding:8px 12px">
     <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">
       <button onclick="lsNavegar(-1)" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;background:#fff;font-size:16px;font-weight:900;cursor:pointer">◄</button>
-      <button onclick="lsSetModo('T')" id="ls-modo-T" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000">T</button>
-      <button onclick="lsSetModo('D')" id="ls-modo-D" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#0d2144;color:#fff">D</button>
-      <button onclick="lsSetModo('S')" id="ls-modo-S" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000">S</button>
+      <button onclick="lsSetModo('T')" id="ls-modo-T" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000" onmouseenter="mostrarTipNav(this,'Turno')" onmouseleave="ocultarTipNav()">T</button>
+      <button onclick="lsSetModo('D')" id="ls-modo-D" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#0d2144;color:#fff" onmouseenter="mostrarTipNav(this,'Día')" onmouseleave="ocultarTipNav()">D</button>
+      <button onclick="lsSetModo('S')" id="ls-modo-S" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000" onmouseenter="mostrarTipNav(this,'Semana')" onmouseleave="ocultarTipNav()">S</button>
       <button onclick="lsSetModo('M')" id="ls-modo-M" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000">M</button>
       <button onclick="lsNavegar(1)" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;background:#fff;font-size:16px;font-weight:900;cursor:pointer">►</button>
       <button onclick="abrirSeleccionManualLS()" id="ls-manual-btn" style="padding:5px 10px;border:1.5px solid #000;border-radius:7px;font-size:12px;font-weight:800;cursor:pointer;background:#fff;color:#000;min-width:80px">Manual</button>
       <div id="ls-periodo-label" style="font-size:11px;font-weight:700;color:#374151;flex:1;text-align:center;min-width:80px"></div>
-      <button onclick="cargarLineSummary()" style="padding:5px 12px;background:#0d2144;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">↻</button>
+      <button onclick="cargarLineSummary()" style="padding:5px 12px;background:#0d2144;color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer" onmouseenter="mostrarTipNav(this,'Actualizar')" onmouseleave="ocultarTipNav()">↻</button>
     </div>
     <!-- Filtro de área y líneas -->
     <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -1051,6 +1051,11 @@ async function renderLinea(){
   // Normalizar ts_inicio a número (puede venir como string de Supabase)
   var ordTsB=esHoy&&ORDEN_ACTIVA&&ORDEN_ACTIVA.ts_inicio?(typeof ORDEN_ACTIVA.ts_inicio==='string'?new Date(ORDEN_ACTIVA.ts_inicio).getTime():Number(ORDEN_ACTIVA.ts_inicio)):null;
   var tsIEfectivo=ordTsB&&ordTsB>tsI?ordTsB:tsI;
+  // Fix: si hay eventos reales anteriores al ts_inicio de la orden (hora ajustada), mostrarlos
+  if(esHoy&&evs&&evs.length){
+    var firstEvTs=Math.min.apply(null,evs.filter(function(e){return Number(e.ts_inicio)>=tsI;}).map(function(e){return Number(e.ts_inicio);}));
+    if(isFinite(firstEvTs)&&firstEvTs<tsIEfectivo) tsIEfectivo=firstEvTs;
+  }
   var ahora_barra=(!ORDEN_ACTIVA&&esHoy)?tsI:(detenida&&tsDetencion?Math.min(tsDetencion,tsF):(!esHoy?tsF:Math.min(Date.now(),tsF)));
   var segmentos=segmentosConGaps(evs,tsIEfectivo,ahora_barra);
   window.AI_SEGS=segmentos;
@@ -1092,6 +1097,14 @@ async function renderLinea(){
   window._lineaTargetH=targetH;
   window._lineaTOcupHr=(tC+tPNP+tPP)/3600000;
   window._lineaAI=AI;
+  // Labels y acumulador para líneas sin flujómetro
+  var esFab=l.area==='fabricacion';
+  var unidadLabel=esFab?'KG Fabricados':'PZS Fabricadas';
+  var vsTCLabel=esFab?'KG vs TC':'Pzs vs TC';
+  var kgAcum=ORDEN_ACTIVA&&ORDEN_ACTIVA._kgAcumulado!=null?ORDEN_ACTIVA._kgAcumulado:(ORDEN_ACTIVA&&ORDEN_ACTIVA.piezas_total!=null?Number(ORDEN_ACTIVA.piezas_total):0);
+  window._kgAcumulado=kgAcum;
+  window._lineaUnidadLabel=unidadLabel;
+  window._lineaVsTCLabel=vsTCLabel;
   var hrs=[],mx=Math.round(Math.max(targetH||1,1)*1.1);
   for(var i=0;i<nH;i++){var ts_h=tsI+i*3600000,hh=new Date(ts_h).getHours(),p=pzs.find(x=>x.hora===hh)||null;hrs.push({h:hh,v:p?p.piezas:null,tn:turnoDe(ts_h),ts:ts_h});}
   var pctTarget=Math.min(98,Math.max(2,(targetH||0)/mx*100)).toFixed(1);
@@ -1150,21 +1163,30 @@ async function renderLinea(){
     +'<button onclick="setNavMode(\'s\')" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='s'?'#7f1d1d':'#fff')+';color:'+(window.AI_NAV_MODE==='s'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">S</button>'
     +'<button onclick="setNavMode(\'d\')" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='d'?'#7f1d1d':'#fff')+';color:'+(window.AI_NAV_MODE==='d'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">D</button>'
     +'<button onclick="setNavMode(\'t\')" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='t'?'#7f1d1d':'#fff')+';color:'+(window.AI_NAV_MODE==='t'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">T</button>'
-    +(ORDEN_ACTIVA?'<button id="btn-folio-nav" onclick="_mostrarMenuFolio(this)" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='o'?'#1e3a8a':'#fff')+';color:'+(window.AI_NAV_MODE==='o'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">F</button>':'')
+    +(ORDEN_ACTIVA?'<button id="btn-folio-nav" onclick="_mostrarMenuFolio(this)" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='o'?'#1e3a8a':'#fff')+';color:'+(window.AI_NAV_MODE==='o'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif" onmouseenter="mostrarTipNav(this,\'Folio\')" onmouseleave="ocultarTipNav()">F</button>':'')
     +'<button onclick="navFecha(1)" onmousedown="this.style.transform=\'scale(.88)\';this.style.background=\'#e5e7eb\'" onmouseup="this.style.transform=\'\';this.style.background=\'#fff\'" onmouseleave="this.style.transform=\'\';this.style.background=\'#fff\'" style="padding:5px 9px;background:#fff;color:#000;border:2px solid #000;border-radius:7px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;transition:transform .1s;line-height:1">►</button>'
     +'<button onclick="renderLinea()" onmousedown="this.style.background=\'#e5e7eb\';this.style.transform=\'scale(.9)\'" onmouseup="this.style.background=\'#fff\';this.style.transform=\'\'" onmouseleave="this.style.background=\'#fff\';this.style.transform=\'\'" style="padding:5px 9px;background:#fff;color:#000;border:2px solid #000;border-radius:7px;font-size:16px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;line-height:1;transition:transform .1s">↻</button>'
     +'</div>'
     +'<select onchange="window.AI_F_TURNO=this.value;renderLinea()" style="flex:1;min-width:0;padding:7px 4px;border:1.5px solid #e5e7eb;border-radius:9px;font-family:Nunito,sans-serif;font-size:.78rem;background:#fff"><option value="turno_actual"'+(fT==='turno_actual'?' selected':'')+'>Turno actual</option><option value="T1"'+(fT==='T1'?' selected':'')+'>T1</option><option value="T2"'+(fT==='T2'?' selected':'')+'>T2</option><option value="T3"'+(fT==='T3'?' selected':'')+'>T3</option><option value="dia"'+(fT==='dia'?' selected':'')+'>Día completo</option></select>'
     +'</div>'
     // KPIs — 4 cuadros
-    +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px;padding:8px 16px">'
-    +'<div style="background:'+(aiMostrar>=(l.objetivo_ai!=null?l.objetivo_ai:85)?'#16a34a':'#dc2626')+';border-radius:10px;padding:10px;color:#fff;text-align:center"><div style="font-size:8px;font-weight:700;opacity:.85">Asset Intensity</div><div style="font-size:20px;font-weight:900;line-height:1.1">'+ aiMostrar +'%</div>'+(ordenCerrada?'<div style="font-size:8px;opacity:.8">Real</div>':'')+'</div>'
+    +'<div style="display:grid;grid-template-columns:'+(tiene_flujo?'1fr 1fr 1fr 1fr':'1fr 1fr 1fr 1fr 1fr')+';gap:5px;padding:8px 16px 4px">'
+    +'<div style="background:'+(aiMostrar>=(l.objetivo_ai!=null?l.objetivo_ai:85)?'#16a34a':'#dc2626')+';border-radius:10px;padding:10px;color:#fff;text-align:center"><div style="font-size:8px;font-weight:700;opacity:.85">Asset Intensity</div><div style="font-size:20px;font-weight:900;line-height:1.1">'+ aiMostrar +'%</div>'+(ordenCerrada?'<div style="font-size:8px;opacity:.8">Real</div>':'')+' </div>'
     +'<div style="background:#dc2626;border-radius:10px;padding:10px;color:#fff;text-align:center"><div style="font-size:8px;font-weight:700;opacity:.85">%PNP</div><div style="font-size:20px;font-weight:900;line-height:1.1">'+PNP+'%</div></div>'
     +'<div style="background:#ca8a04;border-radius:10px;padding:10px;color:#fff;text-align:center"><div style="font-size:8px;font-weight:700;opacity:.85">%PP</div><div style="font-size:20px;font-weight:900;line-height:1.1">'+PP+'%</div></div>'
     +(tiene_flujo
       ? '<div style="background:'+diffCol+';border-radius:10px;padding:10px;color:#fff;text-align:center"><div style="font-size:8px;font-weight:700;opacity:.85">Piezas</div><div style="font-size:17px;font-weight:900;line-height:1.1">'+ diffLabel +'</div><div style="font-size:7px;opacity:.8">'+ pzRegistradas +'/'+ pzEsperadas +'</div></div>'
-      : '<div id="kpi-prod-diff" style="border-radius:10px;padding:7px 6px;background:#374151;color:#fff;text-align:center"><div style="font-size:7px;font-weight:700;opacity:.7;margin-bottom:3px">Paros vs Obj</div><div style="font-size:13px;font-weight:900;line-height:1.5;opacity:.6">—</div><div style="font-size:7px;opacity:.5">Ingresa kg y Calcular</div></div>'
+      : (function(){var kgEs=targetH>0?Math.round(targetH*tCorriendoHr):0;var kgD=Math.round(kgAcum-kgEs);var dMin=targetH>0?Math.round(Math.abs(kgD)/targetH*60):0;var dLbl=(kgD>=0?'+':'-')+dMin+' min';var dCol=kgD>=0?'#16a34a':'#dc2626';
+          return '<div id="kpi-kg-acum" style="border-radius:10px;padding:7px 4px;background:#0d2144;color:#fff;text-align:center">'
+            +'<div style="font-size:7px;font-weight:700;opacity:.7;margin-bottom:2px">'+unidadLabel+'</div>'
+            +'<div style="font-size:16px;font-weight:900;line-height:1.1">'+kgAcum.toLocaleString()+'</div></div>'
+            +'<div id="kpi-prod-diff" style="border-radius:10px;padding:7px 4px;background:'+(kgAcum>0?dCol:'#374151')+';color:#fff;text-align:center">'
+            +'<div style="font-size:7px;font-weight:700;opacity:.7;margin-bottom:2px">'+vsTCLabel+'</div>'
+            +'<div style="font-size:16px;font-weight:900;line-height:1.1">'+(kgAcum>0?dLbl:'—')+'</div>'
+            +(kgAcum>0?'<div style="font-size:7px;opacity:.6">'+kgAcum+'/'+kgEs+'</div>':'')
+            +'</div>';})()
     )
+    +'</div>'
     +'</div>'
     // Botones
     +(esHoy?'<div style="padding:0 16px 8px"><div style="display:flex;gap:5px;align-items:center">'
@@ -1207,7 +1229,7 @@ async function renderLinea(){
           ?'<div style="display:flex;gap:5px;align-items:center;margin-bottom:6px">'
             +'<input type="number" id="pz-total-inp" value="'+pzTotalVal+'" '+(fActCerrada?'disabled':'')+' placeholder="Kg" style="width:70px;padding:8px 6px;border:1.5px solid #0891b2;border-radius:8px;font-family:Nunito,sans-serif;font-size:13px;font-weight:700;text-align:center">'
             +(fActCerrada?''
-              :'<button onclick="calcularKgSinFlujo()" style="padding:8px 12px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif">Calcular</button>'
+              :'<button onclick="calcularKgSinFlujo()" style="padding:8px 12px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif">Alta de producto</button>'
               +'<button onclick="guardarOrden()" style="padding:8px 14px;background:#0891b2;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif">💾 Guardar</button>'
               +'<button onclick="cerrarTecnico()" style="padding:8px 10px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif">CTEC</button>')
             +'</div>'
@@ -1215,8 +1237,8 @@ async function renderLinea(){
         +(!fActDetenida&&!fActCerrada
           ?'<div style="display:flex;gap:8px;align-items:center">'
             +'<input type="number" id="kg-fabricados" placeholder="Kg" style="width:70px;padding:8px 6px;border:1.5px solid #e5e7eb;border-radius:8px;font-family:Nunito,sans-serif;font-size:13px;font-weight:700;text-align:center">'
-            +'<button onclick="calcularKgSinFlujo()" style="padding:10px 16px;background:#0d2144;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif;white-space:nowrap">Calcular</button>'
-            +'</div><div id="kg-resultado" style="margin-top:8px"></div>'
+            +'<button onclick="calcularKgSinFlujo()" style="padding:10px 16px;background:#0d2144;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif;white-space:nowrap">Alta de producto</button>'
+            +'</div>'
           :(fActCerrada
             ?'<div style="font-size:13px;font-weight:700;color:#374151">Total: <b>'+pzTotalVal+' '+unidad+'</b></div>'
             :''))
@@ -2989,6 +3011,19 @@ function mostrarTipKPIBar(ev,idx){
   tip.style.top=(ev.clientY-60)+'px';
 }
 function ocultarTipKPI(){var tip=document.getElementById('kpi-bar-tip');if(tip)tip.style.display='none';}
+var _tipNavTimer=null;
+function mostrarTipNav(el,texto){
+  var tip=document.getElementById('tip-nav');
+  if(!tip){tip=document.createElement('div');tip.id='tip-nav';tip.style.cssText='position:fixed;z-index:9999;background:#1a1a2e;color:#fff;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;pointer-events:none;font-family:Nunito,sans-serif;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.3)';document.body.appendChild(tip);}
+  var r=el.getBoundingClientRect();
+  tip.textContent=texto;
+  tip.style.display='block';
+  tip.style.left=(r.left+r.width/2-tip.offsetWidth/2)+'px';
+  tip.style.top=(r.bottom+5)+'px';
+  if(_tipNavTimer) clearTimeout(_tipNavTimer);
+  _tipNavTimer=setTimeout(function(){tip.style.display='none';},3000);
+}
+function ocultarTipNav(){if(_tipNavTimer){clearTimeout(_tipNavTimer);_tipNavTimer=null;}var tip=document.getElementById('tip-nav');if(tip)tip.style.display='none';}
 var _dcModo='T',_dcOffset=0;
 function dcSetModo(m){
   _dcModo=m;_dcOffset=0;
@@ -3855,49 +3890,42 @@ function iniciarMonitorChecklists(){
 
 // ── CALCULAR KG SIN FLUJÓMETRO ────────────────────────────────
 async function calcularKgSinFlujo(){
+  // Mantener compatibilidad — delega a altaProducto
+  await altaProducto();
+}
+async function altaProducto(){
   var kgInput=document.getElementById('kg-fabricados')||document.getElementById('pz-total-inp');
-  var res=document.getElementById('kg-resultado');
   if(!kgInput) return;
-  var kgReal=parseFloat(kgInput.value);
-  if(isNaN(kgReal)||kgReal<0){toast('Ingresa los Kg fabricados','#dc2626');return;}
+  var delta=parseFloat(kgInput.value);
+  if(isNaN(delta)){toast('Ingresa la cantidad','#dc2626');return;}
+  // Acumular (permite negativos para descuentos)
+  var nuevo=Math.round(((window._kgAcumulado||0)+delta)*100)/100;
+  window._kgAcumulado=nuevo;
+  if(ORDEN_ACTIVA){
+    ORDEN_ACTIVA._kgAcumulado=nuevo;
+    ORDEN_ACTIVA.piezas_total=nuevo;
+    localStorage.setItem('ai_orden_'+LINEA_ID,JSON.stringify(ORDEN_ACTIVA));
+    await dbP('ai_ordenes','PATCH',{piezas_total:nuevo},'id=eq.'+ORDEN_ACTIVA.id);
+  }
+  // Limpiar input
+  kgInput.value='';
+  // Actualizar box KG Fabricados / PZS Fabricadas
+  var boxKg=document.getElementById('kpi-kg-acum');
+  if(boxKg) boxKg.innerHTML='<div style="font-size:7px;font-weight:700;opacity:.7;margin-bottom:2px">'+(window._lineaUnidadLabel||'Fabricado')+'</div><div style="font-size:16px;font-weight:900;line-height:1.1">'+nuevo.toLocaleString()+'</div>';
+  // Actualizar box KG vs TC / Pzs vs TC
   var targetH=window._lineaTargetH||0;
   var tCorriendoHr=window._lineaTCorriendoHr||0;
-  var tOcupHr=window._lineaTOcupHr||0;
-  // Si hay producto en la orden, consultar su velocidad real
-  if(ORDEN_ACTIVA&&ORDEN_ACTIVA.producto_id){
-    var prods=await db('ai_productos','GET',null,'id=eq.'+ORDEN_ACTIVA.producto_id)||[];
-    if(prods&&prods.length&&prods[0].target_hora) targetH=prods[0].target_hora;
-  }
-  // Cálculo basado en producción real
-  var kgEsperados=targetH>0?Math.round(targetH*tCorriendoHr):0;
-  var kgDiff=Math.round(kgReal-(kgEsperados));
-  var diffMin=targetH>0?Math.round(Math.abs(kgDiff)/targetH*60):0;
-  var diffLabel=(kgDiff>=0?'+':'-')+diffMin+' min';
-  var diffCol=kgDiff>=0?'#16a34a':'#dc2626';
-  // AI basado en producción
-  var aiProd=tOcupHr>0&&targetH>0?Math.round((kgReal/targetH)/tOcupHr*100):null;
-  var aiTiempo=window._lineaAI||null;
-  // Actualizar box Paros vs Obj
-  var box=document.getElementById('kpi-prod-diff');
-  if(box){
-    box.style.background=diffCol;
-    box.innerHTML='<div style="font-size:8px;font-weight:700;opacity:.85">Paros vs Obj</div>'
-      +'<div style="font-size:22px;font-weight:900;line-height:1.1">'+diffLabel+'</div>'
-      +'<div style="font-size:7px;opacity:.8">'+kgReal+'/'+kgEsperados+' kg</div>';
-  }
-  // Preview detallado debajo del input
-  if(res){
-    res.innerHTML='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:4px">'
-      +'<div style="background:#f3f4f6;border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#6b7280;font-weight:700">Esperado</div><div style="font-size:16px;font-weight:900">'+kgEsperados+'</div><div style="font-size:8px;color:#9ca3af">kg</div></div>'
-      +'<div style="background:#f3f4f6;border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#6b7280;font-weight:700">Real</div><div style="font-size:16px;font-weight:900">'+kgReal+'</div><div style="font-size:8px;color:#9ca3af">kg</div></div>'
-      +'<div style="background:'+(kgDiff>=0?'#dcfce7':'#fee2e2')+';border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#374151;font-weight:700">Diferencia</div><div style="font-size:14px;font-weight:900;color:'+diffCol+'">'+diffLabel+'</div></div>'
-      +'</div>'
-      +(aiProd!=null?'<div style="margin-top:8px;background:#1a3c5e;color:#fff;border-radius:8px;padding:8px;display:flex;justify-content:space-between;align-items:center">'
-        +'<div><div style="font-size:9px;opacity:.7;font-weight:700">Asset Intensity por producción</div>'
-        +'<div style="font-size:20px;font-weight:900">'+aiProd+'%</div></div>'
-        +(aiTiempo!=null?'<div style="text-align:right;opacity:.7"><div style="font-size:9px;font-weight:700">Por tiempo</div><div style="font-size:14px;font-weight:700">'+aiTiempo+'%</div></div>':'')
-        +'</div>':'')
-      +'<div style="font-size:10px;color:#9ca3af;margin-top:6px">Vel. nominal: '+(targetH||'—')+' kg/h · T.corriendo: '+Math.round(tCorriendoHr*60)+' min · T.ocupado: '+Math.round(tOcupHr*60)+' min</div>';
+  var kgEs=targetH>0?Math.round(targetH*tCorriendoHr):0;
+  var kgD=Math.round(nuevo-kgEs);
+  var dMin=targetH>0?Math.round(Math.abs(kgD)/targetH*60):0;
+  var dLbl=(kgD>=0?'+':'-')+dMin+' min';
+  var dCol=kgD>=0?'#16a34a':'#dc2626';
+  var boxVs=document.getElementById('kpi-prod-diff');
+  if(boxVs){
+    boxVs.style.background=nuevo>0?dCol:'#374151';
+    boxVs.innerHTML='<div style="font-size:7px;font-weight:700;opacity:.7;margin-bottom:2px">'+(window._lineaVsTCLabel||'vs TC')+'</div>'
+      +'<div style="font-size:16px;font-weight:900;line-height:1.1">'+(nuevo>0?dLbl:'\u2014')+'</div>'
+      +(nuevo>0?'<div style="font-size:7px;opacity:.6">'+nuevo+'/'+kgEs+'</div>':'');
   }
 }
 
