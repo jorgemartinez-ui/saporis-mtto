@@ -1028,8 +1028,6 @@ async function renderLinea(){
   var ppRealMin=Math.round(tPP/60000), pnpRealMin=Math.round(tPNP/60000);
   var ppDiffMin=ppRealMin-ppPermMin; // + = exceso = malo
   var pnpDiffMin=pnpRealMin-pnpPermMin;
-  window._lineaTCorriendoHr=tCorriendoHr;
-  window._lineaTargetH=targetH;
 
   // AI real si orden cerrada
   var ordenCerrada=esHoy&&ORDEN_ACTIVA&&ORDEN_ACTIVA.estado==='cerrada';
@@ -1089,6 +1087,11 @@ async function renderLinea(){
   // Target: prioridad producto (piezas_objetivo de la orden) > línea
   var targetH=(ORDEN_ACTIVA&&ORDEN_ACTIVA.piezas_objetivo&&ORDEN_ACTIVA.piezas_objetivo>0)
     ?Number(ORDEN_ACTIVA.piezas_objetivo):(l.target_hora||0);
+  // Guardar para calcularKgSinFlujo (ahora targetH ya tiene su valor real)
+  window._lineaTCorriendoHr=tCorriendoHr;
+  window._lineaTargetH=targetH;
+  window._lineaTOcupHr=(tC+tPNP+tPP)/3600000;
+  window._lineaAI=AI;
   var hrs=[],mx=Math.round(Math.max(targetH||1,1)*1.1);
   for(var i=0;i<nH;i++){var ts_h=tsI+i*3600000,hh=new Date(ts_h).getHours(),p=pzs.find(x=>x.hora===hh)||null;hrs.push({h:hh,v:p?p.piezas:null,tn:turnoDe(ts_h),ts:ts_h});}
   var pctTarget=Math.min(98,Math.max(2,(targetH||0)/mx*100)).toFixed(1);
@@ -1143,12 +1146,12 @@ async function renderLinea(){
     +'<button onclick="abrirPopupFecha(this)" style="flex:1;min-width:0;padding:7px 8px;border:2px solid #000;border-radius:9px;font-family:Nunito,sans-serif;font-size:.78rem;font-weight:700;background:#fff;cursor:pointer;color:#000;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+fechaBtnLbl+' ▾</button>'
     // ── Navegación D / T ──────────────────────────────────
     +'<div style="display:flex;gap:2px;flex-shrink:0">'
-    +(window.AI_NAV_MODE!=='o'?'<button onclick="navFecha(-1)" onmousedown="this.style.transform=\'scale(.88)\';this.style.background=\'#e5e7eb\'" onmouseup="this.style.transform=\'\';this.style.background=\'#fff\'" onmouseleave="this.style.transform=\'\';this.style.background=\'#fff\'" style="padding:5px 9px;background:#fff;color:#000;border:2px solid #000;border-radius:7px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;transition:transform .1s;line-height:1">◄</button>':'')
+    +'<button onclick="navFecha(-1)" onmousedown="this.style.transform=\'scale(.88)\';this.style.background=\'#e5e7eb\'" onmouseup="this.style.transform=\'\';this.style.background=\'#fff\'" onmouseleave="this.style.transform=\'\';this.style.background=\'#fff\'" style="padding:5px 9px;background:#fff;color:#000;border:2px solid #000;border-radius:7px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;transition:transform .1s;line-height:1">◄</button>'
     +'<button onclick="setNavMode(\'s\')" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='s'?'#7f1d1d':'#fff')+';color:'+(window.AI_NAV_MODE==='s'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">S</button>'
     +'<button onclick="setNavMode(\'d\')" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='d'?'#7f1d1d':'#fff')+';color:'+(window.AI_NAV_MODE==='d'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">D</button>'
     +'<button onclick="setNavMode(\'t\')" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='t'?'#7f1d1d':'#fff')+';color:'+(window.AI_NAV_MODE==='t'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">T</button>'
-    +(ORDEN_ACTIVA?'<button onclick="setNavMode(\'o\')" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='o'?'#1e3a8a':'#fff')+';color:'+(window.AI_NAV_MODE==='o'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">O</button>':'')
-    +(window.AI_NAV_MODE!=='o'?'<button onclick="navFecha(1)" onmousedown="this.style.transform=\'scale(.88)\';this.style.background=\'#e5e7eb\'" onmouseup="this.style.transform=\'\';this.style.background=\'#fff\'" onmouseleave="this.style.transform=\'\';this.style.background=\'#fff\'" style="padding:5px 9px;background:#fff;color:#000;border:2px solid #000;border-radius:7px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;transition:transform .1s;line-height:1">►</button>':'')
+    +(ORDEN_ACTIVA?'<button id="btn-folio-nav" onclick="_mostrarMenuFolio(this)" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='o'?'#1e3a8a':'#fff')+';color:'+(window.AI_NAV_MODE==='o'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">F</button>':'')
+    +'<button onclick="navFecha(1)" onmousedown="this.style.transform=\'scale(.88)\';this.style.background=\'#e5e7eb\'" onmouseup="this.style.transform=\'\';this.style.background=\'#fff\'" onmouseleave="this.style.transform=\'\';this.style.background=\'#fff\'" style="padding:5px 9px;background:#fff;color:#000;border:2px solid #000;border-radius:7px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;transition:transform .1s;line-height:1">►</button>'
     +'<button onclick="renderLinea()" onmousedown="this.style.background=\'#e5e7eb\';this.style.transform=\'scale(.9)\'" onmouseup="this.style.background=\'#fff\';this.style.transform=\'\'" onmouseleave="this.style.background=\'#fff\';this.style.transform=\'\'" style="padding:5px 9px;background:#fff;color:#000;border:2px solid #000;border-radius:7px;font-size:16px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;line-height:1;transition:transform .1s">↻</button>'
     +'</div>'
     +'<select onchange="window.AI_F_TURNO=this.value;renderLinea()" style="flex:1;min-width:0;padding:7px 4px;border:1.5px solid #e5e7eb;border-radius:9px;font-family:Nunito,sans-serif;font-size:.78rem;background:#fff"><option value="turno_actual"'+(fT==='turno_actual'?' selected':'')+'>Turno actual</option><option value="T1"'+(fT==='T1'?' selected':'')+'>T1</option><option value="T2"'+(fT==='T2'?' selected':'')+'>T2</option><option value="T3"'+(fT==='T3'?' selected':'')+'>T3</option><option value="dia"'+(fT==='dia'?' selected':'')+'>Día completo</option></select>'
@@ -1176,7 +1179,7 @@ async function renderLinea(){
     :'<div style="padding:0 16px 8px"><div style="background:#fef3c7;color:#92400e;border-radius:9px;padding:8px 12px;font-size:11px;font-weight:700;text-align:center">📖 Modo consulta — viendo historial de '+hFiltro+' (solo lectura)</div></div>')
     // Barra de tiempo
     +'<div style="padding:0 16px 8px">'
-    +'<div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:3px">Línea de tiempo'+(ORDEN_ACTIVA&&esHoy?' - Folio: '+ORDEN_ACTIVA.folio:'')+'</div>'
+    +'<div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:3px">Línea de tiempo'+(ORDEN_ACTIVA?' · Folio: '+ORDEN_ACTIVA.folio:'')+'</div>'
     +'<div style="height:52px;border-radius:10px;overflow:hidden;display:flex;box-shadow:0 1px 4px rgba(0,0,0,.15)">'+segs+'</div>'
     +'<div style="position:relative;height:16px;margin-top:1px">'+marcas+'</div>'
     +'</div>'
@@ -1202,7 +1205,7 @@ async function renderLinea(){
         +'<div style="font-size:11px;font-weight:800;color:#374151;margin-bottom:8px">📊 Producción ('+unidad+')</div>'
         +(fActDetenida
           ?'<div style="display:flex;gap:5px;align-items:center;margin-bottom:6px">'
-            +'<input type="number" id="pz-total-inp" value="'+pzTotalVal+'" '+(fActCerrada?'disabled':'')+' placeholder="Kg fabricados" style="flex:1;padding:8px 10px;border:1.5px solid #0891b2;border-radius:8px;font-family:Nunito,sans-serif;font-size:14px;font-weight:700">'
+            +'<input type="number" id="pz-total-inp" value="'+pzTotalVal+'" '+(fActCerrada?'disabled':'')+' placeholder="Kg" style="width:70px;padding:8px 6px;border:1.5px solid #0891b2;border-radius:8px;font-family:Nunito,sans-serif;font-size:13px;font-weight:700;text-align:center">'
             +(fActCerrada?''
               :'<button onclick="calcularKgSinFlujo()" style="padding:8px 12px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif">Calcular</button>'
               +'<button onclick="guardarOrden()" style="padding:8px 14px;background:#0891b2;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif">💾 Guardar</button>'
@@ -1211,7 +1214,7 @@ async function renderLinea(){
           :'')
         +(!fActDetenida&&!fActCerrada
           ?'<div style="display:flex;gap:8px;align-items:center">'
-            +'<input type="number" id="kg-fabricados" class="fc" placeholder="Kg fabricados" style="flex:1;margin-bottom:0">'
+            +'<input type="number" id="kg-fabricados" placeholder="Kg" style="width:70px;padding:8px 6px;border:1.5px solid #e5e7eb;border-radius:8px;font-family:Nunito,sans-serif;font-size:13px;font-weight:700;text-align:center">'
             +'<button onclick="calcularKgSinFlujo()" style="padding:10px 16px;background:#0d2144;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif;white-space:nowrap">Calcular</button>'
             +'</div><div id="kg-resultado" style="margin-top:8px"></div>'
           :(fActCerrada
@@ -2797,9 +2800,65 @@ function setNavMode(m){
 function navFecha(dir){
   var modo=window.AI_NAV_MODE;
   if(!modo) return;
+  if(modo==='o'){ _navFolio(dir); return; }
   if(modo==='s') navSemana(dir);
   else if(modo==='d'){ navDia(dir); window.AI_F_TURNO='dia'; }
   else navTurno(dir);
+}
+async function _navFolio(dir){
+  if(!LINEA_ID) return;
+  var tsRef=ORDEN_ACTIVA?Number(ORDEN_ACTIVA.ts_inicio):Date.now();
+  var filtro=dir<0
+    ?'linea_id=eq.'+LINEA_ID+'&ts_inicio=lt.'+tsRef+'&order=ts_inicio.desc&limit=1'
+    :'linea_id=eq.'+LINEA_ID+'&ts_inicio=gt.'+tsRef+'&order=ts_inicio.asc&limit=1';
+  var rows=await db('ai_ordenes','GET',null,filtro)||[];
+  if(!rows.length){toast(dir<0?'Sin folio anterior':'Sin folio posterior','#6b7280');return;}
+  var ord=rows[0];
+  // Cargar este folio como el activo del modo F
+  ord._tsF=ord.detenida_en||null;
+  ord._flujoAlertas={};
+  window._folioF=ord;
+  ORDEN_ACTIVA=ord;
+  window.AI_NAV_MODE='o';
+  renderLinea();
+}
+function _mostrarMenuFolio(btn){
+  // Quitar menú existente si hay uno abierto
+  var existente=document.getElementById('menu-folio');
+  if(existente){existente.remove();return;}
+  var rect=btn.getBoundingClientRect();
+  var menu=document.createElement('div');
+  menu.id='menu-folio';
+  menu.style.cssText='position:fixed;z-index:9999;background:#fff;border:2px solid #000;border-radius:10px;box-shadow:0 4px 16px rgba(0,0,0,.2);padding:4px;min-width:160px;top:'+(rect.bottom+4)+'px;left:'+rect.left+'px';
+  menu.innerHTML=
+    '<div onclick="_cargarUltimoFolio();document.getElementById(\'menu-folio\')?.remove()" style="padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;border-radius:7px;display:flex;align-items:center;gap:6px" onmouseenter="this.style.background=\'#f3f4f6\'" onmouseleave="this.style.background=\'\'">📋 Último folio</div>'
+    +'<div onclick="_pedirFolioManual();document.getElementById(\'menu-folio\')?.remove()" style="padding:8px 12px;font-size:12px;font-weight:700;cursor:pointer;border-radius:7px;display:flex;align-items:center;gap:6px" onmouseenter="this.style.background=\'#f3f4f6\'" onmouseleave="this.style.background=\'\'">🔍 Ingresar folio</div>';
+  document.body.appendChild(menu);
+  // Cerrar al click fuera
+  setTimeout(()=>document.addEventListener('click',function h(e){if(!menu.contains(e.target)){menu.remove();document.removeEventListener('click',h);}},true),50);
+}
+function _cargarUltimoFolio(){
+  if(!ORDEN_ACTIVA){toast('No hay folio activo','#6b7280');return;}
+  window.AI_NAV_MODE='o';
+  renderLinea();
+}
+function _pedirFolioManual(){
+  modal('🔍 Ver folio',
+    '<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Número de Folio</label>'
+    +'<input type="number" id="folio-buscar" class="fc" placeholder="Ej: 12345" inputmode="numeric">',
+    async(m)=>{
+      var folio=parseInt(document.getElementById('folio-buscar').value);
+      if(!folio||folio<=0){toast('Ingresa un número válido','#dc2626');return;}
+      m.remove();
+      var rows=await db('ai_ordenes','GET',null,'linea_id=eq.'+LINEA_ID+'&folio=eq.'+folio+'&limit=1')||[];
+      if(!rows.length){toast('Folio '+folio+' no encontrado en esta línea','#dc2626');return;}
+      var ord=rows[0];
+      ord._tsF=ord.detenida_en||null;
+      ord._flujoAlertas={};
+      ORDEN_ACTIVA=ord;
+      window.AI_NAV_MODE='o';
+      renderLinea();
+    },'#0d2144','Buscar');
 }
 function navSemana(dir){
   // Mover una semana entera
@@ -3795,7 +3854,7 @@ function iniciarMonitorChecklists(){
 
 
 // ── CALCULAR KG SIN FLUJÓMETRO ────────────────────────────────
-function calcularKgSinFlujo(){
+async function calcularKgSinFlujo(){
   var kgInput=document.getElementById('kg-fabricados')||document.getElementById('pz-total-inp');
   var res=document.getElementById('kg-resultado');
   if(!kgInput) return;
@@ -3803,13 +3862,22 @@ function calcularKgSinFlujo(){
   if(isNaN(kgReal)||kgReal<0){toast('Ingresa los Kg fabricados','#dc2626');return;}
   var targetH=window._lineaTargetH||0;
   var tCorriendoHr=window._lineaTCorriendoHr||0;
-  var kgEsperados=Math.round(targetH*tCorriendoHr);
-  var kgDiff=Math.round(kgReal-kgEsperados);
+  var tOcupHr=window._lineaTOcupHr||0;
+  // Si hay producto en la orden, consultar su velocidad real
+  if(ORDEN_ACTIVA&&ORDEN_ACTIVA.producto_id){
+    var prods=await db('ai_productos','GET',null,'id=eq.'+ORDEN_ACTIVA.producto_id)||[];
+    if(prods&&prods.length&&prods[0].target_hora) targetH=prods[0].target_hora;
+  }
+  // Cálculo basado en producción real
+  var kgEsperados=targetH>0?Math.round(targetH*tCorriendoHr):0;
+  var kgDiff=Math.round(kgReal-(kgEsperados));
   var diffMin=targetH>0?Math.round(Math.abs(kgDiff)/targetH*60):0;
   var diffLabel=(kgDiff>=0?'+':'-')+diffMin+' min';
   var diffCol=kgDiff>=0?'#16a34a':'#dc2626';
-  var tCorriendoMin=Math.round(tCorriendoHr*60);
-  // Actualizar el box Paros vs Obj
+  // AI basado en producción
+  var aiProd=tOcupHr>0&&targetH>0?Math.round((kgReal/targetH)/tOcupHr*100):null;
+  var aiTiempo=window._lineaAI||null;
+  // Actualizar box Paros vs Obj
   var box=document.getElementById('kpi-prod-diff');
   if(box){
     box.style.background=diffCol;
@@ -3817,14 +3885,19 @@ function calcularKgSinFlujo(){
       +'<div style="font-size:22px;font-weight:900;line-height:1.1">'+diffLabel+'</div>'
       +'<div style="font-size:7px;opacity:.8">'+kgReal+'/'+kgEsperados+' kg</div>';
   }
-  // Detalle debajo del input
+  // Preview detallado debajo del input
   if(res){
     res.innerHTML='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:4px">'
       +'<div style="background:#f3f4f6;border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#6b7280;font-weight:700">Esperado</div><div style="font-size:16px;font-weight:900">'+kgEsperados+'</div><div style="font-size:8px;color:#9ca3af">kg</div></div>'
       +'<div style="background:#f3f4f6;border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#6b7280;font-weight:700">Real</div><div style="font-size:16px;font-weight:900">'+kgReal+'</div><div style="font-size:8px;color:#9ca3af">kg</div></div>'
       +'<div style="background:'+(kgDiff>=0?'#dcfce7':'#fee2e2')+';border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#374151;font-weight:700">Diferencia</div><div style="font-size:14px;font-weight:900;color:'+diffCol+'">'+diffLabel+'</div></div>'
       +'</div>'
-      +'<div style="font-size:10px;color:#9ca3af;margin-top:6px">Tiempo corriendo: '+tCorriendoMin+' min · Velocidad obj: '+(targetH||'—')+' kg/h</div>';
+      +(aiProd!=null?'<div style="margin-top:8px;background:#1a3c5e;color:#fff;border-radius:8px;padding:8px;display:flex;justify-content:space-between;align-items:center">'
+        +'<div><div style="font-size:9px;opacity:.7;font-weight:700">Asset Intensity por producción</div>'
+        +'<div style="font-size:20px;font-weight:900">'+aiProd+'%</div></div>'
+        +(aiTiempo!=null?'<div style="text-align:right;opacity:.7"><div style="font-size:9px;font-weight:700">Por tiempo</div><div style="font-size:14px;font-weight:700">'+aiTiempo+'%</div></div>':'')
+        +'</div>':'')
+      +'<div style="font-size:10px;color:#9ca3af;margin-top:6px">Vel. nominal: '+(targetH||'—')+' kg/h · T.corriendo: '+Math.round(tCorriendoHr*60)+' min · T.ocupado: '+Math.round(tOcupHr*60)+' min</div>';
   }
 }
 
@@ -3843,38 +3916,43 @@ function _checkFlujAlerta(){
   if(!ORDEN_ACTIVA||_flujAlertaActiva) return;
   if(ORDEN_ACTIVA._tsF) return;
   var lActual=LINEAS.find(x=>x.id===LINEA_ID);
-  if(!lActual||!lActual.tiene_flujometro) return; // solo para líneas con flujómetro
-  if(!ORDEN_ACTIVA.flujometro_lecturas) return;
+  if(!lActual) return;
+  if(!ORDEN_ACTIVA.flujometro_lecturas) ORDEN_ACTIVA.flujometro_lecturas=[];
   var ahora=Date.now();
   var t=turno(), h=hoy();
   var tsFinTurno=tIni(t,h)+8*3600000;
   var ventana=tsFinTurno-30*60000;
-  if(ahora<ventana||ahora>=tsFinTurno) return; // fuera de ventana
-  // Verificar si ya se mostró alerta para este fin de turno
+  if(ahora<ventana||ahora>=tsFinTurno) return;
   if(!ORDEN_ACTIVA._flujoAlertas) ORDEN_ACTIVA._flujoAlertas={};
   var alertaKey=t+'_'+h;
-  if(ORDEN_ACTIVA._flujoAlertas[alertaKey]) return; // ya mostrada
-  // Marcar como mostrada ANTES de mostrar el modal
+  if(ORDEN_ACTIVA._flujoAlertas[alertaKey]) return;
   ORDEN_ACTIVA._flujoAlertas[alertaKey]=true;
   localStorage.setItem('ai_orden_'+LINEA_ID,JSON.stringify(ORDEN_ACTIVA));
   _flujAlertaActiva=true;
+  var tieneFlujo=!!(lActual&&lActual.tiene_flujometro);
   var lecs=ORDEN_ACTIVA.flujometro_lecturas;
   var ultimaLec=lecs.length?lecs[lecs.length-1]:null;
   var min30=Math.round((tsFinTurno-ahora)/60000);
-  modal('📊 Lectura de Flujómetro — Turno '+t,
+  var tituloModal=tieneFlujo?'📊 Lectura de Flujómetro — Turno '+t:'📊 Producción del Turno '+t;
+  var labelInput=tieneFlujo?'Lectura actual de Flujómetro':'Kg fabricados en este turno';
+  var placeholder=tieneFlujo?'Ej: 101500.0':'Ej: 850';
+  modal(tituloModal,
     '<div style="background:#fef3c7;border-radius:10px;padding:10px;margin-bottom:12px;font-size:12px;font-weight:700;color:#92400e">⏰ Faltan aprox. '+min30+' min para el fin del Turno '+t+'</div>'
     +(ultimaLec!=null?'<div style="font-size:11px;color:#6b7280;margin-bottom:10px">Última lectura: <b>'+ultimaLec.valor.toLocaleString()+'</b> ('+ultimaLec.tipo+')</div>':'')
-    +'<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Lectura actual de Flujómetro</label>'
-    +'<input type="number" id="flujo-turno" class="fc" placeholder="Ej: 101500.0" step="any" inputmode="decimal">',
+    +'<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">'+labelInput+'</label>'
+    +'<input type="number" id="flujo-turno" class="fc" placeholder="'+placeholder+'" step="any" inputmode="decimal">',
     async(m)=>{
       var val=parseFloat(document.getElementById('flujo-turno').value);
-      if(isNaN(val)){toast('Ingresa la lectura del flujómetro','#dc2626');return;}
+      if(isNaN(val)||val<0){toast('Ingresa el valor','#dc2626');return;}
       m.remove();
       _flujAlertaActiva=false;
       await _registrarLecturaFlujo(val,'turno');
-      var base=ultimaLec?ultimaLec.valor:(ORDEN_ACTIVA.flujometro_lecturas[0]?ORDEN_ACTIVA.flujometro_lecturas[0].valor:val);
-      var prod=Math.round(val-base);
-      toast('✅ Producción T'+t+': '+prod.toLocaleString()+' uds','#16a34a');
+      if(tieneFlujo){
+        var base=ultimaLec?ultimaLec.valor:(lecs[0]?lecs[0].valor:val);
+        toast('✅ Producción T'+t+': '+Math.round(val-base).toLocaleString()+' uds','#16a34a');
+      }else{
+        toast('✅ Kg T'+t+': '+val.toLocaleString()+' kg registrados','#16a34a');
+      }
     },'#7c3aed','Registrar',()=>{_flujAlertaActiva=false;});
 }
 
