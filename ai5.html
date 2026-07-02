@@ -959,10 +959,16 @@ async function renderLinea(){
   }
   var esHoy=hFiltro===hoy();
   var esSemana=fT==='semana';
-  window.AI_MODO_HISTORIAL=!esHoy&&!esSemana;
+  var esModoFolio=window.AI_NAV_MODE==='o'&&!!ORDEN_ACTIVA;
+  window.AI_MODO_HISTORIAL=!esHoy&&!esSemana&&!esModoFolio;
   var t=fT==='turno_actual'?turno():(fT==='dia'||fT==='semana'?turno():fT);
   var tsI, tsF;
-  if(esSemana){
+  if(esModoFolio){
+    // Modo O: mostrar toda la línea de tiempo del folio de inicio a fin
+    tsI=Number(ORDEN_ACTIVA.ts_inicio)||Date.now();
+    tsF=Number(ORDEN_ACTIVA._tsF||ORDEN_ACTIVA.detenida_en)||Date.now();
+    if(tsF<=tsI) tsF=Date.now();
+  } else if(esSemana){
     var lunes=lunesDeEstaFecha(fA,fM,fDia==='hoy'?new Date().getDate():fDia);
     tsI=new Date(lunes.getFullYear(),lunes.getMonth(),lunes.getDate(),6,30,0).getTime();
     tsF=tsI+7*24*3600*1000;
@@ -1029,7 +1035,10 @@ async function renderLinea(){
   var ordenCerrada=esHoy&&ORDEN_ACTIVA&&ORDEN_ACTIVA.estado==='cerrada';
   var detenida=esHoy&&!!tsDetencion&&!ordenCerrada;
   var aiMostrar=ordenCerrada&&ORDEN_ACTIVA.ai_real!=null?ORDEN_ACTIVA.ai_real:AI;
-  var pzTotalVal=esHoy&&ORDEN_ACTIVA&&ORDEN_ACTIVA.piezas_total?ORDEN_ACTIVA.piezas_total:pzRegistradas;
+  var pzTotalVal=ORDEN_ACTIVA&&ORDEN_ACTIVA.piezas_total?ORDEN_ACTIVA.piezas_total:pzRegistradas;
+  // Variables para la sección de producción sin flujómetro (funcionan en cualquier día)
+  var fActCerrada=!!(ORDEN_ACTIVA&&ORDEN_ACTIVA.estado==='cerrada');
+  var fActDetenida=!!tsDetencion&&!fActCerrada;
 
   // ── Topbar con color de estado ───────────────────────────────
   document.getElementById('linea-title').textContent=(l?l.nombre:'—')+(ORDEN_ACTIVA?' · Folio '+(ORDEN_ACTIVA.folio||''):'');
@@ -1134,11 +1143,12 @@ async function renderLinea(){
     +'<button onclick="abrirPopupFecha(this)" style="flex:1;min-width:0;padding:7px 8px;border:2px solid #000;border-radius:9px;font-family:Nunito,sans-serif;font-size:.78rem;font-weight:700;background:#fff;cursor:pointer;color:#000;text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+fechaBtnLbl+' ▾</button>'
     // ── Navegación D / T ──────────────────────────────────
     +'<div style="display:flex;gap:2px;flex-shrink:0">'
-    +'<button onclick="navFecha(-1)" onmousedown="this.style.transform=\'scale(.88)\';this.style.background=\'#e5e7eb\'" onmouseup="this.style.transform=\'\';this.style.background=\'#fff\'" onmouseleave="this.style.transform=\'\';this.style.background=\'#fff\'" style="padding:5px 9px;background:#fff;color:#000;border:2px solid #000;border-radius:7px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;transition:transform .1s;line-height:1">◄</button>'
+    +(window.AI_NAV_MODE!=='o'?'<button onclick="navFecha(-1)" onmousedown="this.style.transform=\'scale(.88)\';this.style.background=\'#e5e7eb\'" onmouseup="this.style.transform=\'\';this.style.background=\'#fff\'" onmouseleave="this.style.transform=\'\';this.style.background=\'#fff\'" style="padding:5px 9px;background:#fff;color:#000;border:2px solid #000;border-radius:7px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;transition:transform .1s;line-height:1">◄</button>':'')
     +'<button onclick="setNavMode(\'s\')" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='s'?'#7f1d1d':'#fff')+';color:'+(window.AI_NAV_MODE==='s'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">S</button>'
     +'<button onclick="setNavMode(\'d\')" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='d'?'#7f1d1d':'#fff')+';color:'+(window.AI_NAV_MODE==='d'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">D</button>'
     +'<button onclick="setNavMode(\'t\')" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='t'?'#7f1d1d':'#fff')+';color:'+(window.AI_NAV_MODE==='t'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">T</button>'
-    +'<button onclick="navFecha(1)" onmousedown="this.style.transform=\'scale(.88)\';this.style.background=\'#e5e7eb\'" onmouseup="this.style.transform=\'\';this.style.background=\'#fff\'" onmouseleave="this.style.transform=\'\';this.style.background=\'#fff\'" style="padding:5px 9px;background:#fff;color:#000;border:2px solid #000;border-radius:7px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;transition:transform .1s;line-height:1">►</button>'
+    +(ORDEN_ACTIVA?'<button onclick="setNavMode(\'o\')" style="padding:5px 8px;background:'+(window.AI_NAV_MODE==='o'?'#1e3a8a':'#fff')+';color:'+(window.AI_NAV_MODE==='o'?'#fff':'#000')+';border:2px solid #000;border-radius:7px;font-size:11px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">O</button>':'')
+    +(window.AI_NAV_MODE!=='o'?'<button onclick="navFecha(1)" onmousedown="this.style.transform=\'scale(.88)\';this.style.background=\'#e5e7eb\'" onmouseup="this.style.transform=\'\';this.style.background=\'#fff\'" onmouseleave="this.style.transform=\'\';this.style.background=\'#fff\'" style="padding:5px 9px;background:#fff;color:#000;border:2px solid #000;border-radius:7px;font-size:18px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;transition:transform .1s;line-height:1">►</button>':'')
     +'<button onclick="renderLinea()" onmousedown="this.style.background=\'#e5e7eb\';this.style.transform=\'scale(.9)\'" onmouseup="this.style.background=\'#fff\';this.style.transform=\'\'" onmouseleave="this.style.background=\'#fff\';this.style.transform=\'\'" style="padding:5px 9px;background:#fff;color:#000;border:2px solid #000;border-radius:7px;font-size:16px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;line-height:1;transition:transform .1s">↻</button>'
     +'</div>'
     +'<select onchange="window.AI_F_TURNO=this.value;renderLinea()" style="flex:1;min-width:0;padding:7px 4px;border:1.5px solid #e5e7eb;border-radius:9px;font-family:Nunito,sans-serif;font-size:.78rem;background:#fff"><option value="turno_actual"'+(fT==='turno_actual'?' selected':'')+'>Turno actual</option><option value="T1"'+(fT==='T1'?' selected':'')+'>T1</option><option value="T2"'+(fT==='T2'?' selected':'')+'>T2</option><option value="T3"'+(fT==='T3'?' selected':'')+'>T3</option><option value="dia"'+(fT==='dia'?' selected':'')+'>Día completo</option></select>'
@@ -1190,22 +1200,23 @@ async function renderLinea(){
       : '<div style="padding:0 16px 10px">'
         +'<div style="background:#f9fafb;border-radius:12px;padding:12px">'
         +'<div style="font-size:11px;font-weight:800;color:#374151;margin-bottom:8px">📊 Producción ('+unidad+')</div>'
-        +(esHoy&&detenida
+        +(fActDetenida
           ?'<div style="display:flex;gap:5px;align-items:center;margin-bottom:6px">'
-            +'<input type="number" id="pz-total-inp" value="'+pzTotalVal+'" '+(ordenCerrada?'disabled':'')+' placeholder="Kg fabricados" style="flex:1;padding:8px 10px;border:1.5px solid #0891b2;border-radius:8px;font-family:Nunito,sans-serif;font-size:14px;font-weight:700">'
-            +'<button onclick="calcularKgSinFlujo()" style="padding:8px 12px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif">Calcular</button>'
-            +'<button onclick="guardarOrden()" style="padding:8px 14px;background:#0891b2;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif">💾 Guardar</button>'
-            +'<button onclick="cerrarTecnico()" style="padding:8px 10px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif">CTEC</button>'
+            +'<input type="number" id="pz-total-inp" value="'+pzTotalVal+'" '+(fActCerrada?'disabled':'')+' placeholder="Kg fabricados" style="flex:1;padding:8px 10px;border:1.5px solid #0891b2;border-radius:8px;font-family:Nunito,sans-serif;font-size:14px;font-weight:700">'
+            +(fActCerrada?''
+              :'<button onclick="calcularKgSinFlujo()" style="padding:8px 12px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif">Calcular</button>'
+              +'<button onclick="guardarOrden()" style="padding:8px 14px;background:#0891b2;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif">💾 Guardar</button>'
+              +'<button onclick="cerrarTecnico()" style="padding:8px 10px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif">CTEC</button>')
             +'</div>'
           :'')
-        +(esHoy&&!detenida&&!ordenCerrada
+        +(!fActDetenida&&!fActCerrada
           ?'<div style="display:flex;gap:8px;align-items:center">'
             +'<input type="number" id="kg-fabricados" class="fc" placeholder="Kg fabricados" style="flex:1;margin-bottom:0">'
             +'<button onclick="calcularKgSinFlujo()" style="padding:10px 16px;background:#0d2144;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif;white-space:nowrap">Calcular</button>'
             +'</div><div id="kg-resultado" style="margin-top:8px"></div>'
-          :(!detenida&&!ordenCerrada?'':
-            '<div style="font-size:13px;font-weight:700;color:#374151">Total: <b>'+pzTotalVal+' '+unidad+'</b></div>'))
-        +'</div></div>'
+          :(fActCerrada
+            ?'<div style="font-size:13px;font-weight:700;color:#374151">Total: <b>'+pzTotalVal+' '+unidad+'</b></div>'
+            :''))
     )
     +'</div></div>'
     // Tabla eventos
@@ -2778,6 +2789,7 @@ function setNavMode(m){
     window.AI_NAV_MODE=m;
     if(m==='d') window.AI_F_TURNO='dia';
     else if(m==='s') window.AI_F_TURNO='semana';
+    else if(m==='o') window.AI_F_TURNO='turno_actual';
     else window.AI_F_TURNO=turno();
   }
   renderLinea();
