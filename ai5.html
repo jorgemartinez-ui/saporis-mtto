@@ -1150,7 +1150,7 @@ async function renderLinea(){
     +'<div style="background:#ca8a04;border-radius:10px;padding:10px;color:#fff;text-align:center"><div style="font-size:8px;font-weight:700;opacity:.85">%PP</div><div style="font-size:20px;font-weight:900;line-height:1.1">'+PP+'%</div></div>'
     +(tiene_flujo
       ? '<div style="background:'+diffCol+';border-radius:10px;padding:10px;color:#fff;text-align:center"><div style="font-size:8px;font-weight:700;opacity:.85">Piezas</div><div style="font-size:17px;font-weight:900;line-height:1.1">'+ diffLabel +'</div><div style="font-size:7px;opacity:.8">'+ pzRegistradas +'/'+ pzEsperadas +'</div></div>'
-      : '<div style="border-radius:10px;padding:7px 6px;background:#0d2144;color:#fff;text-align:center"><div style="font-size:7px;font-weight:700;opacity:.7;margin-bottom:3px">Paros vs Obj</div><div style="font-size:10px;font-weight:900;line-height:1.5;color:'+(ppDiffMin>0?'#fca5a5':'#86efac')+'">' +'PP: '+(ppDiffMin>0?'+':'')+ppDiffMin+' min</div><div style="font-size:10px;font-weight:900;line-height:1.5;color:'+(pnpDiffMin>0?'#fca5a5':'#86efac')+'">'+'PNP: '+(pnpDiffMin>0?'+':'')+pnpDiffMin+' min</div></div>'
+      : '<div id="kpi-prod-diff" style="border-radius:10px;padding:7px 6px;background:#374151;color:#fff;text-align:center"><div style="font-size:7px;font-weight:700;opacity:.7;margin-bottom:3px">Paros vs Obj</div><div style="font-size:13px;font-weight:900;line-height:1.5;opacity:.6">—</div><div style="font-size:7px;opacity:.5">Ingresa kg y Calcular</div></div>'
     )
     +'</div>'
     // Botones
@@ -1193,6 +1193,7 @@ async function renderLinea(){
         +(esHoy&&detenida
           ?'<div style="display:flex;gap:5px;align-items:center;margin-bottom:6px">'
             +'<input type="number" id="pz-total-inp" value="'+pzTotalVal+'" '+(ordenCerrada?'disabled':'')+' placeholder="Kg fabricados" style="flex:1;padding:8px 10px;border:1.5px solid #0891b2;border-radius:8px;font-family:Nunito,sans-serif;font-size:14px;font-weight:700">'
+            +'<button onclick="calcularKgSinFlujo()" style="padding:8px 12px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif">Calcular</button>'
             +'<button onclick="guardarOrden()" style="padding:8px 14px;background:#0891b2;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif">💾 Guardar</button>'
             +'<button onclick="cerrarTecnico()" style="padding:8px 10px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif">CTEC</button>'
             +'</div>'
@@ -1523,6 +1524,7 @@ async function continuarOrden(){
   if(bloqueadoLectura())return;
   if(ORDEN_ACTIVA){
     ORDEN_ACTIVA._tsF=null;
+    ORDEN_ACTIVA.detenida_en=null; // limpiar localmente para que abrirLinea no lo restaure
     localStorage.setItem('ai_orden_'+LINEA_ID,JSON.stringify(ORDEN_ACTIVA));
     await dbP('ai_ordenes','PATCH',{detenida_en:null},'id=eq.'+ORDEN_ACTIVA.id);
   }
@@ -3782,25 +3784,36 @@ function iniciarMonitorChecklists(){
 
 // ── CALCULAR KG SIN FLUJÓMETRO ────────────────────────────────
 function calcularKgSinFlujo(){
-  var kgInput=document.getElementById('kg-fabricados');
+  var kgInput=document.getElementById('kg-fabricados')||document.getElementById('pz-total-inp');
   var res=document.getElementById('kg-resultado');
-  if(!kgInput||!res) return;
+  if(!kgInput) return;
   var kgReal=parseFloat(kgInput.value);
   if(isNaN(kgReal)||kgReal<0){toast('Ingresa los Kg fabricados','#dc2626');return;}
   var targetH=window._lineaTargetH||0;
   var tCorriendoHr=window._lineaTCorriendoHr||0;
   var kgEsperados=Math.round(targetH*tCorriendoHr);
-  var diff=Math.round(kgReal-kgEsperados);
-  var ok=diff>=0;
-  var diffLabel=(ok?'+':'')+diff+' kg '+(ok?'(adelante)':'(atrás)');
+  var kgDiff=Math.round(kgReal-kgEsperados);
+  var diffMin=targetH>0?Math.round(Math.abs(kgDiff)/targetH*60):0;
+  var diffLabel=(kgDiff>=0?'+':'-')+diffMin+' min';
+  var diffCol=kgDiff>=0?'#16a34a':'#dc2626';
   var tCorriendoMin=Math.round(tCorriendoHr*60);
-  res.innerHTML=
-    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:4px">'
-    +'<div style="background:#f3f4f6;border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#6b7280;font-weight:700">Esperado</div><div style="font-size:16px;font-weight:900">'+kgEsperados+'</div><div style="font-size:8px;color:#9ca3af">kg</div></div>'
-    +'<div style="background:#f3f4f6;border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#6b7280;font-weight:700">Real</div><div style="font-size:16px;font-weight:900">'+kgReal+'</div><div style="font-size:8px;color:#9ca3af">kg</div></div>'
-    +'<div style="background:'+(ok?'#dcfce7':'#fee2e2')+';border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#374151;font-weight:700">Diferencia</div><div style="font-size:14px;font-weight:900;color:'+(ok?'#16a34a':'#dc2626')+'">'+diffLabel+'</div></div>'
-    +'</div>'
-    +'<div style="font-size:10px;color:#9ca3af;margin-top:6px">Tiempo corriendo: '+tCorriendoMin+' min · Velocidad obj: '+(targetH||'—')+' kg/h</div>';
+  // Actualizar el box Paros vs Obj
+  var box=document.getElementById('kpi-prod-diff');
+  if(box){
+    box.style.background=diffCol;
+    box.innerHTML='<div style="font-size:8px;font-weight:700;opacity:.85">Paros vs Obj</div>'
+      +'<div style="font-size:22px;font-weight:900;line-height:1.1">'+diffLabel+'</div>'
+      +'<div style="font-size:7px;opacity:.8">'+kgReal+'/'+kgEsperados+' kg</div>';
+  }
+  // Detalle debajo del input
+  if(res){
+    res.innerHTML='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-top:4px">'
+      +'<div style="background:#f3f4f6;border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#6b7280;font-weight:700">Esperado</div><div style="font-size:16px;font-weight:900">'+kgEsperados+'</div><div style="font-size:8px;color:#9ca3af">kg</div></div>'
+      +'<div style="background:#f3f4f6;border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#6b7280;font-weight:700">Real</div><div style="font-size:16px;font-weight:900">'+kgReal+'</div><div style="font-size:8px;color:#9ca3af">kg</div></div>'
+      +'<div style="background:'+(kgDiff>=0?'#dcfce7':'#fee2e2')+';border-radius:8px;padding:8px;text-align:center"><div style="font-size:9px;color:#374151;font-weight:700">Diferencia</div><div style="font-size:14px;font-weight:900;color:'+diffCol+'">'+diffLabel+'</div></div>'
+      +'</div>'
+      +'<div style="font-size:10px;color:#9ca3af;margin-top:6px">Tiempo corriendo: '+tCorriendoMin+' min · Velocidad obj: '+(targetH||'—')+' kg/h</div>';
+  }
 }
 
 // ── MONITOR CHECKLISTS ────────────────────────────────────────
