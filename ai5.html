@@ -723,7 +723,7 @@ async function irCipForm(tipo){
   if(sub) sub.textContent=_cipLineaSel?_cipLineaSel.nombre:'';
   // Cargar config de targets para este tipo
   var cfgs=await db('ai_cip_config','GET',null,'tipo=eq.'+tipo+'&order=orden.asc')||[];
-  cfgs.forEach(function(c){_cipConfigMap[c.campo]={lim_inf:c.lim_inf,target:c.target,lim_sup:c.lim_sup};});
+  cfgs.forEach(function(c){_cipConfigMap[c.campo]={lim_inf:c.lim_inf,target:c.target,lim_sup:c.lim_sup,label:c.campo_label};});
   _cipRenderForm();
 }
 var _cipConfigMap={};  // campo → {lim_inf,target,lim_sup}
@@ -756,7 +756,7 @@ function _cipRenderForm(){
       if(cfg&&cfg.target!=null) colTarget='<span style="font-size:11px;font-weight:700;color:#0891b2">'+cfg.target+'</span>';
     }
     html+='<tr>'
-      +'<td style="'+td+';color:#374151;font-weight:700;width:45%">'+f.l+'</td>'
+      +'<td style="'+td+';color:#374151;font-weight:700;width:45%">'+(cfg&&cfg.label?cfg.label:f.l)+'</td>'
       +'<td style="'+td+';text-align:center;width:25%">'+colBtn+'</td>'
       +'<td style="'+td+';text-align:center;width:15%">'+colEdit+'</td>'
       +'<td style="'+td+';text-align:center;width:15%">'+colTarget+'</td>'
@@ -2760,7 +2760,12 @@ function abrirEditorSegmento(id){
   var enCurso=!seg.ts_fin;
   var tH=t=>String(new Date(t).getHours()).padStart(2,'0')+':'+String(new Date(t).getMinutes()).padStart(2,'0');
   var tipos=['corriendo','pnp','pp','idle'];
-  var tipoBtns=tipos.map(t=>'<button onclick="document.querySelectorAll(\'.ed-tipo-btn\').forEach(b=>{b.style.background=\'#f9fafb\';b.style.color=\'#374151\';b.style.borderColor=\'#e5e7eb\'});this.style.background=\''+COL[t]+'\';this.style.color=\'#fff\';this.style.borderColor=\''+COL[t]+'\';document.getElementById(\'ed-tipo\').value=\''+t+'\'" class="ed-tipo-btn" style="flex:1;padding:8px 4px;border:2px solid '+(t===seg.tipo?COL[t]:'#e5e7eb')+';background:'+(t===seg.tipo?COL[t]:'#f9fafb')+';color:'+(t===seg.tipo?'#fff':'#374151')+';border-radius:9px;font-weight:800;font-size:11px;cursor:pointer;font-family:Nunito,sans-serif">'+LBL[t]+'</button>').join('');
+  var tipoBtns=tipos.map(t=>'<button onclick="document.querySelectorAll(\'.ed-tipo-btn\').forEach(b=>{b.style.background=\'#f9fafb\';b.style.color=\'#374151\';b.style.borderColor=\'#e5e7eb\'});this.style.background=\''+COL[t]+'\';this.style.color=\'#fff\';this.style.borderColor=\''+COL[t]+'\';document.getElementById(\'ed-tipo\').value=\''+t+'\';_edShowRC(\''+t+'\')" class="ed-tipo-btn" style="flex:1;padding:8px 4px;border:2px solid '+(t===seg.tipo?COL[t]:'#e5e7eb')+';background:'+(t===seg.tipo?COL[t]:'#f9fafb')+';color:'+(t===seg.tipo?'#fff':'#374151')+';border-radius:9px;font-weight:800;font-size:11px;cursor:pointer;font-family:Nunito,sans-serif">'+LBL[t]+'</button>').join('');
+  var rcOpts=function(tipo,cur){
+    var rcs=RCODES.filter(function(r){return r.tipo===tipo;});
+    return '<option value="">— Selecciona motivo —</option>'+rcs.map(function(r){return '<option value="'+r.nombre+'"'+(r.nombre===cur?' selected':'')+'>'+r.nombre+'</option>';}).join('');
+  };
+  var tipoEsParoInicial=seg.tipo==='pp'||seg.tipo==='pnp';
   var m=document.createElement('div');
   m.className='m-edseg';
   m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
@@ -2775,6 +2780,12 @@ function abrirEditorSegmento(id){
     ${enCurso?'<div style="font-size:12px;color:#9ca3af;margin-bottom:10px">Este evento sigue en curso, todavía no tiene hora final.</div>':
       `<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Hora final</label>
       <input type="time" id="ed-hf" class="fc" value="${tH(seg.ts_fin)}">`}
+    <div id="ed-rc-sec" style="display:${tipoEsParoInicial?'block':'none'}">
+      <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Motivo</label>
+      <select id="ed-rc" class="fc">${rcOpts(seg.tipo,seg.reason_code||'')}</select>
+      <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Comentario</label>
+      <textarea id="ed-com" class="fc" style="height:60px;resize:none" placeholder="Describe brevemente...">${seg.comentario||''}</textarea>
+    </div>
     <div style="display:flex;gap:10px;margin-top:6px">
       <button onclick="document.querySelectorAll('.m-edseg').forEach(x=>x.remove())" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:12px;cursor:pointer;font-weight:700;font-family:Nunito,sans-serif">Cancelar</button>
       <button onclick="confirmarEdicionSegmento('${id}')" style="flex:2;padding:13px;background:#0d2144;color:#fff;border:none;border-radius:12px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">💾 Guardar</button>
@@ -2784,6 +2795,17 @@ function abrirEditorSegmento(id){
   document.body.appendChild(m);
 }
 function horaAMs(hhmm){var p=hhmm.split(':');return (+p[0])*3600000+(+p[1])*60000;}
+function _edShowRC(tipo){
+  var sec=document.getElementById('ed-rc-sec');
+  if(!sec) return;
+  var esParo=tipo==='pp'||tipo==='pnp';
+  sec.style.display=esParo?'block':'none';
+  if(esParo){
+    var sel=document.getElementById('ed-rc');
+    var rcs=RCODES.filter(function(r){return r.tipo===tipo;});
+    if(sel) sel.innerHTML='<option value="">— Selecciona motivo —</option>'+rcs.map(function(r){return '<option value="'+r.nombre+'">'+r.nombre+'</option>';}).join('');
+  }
+}
 async function confirmarEdicionSegmento(id){
   var full=window.AI_SEGS||[];
   var idx=full.findIndex(s=>s.id===id);
@@ -2802,34 +2824,19 @@ async function confirmarEdicionSegmento(id){
   if(prev && nuevoInicio<prev.ts_inicio){toast('No puedes extenderte más allá del inicio del evento anterior','#dc2626');return;}
   if(next && nuevoFin && next.ts_fin && nuevoFin>next.ts_fin){toast('No puedes extenderte más allá del final del siguiente evento','#dc2626');return;}
   if(nuevoFin && nuevoFin<=nuevoInicio){toast('La hora final debe ser después de la hora inicio','#dc2626');return;}
-  if(nuevoInicio===seg.ts_inicio && nuevoFin===seg.ts_fin && nuevoTipo===seg.tipo){toast('No hay cambios para guardar','#9ca3af');return;}
+  if(nuevoInicio===seg.ts_inicio && nuevoFin===seg.ts_fin && nuevoTipo===seg.tipo && document.getElementById('ed-rc')?.value===( seg.reason_code||'') && (document.getElementById('ed-com')?.value?.trim()||'')===(seg.comentario||'')){toast('No hay cambios para guardar','#9ca3af');return;}
+  // Leer RC y comentario del editor (el form ya los tiene)
+  var edRc=document.getElementById('ed-rc')?.value||null;
+  var edCom=document.getElementById('ed-com')?.value?.trim()||null;
+  // Si es paro y no tiene motivo, bloquear antes de cerrar el modal
+  if((nuevoTipo==='pp'||nuevoTipo==='pnp')&&!edRc){toast('Selecciona el Motivo antes de guardar','#dc2626');return;}
   document.querySelectorAll('.m-edseg').forEach(x=>x.remove());
-  // Si el nuevo tipo es PP/PNP y cambió de tipo (o no tenía motivo), pedir reason_code + comentario
-  if((nuevoTipo==='pp'||nuevoTipo==='pnp')&&(nuevoTipo!==seg.tipo||!seg.reason_code)){
-    var rcs=await db('ai_reason_codes','GET',null,'tipo=eq.'+nuevoTipo+'&activo=eq.true&order=nombre.asc')||[];
-    var mm=document.createElement('div');
-    mm.className='m-edrc';
-    mm.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
-    mm.innerHTML=`<div style="background:#fff;border-radius:22px 22px 0 0;padding:28px 20px 40px;width:100%;max-width:480px">
-      <div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 16px"></div>
-      <div style="font-size:16px;font-weight:900;color:${COL[nuevoTipo]};margin-bottom:14px">${LBL[nuevoTipo]} · Clasificación requerida</div>
-      <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Motivo</label>
-      <select id="edrc-rc" class="fc"><option value="">— Selecciona —</option>${rcs.map(r=>'<option value="'+r.nombre+'">'+r.nombre+'</option>').join('')}</select>
-      <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Comentario</label>
-      <textarea id="edrc-com" class="fc" style="height:70px;resize:none" placeholder="Describe brevemente el motivo..."></textarea>
-      <div id="edrc-err" style="color:#dc2626;font-size:11px;font-weight:700;margin-top:6px;display:none"></div>
-      <div style="display:flex;gap:10px;margin-top:14px">
-        <button onclick="document.querySelectorAll('.m-edrc').forEach(x=>x.remove())" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:12px;cursor:pointer;font-weight:700;font-family:Nunito,sans-serif">Cancelar</button>
-        <button onclick="_confirmarRCEdicion('${id}',${idx},'${nuevoTipo}',${nuevoInicio},${nuevoFin||'null'})" style="flex:2;padding:13px;background:${COL[nuevoTipo]};color:#fff;border:none;border-radius:12px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">Continuar</button>
-      </div>
-    </div>`;
-    document.body.appendChild(mm);
-    return;
-  }
+  var rcFinal=(nuevoTipo==='pp'||nuevoTipo==='pnp')?edRc:(seg.reason_code||null);
+  var comFinal=(nuevoTipo==='pp'||nuevoTipo==='pnp')?edCom:(seg.comentario||null);
   modal('⚠️ Confirmar cambio',
-    `<div style="font-size:13px;color:#374151;margin-bottom:10px">Vas a modificar este evento. Si le quitas o agregas tiempo a la hora de inicio o final, se ajustará automáticamente el evento anterior o siguiente para que no se traslapen ni queden huecos sin sentido.</div>
+    `<div style="font-size:13px;color:#374151;margin-bottom:10px">Vas a modificar este evento. Si le quitas o agregas tiempo a la hora de inicio o final, se ajustará automáticamente el evento anterior o siguiente.</div>
      <div style="font-size:13px;color:#374151;font-weight:700">¿Confirmas el cambio?</div>`,
-    async(m)=>{ m.remove(); await aplicarEdicionSegmento(seg,prev,next,nuevoTipo,nuevoInicio,nuevoFin,seg.reason_code,seg.comentario); },
+    async(m)=>{ m.remove(); await aplicarEdicionSegmento(seg,prev,next,nuevoTipo,nuevoInicio,nuevoFin,rcFinal,comFinal); },
     '#0d2144','Confirmar');
 }
 function _confirmarRCEdicion(id,idx,nuevoTipo,nuevoInicio,nuevoFin){
