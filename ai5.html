@@ -582,13 +582,19 @@ async function irCipLavar(){
   cont.innerHTML='<div style="text-align:center;padding:24px;color:#9ca3af">Cargando...</div>';
   var equipos=await db('ai_cip_equipos','GET',null,'activo=eq.true&order=orden.asc')||[];
   if(!equipos.length){cont.innerHTML='<div style="text-align:center;padding:32px;color:#9ca3af">Sin equipos registrados</div>';return;}
-  cont.innerHTML=equipos.map(function(l){
-    return '<button onclick="_cipSelLinea(\''+l.id+'\',\''+l.nombre.replace(/'/g,"&#39;")+'\',this)" style="padding:16px;background:#fff;border:2px solid #e5e7eb;border-radius:12px;font-size:16px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;text-align:left;color:#0d2144;transition:border-color .15s">'
-      +'<span style="opacity:.5;margin-right:8px">●</span>'+l.nombre
-      +(l.area?'<span style="float:right;font-size:11px;color:#9ca3af;font-weight:600">'+l.area+'</span>':'')
-      +'</button>';
-  }).join('');
+  cont.innerHTML='<label style="font-size:12px;font-weight:700;color:#374151;display:block;margin-bottom:6px">Línea / Equipo</label>'
+    +'<select id="cip-sel-equipo" class="fc" style="font-size:15px;font-weight:700" onchange="_cipSelDesde(this)">'
+    +'<option value="">-- Selecciona --</option>'
+    +equipos.map(function(e){return '<option value="'+e.id+'" data-nombre="'+e.nombre.replace(/"/g,'&quot;')+'">'+e.nombre+'</option>';}).join('')
+    +'</select>';
   if(btn){btn.disabled=true;btn.style.background='#e5e7eb';btn.style.color='#9ca3af';btn.style.cursor='not-allowed';}
+}
+function _cipSelDesde(sel){
+  var opt=sel.options[sel.selectedIndex];
+  if(!opt||!opt.value){_cipLineaSel=null;var btn=document.getElementById('btn-cip-iniciar');if(btn){btn.disabled=true;btn.style.background='#e5e7eb';btn.style.color='#9ca3af';btn.style.cursor='not-allowed';}return;}
+  _cipLineaSel={id:opt.value,nombre:opt.getAttribute('data-nombre')};
+  var btn=document.getElementById('btn-cip-iniciar');
+  if(btn){btn.disabled=false;btn.style.background='#16a34a';btn.style.color='#fff';btn.style.cursor='pointer';}
 }
 function _cipSelLinea(id,nombre,el){
   _cipLineaSel={id:id,nombre:nombre};
@@ -680,21 +686,21 @@ function _cipRenderForm(){
   var cont=document.getElementById('cip-form-cont');
   if(!cont) return;
   var filas=_cipFilas(_cipData.tipo);
-  var tdS='padding:10px 12px;font-size:13px;border-bottom:1px solid #f3f4f6';
-  var html='<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)">';
+  var tdS='padding:6px 10px;font-size:11px;border-bottom:1px solid #f3f4f6';
+  var html='<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)">';
   filas.forEach(function(f){
     var val=_cipData[f.c];
     var celda='';
     if(f.t==='btn'){
       var color=val?'#16a34a':'#6b7280';
-      celda='<button onclick="_cipRegistrarHora(\''+f.c+'\')" style="padding:8px 14px;background:'+color+';color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;min-width:80px" id="cip-btn-'+f.c+'">'+(val||'⏺ Registrar')+'</button>';
+      celda='<button onclick="_cipRegistrarHora(\''+f.c+'\')" style="padding:5px 10px;background:'+color+';color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;min-width:70px" id="cip-btn-'+f.c+'">'+(val||'⏺')+'</button>';
     }else if(f.t==='auto'){
-      celda='<span id="cip-auto-'+f.c+'" style="font-size:14px;font-weight:900;color:'+(val?'#0d2144':'#d1d5db')+'">'+(val||'—')+'</span>'
-        +'<button onclick="_cipEditarAuto(\''+f.c+'\')" style="margin-left:8px;padding:4px 8px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:6px;font-size:10px;color:#6b7280;cursor:pointer;font-family:Nunito,sans-serif">Editar</button>';
+      celda='<span id="cip-auto-'+f.c+'" style="font-size:13px;font-weight:900;color:'+(val?'#0d2144':'#d1d5db')+'">'+(val||'—')+'</span>'
+        +'<button onclick="_cipEditarAuto(\''+f.c+'\')" style="margin-left:6px;padding:2px 6px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:5px;font-size:9px;color:#6b7280;cursor:pointer;font-family:Nunito,sans-serif">✎</button>';
     }else{
-      celda='<input type="number" id="cip-inp-'+f.c+'" step="0.1" placeholder="0.0" value="'+(val||'')+'" oninput="_cipData[\''+f.c+'\']=parseFloat(this.value)||null" style="width:90px;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:14px;font-weight:700;font-family:Nunito,sans-serif;text-align:center">';
+      celda='<input type="number" id="cip-inp-'+f.c+'" step="0.1" placeholder="0.0" value="'+(val||'')+'" oninput="_cipData[\''+f.c+'\']=parseFloat(this.value)||null" style="width:70px;padding:4px 6px;border:1.5px solid #e5e7eb;border-radius:6px;font-size:12px;font-weight:700;font-family:Nunito,sans-serif;text-align:center">';
     }
-    html+='<tr><td style="'+tdS+';color:#374151;font-weight:700;width:55%">'+f.l+'</td><td style="'+tdS+';text-align:right">'+celda+'</td></tr>';
+    html+='<tr><td style="'+tdS+';color:#374151;font-weight:700;width:60%">'+f.l+'</td><td style="'+tdS+';text-align:right">'+celda+'</td></tr>';
   });
   html+='</table>';
   // Validación visual
