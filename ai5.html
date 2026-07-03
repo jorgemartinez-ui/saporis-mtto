@@ -141,13 +141,13 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
   </div>
   <div style="padding:24px 16px;display:flex;flex-direction:column;gap:14px;height:calc(100% - 56px);box-sizing:border-box">
     <button onclick="irCipForm('sosa')" style="flex:1;background:#0d2144;color:#fff;border:none;border-radius:16px;font-size:19px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
-      <span style="font-size:36px">🧼</span>Solo Sosa
+      <span style="font-size:36px">🧼</span>Solo Alcalino
     </button>
     <button onclick="irCipForm('acido')" style="flex:1;background:#dc2626;color:#fff;border:none;border-radius:16px;font-size:19px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
       <span style="font-size:36px">⚗️</span>Solo Ácido
     </button>
     <button onclick="irCipForm('sosa_acido')" style="flex:1;background:#b45309;color:#fff;border:none;border-radius:16px;font-size:19px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
-      <span style="font-size:36px">🧴</span>Completo Sosa / Ácido
+      <span style="font-size:36px">🧴</span>Completo Alcalino / Ácido
     </button>
   </div>
 </div>
@@ -192,9 +192,9 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
     <div><div class="topbar-title">⚙️ CIP · Administración</div></div>
   </div>
   <div style="padding:24px 16px;display:flex;flex-direction:column;gap:14px;height:calc(100% - 56px);box-sizing:border-box">
-    <button onclick="irCipAdminTipo('sosa')" style="flex:1;background:#0d2144;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''"><span style="font-size:32px">🧼</span>Solo Sosa</button>
+    <button onclick="irCipAdminTipo('sosa')" style="flex:1;background:#0d2144;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''"><span style="font-size:32px">🧼</span>Solo Alcalino</button>
     <button onclick="irCipAdminTipo('acido')" style="flex:1;background:#dc2626;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''"><span style="font-size:32px">⚗️</span>Solo Ácido</button>
-    <button onclick="irCipAdminTipo('sosa_acido')" style="flex:1;background:#b45309;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''"><span style="font-size:32px">🧴</span>Completo Sosa/Ácido</button>
+    <button onclick="irCipAdminTipo('sosa_acido')" style="flex:1;background:#b45309;color:#fff;border:none;border-radius:14px;font-size:17px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''"><span style="font-size:32px">🧴</span>Completo Alcalino/Ácido</button>
   </div>
 </div>
 <!-- CIP ADMIN TIPO -->
@@ -691,10 +691,10 @@ function _cipFilas(tipo){
     {c:'h_fin_empuje',   l:'Termina Empuje',                     t:'btn'},
   ];
   if(tipo==='sosa'||tipo==='sosa_acido'){
-    s.push({c:'h_inicio_recirc_sosa',l:'Inicio Recirculación Sosa',t:'auto'});
-    s.push({c:'conc_sosa',l:'Concentración Sosa (%)',t:'num'});
-    s.push({c:'temp_sosa',l:'Temperatura Sosa (°C)',t:'num'});
-    s.push({c:'h_fin_recirc_sosa',l:'Fin Recirculación Sosa',t:'btn'});
+    s.push({c:'h_inicio_recirc_sosa',l:'Inicio Recirculación Alcalino',t:'auto'});
+    s.push({c:'conc_sosa',l:'Concentración Alcalino (%)',t:'num'});
+    s.push({c:'temp_sosa',l:'Temperatura Alcalino (°C)',t:'num'});
+    s.push({c:'h_fin_recirc_sosa',l:'Fin Recirculación Alcalino',t:'btn'});
   }
   if(tipo==='sosa_acido'){
     s.push({c:'h_inicio_empuje_intermedio',l:'Inicio Empuje Intermedio',t:'auto'});
@@ -715,7 +715,7 @@ async function irCipForm(tipo){
   _cipResultado='';
   _cipCamposComentarios={};
   _cipConfigMap={};
-  var titulos={sosa:'Solo Sosa',acido:'Solo Ácido',sosa_acido:'Completo Sosa/Ácido'};
+  var titulos={sosa:'Solo Alcalino',acido:'Solo Ácido',sosa_acido:'Completo Alcalino/Ácido'};
   go('s-cip-form');
   var tit=document.getElementById('cip-form-titulo');
   var sub=document.getElementById('cip-form-sub');
@@ -734,34 +734,33 @@ function _cipRenderForm(){
   var cont=document.getElementById('cip-form-cont');
   if(!cont) return;
   var filas=_cipFilas(_cipData.tipo);
-  var tdS='padding:6px 10px;font-size:11px;border-bottom:1px solid #f3f4f6';
+  var td='padding:5px 6px;font-size:11px;border-bottom:1px solid #f3f4f6;vertical-align:middle';
   var html='<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)">';
   filas.forEach(function(f){
     var val=_cipData[f.c];
     var cfg=_cipConfigMap[f.c];
-    var celda='',extra='';
+    var colBtn='',colEdit='',colTarget='';
     if(f.t==='btn'){
       var color=val?'#16a34a':'#6b7280';
-      celda='<button onclick="_cipRegistrarHora(\''+f.c+'\')" style="padding:5px 10px;background:'+color+';color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;min-width:70px" id="cip-btn-'+f.c+'">'+(val||'⏺')+'</button>'
-        +' <button onclick="_cipEditarAuto(\''+f.c+'\')" style="padding:2px 6px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:5px;font-size:9px;color:#6b7280;cursor:pointer;font-family:Nunito,sans-serif">✎</button>';
+      colBtn='<button onclick="_cipRegistrarHora(\''+f.c+'\')" id="cip-btn-'+f.c+'" style="padding:5px 10px;background:'+color+';color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;min-width:68px">'+(val||'⏺')+'</button>';
+      colEdit='<button onclick="_cipEditarAuto(\''+f.c+'\')" style="padding:3px 7px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:5px;font-size:11px;color:#6b7280;cursor:pointer;font-family:Nunito,sans-serif">✎</button>';
     }else if(f.t==='auto'){
-      celda='<span id="cip-auto-'+f.c+'" style="font-size:13px;font-weight:900;color:'+(val?'#0d2144':'#d1d5db')+'">'+(val||'—')+'</span>'
-        +' <button onclick="_cipEditarAuto(\''+f.c+'\')" style="padding:2px 6px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:5px;font-size:9px;color:#6b7280;cursor:pointer;font-family:Nunito,sans-serif">✎</button>';
+      colBtn='<span id="cip-auto-'+f.c+'" style="font-size:13px;font-weight:900;color:'+(val?'#0d2144':'#d1d5db')+'">'+(val||'—')+'</span>';
+      colEdit='<button onclick="_cipEditarAuto(\''+f.c+'\')" style="padding:3px 7px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:5px;font-size:11px;color:#6b7280;cursor:pointer;font-family:Nunito,sans-serif">✎</button>';
     }else{
-      // Campo numérico con target
       var fuera=false;
-      if(cfg&&val!=null){
-        if((cfg.lim_inf!=null&&val<cfg.lim_inf)||(cfg.lim_sup!=null&&val>cfg.lim_sup)) fuera=true;
-      }
+      if(cfg&&val!=null){if((cfg.lim_inf!=null&&val<cfg.lim_inf)||(cfg.lim_sup!=null&&val>cfg.lim_sup))fuera=true;}
       var borderCol=val==null?'#e5e7eb':(fuera?'#dc2626':'#16a34a');
-      celda='<input type="number" id="cip-inp-'+f.c+'" step="0.1" placeholder="0.0" value="'+(val!=null?val:'')+'"'
-        +' oninput="_cipCampoNumChange(\''+f.c+'\',this)"'
-        +' style="width:70px;padding:4px 6px;border:2px solid '+borderCol+';border-radius:6px;font-size:12px;font-weight:700;font-family:Nunito,sans-serif;text-align:center">';
-      if(cfg&&cfg.target!=null) extra='<span style="font-size:9px;color:#9ca3af;display:block;text-align:right;margin-top:1px">Target: '+cfg.target+'</span>';
-      if(fuera&&_cipCamposComentarios[f.c])
-        extra+='<span style="font-size:9px;color:#dc2626;display:block;text-align:right">💬 '+_cipCamposComentarios[f.c]+'</span>';
+      colBtn='<input type="number" id="cip-inp-'+f.c+'" step="0.1" placeholder="0.0" value="'+(val!=null?val:'')+'" oninput="_cipCampoNumChange(\''+f.c+'\',this)" style="width:65px;padding:4px 5px;border:2px solid '+borderCol+';border-radius:6px;font-size:12px;font-weight:700;font-family:Nunito,sans-serif;text-align:center">';
+      colEdit=fuera&&_cipCamposComentarios[f.c]?'<span style="font-size:9px;color:#dc2626">💬</span>':'';
+      if(cfg&&cfg.target!=null) colTarget='<span style="font-size:11px;font-weight:700;color:#0891b2">'+cfg.target+'</span>';
     }
-    html+='<tr><td style="'+tdS+';color:#374151;font-weight:700;width:60%">'+f.l+'</td><td style="'+tdS+';text-align:right">'+celda+extra+'</td></tr>';
+    html+='<tr>'
+      +'<td style="'+td+';color:#374151;font-weight:700;width:45%">'+f.l+'</td>'
+      +'<td style="'+td+';text-align:center;width:25%">'+colBtn+'</td>'
+      +'<td style="'+td+';text-align:center;width:15%">'+colEdit+'</td>'
+      +'<td style="'+td+';text-align:center;width:15%">'+colTarget+'</td>'
+      +'</tr>';
   });
   html+='</table>';
   // Validación visual — 3 estados: ''=pendiente, 'ok'=verde, 'fallido'=rojo
@@ -794,6 +793,20 @@ function _cipCampoNumChange(campo,el){
   }else if(!fuera){
     delete _cipCamposComentarios[campo];
   }
+}
+function _cipRegistrarHora(campo){
+  var ahora=new Date();
+  var hhmm=String(ahora.getHours()).padStart(2,'0')+':'+String(ahora.getMinutes()).padStart(2,'0');
+  _cipData[campo]=hhmm;
+  var mapa=_cipAutoFillMap(_cipData.tipo);
+  if(mapa[campo]) _cipData[mapa[campo]]=hhmm;
+  _cipRenderForm();
+}
+function _cipEditarAuto(campo){
+  var actual=_cipData[campo]||'';
+  var v=prompt('Corregir hora (HH:MM):',actual);
+  if(v&&/^\d{2}:\d{2}$/.test(v)){_cipData[campo]=v;_cipRenderForm();}
+  else if(v!==null) toast('Formato inválido, usa HH:MM','#dc2626');
 }
 function _cipValidarVisual(){
   if(_cipResultado===''){
@@ -877,7 +890,7 @@ async function _cipNotificarAdmins(rec){
 function _cipVerDetalle(id){
   var r=_cipCResultados.find(function(x){return x.id===id;});
   if(!r) return;
-  var tipos={sosa:'Solo Sosa',acido:'Solo Ácido',sosa_acido:'Completo Sosa/Ácido'};
+  var tipos={sosa:'Solo Alcalino',acido:'Solo Ácido',sosa_acido:'Completo Alcalino/Ácido'};
   var campos=[
     ['Inicio CIP',r.h_inicio_cip],['Inicio Empuje',r.h_inicio_empuje],['Fin Empuje',r.h_fin_empuje],
     ['Inicio Recirc. Sosa',r.h_inicio_recirc_sosa],['Fin Recirc. Sosa',r.h_fin_recirc_sosa],
@@ -925,7 +938,7 @@ async function cargarCipConsultar(){
   var rows=await db('ai_cip_registros','GET',null,filtro)||[];
   _cipCResultados=rows;
   if(!rows.length){cont.innerHTML='<div style="text-align:center;padding:32px;color:#9ca3af">Sin registros</div>';return;}
-  var tipos={sosa:'Solo Sosa',acido:'Solo Ácido',sosa_acido:'Sosa/Ácido'};
+  var tipos={sosa:'Solo Alcalino',acido:'Solo Ácido',sosa_acido:'Sosa/Ácido'};
   var html='';
   rows.forEach(function(r){
     var tipoLbl=tipos[r.tipo]||r.tipo;
@@ -950,7 +963,7 @@ function descargarExcelCIP(){
   var hdrs=['Fecha','Equipo','Tipo','Resultado','Operador','Inicio CIP','Inicio Empuje','Fin Empuje',
     'Inicio Recirc Sosa','Fin Recirc Sosa','Inicio Empuje Interm','Fin Empuje Interm',
     'Inicio Recirc Acido','Fin Recirc Acido','Inicio Empuje Final','Fin Empuje Final',
-    'Conc Sosa %','Temp Sosa C','Conc Acido %','Temp Acido C','Validacion Visual','Comentario'];
+    'Conc Alcalino %','Temp Alcalino C','Conc Acido %','Temp Acido C','Validacion Visual','Comentario'];
   var rows=[hdrs.join(sep)];
   _cipCResultados.forEach(function(r){
     rows.push([
@@ -965,7 +978,7 @@ function descargarExcelCIP(){
       r.validacion_visual?'Si':'No',r.validacion_comentario||''
     ].join(sep));
   });
-  var blob=new Blob(['\ufeff'+rows.join(nl)],{type:'text/csv;charset=utf-8'});
+  var blob=new Blob(['\ufeffsep=;\r\n'+rows.join(nl)],{type:'text/csv;charset=utf-8'});
   var url=URL.createObjectURL(blob);
   var a=document.createElement('a');a.href=url;a.download='CIP_'+hoy()+'.csv';
   a.click();setTimeout(function(){URL.revokeObjectURL(url);},1000);
@@ -1006,31 +1019,49 @@ async function irCipAdmin(){go('s-cip-admin');}
 async function irCipAdminTipo(tipo){
   _cipAdminTipo=tipo;
   go('s-cip-admin-tipo');
-  var titulos={sosa:'Solo Sosa',acido:'Solo Ácido',sosa_acido:'Completo Sosa/Ácido'};
+  var titulos={sosa:'Solo Alcalino',acido:'Solo Ácido',sosa_acido:'Completo Alcalino/Ácido'};
   var tit=document.getElementById('cip-admin-titulo');
   if(tit) tit.textContent='⚙️ '+titulos[tipo];
   var rows=await db('ai_cip_config','GET',null,'tipo=eq.'+tipo+'&order=orden.asc')||[];
-  _cipAdminFilas=rows.map(function(r){return{id:r.id,campo:r.campo,label:r.campo_label,lim_inf:r.lim_inf,target:r.target,lim_sup:r.lim_sup,orden:r.orden};});
+  if(rows.length){
+    _cipAdminFilas=rows.map(function(r){return{id:r.id,campo:r.campo,label:r.campo_label,lim_inf:r.lim_inf,target:r.target,lim_sup:r.lim_sup,orden:r.orden};});
+  }else{
+    // Pre-poblar con los campos del formulario de ese tipo
+    _cipAdminFilas=_cipFilas(tipo).map(function(f,i){
+      return{id:'cip_cfg_new_'+i,campo:f.c,label:f.l,lim_inf:null,target:null,lim_sup:null,orden:i};
+    });
+  }
   _cipAdminRender();
 }
 function _cipAdminRender(){
   var cont=document.getElementById('cip-admin-cont');
   if(!cont) return;
-  var thS='padding:7px 8px;font-size:10px;font-weight:900;background:#f3f4f6;color:#374151;text-align:center';
-  var tdS='padding:5px 6px;font-size:11px;border-bottom:1px solid #f3f4f6';
-  var html='<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.08)">'
-    +'<tr><th style="'+thS+';text-align:left">Campo</th><th style="'+thS+'">Lím. Inf</th><th style="'+thS+'">Target</th><th style="'+thS+'">Lím. Sup</th><th style="'+thS+'">—</th></tr>';
+  var thS='padding:7px 6px;font-size:10px;font-weight:900;background:#f3f4f6;color:#374151;text-align:center';
+  var tdS='padding:5px 4px;font-size:11px;border-bottom:1px solid #f3f4f6;cursor:grab';
+  var html='<table id="cip-admin-table" style="width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 6px rgba(0,0,0,.08)">'
+    +'<tr><th style="'+thS+';text-align:left;padding-left:24px">Campo</th><th style="'+thS+'">Lím. Inf</th><th style="'+thS+'">Target</th><th style="'+thS+'">Lím. Sup</th><th style="'+thS+'">—</th></tr>';
   _cipAdminFilas.forEach(function(f,i){
-    html+='<tr>'
-      +'<td style="'+tdS+'"><input value="'+f.label+'" oninput="_cipAdminFilas['+i+'].label=this.value" style="width:100%;border:none;font-size:11px;font-family:Nunito,sans-serif;background:transparent"></td>'
-      +'<td style="'+tdS+'"><input type="number" step="0.1" value="'+(f.lim_inf!=null?f.lim_inf:'')+'" oninput="_cipAdminFilas['+i+'].lim_inf=parseFloat(this.value)||null" style="width:55px;border:1px solid #e5e7eb;border-radius:5px;padding:3px 4px;font-size:11px;text-align:center;font-family:Nunito,sans-serif"></td>'
-      +'<td style="'+tdS+'"><input type="number" step="0.1" value="'+(f.target!=null?f.target:'')+'" oninput="_cipAdminFilas['+i+'].target=parseFloat(this.value)||null" style="width:55px;border:1px solid #0891b2;border-radius:5px;padding:3px 4px;font-size:11px;text-align:center;font-family:Nunito,sans-serif"></td>'
-      +'<td style="'+tdS+'"><input type="number" step="0.1" value="'+(f.lim_sup!=null?f.lim_sup:'')+'" oninput="_cipAdminFilas['+i+'].lim_sup=parseFloat(this.value)||null" style="width:55px;border:1px solid #e5e7eb;border-radius:5px;padding:3px 4px;font-size:11px;text-align:center;font-family:Nunito,sans-serif"></td>'
-      +'<td style="'+tdS+';text-align:center"><button onclick="_cipAdminFilas.splice('+i+',1);_cipAdminRender()" style="border:none;background:none;color:#dc2626;font-size:14px;cursor:pointer">✕</button></td>'
+    html+='<tr draggable="true" data-idx="'+i+'" ondragstart="_cipDragStart(event,'+i+')" ondragover="_cipDragOver(event)" ondrop="_cipDrop(event,'+i+')" style="background:#fff">'
+      +'<td style="'+tdS+'" title="Arrastra para reordenar"><span style="color:#d1d5db;margin-right:6px;font-size:14px">⠿</span><input value="'+f.label+'" oninput="_cipAdminFilas['+i+'].label=this.value" style="width:calc(100% - 28px);border:none;font-size:11px;font-family:Nunito,sans-serif;background:transparent"></td>'
+      +'<td style="'+tdS+';text-align:center"><input type="number" step="0.1" value="'+(f.lim_inf!=null?f.lim_inf:'')+'" oninput="_cipAdminFilas['+i+'].lim_inf=parseFloat(this.value)||null" style="width:52px;border:1px solid #e5e7eb;border-radius:5px;padding:3px 4px;font-size:11px;text-align:center;font-family:Nunito,sans-serif"></td>'
+      +'<td style="'+tdS+';text-align:center"><input type="number" step="0.1" value="'+(f.target!=null?f.target:'')+'" oninput="_cipAdminFilas['+i+'].target=parseFloat(this.value)||null" style="width:52px;border:1.5px solid #0891b2;border-radius:5px;padding:3px 4px;font-size:11px;text-align:center;font-family:Nunito,sans-serif"></td>'
+      +'<td style="'+tdS+';text-align:center"><input type="number" step="0.1" value="'+(f.lim_sup!=null?f.lim_sup:'')+'" oninput="_cipAdminFilas['+i+'].lim_sup=parseFloat(this.value)||null" style="width:52px;border:1px solid #e5e7eb;border-radius:5px;padding:3px 4px;font-size:11px;text-align:center;font-family:Nunito,sans-serif"></td>'
+      +'<td style="'+tdS+';text-align:center;cursor:pointer"><button onclick="_cipAdminFilas.splice('+i+',1);_cipAdminRender()" style="border:none;background:none;color:#dc2626;font-size:14px;cursor:pointer">✕</button></td>'
       +'</tr>';
   });
   html+='</table>';
   cont.innerHTML=html;
+}
+var _cipDragIdx=null;
+function _cipDragStart(e,idx){_cipDragIdx=idx;e.dataTransfer.effectAllowed='move';}
+function _cipDragOver(e){e.preventDefault();e.dataTransfer.dropEffect='move';}
+function _cipDrop(e,toIdx){
+  e.preventDefault();
+  if(_cipDragIdx===null||_cipDragIdx===toIdx) return;
+  var moved=_cipAdminFilas.splice(_cipDragIdx,1)[0];
+  _cipAdminFilas.splice(toIdx,0,moved);
+  _cipDragIdx=null;
+  _cipAdminRender();
 }
 function _cipAdminAgregarRenglon(){
   _cipAdminFilas.push({id:'cip_cfg_'+Date.now(),campo:'campo_nuevo',label:'Nuevo campo',lim_inf:null,target:null,lim_sup:null,orden:_cipAdminFilas.length});
