@@ -110,7 +110,7 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
     <button onclick="irCipLavar()" style="flex:1;background:#16a34a;color:#fff;border:none;border-radius:16px;font-size:20px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
       <span style="font-size:40px">🚿</span>Lavar
     </button>
-    <button onclick="toast('Consultar — próximamente','#6b7280')" style="flex:1;background:#0891b2;color:#fff;border:none;border-radius:16px;font-size:20px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+    <button onclick="irCipConsultar()" style="flex:1;background:#0891b2;color:#fff;border:none;border-radius:16px;font-size:20px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
       <span style="font-size:40px">🔍</span>Consultar
     </button>
     <button onclick="toast('Administración — próximamente','#6b7280')" style="flex:1;background:#374151;color:#fff;border:none;border-radius:16px;font-size:20px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
@@ -126,7 +126,59 @@ html,body{height:100%;overflow:hidden;font-family:Nunito,sans-serif;background:#
   </div>
   <div style="padding:16px;height:calc(100% - 56px);box-sizing:border-box;display:flex;flex-direction:column;gap:12px;overflow-y:auto">
     <div id="cip-lineas-cont" style="flex:1;display:flex;flex-direction:column;gap:10px;overflow-y:auto"></div>
-    <button id="btn-cip-iniciar" onclick="irCipIniciar()" disabled style="padding:18px;background:#e5e7eb;color:#9ca3af;border:none;border-radius:14px;font-size:18px;font-weight:900;cursor:not-allowed;font-family:Nunito,sans-serif;flex-shrink:0">Iniciar</button>
+    <button id="btn-cip-iniciar" onclick="irCipTipo()" disabled style="padding:18px;background:#e5e7eb;color:#9ca3af;border:none;border-radius:14px;font-size:18px;font-weight:900;cursor:not-allowed;font-family:Nunito,sans-serif;flex-shrink:0">Siguiente →</button>
+  </div>
+</div>
+<!-- CIP TIPO -->
+<div id="s-cip-tipo" class="screen">
+  <div class="topbar" style="background:#16a34a">
+    <button class="topbar-back" onclick="go('s-cip-lavar')">←</button>
+    <div><div class="topbar-title">🚿 CIP · Tipo de limpieza</div><div class="topbar-sub" id="cip-tipo-sub"></div></div>
+  </div>
+  <div style="padding:24px 16px;display:flex;flex-direction:column;gap:14px;height:calc(100% - 56px);box-sizing:border-box">
+    <button onclick="irCipForm('sosa')" style="flex:1;background:#0d2144;color:#fff;border:none;border-radius:16px;font-size:19px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:36px">🧼</span>Solo Sosa
+    </button>
+    <button onclick="irCipForm('acido')" style="flex:1;background:#dc2626;color:#fff;border:none;border-radius:16px;font-size:19px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:36px">⚗️</span>Solo Ácido
+    </button>
+    <button onclick="irCipForm('sosa_acido')" style="flex:1;background:#b45309;color:#fff;border:none;border-radius:16px;font-size:19px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:36px">🧴</span>Completo Sosa / Ácido
+    </button>
+  </div>
+</div>
+<!-- CIP FORM -->
+<div id="s-cip-form" class="screen">
+  <div class="topbar" style="background:#16a34a">
+    <button class="topbar-back" onclick="go('s-cip-tipo')">←</button>
+    <div><div class="topbar-title" id="cip-form-titulo">CIP</div><div class="topbar-sub" id="cip-form-sub"></div></div>
+  </div>
+  <div id="cip-form-cont" style="height:calc(100% - 56px);overflow-y:auto;padding:14px 12px"></div>
+</div>
+<!-- CIP CONSULTAR -->
+<div id="s-cip-consultar" class="screen">
+  <div class="topbar" style="background:#0891b2">
+    <button class="topbar-back" onclick="go('s-cip')">←</button>
+    <div><div class="topbar-title">🔍 Historial CIP</div></div>
+  </div>
+  <div style="padding:12px;height:calc(100% - 56px);box-sizing:border-box;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <div style="flex:1;min-width:120px">
+        <div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:3px">Equipo</div>
+        <select id="cip-c-equipo" class="fc" style="margin-bottom:0;font-size:12px;padding:6px 8px"></select>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:3px">Desde</div>
+        <input type="date" id="cip-c-desde" class="fc" style="margin-bottom:0;padding:6px 8px;font-size:12px">
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:3px">Hasta</div>
+        <input type="date" id="cip-c-hasta" class="fc" style="margin-bottom:0;padding:6px 8px;font-size:12px">
+      </div>
+      <button onclick="cargarCipConsultar()" style="padding:8px 14px;background:#0d2144;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif">Buscar</button>
+      <button onclick="descargarExcelCIP()" style="padding:8px 14px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-weight:800;font-size:12px;cursor:pointer;font-family:Nunito,sans-serif">⬇ Excel</button>
+    </div>
+    <div id="cip-c-cont" style="flex:1;overflow-y:auto;background:#fff;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,.07)"></div>
   </div>
 </div>
 <!-- ARRANCAR LÍNEA -->
@@ -549,11 +601,242 @@ function _cipSelLinea(id,nombre,el){
   var btn=document.getElementById('btn-cip-iniciar');
   if(btn){btn.disabled=false;btn.style.background='#16a34a';btn.style.color='#fff';btn.style.cursor='pointer';}
 }
-function irCipIniciar(){
+function irCipTipo(){
   if(!_cipLineaSel){toast('Selecciona una línea','#dc2626');return;}
-  // Por ahora solo navega — se expandirá después
-  toast('CIP iniciado en '+_cipLineaSel.nombre+' — próximamente','#16a34a');
+  go('s-cip-tipo');
+  var sub=document.getElementById('cip-tipo-sub');
+  if(sub) sub.textContent=_cipLineaSel.nombre;
 }
+var _cipData={};
+function _cipReset(tipo){
+  _cipData={
+    equipo_id:_cipLineaSel?_cipLineaSel.id:'',
+    equipo_nombre:_cipLineaSel?_cipLineaSel.nombre:'',
+    tipo:tipo,
+    h_inicio_cip:null,h_inicio_empuje:null,
+    h_fin_empuje:null,
+    h_inicio_recirc_sosa:null,h_fin_recirc_sosa:null,
+    h_inicio_empuje_intermedio:null,h_fin_empuje_intermedio:null,
+    h_inicio_recirc_acido:null,h_fin_recirc_acido:null,
+    h_inicio_empuje_final:null,h_fin_empuje_final:null,
+    conc_sosa:null,temp_sosa:null,conc_acido:null,temp_acido:null,
+    validacion_visual:false
+  };
+}
+function _cipAutoFillMap(tipo){
+  var m={h_inicio_cip:'h_inicio_empuje'};
+  if(tipo==='sosa'){
+    m.h_fin_empuje='h_inicio_recirc_sosa';
+    m.h_fin_recirc_sosa='h_inicio_empuje_final';
+  }else if(tipo==='acido'){
+    m.h_fin_empuje='h_inicio_recirc_acido';
+    m.h_fin_recirc_acido='h_inicio_empuje_final';
+  }else{
+    m.h_fin_empuje='h_inicio_recirc_sosa';
+    m.h_fin_recirc_sosa='h_inicio_empuje_intermedio';
+    m.h_fin_empuje_intermedio='h_inicio_recirc_acido';
+    m.h_fin_recirc_acido='h_inicio_empuje_final';
+  }
+  return m;
+}
+function _cipFilas(tipo){
+  var s=[
+    {c:'h_inicio_cip',   l:'Inicio CIP',                        t:'btn'},
+    {c:'h_inicio_empuje',l:'Inicio Empuje',                      t:'auto'},
+    {c:'h_fin_empuje',   l:'Termina Empuje',                     t:'btn'},
+  ];
+  if(tipo==='sosa'||tipo==='sosa_acido'){
+    s.push({c:'h_inicio_recirc_sosa',l:'Inicio Recirculación Sosa',t:'auto'});
+    s.push({c:'conc_sosa',l:'Concentración Sosa (%)',t:'num'});
+    s.push({c:'temp_sosa',l:'Temperatura Sosa (°C)',t:'num'});
+    s.push({c:'h_fin_recirc_sosa',l:'Fin Recirculación Sosa',t:'btn'});
+  }
+  if(tipo==='sosa_acido'){
+    s.push({c:'h_inicio_empuje_intermedio',l:'Inicio Empuje Intermedio',t:'auto'});
+    s.push({c:'h_fin_empuje_intermedio',l:'Fin Empuje Intermedio',t:'btn'});
+  }
+  if(tipo==='acido'||tipo==='sosa_acido'){
+    s.push({c:'h_inicio_recirc_acido',l:'Inicio Recirculación Ácido',t:'auto'});
+    s.push({c:'conc_acido',l:'Concentración Ácido (%)',t:'num'});
+    s.push({c:'temp_acido',l:'Temperatura Ácido (°C)',t:'num'});
+    s.push({c:'h_fin_recirc_acido',l:'Fin Recirculación Ácido',t:'btn'});
+  }
+  s.push({c:'h_inicio_empuje_final',l:'Inicio Empuje Final',t:'auto'});
+  s.push({c:'h_fin_empuje_final',l:'Fin Empuje Final',t:'btn'});
+  return s;
+}
+function irCipForm(tipo){
+  _cipReset(tipo);
+  var titulos={sosa:'Solo Sosa',acido:'Solo Ácido',sosa_acido:'Completo Sosa/Ácido'};
+  go('s-cip-form');
+  var tit=document.getElementById('cip-form-titulo');
+  var sub=document.getElementById('cip-form-sub');
+  if(tit) tit.textContent='🚿 CIP · '+titulos[tipo];
+  if(sub) sub.textContent=_cipLineaSel?_cipLineaSel.nombre:'';
+  _cipRenderForm();
+}
+function _cipRenderForm(){
+  var cont=document.getElementById('cip-form-cont');
+  if(!cont) return;
+  var filas=_cipFilas(_cipData.tipo);
+  var tdS='padding:10px 12px;font-size:13px;border-bottom:1px solid #f3f4f6';
+  var html='<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)">';
+  filas.forEach(function(f){
+    var val=_cipData[f.c];
+    var celda='';
+    if(f.t==='btn'){
+      var color=val?'#16a34a':'#6b7280';
+      celda='<button onclick="_cipRegistrarHora(\''+f.c+'\')" style="padding:8px 14px;background:'+color+';color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;min-width:80px" id="cip-btn-'+f.c+'">'+(val||'⏺ Registrar')+'</button>';
+    }else if(f.t==='auto'){
+      celda='<span id="cip-auto-'+f.c+'" style="font-size:14px;font-weight:900;color:'+(val?'#0d2144':'#d1d5db')+'">'+(val||'—')+'</span>'
+        +'<button onclick="_cipEditarAuto(\''+f.c+'\')" style="margin-left:8px;padding:4px 8px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:6px;font-size:10px;color:#6b7280;cursor:pointer;font-family:Nunito,sans-serif">Editar</button>';
+    }else{
+      celda='<input type="number" id="cip-inp-'+f.c+'" step="0.1" placeholder="0.0" value="'+(val||'')+'" oninput="_cipData[\''+f.c+'\']=parseFloat(this.value)||null" style="width:90px;padding:6px 8px;border:1.5px solid #e5e7eb;border-radius:8px;font-size:14px;font-weight:700;font-family:Nunito,sans-serif;text-align:center">';
+    }
+    html+='<tr><td style="'+tdS+';color:#374151;font-weight:700;width:55%">'+f.l+'</td><td style="'+tdS+';text-align:right">'+celda+'</td></tr>';
+  });
+  html+='</table>';
+  // Validación visual
+  var valCol=_cipData.validacion_visual?'#16a34a':'#9ca3af';
+  var valBg=_cipData.validacion_visual?'#dcfce7':'#f9fafb';
+  html+='<button onclick="_cipValidarVisual()" style="width:100%;margin-top:14px;padding:16px;background:'+valBg+';border:2px solid '+valCol+';border-radius:12px;color:'+valCol+';font-size:15px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif" id="btn-cip-validacion">'
+    +(_cipData.validacion_visual?'✅ Validación Visual — Limpieza confirmada':'✓ Validación Visual de Limpieza')+'</button>';
+  if(_cipData.validacion_visual){
+    html+='<button onclick="guardarCIP()" style="width:100%;margin-top:10px;padding:16px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif">💾 Guardar CIP</button>';
+  }
+  cont.innerHTML=html;
+}
+function _cipRegistrarHora(campo){
+  var ahora=new Date();
+  var hhmm=String(ahora.getHours()).padStart(2,'0')+':'+String(ahora.getMinutes()).padStart(2,'0');
+  _cipData[campo]=hhmm;
+  var mapa=_cipAutoFillMap(_cipData.tipo);
+  if(mapa[campo]) _cipData[mapa[campo]]=hhmm;
+  _cipRenderForm();
+  // Scroll to field
+  var btn=document.getElementById('cip-btn-'+campo);
+  if(btn) btn.scrollIntoView({behavior:'smooth',block:'center'});
+}
+function _cipEditarAuto(campo){
+  var actual=_cipData[campo]||'';
+  var v=prompt('Corregir hora (HH:MM):',actual);
+  if(v&&/^\d{2}:\d{2}$/.test(v)){_cipData[campo]=v;_cipRenderForm();}
+  else if(v!==null) toast('Formato inválido, usa HH:MM','#dc2626');
+}
+function _cipValidarVisual(){
+  _cipData.validacion_visual=!_cipData.validacion_visual;
+  _cipRenderForm();
+}
+async function guardarCIP(){
+  // Recoger campos numéricos del DOM por si no se disparó el oninput
+  ['conc_sosa','temp_sosa','conc_acido','temp_acido'].forEach(function(c){
+    var el=document.getElementById('cip-inp-'+c);
+    if(el) _cipData[c]=parseFloat(el.value)||null;
+  });
+  var id='cip_'+Date.now();
+  var rec={
+    id:id,
+    equipo_id:_cipData.equipo_id,
+    equipo_nombre:_cipData.equipo_nombre,
+    tipo:_cipData.tipo,
+    fecha:hoy(),
+    operador:ME?ME.nombre:'—',
+    h_inicio_cip:_cipData.h_inicio_cip,
+    h_inicio_empuje:_cipData.h_inicio_empuje,
+    h_fin_empuje:_cipData.h_fin_empuje,
+    h_inicio_recirc_sosa:_cipData.h_inicio_recirc_sosa,
+    h_fin_recirc_sosa:_cipData.h_fin_recirc_sosa,
+    h_inicio_empuje_intermedio:_cipData.h_inicio_empuje_intermedio,
+    h_fin_empuje_intermedio:_cipData.h_fin_empuje_intermedio,
+    h_inicio_recirc_acido:_cipData.h_inicio_recirc_acido,
+    h_fin_recirc_acido:_cipData.h_fin_recirc_acido,
+    h_inicio_empuje_final:_cipData.h_inicio_empuje_final,
+    h_fin_empuje_final:_cipData.h_fin_empuje_final,
+    conc_sosa:_cipData.conc_sosa,
+    temp_sosa:_cipData.temp_sosa,
+    conc_acido:_cipData.conc_acido,
+    temp_acido:_cipData.temp_acido,
+    validacion_visual:true
+  };
+  await dbP('ai_cip_registros','POST',rec,'');
+  toast('✅ CIP guardado — '+_cipData.equipo_nombre,'#16a34a');
+  go('s-cip');
+}
+// ── CIP CONSULTAR ──────────────────────────────────────────────
+var _cipCResultados=[];
+async function irCipConsultar(){
+  go('s-cip-consultar');
+  var sel=document.getElementById('cip-c-equipo');
+  if(sel&&sel.options.length<=1){
+    var eqs=await db('ai_cip_equipos','GET',null,'activo=eq.true&order=orden.asc')||[];
+    sel.innerHTML='<option value="">Todos los equipos</option>'+eqs.map(function(e){return '<option value="'+e.id+'">'+e.nombre+'</option>';}).join('');
+  }
+  var hoy2=hoy();
+  var desde=document.getElementById('cip-c-desde');
+  var hasta=document.getElementById('cip-c-hasta');
+  if(desde&&!desde.value) desde.value=hoy2.slice(0,7)+'-01';
+  if(hasta&&!hasta.value) hasta.value=hoy2;
+  await cargarCipConsultar();
+}
+async function cargarCipConsultar(){
+  var cont=document.getElementById('cip-c-cont');
+  if(!cont) return;
+  cont.innerHTML='<div style="text-align:center;padding:24px;color:#9ca3af">Cargando...</div>';
+  var equipo=document.getElementById('cip-c-equipo')?.value||'';
+  var desde=document.getElementById('cip-c-desde')?.value||'';
+  var hasta=document.getElementById('cip-c-hasta')?.value||'';
+  var filtro='order=fecha.desc,created_at.desc&limit=200';
+  if(equipo) filtro+='&equipo_id=eq.'+equipo;
+  if(desde)  filtro+='&fecha=gte.'+desde;
+  if(hasta)  filtro+='&fecha=lte.'+hasta;
+  var rows=await db('ai_cip_registros','GET',null,filtro)||[];
+  _cipCResultados=rows;
+  if(!rows.length){cont.innerHTML='<div style="text-align:center;padding:32px;color:#9ca3af">Sin registros</div>';return;}
+  var tipos={sosa:'Solo Sosa',acido:'Solo Ácido',sosa_acido:'Sosa/Ácido'};
+  var html='';
+  rows.forEach(function(r){
+    var tipoLbl=tipos[r.tipo]||r.tipo;
+    html+='<div style="padding:12px 14px;border-bottom:1px solid #f3f4f6">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
+      +'<div style="font-weight:800;font-size:13px;color:#0d2144">'+r.equipo_nombre+'</div>'
+      +'<div style="font-size:11px;color:#9ca3af">'+r.fecha+'</div></div>'
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap;font-size:11px">'
+      +'<span style="background:#e0f2fe;color:#0369a1;padding:2px 8px;border-radius:12px;font-weight:700">'+tipoLbl+'</span>'
+      +(r.validacion_visual?'<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:12px;font-weight:700">✅ Validado</span>':'')
+      +'<span style="color:#6b7280">'+r.operador+'</span>'
+      +(r.h_inicio_cip?'<span style="color:#374151">Inicio: '+r.h_inicio_cip+'</span>':'')
+      +(r.h_fin_empuje_final?'<span style="color:#374151">Fin: '+r.h_fin_empuje_final+'</span>':'')
+      +'</div></div>';
+  });
+  cont.innerHTML=html;
+}
+function descargarExcelCIP(){
+  if(!_cipCResultados.length){toast('Sin datos para exportar','#6b7280');return;}
+  var tab='\t',nl='\r\n';
+  var hdrs=['Fecha','Equipo','Tipo','Operador','Inicio CIP','Inicio Empuje','Fin Empuje',
+    'Inicio Recirc Sosa','Fin Recirc Sosa','Inicio Empuje Interm','Fin Empuje Interm',
+    'Inicio Recirc Ácido','Fin Recirc Ácido','Inicio Empuje Final','Fin Empuje Final',
+    'Conc Sosa %','Temp Sosa °C','Conc Ácido %','Temp Ácido °C','Validación Visual'];
+  var rows=[hdrs.join(tab)];
+  _cipCResultados.forEach(function(r){
+    rows.push([
+      r.fecha,r.equipo_nombre,r.tipo,r.operador,
+      r.h_inicio_cip||'',r.h_inicio_empuje||'',r.h_fin_empuje||'',
+      r.h_inicio_recirc_sosa||'',r.h_fin_recirc_sosa||'',
+      r.h_inicio_empuje_intermedio||'',r.h_fin_empuje_intermedio||'',
+      r.h_inicio_recirc_acido||'',r.h_fin_recirc_acido||'',
+      r.h_inicio_empuje_final||'',r.h_fin_empuje_final||'',
+      r.conc_sosa!=null?r.conc_sosa:'',r.temp_sosa!=null?r.temp_sosa:'',
+      r.conc_acido!=null?r.conc_acido:'',r.temp_acido!=null?r.temp_acido:'',
+      r.validacion_visual?'Sí':'No'
+    ].join(tab));
+  });
+  var blob=new Blob(['\ufeff'+rows.join(nl)],{type:'application/vnd.ms-excel;charset=utf-8'});
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');a.href=url;a.download='CIP_'+hoy()+'.xls';
+  a.click();setTimeout(function(){URL.revokeObjectURL(url);},1000);
+}
+function irCipIniciar(){irCipTipo();}
 
 function doLogout(){
   localStorage.removeItem('ai_me');
