@@ -573,15 +573,16 @@ async function doLogin(){
 function irCipCop(){go('s-cip-cop');}
 function irCip(){go('s-cip');}
 var _cipLineaSel=null;
-function irCipLavar(){
+async function irCipLavar(){
   _cipLineaSel=null;
   go('s-cip-lavar');
   var cont=document.getElementById('cip-lineas-cont');
   var btn=document.getElementById('btn-cip-iniciar');
   if(!cont) return;
-  var lineas=LINEAS.filter(function(l){return l.activa!==false;});
-  if(!lineas.length){cont.innerHTML='<div style="text-align:center;padding:32px;color:#9ca3af">Sin líneas activas</div>';return;}
-  cont.innerHTML=lineas.map(function(l){
+  cont.innerHTML='<div style="text-align:center;padding:24px;color:#9ca3af">Cargando...</div>';
+  var equipos=await db('ai_cip_equipos','GET',null,'activo=eq.true&order=orden.asc')||[];
+  if(!equipos.length){cont.innerHTML='<div style="text-align:center;padding:32px;color:#9ca3af">Sin equipos registrados</div>';return;}
+  cont.innerHTML=equipos.map(function(l){
     return '<button onclick="_cipSelLinea(\''+l.id+'\',\''+l.nombre.replace(/'/g,"&#39;")+'\',this)" style="padding:16px;background:#fff;border:2px solid #e5e7eb;border-radius:12px;font-size:16px;font-weight:800;cursor:pointer;font-family:Nunito,sans-serif;text-align:left;color:#0d2144;transition:border-color .15s">'
       +'<span style="opacity:.5;margin-right:8px">●</span>'+l.nombre
       +(l.area?'<span style="float:right;font-size:11px;color:#9ca3af;font-weight:600">'+l.area+'</span>':'')
