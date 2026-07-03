@@ -1335,7 +1335,8 @@ async function renderLinea(){
   var esHoy=hFiltro===hoy();
   var esSemana=fT==='semana';
   var esModoFolio=window.AI_NAV_MODE==='o'&&!!ORDEN_ACTIVA;
-  window.AI_MODO_HISTORIAL=!esHoy&&!esSemana&&!esModoFolio;
+  var folioActivo=!!(ORDEN_ACTIVA&&ORDEN_ACTIVA.estado!=='cerrada');
+  window.AI_MODO_HISTORIAL=!esHoy&&!esSemana&&!esModoFolio&&!folioActivo;
   var t=fT==='turno_actual'?turno():(fT==='dia'||fT==='semana'?turno():fT);
   var tsI, tsF;
   if(esModoFolio){
