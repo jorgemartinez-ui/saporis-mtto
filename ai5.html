@@ -721,9 +721,21 @@ async function irCipForm(tipo){
   var sub=document.getElementById('cip-form-sub');
   if(tit) tit.textContent='🚿 CIP · '+titulos[tipo];
   if(sub) sub.textContent=_cipLineaSel?_cipLineaSel.nombre:'';
-  // Cargar config de targets para este tipo
   var cfgs=await db('ai_cip_config','GET',null,'tipo=eq.'+tipo+'&order=orden.asc')||[];
   cfgs.forEach(function(c){_cipConfigMap[c.campo]={lim_inf:c.lim_inf,target:c.target,lim_sup:c.lim_sup,label:c.campo_label};});
+  // Generar lista de filas desde DB si hay config; si no, usar hardcodeada
+  if(cfgs.length){
+    var autoFilledCampos=Object.values(_cipAutoFillMap(tipo));
+    window._cipFormFilas=cfgs.map(function(c){
+      var t='num';
+      if(c.campo.startsWith('h_')){
+        t=autoFilledCampos.indexOf(c.campo)>=0?'auto':'btn';
+      }
+      return{c:c.campo,l:c.campo_label,t:t};
+    });
+  }else{
+    window._cipFormFilas=_cipFilas(tipo);
+  }
   _cipRenderForm();
 }
 var _cipConfigMap={};  // campo → {lim_inf,target,lim_sup}
@@ -733,7 +745,7 @@ var _cipResultado='';  // '' | 'ok' | 'fallido'
 function _cipRenderForm(){
   var cont=document.getElementById('cip-form-cont');
   if(!cont) return;
-  var filas=_cipFilas(_cipData.tipo);
+  var filas=window._cipFormFilas||_cipFilas(_cipData.tipo);
   var td='padding:5px 6px;font-size:11px;border-bottom:1px solid #f3f4f6;vertical-align:middle';
   var html='<table style="width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.08)">';
   filas.forEach(function(f){
@@ -830,7 +842,7 @@ function _cipValidarVisual(){
 }
 async function guardarCIP(repetir){
   // D: Validar campos de hora requeridos
-  var filas=_cipFilas(_cipData.tipo);
+  var filas=window._cipFormFilas||_cipFilas(_cipData.tipo);
   var faltantes=[];
   filas.forEach(function(f){
     if((f.t==='btn'||f.t==='auto')&&!_cipData[f.c]) faltantes.push(f.l);
@@ -1043,9 +1055,9 @@ function _cipAdminRender(){
   _cipAdminFilas.forEach(function(f,i){
     html+='<tr draggable="true" data-idx="'+i+'" ondragstart="_cipDragStart(event,'+i+')" ondragover="_cipDragOver(event)" ondrop="_cipDrop(event,'+i+')" style="background:#fff">'
       +'<td style="'+tdS+'" title="Arrastra para reordenar"><span style="color:#d1d5db;margin-right:6px;font-size:14px">⠿</span><input value="'+f.label+'" oninput="_cipAdminFilas['+i+'].label=this.value" style="width:calc(100% - 28px);border:none;font-size:11px;font-family:Nunito,sans-serif;background:transparent"></td>'
-      +'<td style="'+tdS+';text-align:center"><input type="number" step="0.1" value="'+(f.lim_inf!=null?f.lim_inf:'')+'" oninput="_cipAdminFilas['+i+'].lim_inf=parseFloat(this.value)||null" style="width:52px;border:1px solid #e5e7eb;border-radius:5px;padding:3px 4px;font-size:11px;text-align:center;font-family:Nunito,sans-serif"></td>'
-      +'<td style="'+tdS+';text-align:center"><input type="number" step="0.1" value="'+(f.target!=null?f.target:'')+'" oninput="_cipAdminFilas['+i+'].target=parseFloat(this.value)||null" style="width:52px;border:1.5px solid #0891b2;border-radius:5px;padding:3px 4px;font-size:11px;text-align:center;font-family:Nunito,sans-serif"></td>'
-      +'<td style="'+tdS+';text-align:center"><input type="number" step="0.1" value="'+(f.lim_sup!=null?f.lim_sup:'')+'" oninput="_cipAdminFilas['+i+'].lim_sup=parseFloat(this.value)||null" style="width:52px;border:1px solid #e5e7eb;border-radius:5px;padding:3px 4px;font-size:11px;text-align:center;font-family:Nunito,sans-serif"></td>'
+      +'<td style="'+tdS+';text-align:center"><input type="number" step="0.1" value="'+(f.lim_inf!=null?f.lim_inf:'')+'" oninput="_cipAdminFilas['+i+'].lim_inf=parseFloat(this.value)||null" style="width:52px;border:1px solid #e5e7eb;border-radius:5px;padding:3px 4px;font-size:11px;text-align:center;font-family:Nunito,sans-serif;-webkit-appearance:none;-moz-appearance:textfield"></td>'
+      +'<td style="'+tdS+';text-align:center"><input type="number" step="0.1" value="'+(f.target!=null?f.target:'')+'" oninput="_cipAdminFilas['+i+'].target=parseFloat(this.value)||null" style="width:52px;border:1.5px solid #0891b2;border-radius:5px;padding:3px 4px;font-size:11px;text-align:center;font-family:Nunito,sans-serif;-webkit-appearance:none;-moz-appearance:textfield"></td>'
+      +'<td style="'+tdS+';text-align:center"><input type="number" step="0.1" value="'+(f.lim_sup!=null?f.lim_sup:'')+'" oninput="_cipAdminFilas['+i+'].lim_sup=parseFloat(this.value)||null" style="width:52px;border:1px solid #e5e7eb;border-radius:5px;padding:3px 4px;font-size:11px;text-align:center;font-family:Nunito,sans-serif;-webkit-appearance:none;-moz-appearance:textfield"></td>'
       +'<td style="'+tdS+';text-align:center;cursor:pointer"><button onclick="_cipAdminFilas.splice('+i+',1);_cipAdminRender()" style="border:none;background:none;color:#dc2626;font-size:14px;cursor:pointer">✕</button></td>'
       +'</tr>';
   });
@@ -1064,7 +1076,7 @@ function _cipDrop(e,toIdx){
   _cipAdminRender();
 }
 function _cipAdminAgregarRenglon(){
-  _cipAdminFilas.push({id:'cip_cfg_'+Date.now(),campo:'campo_nuevo',label:'Nuevo campo',lim_inf:null,target:null,lim_sup:null,orden:_cipAdminFilas.length});
+  _cipAdminFilas.push({id:'cipcfg_'+_cipAdminTipo+'_custom_'+Date.now(),campo:'custom_'+Date.now(),label:'Nuevo campo',lim_inf:null,target:null,lim_sup:null,orden:_cipAdminFilas.length});
   _cipAdminRender();
 }
 async function guardarCipConfig(){
@@ -2781,7 +2793,7 @@ function abrirEditorSegmento(id){
       `<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Hora final</label>
       <input type="time" id="ed-hf" class="fc" value="${tH(seg.ts_fin)}">`}
     <div id="ed-rc-sec" style="display:${tipoEsParoInicial?'block':'none'}">
-      <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Motivo</label>
+      <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Reason Code</label>
       <select id="ed-rc" class="fc">${rcOpts(seg.tipo,seg.reason_code||'')}</select>
       <label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Comentario</label>
       <textarea id="ed-com" class="fc" style="height:60px;resize:none" placeholder="Describe brevemente...">${seg.comentario||''}</textarea>
@@ -2793,17 +2805,22 @@ function abrirEditorSegmento(id){
     </div>
   </div>`;
   document.body.appendChild(m);
+  // Precargar reason codes si el evento es PP/PNP
+  if(seg.tipo==='pp'||seg.tipo==='pnp') _edShowRC(seg.tipo).then(function(){
+    var sel=document.getElementById('ed-rc');
+    if(sel&&seg.reason_code) sel.value=seg.reason_code;
+  });
 }
 function horaAMs(hhmm){var p=hhmm.split(':');return (+p[0])*3600000+(+p[1])*60000;}
-function _edShowRC(tipo){
+async function _edShowRC(tipo){
   var sec=document.getElementById('ed-rc-sec');
   if(!sec) return;
   var esParo=tipo==='pp'||tipo==='pnp';
   sec.style.display=esParo?'block':'none';
   if(esParo){
     var sel=document.getElementById('ed-rc');
-    var rcs=RCODES.filter(function(r){return r.tipo===tipo;});
-    if(sel) sel.innerHTML='<option value="">— Selecciona motivo —</option>'+rcs.map(function(r){return '<option value="'+r.nombre+'">'+r.nombre+'</option>';}).join('');
+    var rcs=await db('ai_reason_codes','GET',null,'tipo=eq.'+tipo+'&activo=eq.true&order=nombre.asc')||[];
+    if(sel) sel.innerHTML='<option value="">— Selecciona —</option>'+rcs.map(function(r){return '<option value="'+r.nombre+'">'+r.nombre+'</option>';}).join('');
   }
 }
 async function confirmarEdicionSegmento(id){
