@@ -1072,7 +1072,7 @@ async function guardarCipConfig(){
   await fetch(SB+'/rest/v1/ai_cip_config?tipo=eq.'+_cipAdminTipo,{method:'DELETE',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Prefer':'return=minimal'}});
   for(var i=0;i<_cipAdminFilas.length;i++){
     var f=_cipAdminFilas[i];
-    await dbP('ai_cip_config','POST',{id:f.id||('cip_cfg_'+Date.now()+'_'+i),tipo:_cipAdminTipo,campo:f.campo||('campo_'+i),campo_label:f.label||'',lim_inf:f.lim_inf,target:f.target,lim_sup:f.lim_sup,orden:i},'');
+    await dbP('ai_cip_config','POST',{id:'cipcfg_'+_cipAdminTipo+'_'+i,tipo:_cipAdminTipo,campo:f.campo||('campo_'+i),campo_label:f.label||'',lim_inf:f.lim_inf,target:f.target,lim_sup:f.lim_sup,orden:i},'');
   }
   toast('✅ Configuración guardada','#16a34a');
 }
