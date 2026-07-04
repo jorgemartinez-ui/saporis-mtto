@@ -1760,8 +1760,10 @@ async function renderLinea(){
   var fActDetenida=!!tsDetencion&&!fActCerrada;
 
   // ── Topbar con color de estado ───────────────────────────────
-  document.getElementById('linea-title').textContent=(l?l.nombre:'—')+(ORDEN_ACTIVA?' · Folio '+(ORDEN_ACTIVA.folio||''):'');
-  document.getElementById('linea-sub').textContent=fT==='turno_actual'?'Turno '+turno():fT==='dia'?'Día completo':'Turno '+fT;
+  var turnoLbl=fT==='turno_actual'?'T'+turno().replace('T',''):fT==='dia'?'D':fT;
+  document.getElementById('linea-title').textContent=(l?l.nombre:'—')+(ORDEN_ACTIVA?' · Folio '+(ORDEN_ACTIVA.folio||''):'')+' · '+turnoLbl;
+  var estadoLbl=ORDEN_ACTIVA?({corriendo:'▶ Línea Corriendo',pnp:'⛔ Línea en PNP',pp:'⏸ Línea en PP',idle:'⬜ Línea en Idle',detenida:'⏹ Línea Detenida'}[tipoAct]||tipoAct):'Sin folio activo';
+  document.getElementById('linea-sub').textContent=estadoLbl;
   var topbar=document.querySelector('#s-linea .topbar');
   var colTopbar={corriendo:'#16a34a',pnp:'#dc2626',pp:'#ca8a04',idle:'#6b7280',detenida:'#374151'}[tipoAct]||'#16a34a';
   if(topbar) topbar.style.background='linear-gradient(135deg,'+colTopbar+','+colTopbar+'cc)';
@@ -1921,7 +1923,7 @@ async function renderLinea(){
     +(!AI_MODO_HISTORIAL?'<div style="padding:0 16px 8px"><div style="display:flex;gap:5px;align-items:center">'
     +'<div style="width:34px;height:34px;border-radius:50%;background:'+COL[tipoAct]+';flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:15px">'+ICO[tipoAct]+'</div>'
     +'<button onclick="accionPlay()" style="flex:2;padding:8px 4px;background:#16a34a;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:10px;cursor:pointer;font-family:Nunito,sans-serif;opacity:'+(tipoAct==='corriendo'?1:.65)+'">▶ Corriendo</button>'
-    +'<button onclick="pararLinea()" style="flex:2;padding:8px 4px;background:#1a1a1a;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:10px;cursor:pointer;font-family:Nunito,sans-serif;opacity:0.55">⏹ Detener</button>'
+    +'<button onclick="pararLinea()" style="flex:2;padding:8px 4px;background:#1a1a1a;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:10px;cursor:pointer;font-family:Nunito,sans-serif;opacity:'+(tipoAct==='detenida'?1:0.55)+'">⏹ Detener</button>'
     +'<button onclick="selRC(\'pnp\')" style="flex:1;padding:8px 4px;background:#dc2626;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:10px;cursor:pointer;font-family:Nunito,sans-serif;opacity:'+(tipoAct==='pnp'?1:.65)+'">PNP</button>'
     +'<button onclick="selRC(\'pp\')" style="flex:1;padding:8px 4px;background:#ca8a04;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:10px;cursor:pointer;font-family:Nunito,sans-serif;opacity:'+(tipoAct==='pp'?1:.65)+'">PP</button>'
     +'<button onclick="selRC(\'idle\')" style="flex:1;padding:8px 4px;background:#9ca3af;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:10px;cursor:pointer;font-family:Nunito,sans-serif;opacity:'+(tipoAct==='idle'?1:.65)+'">Idle</button>'
