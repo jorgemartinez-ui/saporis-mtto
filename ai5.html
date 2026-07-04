@@ -1536,6 +1536,7 @@ async function abrirLinea(id){
   window.AI_F_AÑO=new Date().getFullYear();
   window.AI_F_TURNO='turno_actual';
   window.AI_F_EVTIPO='todos';
+  window.AI_NAV_MODE=null;
   var l=LINEAS.find(x=>x.id===id);
   document.getElementById('linea-title').textContent=l?l.nombre:'—';
   // Cargar orden activa desde localStorage o Supabase
@@ -1608,6 +1609,7 @@ async function renderLinea(){
     tsF=tsI+24*3600*1000;
   } else {
     tsI=tIni(t,hFiltro);
+    if(t==='T3'&&tsI>Date.now()+60000) tsI-=24*3600000; // T3 cruza medianoche
     tsF=tsI+8*3600*1000;
   }
   // Si la orden está detenida, los KPIs y la barra se calculan hasta el momento de detención
@@ -1688,6 +1690,8 @@ async function renderLinea(){
     if(isFinite(firstEvTs)&&firstEvTs<tsIEfectivo) tsIEfectivo=firstEvTs;
   }
   var ahora_barra=(!ORDEN_ACTIVA&&esHoy)?tsI:(detenida&&tsDetencion?Math.min(tsDetencion,tsF):(!esHoy?tsF:Math.min(Date.now(),tsF)));
+  // Si el folio es de un turno anterior y no hay eventos reales en este turno, no pintar
+  if(esHoy&&evs&&evs.length===0&&ordTsB&&ordTsB<tsI) ahora_barra=tsI;
   var segmentos=segmentosConGaps(evs,tsIEfectivo,ahora_barra);
   window.AI_SEGS=segmentos;
 
@@ -1820,7 +1824,7 @@ async function renderLinea(){
     +'</div>'
     +'</div>'
     // Botones
-    +(esHoy?'<div style="padding:0 16px 8px"><div style="display:flex;gap:5px;align-items:center">'
+    +(!AI_MODO_HISTORIAL?'<div style="padding:0 16px 8px"><div style="display:flex;gap:5px;align-items:center">'
     +'<div style="width:34px;height:34px;border-radius:50%;background:'+COL[tipoAct]+';flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:15px">'+ICO[tipoAct]+'</div>'
     +'<button onclick="accionPlay()" style="flex:2;padding:8px 4px;background:#16a34a;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:10px;cursor:pointer;font-family:Nunito,sans-serif;opacity:'+(tipoAct==='corriendo'?1:.65)+'">▶ Corriendo</button>'
     +'<button onclick="pararLinea()" style="flex:2;padding:8px 4px;background:#1a1a1a;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:10px;cursor:pointer;font-family:Nunito,sans-serif">⏹ Detener</button>'
