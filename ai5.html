@@ -116,6 +116,9 @@ input[type=number]{-moz-appearance:textfield}
     <button onclick="irCipLavar()" style="flex:1;background:#16a34a;color:#fff;border:none;border-radius:16px;font-size:20px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
       <span style="font-size:40px">🚿</span>Lavar
     </button>
+    <button id="btn-cip-corriendo" onclick="irCipCorriendo()" style="flex:1;background:#6b7280;color:#fff;border:none;border-radius:16px;font-size:20px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
+      <span style="font-size:40px">📡</span>CIP Corriendo
+    </button>
     <button onclick="irCipConsultar()" style="flex:1;background:#0891b2;color:#fff;border:none;border-radius:16px;font-size:20px;font-weight:900;cursor:pointer;font-family:Nunito,sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px" onmousedown="this.style.filter='brightness(.85)'" onmouseup="this.style.filter=''" onmouseleave="this.style.filter=''">
       <span style="font-size:40px">🔍</span>Consultar
     </button>
@@ -186,6 +189,14 @@ input[type=number]{-moz-appearance:textfield}
     </div>
     <div id="cip-c-cont" style="flex:1;overflow-y:auto;background:#fff;border-radius:12px;box-shadow:0 2px 6px rgba(0,0,0,.07)"></div>
   </div>
+</div>
+<!-- CIP CORRIENDO -->
+<div id="s-cip-corriendo" class="screen">
+  <div class="topbar" style="background:#16a34a">
+    <button class="topbar-back" onclick="go('s-cip')">←</button>
+    <div><div class="topbar-title">📡 CIP Corriendo</div></div>
+  </div>
+  <div id="cip-corriendo-cont" style="padding:14px;height:calc(100% - 56px);overflow-y:auto;box-sizing:border-box"></div>
 </div>
 <!-- CIP ADMIN -->
 <div id="s-cip-admin" class="screen">
@@ -821,6 +832,8 @@ function _cipRegistrarHora(campo){
   _cipData[campo]=hhmm;
   var mapa=_cipAutoFillMap(_cipData.tipo);
   if(mapa[campo]) _cipData[mapa[campo]]=hhmm;
+  // Primera hora registrada → crear/actualizar registro en ai_cip_activos
+  _cipSyncActivo();
   _cipRenderForm();
 }
 function _cipEditarAuto(campo){
@@ -881,6 +894,8 @@ async function guardarCIP(repetir){
     cip_padre_id:_cipData.cip_padre_id||null
   };
   await dbP('ai_cip_registros','POST',rec,'');
+  // Eliminar del registro de activos
+  await fetch(SB+'/rest/v1/ai_cip_activos?equipo_id=eq.'+_cipData.equipo_id+'&tipo=eq.'+_cipData.tipo,{method:'DELETE',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Prefer':'return=minimal'}});
   // F: si falló, notificar a admins
   if(_cipResultado==='fallido') await _cipNotificarAdmins(rec);
   toast('✅ CIP guardado — '+_cipData.equipo_nombre,'#16a34a');
@@ -1098,6 +1113,79 @@ async function guardarCipConfig(){
   toast('✅ Configuración guardada','#16a34a');
 }
 function irCipIniciar(){irCipTipo();}
+async function _cipSyncActivo(){
+  if(!_cipData.equipo_id) return;
+  var id='cipact_'+_cipData.equipo_id+'_'+_cipData.tipo;
+  var existe=await db('ai_cip_activos','GET',null,'id=eq.'+id)||[];
+  var payload={id:id,equipo_id:_cipData.equipo_id,equipo_nombre:_cipData.equipo_nombre,
+    tipo:_cipData.tipo,operador:ME?ME.nombre:'—',
+    ts_inicio:_cipData._tsInicio||(Date.now()),
+    datos:_cipData};
+  if(!_cipData._tsInicio){_cipData._tsInicio=payload.ts_inicio;}
+  if(existe&&existe.length) await dbP('ai_cip_activos','PATCH',{datos:_cipData,operador:payload.operador},'id=eq.'+id);
+  else await dbP('ai_cip_activos','POST',payload,'');
+}
+async function irCip(){
+  go('s-cip');
+  // Colorear botón según si hay CIPs activos
+  var activos=await db('ai_cip_activos','GET',null,'order=ts_inicio.asc')||[];
+  var btn=document.getElementById('btn-cip-corriendo');
+  if(btn){
+    btn.style.background=activos.length?'#16a34a':'#6b7280';
+    btn.innerHTML='<span style="font-size:40px">📡</span>CIP Corriendo'+(activos.length?' ('+activos.length+')':'');
+  }
+}
+async function irCipCorriendo(){
+  go('s-cip-corriendo');
+  var cont=document.getElementById('cip-corriendo-cont');
+  if(!cont) return;
+  cont.innerHTML='<div style="text-align:center;padding:24px;color:#9ca3af">Cargando...</div>';
+  var activos=await db('ai_cip_activos','GET',null,'order=ts_inicio.asc')||[];
+  if(!activos.length){cont.innerHTML='<div style="text-align:center;padding:32px;color:#9ca3af">No hay CIPs en curso</div>';return;}
+  var tipos={sosa:'Solo Alcalino',acido:'Solo Ácido',sosa_acido:'Completo Alcalino/Ácido'};
+  cont.innerHTML=activos.map(function(a){
+    var mins=Math.round((Date.now()-a.ts_inicio)/60000);
+    return '<div onclick="_cipReanudar(\''+a.id+'\')" style="background:#fff;border-radius:12px;padding:14px 16px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,.08);cursor:pointer;display:flex;align-items:center;gap:12px" onmouseenter="this.style.background=\'#f9fafb\'" onmouseleave="this.style.background=\'#fff\'">'
+      +'<div style="flex:1">'
+      +'<div style="font-size:14px;font-weight:900;color:#0d2144">'+a.equipo_nombre+'</div>'
+      +'<div style="font-size:12px;color:#6b7280;margin-top:2px">'+(tipos[a.tipo]||a.tipo)+' · '+a.operador+'</div>'
+      +'<div style="font-size:11px;color:#9ca3af;margin-top:2px">'+mins+' min en curso</div>'
+      +'</div>'
+      +'<div style="font-size:22px">▶</div>'
+      +'</div>';
+  }).join('');
+}
+async function _cipReanudar(id){
+  var rows=await db('ai_cip_activos','GET',null,'id=eq.'+id)||[];
+  if(!rows.length){toast('CIP no encontrado','#dc2626');return;}
+  var a=rows[0];
+  // Restaurar datos del CIP
+  _cipLineaSel={id:a.equipo_id,nombre:a.equipo_nombre};
+  Object.assign(_cipData,a.datos||{});
+  _cipResultado=a.datos&&a.datos.validacion_visual?'ok':'';
+  _cipCamposComentarios=a.datos&&a.datos._comentarios||{};
+  var titulos={sosa:'Solo Alcalino',acido:'Solo Ácido',sosa_acido:'Completo Alcalino/Ácido'};
+  go('s-cip-form');
+  var tit=document.getElementById('cip-form-titulo');
+  var sub=document.getElementById('cip-form-sub');
+  if(tit) tit.textContent='🚿 CIP · '+(titulos[a.tipo]||a.tipo);
+  if(sub) sub.textContent=a.equipo_nombre;
+  // Cargar config de targets
+  var cfgs=await db('ai_cip_config','GET',null,'tipo=eq.'+a.tipo+'&order=orden.asc')||[];
+  _cipConfigMap={};
+  cfgs.forEach(function(c){_cipConfigMap[c.campo]={lim_inf:c.lim_inf,target:c.target,lim_sup:c.lim_sup,label:c.campo_label};});
+  if(cfgs.length){
+    var autoFilledCampos=Object.values(_cipAutoFillMap(a.tipo));
+    window._cipFormFilas=cfgs.map(function(c){
+      var t='num';
+      if(c.campo.startsWith('h_')) t=autoFilledCampos.indexOf(c.campo)>=0?'auto':'btn';
+      return{c:c.campo,l:c.campo_label,t:t};
+    });
+  }else{
+    window._cipFormFilas=_cipFilas(a.tipo);
+  }
+  _cipRenderForm();
+}
 
 function doLogout(){
   localStorage.removeItem('ai_me');
