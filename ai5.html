@@ -1689,7 +1689,7 @@ async function renderLinea(){
     var firstEvTs=Math.min.apply(null,evs.filter(function(e){return Number(e.ts_inicio)>=tsI;}).map(function(e){return Number(e.ts_inicio);}));
     if(isFinite(firstEvTs)&&firstEvTs<tsIEfectivo) tsIEfectivo=firstEvTs;
   }
-  var ahora_barra=(!ORDEN_ACTIVA&&esHoy)?tsI:(detenida&&tsDetencion?Math.min(tsDetencion,tsF):(!esHoy?tsF:Math.min(Date.now(),tsF)));
+  var ahora_barra=(!ORDEN_ACTIVA&&esHoy)?tsI:(detenida&&tsDetencion?Math.min(tsDetencion,tsF):(!esHoy?Math.min(tsF,Date.now()):Math.min(Date.now(),tsF)));
   // Si el folio es de un turno anterior y no hay eventos reales en este turno, no pintar
   if(esHoy&&evs&&evs.length===0&&ordTsB&&ordTsB<tsI) ahora_barra=tsI;
   var segmentos=segmentosConGaps(evs,tsIEfectivo,ahora_barra);
