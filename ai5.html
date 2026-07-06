@@ -1630,23 +1630,26 @@ async function abrirLinea(id){
   // Cargar orden activa desde localStorage o Supabase
   ORDEN_ACTIVA=null;
   var savedOrden=localStorage.getItem('ai_orden_'+id);
+  var localOrden=null;
   if(savedOrden){
     try{
       var parsed=JSON.parse(savedOrden);
-      // Solo usar si la orden pertenece a ESTA línea (no a otra)
-      if(parsed&&parsed.linea_id===id){
-        ORDEN_ACTIVA=parsed;
-      }else{
-        // Orden de otra línea guardada con esta clave → borrar
-        localStorage.removeItem('ai_orden_'+id);
-      }
-    }catch(e){ORDEN_ACTIVA=null;}
+      if(parsed&&parsed.linea_id===id) localOrden=parsed;
+      else localStorage.removeItem('ai_orden_'+id);
+    }catch(e){}
   }
-  if(!ORDEN_ACTIVA){
-    var rows=await db('ai_ordenes','GET',null,'linea_id=eq.'+id+'&estado=eq.abierta&order=ts_inicio.desc&limit=1');
-    ORDEN_ACTIVA=rows&&rows.length?rows[0]:null;
-    if(ORDEN_ACTIVA) localStorage.setItem('ai_orden_'+id,JSON.stringify(ORDEN_ACTIVA));
+  // Siempre consultar DB para detectar folio más reciente
+  var rows=await db('ai_ordenes','GET',null,'linea_id=eq.'+id+'&estado=eq.abierta&order=ts_inicio.desc&limit=1');
+  var dbOrden=rows&&rows.length?rows[0]:null;
+  // Usar el folio más reciente entre localStorage y DB
+  if(localOrden&&dbOrden){
+    var tsLocal=Number(localOrden.ts_inicio)||0;
+    var tsDb=Number(dbOrden.ts_inicio)||0;
+    ORDEN_ACTIVA=tsDb>tsLocal?dbOrden:localOrden;
+  }else{
+    ORDEN_ACTIVA=localOrden||dbOrden||null;
   }
+  if(ORDEN_ACTIVA) localStorage.setItem('ai_orden_'+id,JSON.stringify(ORDEN_ACTIVA));
   // Sincronizar _tsF desde detenida_en (persiste entre sesiones y dispositivos)
   if(ORDEN_ACTIVA&&ORDEN_ACTIVA.detenida_en&&!ORDEN_ACTIVA._tsF){
     ORDEN_ACTIVA._tsF=ORDEN_ACTIVA.detenida_en;
