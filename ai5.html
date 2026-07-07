@@ -1710,7 +1710,7 @@ async function renderLinea(){
 
   // ── Cargar datos ─────────────────────────────────────────────
   var [evs,pzs]=await Promise.all([
-    db('ai_eventos','GET',null,'linea_id=eq.'+LINEA_ID+'&ts_inicio=gte.'+(tsI-9*3600000)+'&ts_inicio=lt.'+tsF+'&order=ts_inicio.asc'),
+    db('ai_eventos','GET',null,'linea_id=eq.'+LINEA_ID+'&ts_inicio=gte.'+Math.min(tsI-9*3600000,ORDEN_ACTIVA&&Number(ORDEN_ACTIVA.ts_inicio)||tsI-9*3600000)+'&ts_inicio=lt.'+tsF+'&order=ts_inicio.asc'),
     db('ai_piezas','GET',null,'linea_id=eq.'+LINEA_ID+'&fecha=eq.'+hFiltro+(fT==='dia'?'':'&turno=eq.'+t))
   ]);
   evs=evs||[]; pzs=pzs||[];
@@ -1926,6 +1926,7 @@ async function renderLinea(){
     +(!AI_MODO_HISTORIAL?'<div style="padding:0 16px 8px"><div style="display:flex;gap:5px;align-items:center">'
     +'<div style="width:34px;height:34px;border-radius:50%;background:'+COL[tipoAct]+';flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:15px">'+ICO[tipoAct]+'</div>'
     +'<button onclick="accionPlay()" style="flex:2;padding:8px 4px;background:#16a34a;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:10px;cursor:pointer;font-family:Nunito,sans-serif;opacity:'+(tipoAct==='corriendo'?1:.65)+'">▶ Corriendo</button>'
+    +(ORDEN_ACTIVA&&!fActCerrada&&l.permite_cambio_folio!==false&&esHoy?'<button onclick="cambiarFolio()" style="flex:2;padding:8px 4px;background:#0891b2;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:10px;cursor:pointer;font-family:Nunito,sans-serif;opacity:0.85">Cambio Folio</button>':'')
     +'<button onclick="pararLinea()" style="flex:2;padding:8px 4px;background:#1a1a1a;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:10px;cursor:pointer;font-family:Nunito,sans-serif;opacity:'+(tipoAct==='detenida'?1:0.55)+'">⏹ Detener</button>'
     +'<button onclick="selRC(\'pnp\')" style="flex:1;padding:8px 4px;background:#dc2626;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:10px;cursor:pointer;font-family:Nunito,sans-serif;opacity:'+(tipoAct==='pnp'?1:.65)+'">PNP</button>'
     +'<button onclick="selRC(\'pp\')" style="flex:1;padding:8px 4px;background:#ca8a04;color:#fff;border:none;border-radius:9px;font-weight:800;font-size:10px;cursor:pointer;font-family:Nunito,sans-serif;opacity:'+(tipoAct==='pp'?1:.65)+'">PP</button>'
@@ -2017,6 +2018,63 @@ async function renderLinea(){
 }
 
 // ── PLAY — iniciar o continuar orden ─────────────────────────
+async function cambiarFolio(){
+  if(bloqueadoLectura()) return;
+  if(!ORDEN_ACTIVA){toast('No hay folio activo','#dc2626');return;}
+  var l=LINEAS.find(x=>x.id===LINEA_ID);
+  modal('🔄 Cambio de Folio',
+    '<div style="background:#fef3c7;border-radius:10px;padding:10px;margin-bottom:12px;font-size:12px;font-weight:700;color:#92400e">⚠️ La línea continuará corriendo. El folio actual quedará para cuadre de cantidades.</div>'
+    +'<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Folio actual: <b>'+ORDEN_ACTIVA.folio+'</b></label>'
+    +'<label style="font-size:.82rem;font-weight:700;display:block;margin-top:10px;margin-bottom:4px">Número del nuevo folio</label>'
+    +'<input type="number" id="cf-folio" class="fc" placeholder="Ej: 12346" inputmode="numeric">'
+    +(l&&l.tiene_flujometro?'<label style="font-size:.82rem;font-weight:700;display:block;margin-bottom:4px">Lectura actual del Flujómetro</label><input type="number" id="cf-flujo" class="fc" placeholder="Ej: 103200.0" step="any" inputmode="decimal">':''),
+    async(m)=>{
+      var nuevoFolio=parseInt(document.getElementById('cf-folio').value);
+      if(!nuevoFolio||nuevoFolio<=0){toast('Ingresa un número de folio válido','#dc2626');return;}
+      var flujoVal=null;
+      if(l&&l.tiene_flujometro){
+        flujoVal=parseFloat(document.getElementById('cf-flujo').value);
+        if(isNaN(flujoVal)){toast('Ingresa la lectura del flujómetro','#dc2626');return;}
+      }
+      m.remove();
+      await _ejecutarCambioFolio(nuevoFolio, flujoVal, l);
+    },'#0891b2','Confirmar cambio');
+}
+async function _ejecutarCambioFolio(nuevoFolio, flujoVal, l){
+  var ahora=Date.now();
+  var ordenAnterior=ORDEN_ACTIVA;
+  var lineaId=LINEA_ID;
+  // 1. Cerrar el evento activo actual — capturar su tipo primero
+  var evs=await db('ai_eventos','GET',null,'linea_id=eq.'+lineaId+'&ts_fin=is.null')||[];
+  var tipoAnterior=(evs.find(function(e){return ['pp','pnp','corriendo','idle'].includes(e.tipo);})||{tipo:'corriendo'}).tipo;
+  for(var e of evs) await dbP('ai_eventos','PATCH',{ts_fin:ahora},'id=eq.'+e.id);
+  // 2. Cerrar el folio anterior (estado='detenida' para que el operador pueda cuadrar)
+  await dbP('ai_ordenes','PATCH',{estado:'detenida',ts_fin:ahora,detenida_en:ahora},'id=eq.'+ordenAnterior.id);
+  // Guardar lectura final del flujómetro si aplica
+  if(flujoVal!=null&&ordenAnterior.flujometro_lecturas){
+    var lecs=[...(ordenAnterior.flujometro_lecturas||[]),{ts:ahora,valor:flujoVal,tipo:'fin',turno:turno(),fecha:hoy()}];
+    await dbP('ai_ordenes','PATCH',{flujometro_lecturas:lecs},'id=eq.'+ordenAnterior.id);
+  }
+  // 3. Crear el nuevo folio (arranca siempre como corriendo internamente)
+  var prod=ordenAnterior.producto_id?{id:ordenAnterior.producto_id,nombre:ordenAnterior.producto_nombre,target_hora:l?l.target_hora:0}:null;
+  var area=l?l.area:'envasado';
+  await _crearNuevaOrden(nuevoFolio,flujoVal,prod,area,l,lineaId);
+  // 4. Si el estado anterior era PP o PNP, preguntar si continúa o cambió a corriendo
+  if(tipoAnterior==='pp'||tipoAnterior==='pnp'){
+    var mm=document.createElement('div');
+    mm.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+    mm.innerHTML='<div style="background:#fff;border-radius:22px 22px 0 0;padding:24px 20px 36px;width:100%;max-width:480px">'
+      +'<div style="font-size:15px;font-weight:900;color:#1a3c5e;margin-bottom:6px">¿En qué estado sigue la línea?</div>'
+      +'<div style="font-size:12px;color:#6b7280;margin-bottom:18px">Estaba en <b style="color:'+COL[tipoAnterior]+'">'+LBL[tipoAnterior]+'</b> al momento del cambio de folio.</div>'
+      +'<div style="display:flex;flex-direction:column;gap:10px">'
+      +'<button onclick="this.closest(\'div\').parentElement.parentElement.remove();cambiarEstado(\''+tipoAnterior+'\')" style="padding:14px;background:'+COL[tipoAnterior]+';color:#fff;border:none;border-radius:12px;font-weight:800;font-size:14px;cursor:pointer;font-family:Nunito,sans-serif">Continúa en '+LBL[tipoAnterior]+'</button>'
+      +'<button onclick="this.closest(\'div\').parentElement.parentElement.remove()" style="padding:14px;background:#16a34a;color:#fff;border:none;border-radius:12px;font-weight:800;font-size:14px;cursor:pointer;font-family:Nunito,sans-serif">▶ Cambió a Corriendo</button>'
+      +'</div></div>';
+    document.body.appendChild(mm);
+  }else{
+    toast('Folio '+ordenAnterior.folio+' → '+nuevoFolio+' · Línea continúa corriendo','#0891b2');
+  }
+}
 async function accionPlay(){
   if(bloqueadoLectura())return;
   if(ORDEN_ACTIVA&&ORDEN_ACTIVA.estado==='abierta'&&!ORDEN_ACTIVA._tsF){
@@ -3163,13 +3221,18 @@ async function editarLinea(id){
       <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">${tipoProd}s de esta línea (${prods.length})</div>
       ${prods.map(p=>'<div style="background:#f9fafb;border-radius:8px;padding:8px 12px;margin-bottom:4px;font-size:12px"><b>'+p.nombre+'</b> '+( p.codigo?'('+p.codigo+')':'' )+' · '+p.target_hora+' u/h</div>').join('')||'<div style="font-size:11px;color:#9ca3af">Sin '+tipoProd+'s aún</div>'}
       <button type="button" onclick="gestionarProductos('${id}','${l.nombre}','${area}')" style="margin-top:8px;padding:6px 12px;background:#0d2144;color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;font-family:Nunito,sans-serif">+ Gestionar ${tipoProd}s</button>
+    </div>
+    <div style="margin-top:12px;border-top:1px solid #e5e7eb;padding-top:10px;display:flex;align-items:center;gap:8px">
+      <input type="checkbox" id="el-cambio-folio" ${l.permite_cambio_folio!==false?'checked':''} style="width:16px;height:16px;cursor:pointer">
+      <label for="el-cambio-folio" style="font-size:12px;font-weight:700;color:#374151;cursor:pointer">Permitir cambio de folio en esta línea</label>
     </div>`,
     async(m)=>{
       var n=document.getElementById('el-n').value.trim();
       var u=document.getElementById('el-u').value;
       var newArea=document.getElementById('el-area').value;
+      var permiteCambio=document.getElementById('el-cambio-folio').checked;
       var r=await fetch(SB+'/rest/v1/ai_lineas?id=eq.'+id,{method:'PATCH',headers:{'apikey':SK,'Authorization':'Bearer '+SK,'Content-Type':'application/json','Prefer':'return=minimal'},
-        body:JSON.stringify({nombre:n,unidad:u,area:newArea})});
+        body:JSON.stringify({nombre:n,unidad:u,area:newArea,permite_cambio_folio:permiteCambio})});
       if(!r.ok){var err=await r.text();toast('Error: '+r.status+' '+err,'#dc2626');return;}
       if(!r.ok){var err=await r.text();toast('Error: '+r.status+' '+err,'#dc2626');return;}
       m.remove();toast('✅ Actualizado','#0891b2');cargarConfig();
