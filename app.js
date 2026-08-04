@@ -1413,7 +1413,10 @@ function renderPM03(){
 function showDetallePM03(id){
   const p=PM03_PLAN.find(x=>x.id===id);if(!p)return;
   var _activaPM3=document.querySelector('.screen.active');
-  otCerrandoId=id;document.getElementById('detalle-topbar').textContent=p.id;detalleBackScreen=_activaPM3?_activaPM3.id:'screen-pm03';
+  otCerrandoId=id;document.getElementById('detalle-topbar').textContent=p.id;
+  // Solo actualizar backScreen si la pantalla activa NO es ya el detalle
+  var _backCandidate=_activaPM3?_activaPM3.id:'screen-pm03';
+  detalleBackScreen=(_backCandidate==='screen-detalle')?'screen-pm03':_backCandidate;
   const canClose=(currentUser.rol==='tecnico'||currentUser.rol==='admin'||currentUser.rol==='super')&&p.estado!=='cerrada';
   const esAdmin=currentUser.rol==='admin'||currentUser.rol==='super';
   // Necesita asignación: sin semana, sin técnico, o en estado por_reprogramar
@@ -17564,9 +17567,12 @@ function _renderPM02Asignar(){
     return '<option value="'+t.id+'"'+(window._pm02AsigTec===t.id?' selected':'')+'>'+t.nombre.split(' ')[0]+'</option>';
   }).join('');
 
-  fDiv.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+  fDiv.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:6px">'
     +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;color:#7c3aed">📋 PM02 por Asignar</div>'
+    +'<div style="display:flex;gap:6px">'
     +'<button onclick="showPM02ConsultaAsignadas()" style="padding:6px 12px;background:#1a3c5e;color:#fff;border:none;border-radius:8px;font-size:.8rem;font-weight:700;cursor:pointer">🔍 Consulta Asignadas</button>'
+    +'<button onclick="showPM02PorValidar()" style="padding:6px 12px;background:#d97706;color:#fff;border:none;border-radius:8px;font-size:.8rem;font-weight:700;cursor:pointer">✅ Por Validar</button>'
+    +'</div>'
     +'</div>';
 
   // Panel carga técnicos
@@ -21570,3 +21576,83 @@ function limpiarFiltrosConsulta(){
   filtrarOrdenes();
   showAlert('✅ Filtros limpiados');
 }
+
+// ================================================================
+// PM02 POR VALIDAR CORRECCIÓN
+// ================================================================
+function showPM02PorValidar(){
+  showScreen('screen-ordenes');
+  detalleBackScreen='screen-pm02asignar';
+  window._cValidarBusq='';
+  window._cValidarTec='';
+  _renderPM02PorValidar();
+}
+
+function _renderPM02PorValidar(){
+  var fDiv=document.getElementById('ordenes-filtros');
+  var lDiv=document.getElementById('mis-ordenes-list');
+  if(!fDiv||!lDiv) return;
+
+  var rolesValidos=['operador','lider','inspector_calidad','lider_calidad','administrativo','supply','admin','super'];
+
+  // PM02 en pre_cierre del flujo PM02 por asignar
+  var base=ORDENES.filter(function(o){
+    if(o.tipo!=='PM02') return false;
+    if(o.estado!=='pre_cierre') return false;
+    var r=o.rolLevantador||'';
+    return rolesValidos.indexOf(r)>=0||o.pendienteAsignacion===true;
+  });
+
+  var tecnicos=[...new Set(base.map(function(o){return o.tecnicoNombre||'';}).filter(Boolean))].sort();
+  var busq=(window._cValidarBusq||'').toLowerCase();
+  var lista=base.filter(function(o){
+    if(window._cValidarTec && o.tecnicoNombre!==window._cValidarTec) return false;
+    if(busq){
+      var h=(o.id+' '+(o.linea||'')+(o.area||'')+(o.componente||'')+(o.detalle||'')+(o.tecnicoNombre||'')).toLowerCase();
+      if(h.indexOf(busq)<0) return false;
+    }
+    return true;
+  }).sort(function(a,b){return (b.ts||0)-(a.ts||0);});
+
+  fDiv.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;color:#d97706">✅ PM02 Por Validar Corrección</div>'
+    +'<button onclick="showPM02PorAsignar()" style="padding:6px 12px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:.8rem;font-weight:700;cursor:pointer">← Por Asignar</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
+    +'<input type="text" class="form-control" placeholder="🔍 Buscar..." value="'+(window._cValidarBusq||'')+'" oninput="window._cValidarBusq=this.value;_renderPM02PorValidar()" style="flex:2;min-width:140px;padding:8px;font-size:13px">'
+    +'<select class="form-control" onchange="window._cValidarTec=this.value;_renderPM02PorValidar()" style="flex:1;min-width:120px;padding:8px;font-size:13px">'
+    +'<option value="">Todos los técnicos</option>'
+    +tecnicos.map(function(t){return '<option value="'+t+'"'+(window._cValidarTec===t?' selected':'')+'>'+t+'</option>';}).join('')
+    +'</select>'
+    +'</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:8px">'+lista.length+' orden(es) pendientes de validación</div>';
+
+  if(!lista.length){
+    lDiv.innerHTML='<div class="card" style="text-align:center;padding:32px">'
+      +'<div style="font-size:32px">✅</div>'
+      +'<div style="font-weight:700;margin-top:8px;color:#16a34a">Sin órdenes pendientes de validar</div>'
+      +'</div>';
+    return;
+  }
+
+  lDiv.innerHTML=lista.map(function(o){
+    var fecha=o.ts?new Date(o.ts).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'2-digit'}):'—';
+    var lev=o.levantadoPor||o.nombreLevantador||'—';
+    var obs=o.observacionesCierre||o.observaciones||'Sin observaciones';
+    return '<div class="ot-card" style="border-left:4px solid #d97706;margin-bottom:8px;padding:12px;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.06)" onclick="showDetalle(\''+o.id+'\')">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
+      +'<span style="font-size:11px;font-weight:700;color:#7c3aed">'+o.id+'</span>'
+      +'<span style="font-size:11px;background:#fef3c7;color:#92400e;border-radius:6px;padding:2px 8px;font-weight:700">⏳ Pre-cierre</span>'
+      +'</div>'
+      +'<div style="font-size:13px;font-weight:700;color:#1a3c5e;margin-bottom:3px">'+(o.linea||o.area||'—')+(o.componente?' · '+o.componente:'')+'</div>'
+      +'<div style="font-size:12px;color:#374151;margin-bottom:4px">'+(o.detalle||'').substring(0,80)+'</div>'
+      +'<div style="font-size:11px;background:#f9fafb;border-radius:6px;padding:6px;margin-bottom:6px;color:#374151"><b>Observaciones:</b> '+obs.substring(0,100)+'</div>'
+      +'<div style="display:flex;gap:12px;font-size:11px;color:#6b7280">'
+      +'<span>👨‍🔧 '+o.tecnicoNombre+'</span>'
+      +'<span>📅 '+fecha+'</span>'
+      +'<span>👤 Levantó: '+lev+'</span>'
+      +'</div>'
+      +'</div>';
+  }).join('');
+}
+// ── FIN PM02 POR VALIDAR ──────────────────────────────────────────
