@@ -17573,7 +17573,9 @@ function _renderPM02Asignar(){
     +'<button onclick="showPM02ConsultaAsignadas()" style="padding:6px 12px;background:#1a3c5e;color:#fff;border:none;border-radius:8px;font-size:.8rem;font-weight:700;cursor:pointer">🔍 Consulta Asignadas</button>'
     +'<button onclick="showPM02PorValidar()" style="padding:6px 12px;background:#d97706;color:#fff;border:none;border-radius:8px;font-size:.8rem;font-weight:700;cursor:pointer">✅ Por Validar</button>'
     +'</div>'
-    +'</div>';
+    +'</div>'
+    +'<div id="pm02-resumen-asignar"></div>';
+  renderResumenPM02Asignar();
 
   // Panel carga técnicos
   var panelCarga='';
@@ -21656,3 +21658,72 @@ function _renderPM02PorValidar(){
   }).join('');
 }
 // ── FIN PM02 POR VALIDAR ──────────────────────────────────────────
+
+// ================================================================
+// RESUMEN PM02 POR ASIGNAR
+// ================================================================
+function renderResumenPM02Asignar(){
+  var cont=document.getElementById('pm02-resumen-asignar');
+  if(!cont) return;
+
+  var rolesValidos=['operador','lider','inspector_calidad','lider_calidad','administrativo','supply','admin','super'];
+  var ots=ORDENES.filter(function(o){
+    if(o.tipo!=='PM02') return false;
+    var r=o.rolLevantador||'';
+    return rolesValidos.indexOf(r)>=0||o.pendienteAsignacion===true;
+  });
+
+  var total=ots.length;
+  var cerradas=ots.filter(function(o){return o.estado==='cerrada';}).length;
+  var abiertas=ots.filter(function(o){return o.estado==='abierta';}).length;
+  var preCierre=ots.filter(function(o){return o.estado==='pre_cierre';}).length;
+  var sinAsignar=ots.filter(function(o){return o.estado==='abierta'&&(!o.tecnicoAsignado||o.tecnicoAsignado==='');}).length;
+  var asignadas=ots.filter(function(o){return o.estado==='abierta'&&o.tecnicoAsignado&&o.tecnicoAsignado!=='';}).length;
+  var pctCerradas=total?Math.round((cerradas/total)*100):0;
+
+  var pA=ots.filter(function(o){return o.prioridad==='A';});
+  var pB=ots.filter(function(o){return o.prioridad==='B';});
+  var pC=ots.filter(function(o){return o.prioridad==='C';});
+  function ps(arr){
+    var t=arr.length,s=arr.filter(function(o){return o.estado==='cerrada';}).length;
+    var a=t-s,pct=t?Math.round((s/t)*100):0;
+    return{t:t,s:s,a:a,pct:pct};
+  }
+  function bc(p){return p>=80?'#16a34a':p>=50?'#d97706':'#dc2626';}
+  var sA=ps(pA),sB=ps(pB),sC=ps(pC);
+
+  cont.innerHTML='<div style="background:linear-gradient(135deg,#ede9fe,#ddd6fe);border-radius:12px;padding:12px;margin-bottom:12px">'
+    +'<div style="font-size:12px;font-weight:800;color:#7c3aed;margin-bottom:8px">📊 Resumen PM02 — Flujo por Asignar</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:8px">'
+    +[
+      {label:'TOTAL',val:total,col:'#7c3aed'},
+      {label:'SIN ASIGNAR',val:sinAsignar,col:'#dc2626'},
+      {label:'ASIGNADAS',val:asignadas,col:'#d97706'},
+      {label:'POR VALIDAR',val:preCierre,col:'#0891b2'},
+    ].map(function(k){
+      return '<div style="background:rgba(255,255,255,.7);border-radius:8px;padding:8px;text-align:center">'
+        +'<div style="font-size:20px;font-weight:800;color:'+k.col+'">'+k.val+'</div>'
+        +'<div style="font-size:9px;font-weight:700;color:#6b7280">'+k.label+'</div>'
+        +'</div>';
+    }).join('')
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px">'
+    +'<div style="background:rgba(255,255,255,.7);border-radius:8px;padding:8px;text-align:center">'
+    +'<div style="font-size:18px;font-weight:800;color:#16a34a">'+cerradas+'</div>'
+    +'<div style="font-size:9px;font-weight:700;color:#6b7280">CERRADAS</div>'
+    +'<div style="font-size:12px;font-weight:800;color:'+bc(pctCerradas)+'">'+pctCerradas+'%</div>'
+    +'<div style="background:rgba(0,0,0,.1);border-radius:4px;height:4px;margin-top:3px;overflow:hidden"><div style="width:'+pctCerradas+'%;height:100%;background:'+bc(pctCerradas)+';border-radius:4px"></div></div>'
+    +'</div>'
+    +'<div style="background:rgba(255,255,255,.7);border-radius:8px;padding:8px">'
+    +'<div style="font-size:9px;font-weight:700;color:#6b7280;margin-bottom:4px">POR PRIORIDAD</div>'
+    +[{l:'A',s:sA,col:'#dc2626'},{l:'B',s:sB,col:'#d97706'},{l:'C',s:sC,col:'#16a34a'}].map(function(p){
+      return '<div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:2px">'
+        +'<span style="font-weight:700;color:'+p.col+'">Prio '+p.l+'</span>'
+        +'<span>'+p.s.t+' total · <span style="color:#16a34a">'+p.s.s+' cerr</span> · <span style="color:#d97706">'+p.s.a+' ab</span></span>'
+        +'</div>';
+    }).join('')
+    +'</div>'
+    +'</div>'
+    +'</div>';
+}
+// ── FIN RESUMEN PM02 ASIGNAR ──────────────────────────────────────
