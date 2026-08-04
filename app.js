@@ -21487,15 +21487,42 @@ function _renderPM02ConsultaAsignadas(){
   var lDiv=document.getElementById('mis-ordenes-list');
   if(!fDiv||!lDiv) return;
 
-  // Lista de técnicos y levantadores únicos
+  var rolesValidos=['operador','lider','inspector_calidad','lider_calidad','administrativo','supply','admin','super'];
   var tecnicos=[...new Set(ORDENES.filter(function(o){return o.tipo==='PM02'&&o.tecnicoAsignado;}).map(function(o){return o.tecnicoNombre||'';}).filter(Boolean))].sort();
   var levantadores=[...new Set(ORDENES.filter(function(o){return o.tipo==='PM02';}).map(function(o){return o.levantadoPor||o.nombreLevantador||'';}).filter(Boolean))].sort();
+
+  var busq=(window._cAsigBusq||'').toLowerCase();
+  var estadoFil=window._cAsigEstado||'todas';
+  var lista=ORDENES.filter(function(o){
+    if(o.tipo!=='PM02') return false;
+    if(!o.tecnicoAsignado||o.tecnicoAsignado==='') return false;
+    var r=o.rolLevantador||'';
+    if(rolesValidos.indexOf(r)<0 && !o.pendienteAsignacion) return false;
+    if(window._cAsigTec && o.tecnicoNombre!==window._cAsigTec) return false;
+    if(window._cAsigLevanto){
+      var lev=o.levantadoPor||o.nombreLevantador||'';
+      if(lev!==window._cAsigLevanto) return false;
+    }
+    if(estadoFil!=='todas' && o.estado!==estadoFil) return false;
+    if(busq){
+      var haystack=(o.id+' '+(o.linea||'')+(o.area||'')+(o.componente||'')+(o.detalle||'')+(o.tecnicoNombre||'')).toLowerCase();
+      if(haystack.indexOf(busq)<0) return false;
+    }
+    return true;
+  }).sort(function(a,b){return (b.ts||0)-(a.ts||0);});
+
+  var estadoColors={abierta:'#f59e0b',cerrada:'#16a34a',pre_cierre:'#2563eb'};
+  var chips=['todas','abierta','pre_cierre','cerrada'].map(function(e){
+    var label=e==='todas'?'Todas':e==='pre_cierre'?'Pre-cierre':e.charAt(0).toUpperCase()+e.slice(1);
+    var active=estadoFil===e;
+    return '<button onclick="window._cAsigEstado=\''+e+'\';_renderPM02ConsultaAsignadas()" style="padding:5px 12px;border-radius:20px;border:1.5px solid '+(active?'#7c3aed':'#d1d5db')+';background:'+(active?'#ede9fe':'#fff')+';color:'+(active?'#5b21b6':'#374151')+';font-size:.78rem;font-weight:600;cursor:pointer">'+label+'</button>';
+  }).join('');
 
   fDiv.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
     +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;color:#1a3c5e">🔍 Consulta PM02 Asignadas</div>'
     +'<button onclick="showPM02PorAsignar()" style="padding:6px 12px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:.8rem;font-weight:700;cursor:pointer">← Por Asignar</button>'
     +'</div>'
-    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">'
     +'<input type="text" class="form-control" placeholder="🔍 Buscar por descripción, línea, ID..." value="'+(window._cAsigBusq||'')+'" oninput="window._cAsigBusq=this.value;_renderPM02ConsultaAsignadas()" style="flex:2;min-width:140px;padding:8px;font-size:13px">'
     +'<select class="form-control" onchange="window._cAsigTec=this.value;_renderPM02ConsultaAsignadas()" style="flex:1;min-width:120px;padding:8px;font-size:13px">'
     +'<option value="">Todos los técnicos</option>'
@@ -21505,51 +21532,33 @@ function _renderPM02ConsultaAsignadas(){
     +'<option value="">Quién levantó</option>'
     +levantadores.map(function(l){return '<option value="'+l+'"'+(window._cAsigLevanto===l?' selected':'')+'>'+l+'</option>';}).join('')
     +'</select>'
-    +'</div>';
-
-  // Filtrar PM02 asignadas (tienen técnico)
-  var busq=(window._cAsigBusq||'').toLowerCase();
-  var rolesValidos=['operador','lider','inspector_calidad','lider_calidad','administrativo','supply','admin','super'];
-  var lista=ORDENES.filter(function(o){
-    if(o.tipo!=='PM02') return false;
-    if(!o.tecnicoAsignado||o.tecnicoAsignado==='') return false;
-    // Solo las que caen al botón PM02 por asignar
-    var r=o.rolLevantador||'';
-    if(rolesValidos.indexOf(r)<0 && !o.pendienteAsignacion) return false;
-    if(window._cAsigTec && o.tecnicoNombre!==window._cAsigTec) return false;
-    if(window._cAsigLevanto){
-      var lev=o.levantadoPor||o.nombreLevantador||'';
-      if(lev!==window._cAsigLevanto) return false;
-    }
-    if(busq){
-      var haystack=(o.id+' '+(o.linea||'')+(o.area||'')+' '+(o.detalle||'')+(o.componente||'')+(o.tecnicoNombre||'')).toLowerCase();
-      if(haystack.indexOf(busq)<0) return false;
-    }
-    return true;
-  }).sort(function(a,b){return (b.ts||0)-(a.ts||0);});
-
-  fDiv.innerHTML+=('<div style="font-size:12px;color:#6b7280">'+lista.length+' registros encontrados</div>');
+    +'</div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">'+chips+'</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:8px">'+lista.length+' orden(es) encontradas</div>';
 
   if(!lista.length){
     lDiv.innerHTML='<div class="card text-center" style="padding:32px"><div style="font-size:32px">📋</div><div style="font-weight:700;margin-top:8px;color:#6b7280">Sin resultados</div></div>';
     return;
   }
 
-  var estadoColors={abierta:'#f59e0b',cerrada:'#16a34a',pre_cierre:'#2563eb'};
   lDiv.innerHTML=lista.map(function(o){
     var fecha=o.ts?new Date(o.ts).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'2-digit'}):'—';
-    var estado=o.estado||'abierta';
+    var fechaCierre=o.cerradaTs?new Date(o.cerradaTs).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';
     var lev=o.levantadoPor||o.nombreLevantador||'—';
-    return '<div class="ot-card" style="border-left:4px solid '+(estadoColors[estado]||'#9ca3af')+';margin-bottom:8px;padding:12px;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.06)">'
+    var col=estadoColors[o.estado]||'#9ca3af';
+    var estadoLabel=o.estado==='pre_cierre'?'Pre-cierre':o.estado==='cerrada'?'Cerrada':'Abierta';
+    return '<div class="ot-card" style="border-left:4px solid '+col+';margin-bottom:8px;padding:12px;background:#fff;border-radius:10px;box-shadow:0 1px 4px rgba(0,0,0,.06);cursor:pointer" onclick="detalleBackScreen=\'screen-ordenes\';showDetalle(\''+o.id+'\')">'
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
       +'<span style="font-size:11px;font-weight:700;color:#7c3aed">'+o.id+'</span>'
-      +'<span style="font-size:11px;background:'+(estadoColors[estado]||'#9ca3af')+';color:#fff;border-radius:6px;padding:2px 8px;font-weight:700">'+estado+'</span>'
+      +'<span style="font-size:11px;background:'+col+';color:#fff;border-radius:6px;padding:2px 8px;font-weight:700">'+estadoLabel+'</span>'
       +'</div>'
       +'<div style="font-size:13px;font-weight:700;color:#1a3c5e;margin-bottom:3px">'+(o.linea||o.area||'—')+(o.componente?' · '+o.componente:'')+'</div>'
-      +'<div style="font-size:12px;color:#374151;margin-bottom:4px">'+(o.detalle||'Sin descripción').substring(0,80)+'</div>'
-      +'<div style="display:flex;gap:12px;font-size:11px;color:#6b7280">'
+      +'<div style="font-size:12px;color:#374151;margin-bottom:6px">'+(o.detalle||'Sin descripción').substring(0,80)+'</div>'
+      +(o.observacionesCierre?'<div style="font-size:11px;background:#f0fdf4;border-radius:6px;padding:5px 8px;margin-bottom:6px;color:#166534"><b>Obs. cierre:</b> '+o.observacionesCierre.substring(0,100)+'</div>':'')
+      +'<div style="display:flex;flex-wrap:wrap;gap:10px;font-size:11px;color:#6b7280">'
       +'<span>👨‍🔧 '+o.tecnicoNombre+'</span>'
-      +'<span>📅 '+fecha+'</span>'
+      +'<span>📅 Levantada: '+fecha+'</span>'
+      +(o.cerradaTs?'<span>✅ Cerrada: '+fechaCierre+'</span>':'')
       +'<span>👤 Levantó: '+lev+'</span>'
       +'</div>'
       +'</div>';
