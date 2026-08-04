@@ -329,7 +329,14 @@ tr:nth-child(even) td{background:#F8FAFC}
         <div class="user-pill" id="user-pill">👤 Usuario</div>
         <div style="font-size:10px;opacity:.5;color:#fff;margin-top:4px;letter-spacing:.3px">Saporis MTTO · REG-MTT-01.02</div>
       </div>
-      <button onclick="showBuzon()" style="position:relative;background:rgba(255,255,255,.15);border:none;border-radius:12px;padding:9px 12px;cursor:pointer;color:#fff;font-size:1.3rem;flex-shrink:0" id="btn-buzon">📬<span id="badge-buzon" style="display:none;position:absolute;top:-5px;right:-5px;background:#dc2626;color:#fff;border-radius:50%;min-width:20px;height:20px;font-size:11px;font-weight:800;line-height:20px;text-align:center;padding:0 4px"></span></button>
+      <button onclick="showBuzon()" style="position:relative;background:rgba(255,255,255,.18);border:none;border-radius:14px;padding:10px 14px;cursor:pointer;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.2)" id="btn-buzon">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="7" width="28" height="20" rx="3" fill="white" opacity="0.95"/>
+        <path d="M2 10 L16 19 L30 10" stroke="#1a3c5e" stroke-width="2" stroke-linecap="round"/>
+        <path d="M2 7 L16 17 L30 7" fill="white" opacity="0.95"/>
+      </svg>
+      <span id="badge-buzon" style="display:none;position:absolute;top:-6px;right:-6px;background:#dc2626;color:#fff;border-radius:50%;min-width:22px;height:22px;font-size:12px;font-weight:800;line-height:22px;text-align:center;padding:0 4px;box-shadow:0 2px 4px rgba(0,0,0,.3)"></span>
+    </button>
     </div>
   </div>
   <div style="background:linear-gradient(90deg,var(--mo4),var(--mo),var(--verde4));padding:10px 16px;overflow:hidden">
@@ -405,8 +412,8 @@ tr:nth-child(even) td{background:#F8FAFC}
           <div class="menu-btn" id="btn-aprobacion-admin" style="border-color:#7c3aed;background:linear-gradient(135deg,#fff 60%,#ede9fe)" onclick="showLiberacionAdmin()"><div class="menu-icon" id="icon-aprobacion-admin">📋</div><div class="menu-label">Aprobación PM03</div><div class="menu-desc" id="desc-aprobacion-admin">Aprobación final</div></div>
           <div class="menu-btn" style="border-color:#1a3c5e;background:linear-gradient(135deg,#fff 60%,#e8edf5)" onclick="showAdminProtocolos()"><div class="menu-icon">🗂️</div><div class="menu-label">Protocolos PM03</div><div class="menu-desc">Gestionar formatos</div></div>
           <div class="menu-btn" style="border-color:#C62828;background:linear-gradient(135deg,#fff 60%,#ffebee)" onclick="showKPIAnormalidades()"><div class="menu-icon">📊</div><div class="menu-label">KPI Anormalidades</div><div class="menu-desc">Indicadores operador/lider</div></div>
-          <div class="menu-btn" style="border-color:#7c3aed;background:linear-gradient(135deg,#fff 60%,#ede9fe)" onclick="showPM02PorAsignar()"><div class="menu-icon" id="icon-pm02-asignar">📋</div><div class="menu-label">PM02 por Asignar</div><div class="menu-desc" id="desc-pm02-asignar">Anormalidades sin técnico</div></div>
-          <div class="menu-btn" style="border-color:#dc2626;background:linear-gradient(135deg,#fff 60%,#fee2e2)" onclick="showPM03PorReprogramar()"><div class="menu-icon" id="icon-pm3-reprogram">📅</div><div class="menu-label">PM03 x Reprogramar</div><div class="menu-desc" id="desc-pm3-reprogram">PM03 vencidas</div></div>
+          <div class="menu-btn" style="border-color:#7c3aed;background:linear-gradient(135deg,#fff 60%,#ede9fe);position:relative" onclick="showPM02PorAsignar()"><div class="menu-icon" id="icon-pm02-asignar" style="position:relative">📋<span id="badge-pm02-asignar" style="display:none;position:absolute;top:-8px;right:-10px;background:#dc2626;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:11px;font-weight:800;line-height:18px;text-align:center;padding:0 3px"></span></div><div class="menu-label">PM02 por Asignar</div><div class="menu-desc" id="desc-pm02-asignar">Anormalidades sin técnico</div></div>
+          <div class="menu-btn" style="border-color:#dc2626;background:linear-gradient(135deg,#fff 60%,#fee2e2);position:relative" onclick="showPM03PorReprogramar()"><div class="menu-icon" id="icon-pm3-reprogram" style="position:relative">📅<span id="badge-pm03-reprog" style="display:none;position:absolute;top:-8px;right:-10px;background:#7c3aed;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:11px;font-weight:800;line-height:18px;text-align:center;padding:0 3px"></span></div><div class="menu-label">PM03 x Reprogramar</div><div class="menu-desc" id="desc-pm3-reprogram">PM03 vencidas</div></div>
         <div class="menu-btn" style="border-color:#374151;background:linear-gradient(135deg,#fff 60%,#f3f4f6)" onclick="showProveedores()"><div class="menu-icon">🏢</div><div class="menu-label">Proveedores</div><div class="menu-desc">Directorio de proveedores</div></div>
           <div class="menu-btn" style="border-color:#00695C;background:linear-gradient(135deg,#fff 60%,#E0F2F1)" onclick="showServicios()"><div class="menu-icon">🏭</div><div class="menu-label">Servicios</div><div class="menu-desc">Caldera, Agua, Aire, Elec.</div></div>
         <div class="menu-btn" style="border-color:#0891b2;background:linear-gradient(135deg,#fff 60%,#e0f7fa)" onclick="showGestionPersonal()"><div class="menu-icon">👥</div><div class="menu-label">Gestión de Personal</div><div class="menu-desc">Horarios, vacaciones, incidencias</div></div>
@@ -521,6 +528,7 @@ tr:nth-child(even) td{background:#F8FAFC}
   <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">🔍 Consultar Órdenes</div></div><button onclick="syncSupabase();filtrarOrdenes();showAlert('🔄 Actualizando...')" style="background:none;border:none;color:#fff;font-size:1.2rem;padding:8px;cursor:pointer" title="Actualizar">🔄</button></div>
   <div class="scroll-content" style="padding:16px">
     <div id="consulta-resumen" class="resumen-card"></div>
+    <div id="resumen-tecnicos-ot" style="margin-bottom:12px"></div>
     <input type="text" class="search-box" id="consulta-search" placeholder="🔍 Buscar por ID, área, técnico, descripción..." oninput="filtrarOrdenes()">
     <div class="filter-row" id="ft-tipo"><div class="filter-chip active" onclick="setFiltro('tipo','todas',this)">Todas</div><div class="filter-chip" onclick="setFiltro('tipo','PM01',this)">PM01</div><div class="filter-chip" onclick="setFiltro('tipo','PM02',this)">PM02</div><div class="filter-chip" onclick="setFiltro('tipo','PM03',this)">PM03</div><div class="filter-chip" onclick="setFiltro('tipo','PM04',this)">PM04</div><div class="filter-chip" onclick="setFiltro('tipo','temporal',this)" style="border-color:#F59E0B;color:#B45309">⚡ Temp</div><div class="filter-chip" onclick="setFiltro('tipo','bitacora',this)" style="border-color:#6d28d9;color:#6d28d9">📒 Bitácora</div></div>
     <div class="filter-row" id="ft-estado"><div class="filter-chip active" onclick="setFiltro('estado','todos',this)">Todos estados</div><div class="filter-chip" onclick="setFiltro('estado','abierta',this)">Abiertas</div><div class="filter-chip" onclick="setFiltro('estado','cerrada',this)">Cerradas</div></div>
@@ -537,7 +545,8 @@ tr:nth-child(even) td{background:#F8FAFC}
       <div class="filter-chip" onclick="setFiltro('anom','Condición Básica',this)">Condición Básica</div>
       <div class="filter-chip" onclick="setFiltro('anom','LDA',this)">LDA</div>
     </div>
-    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <button onclick="limpiarFiltrosConsulta()" style="padding:7px 14px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:8px;font-size:13px;font-weight:700;color:#374151;cursor:pointer">🔄 Limpiar filtros</button>
       <button class="btn btn-outline btn-sm" style="width:auto;padding:8px 14px" onclick="descargarOTExcel()">📥 Descargar Excel</button>
     </div>
     <div id="consulta-list" style="margin-top:8px"></div>
