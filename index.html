@@ -67,7 +67,7 @@ textarea.form-control{min-height:80px;resize:vertical}
 .card{background:var(--card);border-radius:var(--r);padding:16px;box-shadow:var(--shadow);margin-bottom:12px}
 .card-title{font-family:'Nunito',sans-serif;font-size:16px;font-weight:800;color:var(--txt);margin-bottom:8px}
 /* MENU */
-.app-header{padding:20px 16px 16px;color:#fff;text-align:center;background:linear-gradient(135deg,var(--mo) 0%,var(--verde4) 100%)}
+.app-header{color:#fff;text-align:center}
 .user-pill{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.18);padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;margin-top:8px}
 .menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px}
 .menu-btn{background:var(--card);border-radius:var(--r);padding:18px 12px;box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;border:2px solid transparent;transition:all .15s;text-align:center}
@@ -195,8 +195,8 @@ tr:nth-child(even) td{background:#F8FAFC}
   const app = initializeApp(firebaseConfig);
   const messaging = getMessaging(app);
 
-  window._initFCM = function(tecnicoId) {
-    Notification.requestPermission().then(function(perm) {
+  window._initFCM = async function(tecnicoId) {
+    Notification.requestPermission().then(async function(perm) {
       if (perm !== 'granted') return;
       getToken(messaging, {
         vapidKey: 'mp4SE5rjxBr6DW96xjl6NnH-cKztbP4qzdBHs2MnU7M',
@@ -309,11 +309,35 @@ tr:nth-child(even) td{background:#F8FAFC}
 
 <!-- ===== MENÚ ===== -->
 <div id="screen-menu" class="screen">
-  <div class="app-header">
-    <img src="data:image/png;base64,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" alt="Saporis" style="width:60px;height:auto;margin:0 auto 4px;display:block">
-    <div style="font-family:'Nunito',sans-serif;font-size:22px;font-weight:900;letter-spacing:-0.5px;color:#fff">Sap<span style="color:#00D4BD">oris</span></div>
-    <div style="font-size:12px;opacity:.8;margin-top:2px">Gestión de Mantenimiento</div>
-    <div class="user-pill" id="user-pill">👤 Usuario</div>
+  <div class="app-header" style="background:linear-gradient(160deg,#0f2540 0%,#1a3c5e 60%,#2a5a8f 100%);padding:24px 16px 20px;text-align:center">
+    <!-- Logo SVG Mantenimiento -->
+    <div style="width:88px;height:88px;background:#fff;border-radius:20px;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 24px rgba(0,0,0,.3)">
+      <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M32 6 L54 16 L54 34 C54 46 44 56 32 60 C20 56 10 46 10 34 L10 16 Z" fill="#1a3c5e" opacity=".08"/>
+        <path d="M32 10 L50 19 L50 34 C50 44 42 52 32 56 C22 52 14 44 14 34 L14 19 Z" fill="none" stroke="#1a3c5e" stroke-width="2"/>
+        <circle cx="32" cy="33" r="8" fill="none" stroke="#1a3c5e" stroke-width="2.5"/>
+        <circle cx="32" cy="33" r="3.5" fill="#1a3c5e"/>
+        <path d="M32 22v-3M32 47v-3M43 33h3M18 33h-3M39.8 25.2l2.1-2.1M20.1 43.9l-2.1 2.1M39.8 40.8l2.1 2.1M20.1 25.1l-2.1-2.1" stroke="#1a3c5e" stroke-width="2" stroke-linecap="round"/>
+        <path d="M38 20 L44 14" stroke="#d97706" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="44" cy="14" r="3" fill="#d97706" opacity=".8"/>
+      </svg>
+    </div>
+    <div style="font-family:Nunito,sans-serif;font-size:22px;font-weight:900;color:#fff;letter-spacing:.5px;margin-bottom:2px">Saporis MTTO</div>
+    <div style="font-size:11px;color:rgba(255,255,255,.6);margin-bottom:16px">Gestión de Mantenimiento</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+      <div style="text-align:left">
+        <div class="user-pill" id="user-pill">👤 Usuario</div>
+        <div style="font-size:10px;opacity:.5;color:#fff;margin-top:4px;letter-spacing:.3px">Saporis MTTO · REG-MTT-01.02</div>
+      </div>
+      <button onclick="showBuzon()" style="position:relative;background:rgba(255,255,255,.18);border:none;border-radius:14px;padding:10px 14px;cursor:pointer;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.2)" id="btn-buzon">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="7" width="28" height="20" rx="3" fill="white" opacity="0.95"/>
+        <path d="M2 10 L16 19 L30 10" stroke="#1a3c5e" stroke-width="2" stroke-linecap="round"/>
+        <path d="M2 7 L16 17 L30 7" fill="white" opacity="0.95"/>
+      </svg>
+      <span id="badge-buzon" style="display:none;position:absolute;top:-6px;right:-6px;background:#dc2626;color:#fff;border-radius:50%;min-width:22px;height:22px;font-size:12px;font-weight:800;line-height:22px;text-align:center;padding:0 4px;box-shadow:0 2px 4px rgba(0,0,0,.3)"></span>
+    </button>
+    </div>
   </div>
   <div style="background:linear-gradient(90deg,var(--mo4),var(--mo),var(--verde4));padding:10px 16px;overflow:hidden">
     <div style="display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px">
@@ -336,68 +360,133 @@ tr:nth-child(even) td{background:#F8FAFC}
     <!-- OPERADOR -->
     <div id="menu-operador"><p style="padding:16px 16px 4px;font-size:13px;font-weight:700;color:var(--txt2)">¿Qué deseas hacer?</p>
       <div class="menu-grid">
-        <div class="menu-btn" style="border-color:#1565C0;background:linear-gradient(135deg,#fff 60%,#E3F2FD)" onclick="mostrarTecnicosEnTurno(null,'Consulta','')"><div class="menu-icon">👷</div><div class="menu-label btn-tecnicos-turno">Técnicos en Turno (0)</div><div class="menu-desc">Ver quién está en fábrica</div></div>
-        <div class="menu-btn pm02" onclick="iniciarPM('PM02')"><div class="menu-icon">📋</div><div class="menu-label">Levantar Aviso</div><div class="menu-desc">Anormalidad PM02</div></div>
+        <div class="menu-btn" style="border-color:#1565C0;background:linear-gradient(135deg,#fff 60%,#E3F2FD);display:none" onclick="mostrarTecnicosEnTurno(null,'Consulta','')"><div class="menu-icon">👷</div><div class="menu-label btn-tecnicos-turno">Técnicos en Turno (0)</div><div class="menu-desc">Ver quién está en fábrica</div></div>
+        <div class="menu-btn pm02" onclick="iniciarPM('PM02')"><div class="menu-icon">⚠️</div><div class="menu-label">Generar Anormalidad</div><div class="menu-desc"></div></div>
         <div class="menu-btn pendientes" onclick="showMisOrdenes()"><div class="menu-icon">📌</div><div class="menu-label">Mis Pendientes</div><div class="menu-desc">Mis avisos abiertos</div></div>
-        <div class="menu-btn" style="border-color:#546E7A;background:linear-gradient(135deg,#fff 60%,#ECEFF1)" onclick="showConsultaOT()"><div class="menu-icon">🔍</div><div class="menu-label">Consultar OT</div><div class="menu-desc">Estado de órdenes</div></div>
+        <div class="menu-btn" style="border-color:#C62828;background:linear-gradient(135deg,#fff 60%,#ffebee)" onclick="showKPIAnormalidades()"><div class="menu-icon">📊</div><div class="menu-label">KPI Anormalidades</div><div class="menu-desc">Indicadores operador/lider</div></div>
       </div>
     </div>
     <!-- LÍDER -->
     <div id="menu-lider" class="hidden"><p style="padding:16px 16px 4px;font-size:13px;font-weight:700;color:var(--txt2)">Líder de Producción</p>
       <div class="menu-grid">
-        <div class="menu-btn" style="border-color:#1565C0;background:linear-gradient(135deg,#fff 60%,#E3F2FD)" onclick="mostrarTecnicosEnTurno(null,'Consulta','')"><div class="menu-icon">👷</div><div class="menu-label btn-tecnicos-turno">Técnicos en Turno (0)</div><div class="menu-desc">Ver quién está en fábrica</div></div>
-        <div class="menu-btn pm02" onclick="iniciarPM('PM02')"><div class="menu-icon">📋</div><div class="menu-label">Levantar Aviso</div><div class="menu-desc">Anormalidad PM02</div></div>
+        <div class="menu-btn" style="border-color:#1565C0;background:linear-gradient(135deg,#fff 60%,#E3F2FD);display:none" onclick="mostrarTecnicosEnTurno(null,'Consulta','')"><div class="menu-icon">👷</div><div class="menu-label btn-tecnicos-turno">Técnicos en Turno (0)</div><div class="menu-desc">Ver quién está en fábrica</div></div>
+        <div class="menu-btn pm02" onclick="iniciarPM('PM02')"><div class="menu-icon">⚠️</div><div class="menu-label">Generar Anormalidad</div><div class="menu-desc"></div></div>
         <div class="menu-btn pendientes" onclick="showMisOrdenes()"><div class="menu-icon">📌</div><div class="menu-label">Pendientes</div><div class="menu-desc">Filtrar órdenes</div></div>
-        <div class="menu-btn kpis" onclick="showKPIsLider()"><div class="menu-icon">📊</div><div class="menu-label">KPI Anormalidades</div><div class="menu-desc">Azules y rojas</div></div>
-        <div class="menu-btn" style="border-color:#546E7A;background:linear-gradient(135deg,#fff 60%,#ECEFF1)" onclick="showConsultaOT()"><div class="menu-icon">🔍</div><div class="menu-label">Consultar OT</div><div class="menu-desc">Estado de órdenes</div></div>
+        <div class="menu-btn" style="border-color:#C62828;background:linear-gradient(135deg,#fff 60%,#ffebee)" onclick="showKPIAnormalidades()"><div class="menu-icon">📊</div><div class="menu-label">KPI Anormalidades</div><div class="menu-desc">Azules y rojas</div></div>
+        <div class="menu-btn" id="btn-lib-prod-lider" style="border-color:#0891b2;background:linear-gradient(135deg,#fff 60%,#e0f7fa)" onclick="showLiberacionProduccion()"><div class="menu-icon" id="icon-lib-prod">🏭</div><div class="menu-label">Liberación Producción</div><div class="menu-desc" id="desc-lib-prod">PM03 por liberar</div></div>
       </div>
     </div>
     <!-- TÉCNICO -->
     <div id="menu-tecnico" class="hidden"><p style="padding:16px 16px 4px;font-size:13px;font-weight:700;color:var(--txt2)">Gestión de Mantenimiento</p>
-      <div style="display:flex;gap:8px;margin:12px 16px 4px">
-          <button id="btn-inicio-turno" class="btn btn-success" style="flex:1;padding:10px" onclick="iniciarTurno()">🟢 Iniciar Turno</button>
-          <button id="btn-fin-turno" class="btn btn-gray" style="flex:1;padding:10px" onclick="finalizarTurno()">🔴 Fin de Turno</button>
-        </div>
-        <div id="turno-status" style="text-align:center;font-size:12px;color:var(--txt3);margin-bottom:8px;padding:0 16px"></div>
-        <!-- FILA 1: Mis Pendientes + Check List de Turno -->
-        <div style="grid-column:1/-1;display:flex;gap:8px;margin-bottom:0">
-          <div class="menu-btn pendientes" style="flex:1;margin:0" onclick="showMisOrdenes()"><div class="menu-icon">📌</div><div class="menu-label">Mis Pendientes</div><div class="menu-desc">Órdenes asignadas</div></div>
-          <div class="menu-btn inspeccion" style="flex:1;margin:0" onclick="showChecklistMenu()"><div class="menu-icon">✅</div><div class="menu-label">Check List<br>de Turno</div><div class="menu-desc">Inspecciones y paros</div></div>
-        </div>
-        <!-- FILA 2: 3 botones Atención a Línea -->
+        <div id="turno-status" style="display:none"></div>
+        <div class="menu-grid">
+        <div class="menu-btn" style="border-color:#d97706;background:linear-gradient(135deg,#fff 60%,#fffbeb);grid-column:1/-1" onclick="showSHO()"><div class="menu-icon">🔄</div><div class="menu-label" style="font-size:18px;font-weight:900;color:#d97706">Bitácora / SHO</div><div class="menu-desc">Entrega de turno · REG-MTT-001.03</div></div>
+        <div class="menu-btn pm01" onclick="iniciarPM('PM01')"><div class="menu-icon">🚨</div><div class="menu-label">PM01</div><div class="menu-desc">Avería</div></div>
+        <div class="menu-btn pm02" onclick="iniciarPM('PM02')"><div class="menu-icon">📋</div><div class="menu-label">PM02</div><div class="menu-desc">Anormalidad</div></div>
+        <div class="menu-btn pm03" onclick="showPM03()" id="btn-pm03-menu"><div class="menu-icon">📅</div><div class="menu-label">PM03</div><div class="menu-desc" id="pm03-menu-desc">Mtto Planeado</div></div>
+        <div class="menu-btn pm04" onclick="iniciarPM('PM04')"><div class="menu-icon">🤝</div><div class="menu-label">PM04</div><div class="menu-desc">Apoyo Producción</div></div>
+        <!-- 3 botones Atención a Línea -->
         <div style="grid-column:1/-1;display:flex;gap:8px">
           <button class="menu-btn atencion" onclick="abrirSlot(1)" style="flex:1;min-width:0;flex-direction:column;align-items:center;padding:12px 4px;margin:0;border:none;cursor:pointer"><div style="font-size:24px;margin-bottom:4px">⚡</div><div style="font-size:12px;font-weight:800">Atención 1</div><div id="slot-desc-1" style="font-size:10px;color:#777;margin-top:2px">Disponible</div></button>
           <button class="menu-btn atencion" onclick="abrirSlot(2)" style="flex:1;min-width:0;flex-direction:column;align-items:center;padding:12px 4px;margin:0;border:none;cursor:pointer"><div style="font-size:24px;margin-bottom:4px">⚡</div><div style="font-size:12px;font-weight:800">Atención 2</div><div id="slot-desc-2" style="font-size:10px;color:#777;margin-top:2px">Disponible</div></button>
           <button class="menu-btn atencion" onclick="abrirSlot(3)" style="flex:1;min-width:0;flex-direction:column;align-items:center;padding:12px 4px;margin:0;border:none;cursor:pointer"><div style="font-size:24px;margin-bottom:4px">⚡</div><div style="font-size:12px;font-weight:800">Atención 3</div><div id="slot-desc-3" style="font-size:10px;color:#777;margin-top:2px">Disponible</div></button>
         </div>
-        <!-- FILA 3: PMs -->
-        <div class="menu-grid" style="grid-column:1/-1">
-        <div class="menu-btn pm01" onclick="iniciarPM('PM01')"><div class="menu-icon">🚨</div><div class="menu-label">PM01</div><div class="menu-desc">Avería</div></div>
-        <div class="menu-btn pm02" onclick="iniciarPM('PM02')"><div class="menu-icon">📋</div><div class="menu-label">PM02</div><div class="menu-desc">Anormalidad</div></div>
-        <div class="menu-btn pm03" onclick="showPM03()"><div class="menu-icon">📅</div><div class="menu-label">PM03</div><div class="menu-desc">Mtto Planeado</div></div>
-        <div class="menu-btn pm04" onclick="iniciarPM('PM04')"><div class="menu-icon">🤝</div><div class="menu-label">PM04</div><div class="menu-desc">Apoyo Producción</div></div>
+        <!-- Mis Pendientes + Check List de Turno -->
+        <div class="menu-btn pendientes" onclick="showMisOrdenes()"><div class="menu-icon">📌</div><div class="menu-label">Mis Pendientes</div><div class="menu-desc">Órdenes asignadas</div></div>
+        <div class="menu-btn inspeccion" onclick="showChecklistMenu()"><div class="menu-icon">✅</div><div class="menu-label">Check List de Turno</div><div class="menu-desc">Inspecciones y paros</div></div>
         <div class="menu-btn kpis" onclick="showKPIs()"><div class="menu-icon">📊</div><div class="menu-label">KPI's</div><div class="menu-desc">Indicadores</div></div>
-        <div class="menu-btn almacen" onclick="showAlmacen()"><div class="menu-icon">🔧</div><div class="menu-label">Almacén</div><div class="menu-desc">Refacciones</div></div>
+        <div class="menu-btn almacen" onclick="showAlmacen()" style="position:relative"><div class="menu-icon" style="position:relative">🔧<span id="badge-almacen" style="display:none;position:absolute;top:-6px;right:-8px;background:#dc2626;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:11px;font-weight:800;line-height:18px;text-align:center;padding:0 3px"></span></div><div class="menu-label">Almacén</div><div class="menu-desc">Refacciones</div></div>
         <div class="menu-btn" style="border-color:#546E7A;background:linear-gradient(135deg,#fff 60%,#ECEFF1)" onclick="showConsultaOT()"><div class="menu-icon">🔍</div><div class="menu-label">Consultar OT</div><div class="menu-desc">Ver todas las órdenes</div></div>
         <div class="menu-btn" style="border-color:#546E7A;background:linear-gradient(135deg,#fff 60%,#ECEFF1)" onclick="showHistorial()"><div class="menu-icon">🏭</div><div class="menu-label">Historial Máquinas</div><div class="menu-desc">Historial por línea</div></div>
         <div class="menu-btn" style="border-color:#1565C0;background:linear-gradient(135deg,#fff 60%,#E3F2FD)" onclick="showActivos()"><div class="menu-icon">⚙️</div><div class="menu-label">Activos</div><div class="menu-desc">Inventario de equipos</div></div>
         <div class="menu-btn" style="border-color:#E65100;background:linear-gradient(135deg,#fff 60%,#FFF3E0)" onclick="showManuales()"><div class="menu-icon">📚</div><div class="menu-label">Manuales</div><div class="menu-desc">Documentos y entrenamiento</div></div>
-        </div>
-        <div class="menu-btn" style="border-color:#16a34a;background:linear-gradient(135deg,#fff 60%,#dcfce7)" onclick="showMejoras()"><div class="menu-icon"><img src="data:image/jpeg;base64,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" style="width:36px;height:36px;border-radius:50%;object-fit:contain" /></div><div class="menu-label">Mejoras</div><div class="menu-desc">Lección de Un Punto</div></div>
+        <div class="menu-btn" style="border-color:#00695C;background:linear-gradient(135deg,#fff 60%,#E0F2F1)" onclick="showServicios()"><div class="menu-icon">🏭</div><div class="menu-label">Servicios</div><div class="menu-desc">Caldera, Agua, Aire, Elec.</div></div>
+
 
       </div>
       <div id="menu-admin-extra" class="hidden"><p style="padding:4px 16px;font-size:13px;font-weight:700;color:var(--txt2)">Administración</p>
         <div class="menu-grid">
-          <div class="menu-btn" style="border-color:#1565C0;background:linear-gradient(135deg,#fff 60%,#E3F2FD)" onclick="mostrarTecnicosEnTurno(null,'Consulta','')"><div class="menu-icon">👷</div><div class="menu-label btn-tecnicos-turno">Técnicos en Turno (0)</div><div class="menu-desc">Ver quién está en fábrica</div></div>
+          <div class="menu-btn" style="border-color:#1565C0;background:linear-gradient(135deg,#fff 60%,#E3F2FD);display:none" onclick="mostrarTecnicosEnTurno(null,'Consulta','')"><div class="menu-icon">👷</div><div class="menu-label btn-tecnicos-turno">Técnicos en Turno (0)</div><div class="menu-desc">Ver quién está en fábrica</div></div>
           <div class="menu-btn admin" onclick="showAdmin()"><div class="menu-icon">⚙️</div><div class="menu-label">Administrar</div><div class="menu-desc">Usuarios, listas, app</div></div>
           <div class="menu-btn desempeno" onclick="showDesempeno()"><div class="menu-icon">🏆</div><div class="menu-label">Desempeño</div><div class="menu-desc">Indicadores por técnico</div></div>
-          <div class="menu-btn gestion" onclick="showGestionLinea()"><div class="menu-icon">📡</div><div class="menu-label">Gestión de Línea</div><div class="menu-desc">Monitor de atenciones</div></div>
-          <div class="menu-btn" style="border-color:#00838F;background:linear-gradient(135deg,#fff 60%,#E0F7FA)" onclick="showConsultaOT()"><div class="menu-icon">🔍</div><div class="menu-label">Consultar OT</div><div class="menu-desc">Buscar órdenes</div></div>
+          <div class="menu-btn" id="btn-aprobacion-admin" style="border-color:#7c3aed;background:linear-gradient(135deg,#fff 60%,#ede9fe)" onclick="showLiberacionAdmin()"><div class="menu-icon" id="icon-aprobacion-admin">📋</div><div class="menu-label">Aprobación PM03</div><div class="menu-desc" id="desc-aprobacion-admin">Aprobación final</div></div>
+          <div class="menu-btn" style="border-color:#1a3c5e;background:linear-gradient(135deg,#fff 60%,#e8edf5)" onclick="showAdminProtocolos()"><div class="menu-icon">🗂️</div><div class="menu-label">Protocolos PM03</div><div class="menu-desc">Gestionar formatos</div></div>
+          <div class="menu-btn" style="border-color:#C62828;background:linear-gradient(135deg,#fff 60%,#ffebee)" onclick="showKPIAnormalidades()"><div class="menu-icon">📊</div><div class="menu-label">KPI Anormalidades</div><div class="menu-desc">Indicadores operador/lider</div></div>
+          <div class="menu-btn" style="border-color:#7c3aed;background:linear-gradient(135deg,#fff 60%,#ede9fe);position:relative" onclick="showPM02PorAsignar()"><div class="menu-icon" id="icon-pm02-asignar" style="position:relative">📋<span id="badge-pm02-asignar" style="display:none;position:absolute;top:-8px;right:-10px;background:#dc2626;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:11px;font-weight:800;line-height:18px;text-align:center;padding:0 3px"></span></div><div class="menu-label">PM02 por Asignar</div><div class="menu-desc" id="desc-pm02-asignar">Anormalidades sin técnico</div></div>
+          <div class="menu-btn" style="border-color:#dc2626;background:linear-gradient(135deg,#fff 60%,#fee2e2);position:relative" onclick="showPM03PorReprogramar()"><div class="menu-icon" id="icon-pm3-reprogram" style="position:relative">📅<span id="badge-pm03-reprog" style="display:none;position:absolute;top:-8px;right:-10px;background:#7c3aed;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:11px;font-weight:800;line-height:18px;text-align:center;padding:0 3px"></span></div><div class="menu-label">PM03 x Reprogramar</div><div class="menu-desc" id="desc-pm3-reprogram">PM03 vencidas</div></div>
+        <div class="menu-btn" style="border-color:#374151;background:linear-gradient(135deg,#fff 60%,#f3f4f6)" onclick="showProveedores()"><div class="menu-icon">🏢</div><div class="menu-label">Proveedores</div><div class="menu-desc">Directorio de proveedores</div></div>
+          <div class="menu-btn" style="border-color:#00695C;background:linear-gradient(135deg,#fff 60%,#E0F2F1)" onclick="showServicios()"><div class="menu-icon">🏭</div><div class="menu-label">Servicios</div><div class="menu-desc">Caldera, Agua, Aire, Elec.</div></div>
+        <div class="menu-btn" style="border-color:#0891b2;background:linear-gradient(135deg,#fff 60%,#e0f7fa)" onclick="showGestionPersonal()"><div class="menu-icon">👥</div><div class="menu-label">Gestión de Personal</div><div class="menu-desc">Horarios, vacaciones, incidencias</div></div>
         </div>
       </div>
     </div>
+      <!-- MENU ADMINISTRATIVO -->
+      <div id="menu-administrativo" class="hidden">
+        <p style="padding:16px 16px 4px;font-size:13px;font-weight:700;color:var(--txt2)">¿Qué deseas hacer?</p>
+        <div class="menu-grid">
+          <div class="menu-btn pm02" onclick="iniciarPM('PM02')"><div class="menu-icon">⚠️</div><div class="menu-label">Generar Anormalidad</div><div class="menu-desc">Levantar PM02</div></div>
+          <div class="menu-btn pendientes" onclick="showMisOrdenes()"><div class="menu-icon">📌</div><div class="menu-label">Mis Pendientes</div><div class="menu-desc" id="desc-pend-admin2">Por aprobar y en proceso</div></div>
+          <div class="menu-btn" style="border-color:#546E7A;background:linear-gradient(135deg,#fff 60%,#ECEFF1)" onclick="showConsultaOT()"><div class="menu-icon">🔍</div><div class="menu-label">Consultar OT</div><div class="menu-desc">Ver órdenes</div></div>
+        </div>
+      </div>
+      <!-- MENU SUPPLY -->
+      <div id="menu-supply" class="hidden">
+        <p style="padding:16px 16px 4px;font-size:13px;font-weight:700;color:var(--txt2)">¿Qué deseas hacer?</p>
+        <div class="menu-grid">
+          <div class="menu-btn pm02" onclick="iniciarPM('PM02')"><div class="menu-icon">⚠️</div><div class="menu-label">Generar Anormalidad</div><div class="menu-desc">Levantar PM02</div></div>
+          <div class="menu-btn pendientes" onclick="showMisOrdenes()"><div class="menu-icon">📌</div><div class="menu-label">Mis Pendientes</div><div class="menu-desc" id="desc-pend-supply">Por aprobar y en proceso</div></div>
+          <div class="menu-btn" style="border-color:#546E7A;background:linear-gradient(135deg,#fff 60%,#ECEFF1)" onclick="showConsultaOT()"><div class="menu-icon">🔍</div><div class="menu-label">Consultar OT</div><div class="menu-desc">Ver órdenes</div></div>
+        </div>
+      </div>
+
     <div style="text-align:center;padding:16px"><button class="btn btn-gray btn-sm" style="width:auto;padding:8px 24px" onclick="doLogout()">🚪 Cerrar sesión</button></div>
   </div>
+</div>
+
+<!-- ===== SHO — ENTREGA DE TURNO ===== -->
+<div id="screen-sho" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="goMenu()">←</button>
+    <div><div class="topbar-title">🔄 Bitácora / SHO</div><div class="topbar-sub" id="sho-topbar-sub">Entrega de Turno · REG-MTT-001.03</div></div>
+  </div>
+  <div class="scroll-content">
+    <!-- Filtros -->
+    <div style="display:flex;gap:6px;padding:12px 16px 4px;flex-wrap:wrap">
+      <select id="sho-f-anio" class="form-control" style="flex:1;min-width:70px;padding:7px;font-size:.8rem" onchange="renderSHO()"></select>
+      <select id="sho-f-mes" class="form-control" style="flex:1;min-width:80px;padding:7px;font-size:.8rem" onchange="renderSHO()">
+        <option value="">Todos</option>
+        <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
+        <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
+        <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
+        <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+      </select>
+      <select id="sho-f-dia" class="form-control" style="flex:1;min-width:70px;padding:7px;font-size:.8rem" onchange="renderSHO()">
+        <option value="">Todos</option>
+      </select>
+      <select id="sho-f-turno" class="form-control" style="flex:1;min-width:70px;padding:7px;font-size:.8rem" onchange="renderSHO()">
+        <option value="">Turnos</option>
+        <option value="T1">T1</option><option value="T2">T2</option><option value="T3">T3</option>
+      </select>
+    </div>
+    <div id="sho-dashboard" style="padding:8px 16px 24px"></div>
+  </div>
+</div>
+<div id="screen-sho-historial" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showSHO()">←</button><div><div class="topbar-title">📋 Historial SHO</div><div class="topbar-sub">Todas las entregas</div></div></div>
+  <div class="scroll-content"><div id="sho-historial-content" style="padding:16px"></div></div>
+</div>
+<div id="screen-sho-detalle" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showSHOHistorial()">←</button><div><div class="topbar-title">📄 Detalle SHO</div><div class="topbar-sub" id="sho-detalle-sub"></div></div></div>
+  <div class="scroll-content"><div id="sho-detalle-content" style="padding:16px"></div></div>
+</div>
+
+<!-- ===== FORMULARIO ÚNICO ANORMALIDAD OPERADOR/LIDER ===== -->
+<div id="screen-pm-anom" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="backFromAnomUnico()">←</button>
+    <div><div class="topbar-title">⚠️ Nueva Anormalidad</div><div class="topbar-sub" id="pm-anom-sub"></div></div>
+  </div>
+  <div class="scroll-content"><div id="pm-anom-content" style="padding:16px 16px 32px"></div></div>
 </div>
 
 <!-- ===== WIZARD PM ===== -->
@@ -436,11 +525,12 @@ tr:nth-child(even) td{background:#F8FAFC}
 
 <!-- ===== CONSULTA OT ===== -->
 <div id="screen-consulta" class="screen">
-  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">🔍 Consultar Órdenes</div></div></div>
+  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">🔍 Consultar Órdenes</div></div><button onclick="syncSupabase();filtrarOrdenes();showAlert('🔄 Actualizando...')" style="background:none;border:none;color:#fff;font-size:1.2rem;padding:8px;cursor:pointer" title="Actualizar">🔄</button></div>
   <div class="scroll-content" style="padding:16px">
     <div id="consulta-resumen" class="resumen-card"></div>
+    <div id="resumen-tecnicos-ot" style="margin-bottom:12px"></div>
     <input type="text" class="search-box" id="consulta-search" placeholder="🔍 Buscar por ID, área, técnico, descripción..." oninput="filtrarOrdenes()">
-    <div class="filter-row" id="ft-tipo"><div class="filter-chip active" onclick="setFiltro('tipo','todas',this)">Todas</div><div class="filter-chip" onclick="setFiltro('tipo','PM01',this)">PM01</div><div class="filter-chip" onclick="setFiltro('tipo','PM02',this)">PM02</div><div class="filter-chip" onclick="setFiltro('tipo','PM03',this)">PM03</div><div class="filter-chip" onclick="setFiltro('tipo','PM04',this)">PM04</div></div>
+    <div class="filter-row" id="ft-tipo"><div class="filter-chip active" onclick="setFiltro('tipo','todas',this)">Todas</div><div class="filter-chip" onclick="setFiltro('tipo','PM01',this)">PM01</div><div class="filter-chip" onclick="setFiltro('tipo','PM02',this)">PM02</div><div class="filter-chip" onclick="setFiltro('tipo','PM03',this)">PM03</div><div class="filter-chip" onclick="setFiltro('tipo','PM04',this)">PM04</div><div class="filter-chip" onclick="setFiltro('tipo','temporal',this)" style="border-color:#F59E0B;color:#B45309">⚡ Temp</div><div class="filter-chip" onclick="setFiltro('tipo','bitacora',this)" style="border-color:#6d28d9;color:#6d28d9">📒 Bitácora</div></div>
     <div class="filter-row" id="ft-estado"><div class="filter-chip active" onclick="setFiltro('estado','todos',this)">Todos estados</div><div class="filter-chip" onclick="setFiltro('estado','abierta',this)">Abiertas</div><div class="filter-chip" onclick="setFiltro('estado','cerrada',this)">Cerradas</div></div>
     <div class="filter-row" id="ft-color"><div class="filter-chip active" onclick="setFiltro('color','todos',this)">Todos colores</div><div class="filter-chip" onclick="setFiltro('color','azul',this)" style="border-color:var(--az)">🔵 Azul</div><div class="filter-chip" onclick="setFiltro('color','rojo',this)" style="border-color:var(--rj)">🔴 Rojo</div></div>
     <div class="filter-row" id="ft-prio"><div class="filter-chip active" onclick="setFiltro('prio','todas',this)">Prio: Todas</div><div class="filter-chip" onclick="setFiltro('prio','A',this)">Prio A</div><div class="filter-chip" onclick="setFiltro('prio','B',this)">Prio B</div><div class="filter-chip" onclick="setFiltro('prio','C',this)">Prio C</div></div>
@@ -455,7 +545,8 @@ tr:nth-child(even) td{background:#F8FAFC}
       <div class="filter-chip" onclick="setFiltro('anom','Condición Básica',this)">Condición Básica</div>
       <div class="filter-chip" onclick="setFiltro('anom','LDA',this)">LDA</div>
     </div>
-    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <button onclick="limpiarFiltrosConsulta()" style="padding:7px 14px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:8px;font-size:13px;font-weight:700;color:#374151;cursor:pointer">🔄 Limpiar filtros</button>
       <button class="btn btn-outline btn-sm" style="width:auto;padding:8px 14px" onclick="descargarOTExcel()">📥 Descargar Excel</button>
     </div>
     <div id="consulta-list" style="margin-top:8px"></div>
@@ -464,7 +555,7 @@ tr:nth-child(even) td{background:#F8FAFC}
 
 <!-- ===== PM03 ===== -->
 <div id="screen-pm03" class="screen">
-  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">📅 PM03 — Mantenimiento Planeado</div></div></div>
+  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">📅 PM03 — Mantenimiento Planeado</div></div><button onclick="syncSupabase();setTimeout(renderPM03,800);showAlert('🔄 Actualizando...')" style="background:none;border:none;color:#fff;font-size:1.2rem;padding:8px;cursor:pointer" title="Actualizar">🔄</button></div>
   <div class="scroll-content" style="padding:16px" id="pm03-content"></div>
 </div>
 
@@ -472,8 +563,16 @@ tr:nth-child(even) td{background:#F8FAFC}
 <div id="screen-kpis" class="screen">
   <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">📊 KPI's de Mantenimiento</div></div></div>
   <div style="background:#3D2F8F;padding:10px 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-    <span style="color:rgba(255,255,255,.8);font-size:12px;font-weight:700">Semana:</span>
-    <select id="kpi-sem-sel" class="form-control" style="flex:1;min-width:100px;padding:6px 10px;font-size:13px" onchange="reloadKPIs()">
+    <span style="color:rgba(255,255,255,.8);font-size:12px;font-weight:700">Mes:</span>
+    <select id="kpi-mes-sel" class="form-control" style="flex:1;min-width:80px;padding:6px 10px;font-size:13px" onchange="reloadKPIs()">
+      <option value="">Todos</option>
+      <option value="1">Ene</option><option value="2">Feb</option><option value="3">Mar</option>
+      <option value="4">Abr</option><option value="5">May</option><option value="6">Jun</option>
+      <option value="7">Jul</option><option value="8">Ago</option><option value="9">Sep</option>
+      <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dic</option>
+    </select>
+    <span style="color:rgba(255,255,255,.8);font-size:12px;font-weight:700">Sem:</span>
+    <select id="kpi-sem-sel" class="form-control" style="flex:1;min-width:80px;padding:6px 10px;font-size:13px" onchange="reloadKPIs()">
       <option value="">Actual</option>
     </select>
     <select id="kpi-año-sel" class="form-control" style="width:85px;padding:6px 10px;font-size:13px" onchange="reloadKPIs()">
@@ -485,7 +584,12 @@ tr:nth-child(even) td{background:#F8FAFC}
 <!-- ===== ALMACÉN ===== -->
 <div id="screen-almacen" class="screen">
   <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">🔧 Almacén de Refacciones</div></div></div>
-  <div class="scroll-content" style="padding:16px" id="almacen-content"></div>
+  <div class="scroll-content" style="padding:16px">
+    <button onclick="showOrdenesRefaccion()" style="width:100%;padding:13px;background:#1a3c5e;color:#fff;border:none;border-radius:10px;font-family:Nunito,sans-serif;font-size:.9rem;font-weight:700;cursor:pointer;margin-bottom:12px">🔩 Órdenes con Gasto de Refacción</button>
+    <button onclick="showRefacciones()" style="width:100%;padding:13px;background:#5D4037;color:#fff;border:none;border-radius:10px;font-family:Nunito,sans-serif;font-size:.9rem;font-weight:700;cursor:pointer;margin-bottom:12px">📦 Inventario de Refacciones</button>
+    <button onclick="showRefFaltantes()" style="width:100%;padding:13px;background:#b45309;color:#fff;border:none;border-radius:10px;font-family:Nunito,sans-serif;font-size:.9rem;font-weight:700;cursor:pointer;margin-bottom:12px;position:relative" id="btn-ref-faltantes">🛒 Refacciones Faltantes <span id="badge-ref-faltantes" style="display:none;position:absolute;top:6px;right:10px;background:#dc2626;color:#fff;border-radius:50%;width:20px;height:20px;font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center"></span></button>
+    <div id="almacen-content"></div>
+  </div>
 </div>
 
 <!-- ===== INSPECCIONES ===== -->
@@ -516,6 +620,7 @@ tr:nth-child(even) td{background:#F8FAFC}
     <button class="tab-btn" onclick="setAdminTab('mtbf',this)">MTBF</button>
     <button class="tab-btn" onclick="setAdminTab('gasto',this)">Gasto</button>
     <button class="tab-btn" onclick="setAdminTab('listas',this)">Listas</button>
+    <button class="tab-btn" id="tab-importar-btn" onclick="setAdminTab('importar',this)" style="display:none;border-color:#6d28d9;color:#6d28d9">📒 Importar</button>
   </div>
   <div class="scroll-content" style="padding:16px" id="admin-content"></div>
 </div>
@@ -542,8 +647,20 @@ tr:nth-child(even) td{background:#F8FAFC}
         <div id="cierre-tiempo-calc" style="font-size:13px;font-weight:700;color:var(--mo);margin-top:8px;text-align:center"></div>
       </div>
     </div>
-    <div class="form-group"><label class="form-label">Horas empleadas</label><input type="number" class="form-control" id="cierre-horas" placeholder="0.0" step="0.5" min="0"></div>
+    <div class="form-group" style="display:none"><label class="form-label">Horas empleadas</label><input type="number" class="form-control" id="cierre-horas" placeholder="0.0" step="0.5" min="0"></div>
     <div class="form-group" id="cierre-ref-wrap"><label class="form-label">Refacciones utilizadas</label><input type="text" class="form-control" id="cierre-refacciones" placeholder="Código o descripción..."></div>
+    <!-- LIMPIEZA -->
+    <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:10px;padding:12px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;color:#856404;margin-bottom:10px">🧹 ¿Se requiere limpieza por el usuario después de la intervención?</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <button id="btn-limpieza-si" type="button" onclick="toggleLimpieza(true)" style="flex:1;padding:9px;border-radius:8px;border:2px solid #e5e7eb;background:#fff;font-weight:700;font-size:.85rem;cursor:pointer">✅ Sí</button>
+        <button id="btn-limpieza-no" type="button" onclick="toggleLimpieza(false)" style="flex:1;padding:9px;border-radius:8px;border:2px solid #e5e7eb;background:#fff;font-weight:700;font-size:.85rem;cursor:pointer">❌ No</button>
+      </div>
+      <div id="limpieza-aviso-wrap" style="display:none">
+        <label class="form-label" style="font-size:12px">¿A quién se le avisó de la limpieza?</label>
+        <input type="text" class="form-control" id="limpieza-aviso" placeholder="Nombre del usuario avisado..." style="padding:9px">
+      </div>
+    </div>
     <div class="btn-row"><button class="btn btn-gray" onclick="cerrarModal('modal-cierre')">Cancelar</button><button class="btn btn-success" onclick="confirmarCierre()">✅ Confirmar</button></div>
   </div>
 </div>
@@ -726,7 +843,7 @@ tr:nth-child(even) td{background:#F8FAFC}
 
 
 <!-- ===== MEJORAS (LUP) ===== -->
-<div id="screen-mejoras" class="screen">
+<div id="screen-mejoras" class="screen" style="display:none!important">
   <div class="topbar">
     <button class="topbar-back" onclick="goMenu()">←</button>
     <div><div class="topbar-title">Mejoras</div><div class="topbar-sub">Lección de Un Punto</div></div>
@@ -745,7 +862,7 @@ tr:nth-child(even) td{background:#F8FAFC}
 </div>
 
 <!-- CONSULTAR MEJORAS -->
-<div id="screen-mejoras-consultar" class="screen">
+<div id="screen-mejoras-consultar" class="screen" style="display:none!important">
   <div class="topbar">
     <button class="topbar-back" onclick="showScreen('screen-mejoras')">←</button>
     <div><div class="topbar-title">Consultar Mejoras</div></div>
@@ -754,7 +871,7 @@ tr:nth-child(even) td{background:#F8FAFC}
 </div>
 
 <!-- REGISTRAR MEJORA -->
-<div id="screen-mejoras-form" class="screen">
+<div id="screen-mejoras-form" class="screen" style="display:none!important">
   <div class="topbar">
     <button class="topbar-back" onclick="showScreen('screen-mejoras')">←</button>
     <div><div class="topbar-title">Registrar Mejora</div></div>
@@ -763,7 +880,7 @@ tr:nth-child(even) td{background:#F8FAFC}
 </div>
 
 <!-- MEJORAS KPI -->
-<div id="screen-mejoras-kpi" class="screen">
+<div id="screen-mejoras-kpi" class="screen" style="display:none!important">
   <div class="topbar">
     <button class="topbar-back" onclick="showMejoras()">←</button>
     <div><div class="topbar-title">KPI Mejoras</div><div class="topbar-sub">Indicadores LUP</div></div>
@@ -790,6 +907,55 @@ tr:nth-child(even) td{background:#F8FAFC}
   <div class="topbar"><button class="topbar-back" onclick="showChecklistMenu()">←</button><div><div class="topbar-title" id="chk-topbar-title">Check List</div></div></div>
   <div class="scroll-content" id="checklist-content"></div>
   <div class="fixed-bar"><button class="btn btn-success" onclick="guardarChecklist()" style="width:100%">💾 Guardar Check List</button></div>
+</div>
+<div id="screen-personal" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="goMenu()">←</button>
+    <div><div class="topbar-title">👥 Gestión de Personal</div></div>
+  </div>
+  <div class="scroll-content" style="padding:0">
+    <div id="personal-tabs" style="display:flex;gap:6px;padding:12px 16px 0;flex-wrap:wrap"></div>
+    <div id="personal-content" style="padding:12px 16px 16px"></div>
+  </div>
+</div>
+<div id="screen-refacciones" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showScreen('screen-almacen')">←</button>
+    <div><div class="topbar-title">📦 Inventario de Refacciones</div></div>
+    <button onclick="abrirEscanerQR()" style="background:none;border:none;color:#fff;font-size:1.4rem;padding:8px;cursor:pointer">📷</button>
+  </div>
+  <div class="scroll-content" style="padding:0">
+    <div id="ref-tabs" style="display:flex;gap:6px;padding:12px 16px 0;flex-wrap:wrap"></div>
+    <div id="ref-content" style="padding:12px 16px 16px"></div>
+  </div>
+</div>
+
+
+
+<div id="screen-servicios" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="goMenu()">←</button>
+    <div><div class="topbar-title">🏭 Servicios</div></div>
+  </div>
+  <div class="scroll-content" style="padding:16px">
+    <div class="menu-grid">
+      <div class="menu-btn" style="border-color:#F44336;background:linear-gradient(135deg,#fff 60%,#FFEBEE)" onclick="showAlert('Módulo en desarrollo','info')">
+        <div class="menu-icon">🔥</div><div class="menu-label">Caldera</div><div class="menu-desc">En desarrollo</div>
+      </div>
+      <div class="menu-btn" style="border-color:#2196F3;background:linear-gradient(135deg,#fff 60%,#E3F2FD)" onclick="showAlert('Módulo en desarrollo','info')">
+        <div class="menu-icon">💧</div><div class="menu-label">Agua</div><div class="menu-desc">En desarrollo</div>
+      </div>
+      <div class="menu-btn" style="border-color:#607D8B;background:linear-gradient(135deg,#fff 60%,#ECEFF1)" onclick="showAlert('Módulo en desarrollo','info')">
+        <div class="menu-icon">💨</div><div class="menu-label">Aire Comprimido</div><div class="menu-desc">En desarrollo</div>
+      </div>
+      <div class="menu-btn" style="border-color:#FFC107;background:linear-gradient(135deg,#fff 60%,#FFFDE7)" onclick="showAlert('Módulo en desarrollo','info')">
+        <div class="menu-icon">⚡</div><div class="menu-label">Electricidad</div><div class="menu-desc">En desarrollo</div>
+      </div>
+      <div class="menu-btn" style="border-color:#795548;background:linear-gradient(135deg,#fff 60%,#EFEBE9)" onclick="showAlert('Módulo en desarrollo','info')">
+        <div class="menu-icon">🔩</div><div class="menu-label">Instalaciones</div><div class="menu-desc">En desarrollo</div>
+      </div>
+    </div>
+  </div>
 </div>
 </body>
 </html>
