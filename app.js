@@ -22562,3 +22562,4 @@ function eliminarEquipo(id){
   }).catch(function(){showAlert('Error al eliminar','error');});
 }
 // ── FIN EQUIPOS POR LÍNEA ─────────────────────────────────────────
+
