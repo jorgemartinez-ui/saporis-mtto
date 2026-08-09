@@ -373,20 +373,27 @@ function renderMenu(){
 // ================================================================
 // AREAS
 // ================================================================
-const PM_AREAS=[
+var PM_AREAS=[
   {id:'proceso',label:'Producción — Fabricación',icon:'⚗️'},
   {id:'envasado',label:'Producción — Envasado',icon:'📦'},
   {id:'servicios',label:'Servicios Industriales',icon:'⚙️'},
-  {id:'bodega',label:'Bodega',icon:'📦'},
+  {id:'bodega',label:'Bodega',icon:'🏪'},
+  {id:'instalaciones',label:'Instalaciones',icon:'🏗️'},
   {id:'administrativo',label:'Administrativo',icon:'🏢'},
   {id:'otras',label:'Otras Áreas',icon:'📍'},
 ];
+var EQUIPOS_LINEA=loadDB('equipos_linea',[]);
 function getLineasPorArea(a){
   if(a==='proceso')return LISTAS.lineas_proceso||[];
   if(a==='envasado')return LISTAS.lineas_envasado||[];
   if(a==='servicios')return LISTAS.lineas_servicios||[];
-  if(a==='bodega')return LISTAS.lineas_bodega;
-  return[];
+  if(a==='bodega')return LISTAS.lineas_bodega||[];
+  if(a==='instalaciones')return LISTAS.lineas_instalaciones||[];
+  // Dynamic areas
+  return [];
+}
+function getEquiposPorLinea(area,linea){
+  return EQUIPOS_LINEA.filter(function(e){return e.activo!==false&&e.area_id===area&&e.linea===linea;}).map(function(e){return e.equipo;}).sort();
 }
 function esProd(a){return a==='proceso'||a==='envasado';}
 
@@ -504,10 +511,18 @@ function renderPMStep(){
     </div>`;
   }
   else if(stepName==='componente'){
-    const lbl=prod?'🔩 Componente':'🔩 Zona / Equipo específico';
-    const ph=prod?'Ej: Motor principal, sensor temperatura...':'Ej: Rack, escalera, puerta...';
-    c.innerHTML=`<div class="wizard-title">${lbl}</div><div class="wizard-sub">${prod?'Indica el subcomponente o parte específica':'Indica la zona o equipo específico'}</div>
-    <div class="form-group"><input type="text" class="form-control" id="inp-componente" placeholder="${ph}" value="${pmState.componente||''}"></div>`;
+    const lbl=prod?'🔩 Componente / Equipo':'🔩 Zona / Equipo específico';
+    const equipos=getEquiposPorLinea(pmState.area||'',pmState.linea||'');
+    const equipoOpts=equipos.length?
+      '<div style="margin-top:10px"><div style="font-size:12px;font-weight:700;color:#6b7280;margin-bottom:6px">Equipos registrados — toca para seleccionar:</div>'
+      +'<input type="text" id="inp-eq-busq" class="form-control" placeholder="Filtrar equipos..." oninput="filtrarEquiposLista(this.value)" style="margin-bottom:8px;padding:8px;font-size:13px">'
+      +'<div id="eq-lista" style="display:flex;flex-wrap:wrap;gap:6px">'
+      +equipos.map(function(e){return '<button type="button" onclick="selEquipo(\''+e.replace(/'/g,"\\'")+'\')" style="padding:5px 10px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:8px;font-size:12px;font-weight:600;color:#0369a1;cursor:pointer">'+e+'</button>';}).join('')
+      +'</div></div>':'';
+    c.innerHTML=`<div class="wizard-title">${lbl}</div>
+    <div class="wizard-sub">Escribe libremente o selecciona un equipo registrado</div>
+    <div class="form-group"><input type="text" class="form-control" id="inp-componente" placeholder="Ej: Motor principal, bomba, sensor..." value="${pmState.componente||''}" style="font-size:15px"></div>
+    ${equipoOpts}`;
   }
   else if(stepName==='prioridad'){
     c.innerHTML=`<div class="wizard-title">⚡ Prioridad</div><div class="wizard-sub">¿Qué tan urgente es?</div>
@@ -516,6 +531,11 @@ function renderPMStep(){
     </div>`;
   }
   else if(stepName==='tipo_anom'){
+    // Roles que siempre levantan PM02 rojas
+    var rolesRojo=['lider_calidad','inspector_calidad','administrativo','supply'];
+    if(pmTipo==='PM02'&&rolesRojo.indexOf(currentUser.rol)>=0&&!pmState.colorOT){
+      pmState.colorOT='rojo';
+    }
     const tipos=[...LISTAS.tipos_anormalidad,'Otra'];
     c.innerHTML=`<div class="wizard-title">📌 Tipo de Anormalidad</div>
     <div class="form-group"><select class="form-control" id="sel-tipo-anom" onchange="onTipoAnomChange(this)">
@@ -524,7 +544,13 @@ function renderPMStep(){
     <div id="tipo-otra-w" class="${pmState.tipoAnormalidad==='Otra'?'':'hidden'} form-group">
       <label class="form-label">Especifica el tipo</label>
       <input type="text" class="form-control" id="inp-tipo-otra" value="${pmState.tipoAnormalidadOtra||''}" placeholder="Describe...">
-    </div>`;
+    </div>
+    ${(pmState.colorOT==='rojo'&&pmState.prioridad==='A'&&(pmState.tipoAnormalidad==='Seguridad'||pmState.tipoAnormalidad==='Calidad'))?`
+    <div class="form-group" style="margin-top:12px;background:#fff7ed;border:2px solid #f59e0b;border-radius:10px;padding:12px">
+      <label class="form-label" style="color:#92400e;font-weight:800">⚠️ Medida de Contención <span style="color:#dc2626">*Obligatoria</span></label>
+      <div style="font-size:12px;color:#92400e;margin-bottom:8px">Describe qué acción inmediata de contención se está aplicando mientras mantenimiento resuelve el problema.</div>
+      <textarea class="form-control" id="inp-contencion" placeholder="Ej: Se aisló el área, se colocó señalización, se detuvo la línea..." style="min-height:80px">${pmState.contencion||''}</textarea>
+    </div>`:''}\``;
   }
   else if(stepName==='detalle'){
     const dup=checkDuplicado();
@@ -637,7 +663,20 @@ function pmSelectArea(val,btn){
 }
 function pmSelect(field,val,btn){pmState[field]=val;btn.closest('.option-list').querySelectorAll('.option-btn').forEach(b=>b.classList.remove('selected'));btn.classList.add('selected');}
 function onLineaChange(sel){pmState.linea=sel.value;const w=document.getElementById('linea-otra-w');if(w)w.classList.toggle('hidden',sel.value!=='otra');}
-function onTipoAnomChange(sel){pmState.tipoAnormalidad=sel.value;const w=document.getElementById('tipo-otra-w');if(w)w.classList.toggle('hidden',sel.value!=='Otra');}
+function onTipoAnomChange(sel){
+  pmState.tipoAnormalidad=sel.value;
+  const w=document.getElementById('tipo-otra-w');
+  if(w)w.classList.toggle('hidden',sel.value!=='Otra');
+  // Mostrar/ocultar campo de contención dinámicamente
+  var contDiv=document.getElementById('contencion-wrap');
+  if(!contDiv){
+    // Si no existe, re-renderizar el paso para mostrarlo
+    renderPMStep();
+    return;
+  }
+  var needsCont=pmState.colorOT==='rojo'&&pmState.prioridad==='A'&&(sel.value==='Seguridad'||sel.value==='Calidad');
+  contDiv.style.display=needsCont?'block':'none';
+}
 function procesarFoto(input){
   const f=input.files[0];if(!f)return;
   // Save current text values BEFORE processing
@@ -675,6 +714,9 @@ function pmStep(dir){
     const s=document.getElementById('sel-tipo-anom');if(s)pmState.tipoAnormalidad=s.value;
     const o=document.getElementById('inp-tipo-otra');if(o)pmState.tipoAnormalidadOtra=o.value.trim();
     pmState.tipoAnormalidadDisplay=pmState.tipoAnormalidad==='Otra'?pmState.tipoAnormalidadOtra:pmState.tipoAnormalidad;
+    // Guardar contención
+    var contEl=document.getElementById('inp-contencion');
+    if(contEl) pmState.contencion=contEl.value.trim();
   }
   if(stepName==='detalle'){const t=document.getElementById('inp-detalle');if(t)pmState.detalle=t.value.trim();}
   if(stepName==='fecha_trabajo'){
@@ -702,6 +744,9 @@ function pmStep(dir){
     // Validations
     if(stepName==='area'&&!pmState.area){showAlert('Selecciona un área','error');return;}
     if(stepName==='color'&&pmTipo==='PM02'&&!pmState.colorOT){showAlert('Selecciona Azul o Rojo para continuar','error');return;}
+    if(stepName==='tipo_anom'&&pmState.colorOT==='rojo'&&pmState.prioridad==='A'&&
+       (pmState.tipoAnormalidad==='Seguridad'||pmState.tipoAnormalidad==='Calidad')&&
+       !pmState.contencion){showAlert('La medida de contención es obligatoria para Seguridad/Calidad Prio A','error');return;}
     if(stepName==='linea'&&!pmState.linea){showAlert('Selecciona una opción','error');return;}
     if(stepName==='linea'&&pmState.linea==='otra'&&!pmState.lineaOtra){showAlert('Especifica la línea','error');return;}
     if(stepName==='prioridad'&&!pmState.prioridad){showAlert('Selecciona prioridad','error');return;}
@@ -1023,8 +1068,9 @@ function showDetalle(id){
   const r=currentUser.rol;
   // Determinar si la PM02 roja fue levantada por operador/lider (requiere aprobación)
   const esAnomOperador = o.tipo==='PM02' && o.colorOT==='rojo' &&
-    (o.rolLevantador==='operador'||o.rolLevantador==='lider'||
-     USERS.find(function(u){return u.id===o.levantadoId&&(u.rol==='operador'||u.rol==='lider');})!=null);
+    (o.rolLevantador!==null && o.rolLevantador!=='admin' && o.rolLevantador!=='super' && o.rolLevantador!=='tecnico' ||
+     o.pendienteAsignacion===true ||
+     USERS.find(function(u){return u.id===o.levantadoId&&u.rol!=='admin'&&u.rol!=='super'&&u.rol!=='tecnico';})!=null);
   // Si la orden fue rechazada, el técnico puede volver a dar pre-cierre
   const fueRechazada = !!(o.motivoRechazo);
   const estaEnPreCierre = o.estado==='pre_cierre';
@@ -1034,9 +1080,10 @@ function showDetalle(id){
   const canPreCierre=(r==='tecnico'||r==='admin'||r==='super')&&o.estado==='abierta'&&esAnomOperador;
   const canCierreAdmin=(r==='admin'||r==='super')&&(o.estado==='abierta'||o.estado==='pre_cierre');
   const canCloseAzul=r==='operador'&&o.colorOT==='azul'&&o.levantadoId===currentUser.id&&o.estado!=='cerrada'&&o.estado!=='pre_cierre';
-  const canAprobar=(r==='operador'||r==='lider'||r==='super')&&estaEnPreCierre;
+  const canAprobar=(r!=='admin'&&r!=='tecnico'||r==='super')&&estaEnPreCierre&&(o.levantadoId===currentUser.id||r==='super');
   const canReasign=(r==='tecnico'||r==='admin'||r==='lider'||r==='super')&&o.estado==='abierta';
-  const canEditOwn=r==='operador'&&o.levantadoId===currentUser.id&&o.estado==='abierta';
+  const canEditOwn=['operador','lider','lider_calidad','inspector_calidad','administrativo','supply'].indexOf(r)>=0&&o.levantadoId===currentUser.id&&o.estado==='abierta';
+  var canDelete=(r==='super')||(o.levantadoId===currentUser.id&&o.estado==='abierta'&&['operador','lider','lider_calidad','inspector_calidad','administrativo','supply'].indexOf(r)>=0);
   // Edición completa: super sin límite, admin y técnico dentro de 7 días
   var _7dias=7*24*60*60*1000;
   var _edadOT=Date.now()-(o.ts||0);
@@ -1060,10 +1107,14 @@ function showDetalle(id){
       ${row('📍 Línea',o.linea)}
       ${row('🔩 Componente',o.componente)}
       ${row('📌 Tipo',o.tipoAnormalidad)}
+      ${o.contencion?'<div style="background:#fff7ed;border:1.5px solid #f59e0b;border-radius:8px;padding:10px 12px;margin:6px 0"><div style="font-size:11px;font-weight:700;color:#92400e;margin-bottom:3px">⚠️ Medida de Contención</div><div style="font-size:13px;color:#374151">'+o.contencion+'</div></div>':''}
       ${row('👤 Levantado por',o.levantadoPor)}
       ${row('👨‍🔧 Técnico asignado',o.tecnicoNombre||'Sin asignar')}
       ${o.tecnicosAdicionales&&o.tecnicosAdicionales.length?row('👥 Técnicos adicionales',o.tecnicosAdicionales.map(function(t){return t.nombre+(t.horas?' ('+t.horas+'h)':'');}).join(', ')):''}
       ${o.estado==='cerrada'&&o.cerradaPor&&o.cerradaPor!==o.tecnicoNombre&&o.cerradaPor!=='Super Usuario'&&o.cerradaPor!==currentUser?.nombre?row('✅ Cerrado por',o.cerradaPor):''}
+      ${o.aprobadoPor?row('👤 Validado por',o.aprobadoPor+(o.aprobadoTs?' · '+new Date(o.aprobadoTs).toLocaleString('es-MX',{day:'2-digit',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'}):'')):''}
+      ${o.rechazadoPor?row('❌ Rechazado por',o.rechazadoPor+(o.rechazadoTs?' · '+new Date(o.rechazadoTs).toLocaleString('es-MX',{day:'2-digit',month:'short',year:'2-digit',hour:'2-digit',minute:'2-digit'}):'')):''}
+      ${o.motivoRechazo?row('📝 Motivo rechazo',o.motivoRechazo):''}
       ${o.liderPM04?row('👷 Líder/Oficial A',o.liderPM04):''}
       ${o.limpiezaRequerida?row('🧹 Limpieza requerida','Sí — avisado: '+(o.limpiezaAvisadoA||'—')):(o.limpiezaRequerida===false?row('🧹 Limpieza','No requerida'):'')}
       ${o.horaLlamado?row('📞 Hora llamado',fmtTime(o.horaLlamado)):''}
@@ -1133,6 +1184,7 @@ function showDetalle(id){
       ${canCloseAzul?`<button class="btn btn-azul-ot" onclick="abrirCierreAzul('${o.id}')">🔵 Marcar resuelta</button>`:''}
       ${canReasign?`<button class="btn btn-warning" onclick="abrirReasignacion('${o.id}')">🔄 Reasignar</button>`:''}
       ${canEditOwn?`<button class="btn btn-outline" onclick="editarDetalleOp('${o.id}')">✏️ Editar mi aviso</button>`:''}
+      ${canDelete?`<button class="btn" style="background:#fee2e2;color:#dc2626;border:none;margin-top:6px" onclick="eliminarOrdenPropia('${o.id}')">🗑️ Eliminar aviso</button>`:''}
       ${canEditFull?`<button class="btn btn-outline" style="border-color:#7c3aed;color:#7c3aed" onclick="abrirEditorCompleto('${o.id}')">✏️ Editar Orden</button>`:''}
     </div>`;
   showScreen('screen-detalle');
@@ -1221,11 +1273,71 @@ function confirmarReasignacion(){
 }
 function editarDetalleOp(id){
   const o=ORDENES.find(x=>x.id===id);if(!o)return;
-  const nuevo=prompt('Edita el detalle de tu aviso:',o.detalle);
-  if(!nuevo||nuevo===o.detalle)return;
+  const TIPOS=['Seguridad','Calidad','5s','Condición Básica','LDA (Lugar de Difícil Acceso)','FDS (Fuente de Suciedad)','Paro Menor','Otra'];
+  const tiposOpts=TIPOS.map(t=>`<option value="${t}"${o.tipoAnormalidad===t?' selected':''}>${t}</option>`).join('');
+  const esContencion=(o.colorOT==='rojo'&&o.prioridad==='A'&&(o.tipoAnormalidad==='Seguridad'||o.tipoAnormalidad==='Calidad'));
+
+  const m=document.createElement('div');
+  m.id='modal-edit-op';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  m.innerHTML=`<div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
+    <div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:14px">✏️ Editar mi aviso</div>
+    <div class="form-group"><label class="form-label">Prioridad</label>
+      <select class="form-control" id="eop-prio">
+        <option value="A"${o.prioridad==='A'?' selected':''}>🔴 Prioridad A</option>
+        <option value="B"${o.prioridad==='B'?' selected':''}>🟠 Prioridad B</option>
+        <option value="C"${o.prioridad==='C'?' selected':''}>🟢 Prioridad C</option>
+      </select></div>
+    <div class="form-group"><label class="form-label">Tipo de anormalidad</label>
+      <select class="form-control" id="eop-tipo" onchange="eopCheckContencion()">
+        <option value="">-- Selecciona --</option>${tiposOpts}
+      </select></div>
+    <div class="form-group"><label class="form-label">Componente</label>
+      <input type="text" class="form-control" id="eop-comp" value="${o.componente||''}"></div>
+    <div class="form-group"><label class="form-label">Detalle / Descripción</label>
+      <textarea class="form-control" id="eop-detalle" rows="3">${o.detalle||''}</textarea></div>
+    <div id="eop-contencion-wrap" style="display:${esContencion?'block':'none'}">
+      <div class="form-group" style="background:#fff7ed;border:2px solid #f59e0b;border-radius:10px;padding:12px">
+        <label class="form-label" style="color:#92400e;font-weight:800">⚠️ Medida de Contención <span style="color:#dc2626">*Obligatoria</span></label>
+        <textarea class="form-control" id="eop-contencion" rows="2" placeholder="Describe la acción de contención...">${o.contencion||''}</textarea>
+      </div></div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button type="button" class="btn btn-outline" style="flex:1" onclick="document.getElementById('modal-edit-op').remove()">Cancelar</button>
+      <button type="button" class="btn btn-primary" style="flex:2" onclick="guardarEditOp('${id}')">💾 Guardar</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+function eopCheckContencion(){
+  var tipo=document.getElementById('eop-tipo')?.value||'';
+  var prio=document.getElementById('eop-prio')?.value||'';
+  var wrap=document.getElementById('eop-contencion-wrap');
+  if(wrap) wrap.style.display=(prio==='A'&&(tipo==='Seguridad'||tipo==='Calidad'))?'block':'none';
+}
+
+function guardarEditOp(id){
+  var o=ORDENES.find(x=>x.id===id);if(!o)return;
+  var prio=document.getElementById('eop-prio')?.value||o.prioridad;
+  var tipo=document.getElementById('eop-tipo')?.value||o.tipoAnormalidad;
+  var comp=document.getElementById('eop-comp')?.value.trim()||o.componente;
+  var det=document.getElementById('eop-detalle')?.value.trim()||o.detalle;
+  var cont=document.getElementById('eop-contencion')?.value.trim()||'';
+  // Validar contención obligatoria
+  if(o.colorOT==='rojo'&&prio==='A'&&(tipo==='Seguridad'||tipo==='Calidad')&&!cont){
+    showAlert('La medida de contención es obligatoria para Seguridad/Calidad Prio A','error');return;
+  }
   if(!o.historialModificacion)o.historialModificacion=[];
-  o.historialModificacion.push({ts:Date.now(),por:nombreEfectivo(),campo:'Detalle',de:o.detalle,a:nuevo});
-  o.detalle=nuevo;saveDB('ordenes',ORDENES);showAlert('✅ Aviso actualizado');showDetalle(id);
+  if(prio!==o.prioridad)o.historialModificacion.push({ts:Date.now(),por:nombreEfectivo(),campo:'Prioridad',de:o.prioridad,a:prio});
+  if(tipo!==o.tipoAnormalidad)o.historialModificacion.push({ts:Date.now(),por:nombreEfectivo(),campo:'Tipo anormalidad',de:o.tipoAnormalidad,a:tipo});
+  if(det!==o.detalle)o.historialModificacion.push({ts:Date.now(),por:nombreEfectivo(),campo:'Detalle',de:o.detalle,a:det});
+  o.prioridad=prio;o.tipoAnormalidad=tipo;o.componente=comp;o.detalle=det;
+  if(cont)o.contencion=cont;
+  saveDB('ordenes',ORDENES);
+  saveOrdenSupa(o);
+  document.getElementById('modal-edit-op')?.remove();
+  showAlert('✅ Aviso actualizado');
+  showDetalle(id);
 }
 
 // ================================================================
@@ -3284,7 +3396,12 @@ function renderAdminGasto(cont){
 function guardarGastoS(){const sem=parseInt(document.getElementById('gas-sem')?.value),año=parseInt(document.getElementById('gas-año')?.value)||currentYear(),plan=parseFloat(document.getElementById('gas-plan')?.value)||0,real=parseFloat(document.getElementById('gas-real')?.value)||0;const idx=GASTO_DATA.findIndex(g=>g.semana===sem&&g.año===año);const e={semana:sem,año,planeado:plan,real,ts:Date.now()};if(idx>=0)GASTO_DATA[idx]=e;else GASTO_DATA.push(e);saveDB('gasto_data',GASTO_DATA);showAlert('✅ Guardado');renderAdminGasto(document.getElementById('admin-content'));}
 function cargarSemanasDelMes(){const año=parseInt(document.getElementById('gas-año-b')?.value)||currentYear();const mes=parseInt(document.getElementById('gas-mes-b')?.value)||1;const semanas=getWeeksInMonth(año,mes);const cont=document.getElementById('gas-semanas-mes');cont.innerHTML=semanas.map(s=>{const ex=GASTO_DATA.find(g=>g.semana===s&&g.año===año);return`<div class="card" style="padding:12px;margin-bottom:8px"><div style="font-weight:700;font-size:13px;margin-bottom:8px">Semana ${s}</div><div style="display:flex;gap:8px"><div style="flex:1"><label class="form-label" style="font-size:11px">Planeado ($)</label><input type="number" class="form-control" id="bp-${s}" value="${ex?ex.planeado:''}" step="0.01"></div><div style="flex:1"><label class="form-label" style="font-size:11px">Real ($)</label><input type="number" class="form-control" id="br-${s}" value="${ex?ex.real:''}" step="0.01"></div></div></div>`;}).join('')+'<button class="btn btn-success" onclick="guardarBulk('+año+',['+semanas.join(',')+'])">💾 Guardar todas las semanas</button>';}
 function guardarBulk(año,sems){sems.forEach(s=>{const p=parseFloat(document.getElementById('bp-'+s)?.value)||0,r=parseFloat(document.getElementById('br-'+s)?.value)||0;if(p>0||r>0){const idx=GASTO_DATA.findIndex(g=>g.semana===s&&g.año===año);const e={semana:s,año,planeado:p,real:r,ts:Date.now()};if(idx>=0)GASTO_DATA[idx]=e;else GASTO_DATA.push(e);}});saveDB('gasto_data',GASTO_DATA);showAlert('✅ Mes guardado');renderAdminGasto(document.getElementById('admin-content'));}
-function renderAdminListas(cont){cont.innerHTML=`<div class="card"><div class="card-title mb12">📋 Editar Listas</div>${renderListaEd('Líneas Proceso','lineas_proceso')+renderListaEd('Líneas Envasado','lineas_envasado')}${renderListaEd('Servicios Industriales','lineas_servicios')}${renderListaEd('Bodega','lineas_bodega')}${renderListaEd('Tipos de Anormalidad','tipos_anormalidad')}</div>`;}
+function renderAdminListas(cont){cont.innerHTML=`<div class="card"><div class="card-title mb12">📋 Editar Listas</div>${renderListaEd('Líneas Proceso','lineas_proceso')+renderListaEd('Líneas Envasado','lineas_envasado')}${renderListaEd('Servicios Industriales','lineas_servicios')}${renderListaEd('Bodega','lineas_bodega')}${renderListaEd('Instalaciones','lineas_instalaciones')}${renderListaEd('Tipos de Anormalidad','tipos_anormalidad')}</div>`;
+  // Append areas card
+  var areaDiv=document.createElement('div');
+  renderAdminAreas(areaDiv);
+  cont.appendChild(areaDiv);
+}
 function renderListaEd(titulo,key){return`<div style="margin-bottom:20px"><div style="font-weight:700;margin-bottom:8px">${titulo}</div><div style="max-height:120px;overflow-y:auto;border:1px solid var(--gr4);border-radius:8px;padding:8px;margin-bottom:8px">${(LISTAS[key]||[]).map((item,i)=>`<div style="display:flex;justify-content:space-between;padding:4px 0;font-size:13px"><span>${item}</span><button onclick="eliminarLI('${key}',${i})" style="background:none;border:none;color:var(--rj);cursor:pointer;font-size:16px">🗑️</button></div>`).join('')}</div><div style="display:flex;gap:8px"><input type="text" class="form-control" id="add-${key}" placeholder="Nueva opción..." style="flex:1"><button class="btn btn-primary btn-sm" style="width:auto;padding:8px 16px" onclick="agregarLI('${key}')">+</button></div></div>`;}
 function agregarLI(key){const inp=document.getElementById('add-'+key);const val=inp?.value?.trim();if(!val){showAlert('Escribe el valor','error');return;}if(!LISTAS[key])LISTAS[key]=[];LISTAS[key].push(val);saveListas();inp.value='';renderAdminListas(document.getElementById('admin-content'));showAlert('✅ Opción agregada');}
 function eliminarLI(key,idx){if(!confirm('¿Eliminar?'))return;LISTAS[key].splice(idx,1);saveListas();renderAdminListas(document.getElementById('admin-content'));}
@@ -4305,6 +4422,36 @@ function syncSupabase(){
   setTimeout(syncNotificaciones, 1500);
   // Actualizar badges admin
   setTimeout(actualizarBadgesAdmin, 2000);
+  // Sync areas config
+  supaFetch('areas_config','GET',null,'activa=eq.true&order=orden.asc').then(function(rows){
+    if(rows&&rows.length){
+      PM_AREAS=rows.map(function(r){return{id:r.id,label:r.label,icon:r.icon||'📍'};});
+      saveDB('pm_areas_config',PM_AREAS);
+    }
+  }).catch(function(){});
+  // Sync equipos por linea
+  supaFetch('equipos_linea','GET',null,'activo=eq.true&limit=2000').then(function(rows){
+    if(rows&&rows.length){
+      EQUIPOS_LINEA=rows;
+      saveDB('equipos_linea',EQUIPOS_LINEA);
+    }
+  }).catch(function(){});
+  // Sync DOR planes
+  supaFetch('dor_planes','GET',null,'order=creado_ts.desc&limit=500').then(function(rows){
+    if(rows&&rows.length){
+      DOR_PLANES=rows.map(function(r){return{
+        id:r.id,descripcion:r.descripcion,responsable:r.responsable,
+        prioridad:r.prioridad||'B',tipo:r.tipo||'plan',
+        fechaVencimiento:r.fecha_vencimiento||'',estado:r.estado||'abierto',
+        creadoPor:r.creado_por||'',creadoTs:r.creado_ts||0,
+        cierreTs:r.cierre_ts||0,cierreNota:r.cierre_nota||'',
+        cerradoPor:r.cerrado_por||'',bloqueo:r.bloqueo||null
+      };});
+      saveDB('dor_planes',DOR_PLANES);
+      // Re-render DOR if open
+      if(document.getElementById('dor-content')) renderDOR();
+    }
+  }).catch(function(){});
   supaFetch('usuarios','GET',null,'activo=eq.true').then(function(rows){
     if(!rows||!rows.length){supaUpsert('usuarios',DEFAULT_USERS.filter(function(u){return u.rol!=='super';}).map(function(u){return{id:u.id,username:u.username,nombre:u.nombre,password_hash:u.password,rol:u.rol,activo:true};})  ).catch(function(){});return;}
     // Filtrar super de los registros de Supabase para no sobreescribir
@@ -7261,6 +7408,17 @@ function confirmarPreCierre(){
     motivo_rechazo: null,
     rechazado_por: null
   });
+  // Notificar al usuario que levantó la OT
+  if(o.levantadoId){
+    crearNotificacion(
+      'pre_cierre',
+      '🔧 Corrección lista para validar',
+      'La OT '+o.id+' fue atendida por '+o.tecnicoNombre+'. Ingresa a revisar y aprobar o rechazar el cierre.',
+      null,
+      o.levantadoId,
+      o.id
+    );
+  }
   cerrarModal('modal-cierre');
   showAlert('✅ Pre-cierre registrado — esperando aprobación del operador');
   showDetalle(otCerrandoId);
@@ -11959,7 +12117,7 @@ function abrirEditorCompleto(id){
     +field('Componente','componente',o.componente)
     +field('Detalle / Falla','detalle',o.detalle,'textarea')
     +(function(){
-    var tipos=['Seguridad','Calidad','Mantenimiento','Correctivo','Apoyo','Paro','Velocidad reducida','Microparos','Calidad reducida','Instalaci\u00f3n','Arranque','Otra'];
+    var tipos=['Seguridad','Calidad','5s','Condici\u00f3n B\u00e1sica','LDA (Lugar de Dif\u00edcil Acceso)','FDS (Fuente de Suciedad)','Paro Menor','Otra'];
     var tipoAnomOpts='<option value="">-- Selecciona --</option>'+tipos.map(function(t){return '<option value="'+t+'"'+(o.tipoAnormalidad===t?' selected':'')+'>'+t+'</option>';}).join('');
     return field('Tipo de anormalidad','tipo_anom',o.tipoAnormalidad,'select',tipoAnomOpts);
   })()  +field('Causa raíz','causa',o.causaRaiz,'textarea')
@@ -12134,6 +12292,36 @@ function syncSupabase(){
   setTimeout(syncNotificaciones, 1500);
   // Actualizar badges admin
   setTimeout(actualizarBadgesAdmin, 2000);
+  // Sync areas config
+  supaFetch('areas_config','GET',null,'activa=eq.true&order=orden.asc').then(function(rows){
+    if(rows&&rows.length){
+      PM_AREAS=rows.map(function(r){return{id:r.id,label:r.label,icon:r.icon||'📍'};});
+      saveDB('pm_areas_config',PM_AREAS);
+    }
+  }).catch(function(){});
+  // Sync equipos por linea
+  supaFetch('equipos_linea','GET',null,'activo=eq.true&limit=2000').then(function(rows){
+    if(rows&&rows.length){
+      EQUIPOS_LINEA=rows;
+      saveDB('equipos_linea',EQUIPOS_LINEA);
+    }
+  }).catch(function(){});
+  // Sync DOR planes
+  supaFetch('dor_planes','GET',null,'order=creado_ts.desc&limit=500').then(function(rows){
+    if(rows&&rows.length){
+      DOR_PLANES=rows.map(function(r){return{
+        id:r.id,descripcion:r.descripcion,responsable:r.responsable,
+        prioridad:r.prioridad||'B',tipo:r.tipo||'plan',
+        fechaVencimiento:r.fecha_vencimiento||'',estado:r.estado||'abierto',
+        creadoPor:r.creado_por||'',creadoTs:r.creado_ts||0,
+        cierreTs:r.cierre_ts||0,cierreNota:r.cierre_nota||'',
+        cerradoPor:r.cerrado_por||'',bloqueo:r.bloqueo||null
+      };});
+      saveDB('dor_planes',DOR_PLANES);
+      // Re-render DOR if open
+      if(document.getElementById('dor-content')) renderDOR();
+    }
+  }).catch(function(){});
   supaFetch('usuarios','GET',null,'activo=eq.true').then(function(rows){
     if(!rows||!rows.length){supaUpsert('usuarios',DEFAULT_USERS.filter(function(u){return u.rol!=='super';}).map(function(u){return{id:u.id,username:u.username,nombre:u.nombre,password_hash:u.password,rol:u.rol,activo:true};})  ).catch(function(){});return;}
     // Filtrar super de los registros de Supabase para no sobreescribir
@@ -15283,6 +15471,17 @@ function confirmarPreCierre(){
     motivo_rechazo: null,
     rechazado_por: null
   });
+  // Notificar al usuario que levantó la OT
+  if(o.levantadoId){
+    crearNotificacion(
+      'pre_cierre',
+      '🔧 Corrección lista para validar',
+      'La OT '+o.id+' fue atendida por '+o.tecnicoNombre+'. Ingresa a revisar y aprobar o rechazar el cierre.',
+      null,
+      o.levantadoId,
+      o.id
+    );
+  }
   cerrarModal('modal-cierre');
   showAlert('✅ Pre-cierre registrado — esperando aprobación del operador');
   showDetalle(otCerrandoId);
@@ -20253,8 +20452,7 @@ function abrirGestorPM02(id){
     +'<div style="grid-column:1/-1"><label style="font-size:.72rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Detalle / Descripción</label>'
     +'<textarea id="gp-detalle" class="form-control" rows="2" style="padding:8px;resize:none">'+(o.detalle||'')+'</textarea></div>'
     +'<div><label style="font-size:.72rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Tipo anormalidad</label>'
-    +'<div><label style="font-size:.72rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Tipo anormalidad</label>'
-    +'<select id="gp-tipo" class="form-control" style="padding:8px">'+['Seguridad','Calidad','Mantenimiento','Paro','Velocidad reducida','Microparos','Calidad reducida','Otra'].map(function(t){return '<option value="'+t+'"'+(o.tipoAnormalidad===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div>'
+    +'<select id="gp-tipo" class="form-control" style="padding:8px"><option value="">-- Selecciona --</option>'+['Seguridad','Calidad','5s','Condición Básica','LDA (Lugar de Difícil Acceso)','FDS (Fuente de Suciedad)','Paro Menor','Otra'].map(function(t){return '<option value="'+t+'"'+(o.tipoAnormalidad===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div>'
     +'<div><label style="font-size:.72rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Prioridad</label>'
     +'<select id="gp-prio" class="form-control" style="padding:8px"><option value="A"'+(o.prioridad==='A'?' selected':'')+'>A</option><option value="B"'+(o.prioridad==='B'?' selected':'')+'>B</option><option value="C"'+(o.prioridad==='C'?' selected':'')+'>C</option></select></div>'
     +'</div>'
@@ -20682,6 +20880,7 @@ function renderRefFaltantes(){
        var canGoBack = orden2.indexOf(r.estado) > 0;
        adminBtns = '<div style="display:flex;gap:6px;margin-top:8px">'
          +(canGoBack?'<button onclick="event.stopPropagation();regresarEstadoRefFaltante(\''+r.id+'\')" style="flex:1;padding:9px;background:#f3f4f6;color:#374151;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">↩️</button>':'')
+         +'<button onclick="event.stopPropagation();editarRefFaltante(\''+r.id+'\')" style="padding:9px 10px;background:#f3f4f6;border:none;border-radius:8px;font-size:.82rem;cursor:pointer">✏️</button>'
          +'<button onclick="event.stopPropagation();cambiarEstadoRefFaltante(\''+r.id+'\',\''+nextEstado+'\')" style="flex:2;padding:9px;background:'+(estadoColors[nextEstado]||'#1a3c5e')+';color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">'+nextLabel+'</button>'
          +(isAdmin2?'<button onclick="event.stopPropagation();eliminarRefFaltante(\''+r.id+'\')" style="flex:1;padding:9px;background:#f3f4f6;color:#dc2626;border:none;border-radius:8px;font-size:.82rem;cursor:pointer">🗑</button>':'')
          +'</div>';
@@ -20713,7 +20912,7 @@ function abrirFormRefFaltante(){
     +'<input type="text" class="form-control" id="rf-nombre" placeholder="Ej: Rodamiento 6205 2RS..." style="padding:10px"></div>'
     +'<div style="display:flex;gap:10px;margin-bottom:10px">'
     +'<div style="flex:2"><label class="form-label">Cantidad *</label>'
-    +'<input type="number" class="form-control" id="rf-cantidad" placeholder="Ej: 2" step="0.01" style="padding:10px"></div>'
+    +'<input type="number" class="form-control" id="rf-cantidad" step="1" min="1" placeholder="Ej: 2" style="padding:10px"></div>'
     +'<div style="flex:2"><label class="form-label">Unidad *</label>'
     +'<select class="form-control" id="rf-unidad" style="padding:10px">'
     +'<option value="piezas">Piezas</option>'
@@ -20825,6 +21024,61 @@ function regresarEstadoRefFaltante(id){
   actualizarBadgeRefFaltantes();
   renderRefFaltantes();
   showAlert('↩️ Estado regresado a '+labels[estadoAnterior]);
+}
+
+function editarRefFaltante(id){
+  var r=REF_FALTANTES.find(function(x){return x.id===id;});
+  if(!r) return;
+  var modal=document.createElement('div');
+  modal.id='modal-edit-ref';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;overflow-y:auto;padding:12px;box-sizing:border-box';
+  modal.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;max-width:500px;margin:auto;box-sizing:border-box">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#b45309;margin-bottom:16px">✏️ Editar Refacción</div>'
+    +'<div class="form-group"><label class="form-label">Nombre / Descripción *</label>'
+    +'<input type="text" class="form-control" id="erf-nombre" value="'+r.nombre+'" style="padding:10px"></div>'
+    +'<div style="display:flex;gap:10px;margin-bottom:10px">'
+    +'<div style="flex:2"><label class="form-label">Cantidad *</label>'
+    +'<input type="number" class="form-control" id="erf-cantidad" step="1" min="1" value="'+r.cantidad+'" style="padding:10px"></div>'
+    +'<div style="flex:2"><label class="form-label">Unidad *</label>'
+    +'<select class="form-control" id="erf-unidad" style="padding:10px">'
+    +['piezas','metros','kg','litros','cajas','rollos','juegos','pares'].map(function(u){return '<option value="'+u+'"'+(r.unidad===u?' selected':'')+'>'+u.charAt(0).toUpperCase()+u.slice(1)+'</option>';}).join('')
+    +'</select></div></div>'
+    +'<div style="display:flex;gap:10px;margin-bottom:10px">'
+    +'<div style="flex:1"><label class="form-label">Prioridad</label>'
+    +'<select class="form-control" id="erf-prioridad" style="padding:10px">'
+    +'<option value="A"'+(r.prioridad==='A'?' selected':'')+'>A — Urgente</option>'
+    +'<option value="B"'+(r.prioridad==='B'?' selected':'')+'>B — Normal</option>'
+    +'<option value="C"'+(r.prioridad==='C'?' selected':'')+'>C — Baja</option>'
+    +'</select></div>'
+    +'<div style="flex:2"><label class="form-label">Fecha requerida</label>'
+    +'<input type="date" class="form-control" id="erf-fecha" value="'+(r.fechaRequerida||'')+'" style="padding:10px"></div></div>'
+    +'<div class="form-group"><label class="form-label">Nota / Observación</label>'
+    +'<input type="text" class="form-control" id="erf-nota" value="'+(r.nota||'')+'" placeholder="OT relacionada, equipo, etc..." style="padding:10px"></div>'
+    +'<div style="display:flex;gap:8px;margin-top:4px">'
+    +'<button type="button" onclick="document.getElementById(\'modal-edit-ref\').remove()" style="flex:1;padding:12px;background:#f3f4f6;border:none;border-radius:10px;cursor:pointer">Cancelar</button>'
+    +'<button type="button" onclick="guardarEditarRefFaltante(\''+id+'\')" style="flex:2;padding:12px;background:#b45309;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">💾 Guardar</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function guardarEditarRefFaltante(id){
+  var r=REF_FALTANTES.find(function(x){return x.id===id;});
+  if(!r) return;
+  var nombre=document.getElementById('erf-nombre')?.value.trim();
+  var cantidad=parseInt(document.getElementById('erf-cantidad')?.value)||0;
+  var unidad=document.getElementById('erf-unidad')?.value||r.unidad;
+  var prioridad=document.getElementById('erf-prioridad')?.value||r.prioridad;
+  var fecha=document.getElementById('erf-fecha')?.value||'';
+  var nota=document.getElementById('erf-nota')?.value.trim()||'';
+  if(!nombre){showAlert('El nombre es obligatorio','error');return;}
+  if(cantidad<=0){showAlert('La cantidad debe ser mayor a 0','error');return;}
+  r.nombre=nombre;r.cantidad=cantidad;r.unidad=unidad;r.prioridad=prioridad;r.fechaRequerida=fecha;r.nota=nota;
+  saveDB('ref_faltantes',REF_FALTANTES);
+  var patch={nombre:nombre,cantidad:cantidad,unidad:unidad,prioridad:prioridad,fecha_requerida:fecha||null,nota:nota};
+  supaFetch('refacciones_faltantes','PATCH',patch,'id=eq.'+id).catch(function(){});
+  document.getElementById('modal-edit-ref')?.remove();
+  showAlert('✅ Refacción actualizada');
+  renderRefFaltantes();
 }
 
 function eliminarRefFaltante(id){
@@ -21736,3 +21990,575 @@ function renderResumenPM02Asignar(){
     +'</div>';
 }
 // ── FIN RESUMEN PM02 ASIGNAR ──────────────────────────────────────
+
+// ================================================================
+// ELIMINAR ORDEN PROPIA
+// ================================================================
+function eliminarOrdenPropia(id){
+  var o=ORDENES.find(function(x){return x.id===id;});
+  if(!o) return;
+  var r=currentUser.rol;
+  // Verificar permisos
+  var canDel=(r==='super')||(o.levantadoId===currentUser.id&&o.estado==='abierta'&&['operador','lider','lider_calidad','inspector_calidad','administrativo','supply'].indexOf(r)>=0);
+  if(!canDel){showAlert('Sin permisos para eliminar','error');return;}
+  if(!confirm('¿Eliminar el aviso '+id+'? Esta acción no se puede deshacer.')) return;
+  // Remove from ORDENES
+  var idx=ORDENES.findIndex(function(x){return x.id===id;});
+  if(idx>=0) ORDENES.splice(idx,1);
+  saveDB('ordenes',ORDENES);
+  // Delete from Supabase
+  deleteOrdenSupa(id);
+  showAlert('🗑️ Aviso eliminado');
+  // Navigate back
+  var back=detalleBackScreen||'screen-menu';
+  showScreen(back);
+}
+// ── FIN ELIMINAR ORDEN ────────────────────────────────────────────
+
+// ================================================================
+// DOR / WOR — Daily Operations Review
+// ================================================================
+function showDORWOR(){
+  showScreen('screen-dorwor');
+}
+
+function showDOR(){
+  showScreen('screen-dor');
+  var sub=document.getElementById('dor-sub');
+  if(sub){
+    var now=new Date();
+    sub.textContent=now.toLocaleDateString('es-MX',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
+  }
+  renderDOR();
+}
+
+function renderDOR(){
+  var cont=document.getElementById('dor-content');
+  if(!cont) return;
+
+  // Cargar datos de accidente si no están cargados
+  shoCargarAccidente().then(function(acc){
+    var dias=shoDiasDesde(acc.fecha||'2026-05-12');
+    var ultimoAcc=acc.fecha||'2026-05-12';
+    _renderDORInner(cont,dias,ultimoAcc);
+  });
+}
+
+function _renderDORInner(cont,dias,ultimoAcc){
+  var colAcc=dias<=7?'#dc2626':'#4a7c59';
+  var anom=shoAnomaliasSeg();
+  var colAnom=anom===0?'#16a34a':'#dc2626';
+  var anomCal=shoAnomaliasCalidad();
+  var colCal=anomCal===0?'#16a34a':'#dc2626';
+  var kpi1=shoKPI1({anio:currentYear(),sem:currentWeek()});
+
+  var otsAbiertas=ORDENES.filter(function(o){return o.estado==='abierta'&&!o.fuenteBitacora;}).length;
+  var otsTotal=ORDENES.filter(function(o){return !o.fuenteBitacora;}).length;
+  var otsCerradas=ORDENES.filter(function(o){return o.estado==='cerrada'&&!o.fuenteBitacora;}).length;
+  var pctCierre=otsTotal>0?Math.round((otsCerradas/otsTotal)*100):0;
+  var colPct=pctCierre>=80?'#16a34a':pctCierre>=50?'#d97706':'#dc2626';
+  var refPend=(REF_FALTANTES||[]).filter(function(r){return r.estado!=='comprada';}).length;
+
+  // Planes y Prioridades
+  var planes=DOR_PLANES.filter(function(p){return p.tipo!=='prioridad'&&p.estado!=='cerrado';});
+  var prioridades=DOR_PLANES.filter(function(p){return p.tipo==='prioridad'&&p.estado!=='cerrado';});
+  var planesVenc=planes.filter(function(p){return p.fechaVencimiento&&new Date(p.fechaVencimiento)<new Date();}).length;
+  var priorVenc=prioridades.filter(function(p){return p.fechaVencimiento&&new Date(p.fechaVencimiento)<new Date();}).length;
+
+  var html='';
+
+  // ── Indicadores de Turno ──────────────────────────────────────
+  html+='<div style="font-size:11px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📊 Indicadores de Turno</div>';
+  html+='<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px">';
+
+  // Días sin accidentes
+  html+='<div style="background:'+colAcc+';border-radius:12px;padding:12px;color:#fff;text-align:center;position:relative">'
+    +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px;line-height:1.2">Días sin accidentes</div>'
+    +'<div style="font-size:28px;font-weight:900;line-height:1.1">'+dias+'</div>'
+    +'<div style="font-size:9px;opacity:.7;margin-top:2px">Último: '+ultimoAcc+'</div>'
+    +'</div>';
+
+  // Anorm Seguridad
+  html+='<div onclick="shoMostrarListaAnom(shoGetAnomaliasSeg(),\'🚨 Seguridad Prio A\')" style="background:'+colAnom+';border-radius:12px;padding:12px;color:#fff;text-align:center;cursor:pointer">'
+    +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Anorm. Seguridad</div>'
+    +'<div style="font-size:28px;font-weight:900;line-height:1.1">'+anom+'</div>'
+    +'<div style="font-size:9px;opacity:.85;margin-top:2px">Prioridad A abiertas</div>'
+    +'</div>';
+
+  // Anorm Calidad
+  html+='<div onclick="shoMostrarListaAnom(shoGetAnomaliasCalidad(),\'🔬 Calidad Prio A\')" style="background:'+colCal+';border-radius:12px;padding:12px;color:#fff;text-align:center;cursor:pointer">'
+    +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Anorm. Calidad</div>'
+    +'<div style="font-size:28px;font-weight:900;line-height:1.1">'+anomCal+'</div>'
+    +'<div style="font-size:9px;opacity:.85;margin-top:2px">Prioridad A abiertas</div>'
+    +'</div>';
+
+  // Avance PM
+  html+='<div onclick="dorMostrarPM03Pendientes()" style="background:'+kpi1.color+';border-radius:12px;padding:12px;color:#fff;text-align:center;cursor:pointer">'
+    +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Avance PM Sem '+currentWeek()+'</div>'
+    +'<div style="font-size:28px;font-weight:900;line-height:1.1">'+kpi1.label+'</div>'
+    +'<div style="font-size:9px;opacity:.7;margin-top:2px">Mtto preventivo</div>'
+    +'</div>';
+  html+='</div>';
+
+  // ── OTs + Refacciones ─────────────────────────────────────────
+  html+='<div style="font-size:11px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">🔧 OTs & Refacciones</div>';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px">';
+
+  // OTs
+  html+='<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px">'
+    +'<div style="font-size:10px;font-weight:700;color:#6b7280;margin-bottom:8px">ÓRDENES DE TRABAJO</div>'
+    +'<div style="display:flex;justify-content:space-around;margin-bottom:8px">'
+    +'<div style="text-align:center"><div style="font-size:22px;font-weight:900;color:#dc2626">'+otsAbiertas+'</div><div style="font-size:9px;color:#6b7280">ABIERTAS</div></div>'
+    +'<div style="text-align:center"><div style="font-size:22px;font-weight:900;color:#16a34a">'+otsCerradas+'</div><div style="font-size:9px;color:#6b7280">CERRADAS</div></div>'
+    +'</div>'
+    +'<div style="text-align:center;font-size:18px;font-weight:900;color:'+colPct+'">'+pctCierre+'% cierre</div>'
+    +'<div style="background:#f3f4f6;border-radius:6px;height:6px;margin-top:6px;overflow:hidden"><div style="width:'+pctCierre+'%;height:100%;background:'+colPct+';border-radius:6px"></div></div>'
+    +'</div>';
+
+  // Refacciones
+  var refA=(REF_FALTANTES||[]).filter(function(r){return r.estado!=='comprada'&&r.prioridad==='A';}).length;
+  var refB=(REF_FALTANTES||[]).filter(function(r){return r.estado!=='comprada'&&r.prioridad==='B';}).length;
+  var refC=(REF_FALTANTES||[]).filter(function(r){return r.estado!=='comprada'&&r.prioridad==='C';}).length;
+  html+='<div style="background:'+(refPend>0?'#fff7ed':'#f0fdf4')+';border:1px solid '+(refPend>0?'#fed7aa':'#86efac')+';border-radius:12px;padding:12px">'
+    +'<div style="font-size:10px;font-weight:700;color:#94a3b8;margin-bottom:8px;text-align:center">REFACCIONES PEND.</div>'
+    +'<div style="display:flex;justify-content:space-around;margin-bottom:4px">'
+    +'<div style="text-align:center"><div style="font-size:18px;font-weight:900;color:#f87171">'+refA+'</div><div style="font-size:9px;color:#94a3b8">Prio A</div></div>'
+    +'<div style="text-align:center"><div style="font-size:18px;font-weight:900;color:#fbbf24">'+refB+'</div><div style="font-size:9px;color:#94a3b8">Prio B</div></div>'
+    +'<div style="text-align:center"><div style="font-size:18px;font-weight:900;color:#4ade80">'+refC+'</div><div style="font-size:9px;color:#94a3b8">Prio C</div></div>'
+    +'</div>'
+    +'<div style="text-align:center;font-size:22px;font-weight:900;color:'+(refPend>0?'#d97706':'#16a34a')+'">'+(refPend>0?refPend+' total':'✅ Al día')+'</div>'
+    +'</div>';
+  html+='</div>';
+
+  // ── Planes de Acción y Prioridades (lado a lado) ──────────────
+  html+='<div style="font-size:11px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">✅ Seguimiento</div>';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">';
+
+  // Planes
+  html+='<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px;cursor:pointer" onclick="showDORPlanes(\'plan\')">'
+    +'<div style="font-size:10px;font-weight:700;color:#93c5fd;margin-bottom:8px">📋 PLANES DE ACCIÓN</div>'
+    +'<div style="display:flex;justify-content:space-around">'
+    +'<div style="text-align:center"><div style="font-size:22px;font-weight:900;color:#93c5fd">'+planes.length+'</div><div style="font-size:9px;color:#94a3b8">ABIERTOS</div></div>'
+    +'<div style="text-align:center"><div style="font-size:22px;font-weight:900;color:#f87171">'+planesVenc+'</div><div style="font-size:9px;color:#94a3b8">VENCIDOS</div></div>'
+    +'</div>'
+    +'<div style="text-align:center;font-size:10px;color:#a5b4fc;margin-top:8px;font-weight:600">Ver todos →</div>'
+    +'</div>';
+
+  // Prioridades
+  html+='<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:12px;cursor:pointer" onclick="showDORPlanes(\'prioridad\')">'
+    +'<div style="font-size:10px;font-weight:700;color:#fcd34d;margin-bottom:8px">🎯 PRIORIDADES</div>'
+    +'<div style="display:flex;justify-content:space-around">'
+    +'<div style="text-align:center"><div style="font-size:22px;font-weight:900;color:#d97706">'+prioridades.length+'</div><div style="font-size:9px;color:#6b7280">ABIERTAS</div></div>'
+    +'<div style="text-align:center"><div style="font-size:22px;font-weight:900;color:#f87171">'+priorVenc+'</div><div style="font-size:9px;color:#94a3b8">VENCIDAS</div></div>'
+    +'</div>'
+    +'<div style="text-align:center;font-size:10px;color:#fcd34d;margin-top:8px;font-weight:600">Ver todas →</div>'
+    +'</div>';
+  html+='</div>';
+
+  html+='<button onclick="abrirNuevoPlan()" style="width:100%;padding:12px;background:#1a3c5e;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer">➕ Nuevo Plan / Prioridad</button>';
+
+  cont.innerHTML=html;
+}
+
+// ── Planes de Acción ─────────────────────────────────────────────
+var DOR_PLANES=loadDB('dor_planes',[]);
+
+function renderDORPlanesResumen(){
+  var planes=DOR_PLANES.filter(function(p){return p.estado!=='cerrado';});
+  var vencidos=planes.filter(function(p){return p.fechaVencimiento&&new Date(p.fechaVencimiento)<new Date();}).length;
+  var html='<div style="background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:14px;margin-bottom:8px">';
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">';
+  html+='<div style="text-align:center"><div style="font-size:22px;font-weight:900;color:#1a3c5e">'+planes.length+'</div><div style="font-size:10px;color:#6b7280">ABIERTOS</div></div>';
+  html+='<div style="text-align:center"><div style="font-size:22px;font-weight:900;color:#dc2626">'+vencidos+'</div><div style="font-size:10px;color:#6b7280">VENCIDOS</div></div>';
+  html+='<div style="text-align:center"><div style="font-size:22px;font-weight:900;color:#16a34a">'+DOR_PLANES.filter(function(p){return p.estado==='cerrado';}).length+'</div><div style="font-size:10px;color:#6b7280">CERRADOS</div></div>';
+  html+='</div></div>';
+  return html;
+}
+
+function showDORPlanes(tipo){
+  showScreen('screen-dor-planes');
+  window._dorPlanTipo=tipo||'plan';
+  window._dorPlanFiltro='todos';
+  window._dorPlanPrio='';
+  window._dorPlanResp='';
+  renderDORPlanesList();
+}
+
+function renderDORPlanesList(){
+  var fDiv=document.getElementById('dor-planes-filtros');
+  var lDiv=document.getElementById('dor-planes-list');
+  if(!fDiv||!lDiv) return;
+
+  var responsables=['César Arreola','Anthon Chávez','Lisandro Torres','Ángel Muratalla','Eduardo Orozco','Marco Díaz','Uriel Navarrete','Alan Zurita','Jorge Martínez','Mauricio Rangel'];
+  var tipo=window._dorPlanTipo||'plan';
+  var filtro=window._dorPlanFiltro||'todos';
+  var prio=window._dorPlanPrio||'';
+  var resp=window._dorPlanResp||'';
+  var titulo=tipo==='prioridad'?'🎯 Prioridades':'📋 Planes de Acción';
+  var colTitulo=tipo==='prioridad'?'#d97706':'#1a3c5e';
+
+  var lista=DOR_PLANES.filter(function(p){
+    if((p.tipo||'plan')!==tipo) return false;
+    if(filtro==='abiertos'&&p.estado==='cerrado') return false;
+    if(filtro==='cerrados'&&p.estado!=='cerrado') return false;
+    if(filtro==='vencidos'&&!(p.estado!=='cerrado'&&p.fechaVencimiento&&new Date(p.fechaVencimiento)<new Date())) return false;
+    if(prio&&p.prioridad!==prio) return false;
+    if(resp&&p.responsable!==resp) return false;
+    return true;
+  }).sort(function(a,b){
+    if(a.estado==='cerrado'&&b.estado!=='cerrado') return 1;
+    if(b.estado==='cerrado'&&a.estado!=='cerrado') return -1;
+    return new Date(a.fechaVencimiento||'9999')-new Date(b.fechaVencimiento||'9999');
+  });
+
+  // Update screen title
+  var pantTitle=document.querySelector('#screen-dor-planes .topbar-title');
+  if(pantTitle) pantTitle.textContent=titulo;
+  var otroTipo=tipo==='plan'?'prioridad':'plan';
+  var otroLabel=tipo==='plan'?'🎯 Ver Prioridades':'📋 Ver Planes';
+  var navRow='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    +'<div style="font-size:15px;font-weight:800;color:'+colTitulo+'">'+titulo+'</div>'
+    +'<div style="display:flex;gap:6px">'
+    +'<button onclick="showDORPlanes(\''+otroTipo+'\')" style="padding:6px 10px;background:#1a3c5e;color:#fff;border:none;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer">'+otroLabel+'</button>'
+    +'<button onclick="showDOR()" style="padding:6px 10px;background:#374151;color:#fff;border:none;border-radius:8px;font-size:.75rem;font-weight:700;cursor:pointer">← DOR</button>'
+    +'</div></div>';
+
+  var chips=['todos','abiertos','vencidos','cerrados'].map(function(f){
+    var label=f.charAt(0).toUpperCase()+f.slice(1);
+    var active=filtro===f;
+    return '<button onclick="window._dorPlanFiltro=\''+f+'\';renderDORPlanesList()" style="padding:5px 12px;border-radius:20px;border:1.5px solid '+(active?'#1a3c5e':'#d1d5db')+';background:'+(active?'#1a3c5e':'#fff')+';color:'+(active?'#fff':'#374151')+';font-size:.78rem;font-weight:600;cursor:pointer">'+label+'</button>';
+  }).join('');
+
+  fDiv.innerHTML=navRow+'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px">'+chips+'</div>'
+    +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
+    +'<select class="form-control" onchange="window._dorPlanPrio=this.value;renderDORPlanesList()" style="flex:1;min-width:100px;padding:7px;font-size:12px">'
+    +'<option value="">Todas las prioridades</option>'
+    +'<option value="A"'+(prio==='A'?' selected':'')+'>🔴 Prioridad A</option>'
+    +'<option value="B"'+(prio==='B'?' selected':'')+'>🟠 Prioridad B</option>'
+    +'<option value="C"'+(prio==='C'?' selected':'')+'>🟢 Prioridad C</option>'
+    +'</select>'
+    +'<select class="form-control" onchange="window._dorPlanResp=this.value;renderDORPlanesList()" style="flex:1;min-width:120px;padding:7px;font-size:12px">'
+    +'<option value="">Todos los responsables</option>'
+    +responsables.map(function(r){return '<option value="'+r+'"'+(resp===r?' selected':'')+'>'+r+'</option>';}).join('')
+    +'</select></div>'
+    +'<button onclick="abrirNuevoPlan()" style="width:100%;padding:10px;background:#1a3c5e;color:#fff;border:none;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;margin-bottom:10px">➕ Nuevo Plan de Acción</button>';
+
+  var now=new Date();
+  var lunes=new Date(now); lunes.setDate(now.getDate()-(now.getDay()||7)+1); lunes.setHours(0,0,0,0);
+  var domingo=new Date(lunes); domingo.setDate(lunes.getDate()+6); domingo.setHours(23,59,59,999);
+
+  function planCard(p){
+    var vencido=p.estado!=='cerrado'&&p.fechaVencimiento&&new Date(p.fechaVencimiento)<now;
+    var esSemana=!vencido&&p.fechaVencimiento&&new Date(p.fechaVencimiento)>=lunes&&new Date(p.fechaVencimiento)<=domingo;
+    var colBorder=p.estado==='cerrado'?'#16a34a':vencido?'#dc2626':p.bloqueo?'#7c3aed':p.prioridad==='A'?'#dc2626':p.prioridad==='B'?'#d97706':'#6b7280';
+    var fecha=p.fechaVencimiento?new Date(p.fechaVencimiento+'T12:00:00').toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'2-digit'}):'Sin fecha';
+    var bloqueoTag=p.bloqueo==='refaccion'?'<span style="background:#fef3c7;border:1px solid #f59e0b;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:700;color:#92400e;margin-left:4px">🔩 Refacción</span>'
+      :p.bloqueo==='contratista'?'<span style="background:#ede9fe;border:1px solid #7c3aed;border-radius:4px;padding:1px 5px;font-size:9px;font-weight:700;color:#5b21b6;margin-left:4px">👷 Contratista</span>':'';
+    return '<div style="border-left:4px solid '+colBorder+';background:'+(p.bloqueo?'#faf5ff':'#fff')+';border-radius:10px;padding:12px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,.06)">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">'
+      +'<span style="font-size:11px;font-weight:700;color:#6b7280">Prio '+p.prioridad+bloqueoTag+(vencido?' · <span style="color:#dc2626">⚠️ VENCIDO</span>':'')+' · '+fecha+'</span>'
+      +(p.estado!=='cerrado'?
+        '<div style="display:flex;gap:4px;flex-wrap:wrap">'
+        +'<button onclick="cerrarPlanDOR(\''+p.id+'\')" style="padding:2px 8px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;font-size:10px;font-weight:700;color:#16a34a;cursor:pointer">✅ Cerrar</button>'
+        +'<button onclick="togglePlanBloqueo(\''+p.id+'\',\'refaccion\')" style="padding:2px 8px;background:'+(p.bloqueo==='refaccion'?'#fef3c7':'#f9fafb')+';border:1px solid '+(p.bloqueo==='refaccion'?'#f59e0b':'#d1d5db')+';border-radius:6px;font-size:10px;font-weight:700;color:'+(p.bloqueo==='refaccion'?'#92400e':'#6b7280')+';cursor:pointer">🔩</button>'
+        +'<button onclick="togglePlanBloqueo(\''+p.id+'\',\'contratista\')" style="padding:2px 8px;background:'+(p.bloqueo==='contratista'?'#ede9fe':'#f9fafb')+';border:1px solid '+(p.bloqueo==='contratista'?'#7c3aed':'#d1d5db')+';border-radius:6px;font-size:10px;font-weight:700;color:'+(p.bloqueo==='contratista'?'#5b21b6':'#6b7280')+';cursor:pointer">👷</button>'
+        +'</div>'
+        :'<span style="font-size:10px;color:#16a34a;font-weight:700">✅ Cerrado</span>')
+      +'</div>'
+      +'<div style="font-size:13px;font-weight:700;color:#1a3c5e;margin-bottom:3px">'+p.descripcion+'</div>'
+      +'<div style="font-size:11px;color:#6b7280">👤 '+p.responsable+'</div>'
+      +(p.cierreNota?'<div style="font-size:11px;color:#16a34a;margin-top:4px">📝 '+p.cierreNota+'</div>':'')
+      +'</div>';
+  }
+
+  if(lista.length===0){
+    lDiv.innerHTML='<div class="card" style="text-align:center;padding:24px;color:#9ca3af">Sin planes en este filtro</div>';
+    return;
+  }
+
+  // Separar en grupos
+  var vencidos=lista.filter(function(p){return p.estado!=='cerrado'&&p.fechaVencimiento&&new Date(p.fechaVencimiento)<now;});
+  var estaSemana=lista.filter(function(p){return p.estado!=='cerrado'&&p.fechaVencimiento&&new Date(p.fechaVencimiento)>=lunes&&new Date(p.fechaVencimiento)<=domingo;});
+  var resto=lista.filter(function(p){return p.estado==='cerrado'||((!p.fechaVencimiento||new Date(p.fechaVencimiento)>domingo));});
+
+  var html='';
+  if(vencidos.length>0){
+    html+='<div style="font-size:11px;font-weight:800;color:#991b1b;text-transform:uppercase;letter-spacing:.06em;margin:8px 0 6px;padding-bottom:4px;border-bottom:2px solid #dc2626">⚠️ Vencidos ('+vencidos.length+')</div>';
+    html+=vencidos.map(planCard).join('');
+  }
+  if(estaSemana.length>0){
+    html+='<div style="font-size:11px;font-weight:800;color:#0f766e;text-transform:uppercase;letter-spacing:.06em;margin:10px 0 6px;padding-bottom:4px;border-bottom:2px solid #0d9488">📅 Vencen esta semana ('+estaSemana.length+')</div>';
+    html+=estaSemana.map(planCard).join('');
+  }
+  if(resto.length>0){
+    html+='<div style="font-size:11px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.06em;margin:10px 0 6px;padding-bottom:4px;border-bottom:2px solid #e5e7eb">📋 Próximos / Cerrados ('+resto.length+')</div>';
+    html+=resto.map(planCard).join('');
+  }
+  lDiv.innerHTML=html;
+}
+
+
+
+function abrirNuevoPlan(){
+  var responsables=['César Arreola','Anthon Chávez','Lisandro Torres','Ángel Muratalla','Eduardo Orozco','Marco Díaz','Uriel Navarrete','Alan Zurita','Jorge Martínez','Mauricio Rangel'];
+  var m=document.createElement('div');
+  m.id='modal-nuevo-plan';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  m.innerHTML='<div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">'
+    +'<div style="font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:14px">➕ Nuevo Plan / Prioridad</div>'
+    +'<div class="form-group"><label class="form-label">Tipo</label>'
+    +'<select class="form-control" id="np-tipo">'
+    +'<option value="plan"'+(window._dorPlanTipo!=='prioridad'?' selected':'')+'>📋 Plan de Acción</option>'
+    +'<option value="prioridad"'+(window._dorPlanTipo==='prioridad'?' selected':'')+'>🎯 Prioridad</option>'
+    +'</select></div>'
+    +'<div class="form-group"><label class="form-label">Descripción *</label><textarea class="form-control" id="np-desc" rows="3" placeholder="Describe la acción..."></textarea></div>'
+    +'<div class="form-group"><label class="form-label">Responsable *</label>'
+    +'<select class="form-control" id="np-resp"><option value="">-- Selecciona --</option>'
+    +responsables.map(function(r){return '<option value="'+r+'">'+r+'</option>';}).join('')
+    +'</select></div>'
+    +'<div class="form-group"><label class="form-label">Prioridad</label>'
+    +'<select class="form-control" id="np-prio"><option value="A">🔴 A</option><option value="B" selected>🟠 B</option><option value="C">🟢 C</option></select></div>'
+    +'<div class="form-group"><label class="form-label">Fecha de vencimiento</label><input type="date" class="form-control" id="np-fecha"></div>'
+    +'<div style="display:flex;gap:8px;margin-top:12px">'
+    +'<button type="button" class="btn btn-outline" style="flex:1" onclick="document.getElementById(\'modal-nuevo-plan\').remove()">Cancelar</button>'
+    +'<button type="button" class="btn btn-primary" style="flex:2" onclick="guardarNuevoPlan()">💾 Guardar</button>'
+    +'</div></div>';
+  document.body.appendChild(m);
+}
+
+function guardarNuevoPlan(){
+  var desc=document.getElementById('np-desc')?.value.trim();
+  var resp=document.getElementById('np-resp')?.value;
+  var prio=document.getElementById('np-prio')?.value||'B';
+  var fecha=document.getElementById('np-fecha')?.value;
+  var planTipo=document.getElementById('np-tipo')?.value||'plan';
+  if(!desc){showAlert('Describe el plan de acción','error');return;}
+  if(!resp){showAlert('Selecciona un responsable','error');return;}
+  var plan={id:genID('PA'),descripcion:desc,responsable:resp,prioridad:prio,tipo:planTipo,fecha_vencimiento:fecha||null,estado:'abierto',creado_por:nombreEfectivo()||currentUser.nombre,creado_ts:Date.now()};
+  DOR_PLANES.unshift(plan);
+  saveDB('dor_planes',DOR_PLANES);
+  supaFetch('dor_planes','POST',plan,'').catch(function(){});
+  document.getElementById('modal-nuevo-plan')?.remove();
+  showAlert('✅ '+( planTipo==='prioridad'?'Prioridad':'Plan de acción')+' guardado');
+  renderDOR();
+}
+
+
+function dorMostrarPM03Pendientes(){
+  var sem=currentWeek();
+  var año=currentYear();
+  var pendientes=PM03_PLAN.filter(function(p){
+    return p.semana===sem && (p.año||2026)===año && p.estado!=='cerrada' && p.estado!=='reprogramada' && !p.esInspeccion;
+  }).sort(function(a,b){return (a.linea||'').localeCompare(b.linea||'');});
+
+  var m=document.createElement('div');
+  m.id='modal-pm03-pend';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  var rows=pendientes.length===0?'<div style="text-align:center;padding:24px;color:#9ca3af">Sin PM03 pendientes esta semana ✅</div>'
+    :pendientes.map(function(p){
+      return '<div style="padding:10px;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">'
+        +'<div>'
+        +'<div style="font-size:12px;font-weight:700;color:#1a3c5e">'+(p.linea||p.area||'—')+'</div>'
+        +'<div style="font-size:11px;color:#6b7280">'+(p.actividad||p.componente||p.descripcion||'—')+'</div>'
+        +'<div style="font-size:10px;color:#9ca3af">👨‍🔧 '+(p.tecnicoNombre||'Sin asignar')+'</div>'
+        +'</div>'
+        +'<span style="font-size:10px;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:2px 6px;color:#92400e;font-weight:700">Pendiente</span>'
+        +'</div>';
+    }).join('');
+
+  m.innerHTML='<div style="background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:480px;max-height:85vh;display:flex;flex-direction:column">'
+    +'<div style="padding:16px 20px;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">'
+    +'<div style="font-size:16px;font-weight:800;color:#1a3c5e">📋 PM03 Pendientes — Sem '+sem+'</div>'
+    +'<div style="display:flex;align-items:center;gap:8px">'
+    +'<span style="font-size:14px;font-weight:700;color:#dc2626">'+pendientes.length+' pendientes</span>'
+    +'<button onclick="document.getElementById(\'modal-pm03-pend\').remove()" style="padding:4px 10px;background:#f3f4f6;border:none;border-radius:8px;cursor:pointer;font-size:13px">✕</button>'
+    +'</div></div>'
+    +'<div style="overflow-y:auto;flex:1">'+rows+'</div>'
+    +'</div>';
+  document.body.appendChild(m);
+}
+
+
+function cerrarPlanDOR(id){
+  var p=DOR_PLANES.find(function(x){return x.id===id;});
+  if(!p) return;
+  var nota=prompt('Nota de cierre (opcional):','');
+  if(nota===null) return;
+  p.estado='cerrado';p.cierreTs=Date.now();p.cierreNota=nota;p.cerradoPor=nombreEfectivo()||currentUser.nombre;
+  saveDB('dor_planes',DOR_PLANES);
+  // Update in Supabase
+  supaFetch('dor_planes','PATCH',{estado:'cerrado',cierre_ts:p.cierreTs,cierre_nota:nota,cerrado_por:p.cerradoPor},'id=eq.'+id).catch(function(){});
+  showAlert('✅ Plan cerrado');
+  renderDORPlanesList();
+}
+
+function togglePlanBloqueo(id,tipo){
+  var p=DOR_PLANES.find(function(x){return x.id===id;});
+  if(!p) return;
+  p.bloqueo=p.bloqueo===tipo?null:tipo;
+  saveDB('dor_planes',DOR_PLANES);
+  supaFetch('dor_planes','PATCH',{bloqueo:p.bloqueo||null},'id=eq.'+id).catch(function(){});
+  renderDORPlanesList();
+}
+
+// ── FIN DOR ───────────────────────────────────────────────────────
+
+// ================================================================
+// EQUIPOS POR LÍNEA — HELPERS
+// ================================================================
+function selEquipo(nombre){
+  var inp=document.getElementById('inp-componente');
+  if(inp){inp.value=nombre;pmState.componente=nombre;}
+}
+
+function filtrarEquiposLista(q){
+  var lista=document.getElementById('eq-lista');
+  if(!lista) return;
+  q=q.toLowerCase();
+  lista.querySelectorAll('button').forEach(function(btn){
+    btn.style.display=(!q||btn.textContent.toLowerCase().includes(q))?'':'none';
+  });
+}
+
+// ================================================================
+// ADMIN — GESTIÓN DE ÁREAS Y EQUIPOS
+// ================================================================
+function renderAdminAreas(cont){
+  if(!cont) return;
+  var html='<div class="card"><div class="card-title mb12">🏭 Áreas e Instalaciones</div>';
+
+  // Areas list
+  html+='<div style="margin-bottom:16px">';
+  PM_AREAS.forEach(function(a){
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f3f4f6">'
+      +'<span>'+a.icon+' '+a.label+'</span>'
+      +'<button onclick="adminVerEquipos(\''+a.id+'\',\''+a.label+'\')" style="padding:4px 10px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px;font-size:12px;color:#0369a1;cursor:pointer">🔩 Equipos</button>'
+      +'</div>';
+  });
+  html+='</div>';
+
+  // Add new area button
+  html+='<button onclick="adminNuevaArea()" class="btn btn-primary" style="width:100%">➕ Nueva Área</button>';
+  html+='</div>';
+  cont.innerHTML=html;
+}
+
+function adminNuevaArea(){
+  var m=document.createElement('div');
+  m.id='modal-nueva-area';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  m.innerHTML='<div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px">'
+    +'<div style="font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:14px">➕ Nueva Área</div>'
+    +'<div class="form-group"><label class="form-label">Nombre del área *</label><input type="text" class="form-control" id="na-label" placeholder="Ej: Laboratorio, Taller..."></div>'
+    +'<div class="form-group"><label class="form-label">Ícono (emoji)</label><input type="text" class="form-control" id="na-icon" value="📍" style="font-size:20px;text-align:center"></div>'
+    +'<div style="display:flex;gap:8px;margin-top:12px">'
+    +'<button type="button" class="btn btn-outline" style="flex:1" onclick="document.getElementById(\'modal-nueva-area\').remove()">Cancelar</button>'
+    +'<button type="button" class="btn btn-primary" style="flex:2" onclick="guardarNuevaArea()">💾 Guardar</button>'
+    +'</div></div>';
+  document.body.appendChild(m);
+}
+
+function guardarNuevaArea(){
+  var label=document.getElementById('na-label')?.value.trim();
+  var icon=document.getElementById('na-icon')?.value.trim()||'📍';
+  if(!label){showAlert('El nombre del área es obligatorio','error');return;}
+  var id=label.toLowerCase().replace(/\s+/g,'-').replace(/[^a-z0-9-]/g,'');
+  var orden=PM_AREAS.length+1;
+  var row={id:id,label:label,icon:icon,orden:orden,activa:true,creado_por:nombreEfectivo()||currentUser.nombre,creado_ts:Date.now()};
+  supaFetch('areas_config','POST',row,'').then(function(){
+    PM_AREAS.push({id:id,label:label,icon:icon});
+    saveDB('pm_areas_config',PM_AREAS);
+    document.getElementById('modal-nueva-area')?.remove();
+    showAlert('✅ Área añadida');
+    var cont=document.getElementById('admin-content');
+    if(cont) renderAdminAreas(cont);
+  }).catch(function(){showAlert('Error al guardar el área','error');});
+}
+
+function adminVerEquipos(areaId,areaLabel){
+  var equipos=EQUIPOS_LINEA.filter(function(e){return e.activo!==false&&e.area_id===areaId;});
+  var lineas=[...new Set(equipos.map(function(e){return e.linea;}))].sort();
+  var lineasArea=getLineasPorArea(areaId);
+
+  var m=document.createElement('div');
+  m.id='modal-equipos-area';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;overflow-y:auto;padding:12px;box-sizing:border-box';
+
+  var content='<div style="background:#fff;border-radius:16px;padding:20px;max-width:500px;margin:auto">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
+    +'<div style="font-size:16px;font-weight:800;color:#1a3c5e">🔩 Equipos — '+areaLabel+'</div>'
+    +'<button onclick="document.getElementById(\'modal-equipos-area\').remove()" style="padding:4px 10px;background:#f3f4f6;border:none;border-radius:8px;cursor:pointer">✕</button>'
+    +'</div>'
+    +'<div class="form-group">'
+    +'<label class="form-label">Línea *</label>'
+    +'<select class="form-control" id="eq-linea" style="padding:9px">'
+    +'<option value="">-- Selecciona línea --</option>'
+    +lineasArea.map(function(l){return '<option value="'+l+'">'+l+'</option>';}).join('')
+    +'<option value="_nueva">+ Otra línea (texto libre)</option>'
+    +'</select>'
+    +'<input type="text" class="form-control" id="eq-linea-libre" placeholder="Nombre de la línea..." style="margin-top:6px;padding:9px;display:none" oninput="pmState._tmpLinea=this.value">'
+    +'</div>'
+    +'<div class="form-group"><label class="form-label">Nombre del equipo *</label>'
+    +'<input type="text" class="form-control" id="eq-nombre" placeholder="Ej: Bomba centrífuga 1, Chiller A..."></div>'
+    +'<button onclick="guardarEquipo(\''+areaId+'\')" class="btn btn-primary" style="width:100%;margin-bottom:14px">➕ Agregar equipo</button>'
+    +'<div style="font-size:12px;font-weight:700;color:#6b7280;margin-bottom:8px">Equipos registrados ('+equipos.length+')</div>';
+
+  if(equipos.length===0){
+    content+='<div style="text-align:center;color:#9ca3af;padding:16px">Sin equipos registrados</div>';
+  } else {
+    lineas.concat(lineasArea.filter(function(l){return lineas.indexOf(l)<0;})).forEach(function(linea){
+      var eq=equipos.filter(function(e){return e.linea===linea;});
+      if(!eq.length) return;
+      content+='<div style="font-size:11px;font-weight:700;color:#1a3c5e;margin:10px 0 4px">'+linea+'</div>';
+      eq.forEach(function(e){
+        content+='<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 8px;background:#f9fafb;border-radius:6px;margin-bottom:4px">'
+          +'<span style="font-size:12px">'+e.equipo+'</span>'
+          +'<button onclick="eliminarEquipo(\''+e.id+'\')" style="padding:2px 6px;background:#fee2e2;border:none;border-radius:4px;color:#dc2626;font-size:11px;cursor:pointer">✕</button>'
+          +'</div>';
+      });
+    });
+  }
+
+  content+='</div>';
+  m.innerHTML=content;
+
+  // Handle linea select change
+  m.querySelector('#eq-linea').addEventListener('change',function(){
+    var libre=m.querySelector('#eq-linea-libre');
+    if(this.value==='_nueva'){libre.style.display='block';}
+    else{libre.style.display='none';}
+  });
+
+  document.body.appendChild(m);
+}
+
+function guardarEquipo(areaId){
+  var lineaSel=document.getElementById('eq-linea')?.value;
+  var lineaLibre=document.getElementById('eq-linea-libre')?.value.trim();
+  var linea=lineaSel==='_nueva'?lineaLibre:lineaSel;
+  var nombre=document.getElementById('eq-nombre')?.value.trim();
+  if(!linea){showAlert('Selecciona o escribe una línea','error');return;}
+  if(!nombre){showAlert('Escribe el nombre del equipo','error');return;}
+  var row={id:genID('EQ'),area_id:areaId,linea:linea,equipo:nombre,activo:true,creado_por:nombreEfectivo()||currentUser.nombre,creado_ts:Date.now()};
+  supaFetch('equipos_linea','POST',row,'').then(function(){
+    EQUIPOS_LINEA.push(row);
+    saveDB('equipos_linea',EQUIPOS_LINEA);
+    document.getElementById('modal-equipos-area')?.remove();
+    showAlert('✅ Equipo añadido');
+    var areaLabel=(PM_AREAS.find(function(a){return a.id===areaId;})||{}).label||areaId;
+    adminVerEquipos(areaId,areaLabel);
+  }).catch(function(){showAlert('Error al guardar el equipo','error');});
+}
+
+function eliminarEquipo(id){
+  if(!confirm('¿Eliminar este equipo?')) return;
+  supaFetch('equipos_linea','PATCH',{activo:false},'id=eq.'+id).then(function(){
+    var eq=EQUIPOS_LINEA.find(function(e){return e.id===id;});
+    if(eq){eq.activo=false;saveDB('equipos_linea',EQUIPOS_LINEA);}
+    showAlert('Equipo eliminado');
+    // Refresh modal
+    var m=document.getElementById('modal-equipos-area');
+    if(m) m.remove();
+  }).catch(function(){showAlert('Error al eliminar','error');});
+}
+// ── FIN EQUIPOS POR LÍNEA ─────────────────────────────────────────
