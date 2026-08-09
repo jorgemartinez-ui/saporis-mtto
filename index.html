@@ -380,7 +380,8 @@ tr:nth-child(even) td{background:#F8FAFC}
     <div id="menu-tecnico" class="hidden"><p style="padding:16px 16px 4px;font-size:13px;font-weight:700;color:var(--txt2)">Gestión de Mantenimiento</p>
         <div id="turno-status" style="display:none"></div>
         <div class="menu-grid">
-        <div class="menu-btn" style="border-color:#d97706;background:linear-gradient(135deg,#fff 60%,#fffbeb);grid-column:1/-1" onclick="showSHO()"><div class="menu-icon">🔄</div><div class="menu-label" style="font-size:18px;font-weight:900;color:#d97706">Bitácora / SHO</div><div class="menu-desc">Entrega de turno · REG-MTT-001.03</div></div>
+        <div class="menu-btn" style="border-color:#d97706;background:linear-gradient(135deg,#fff 60%,#fffbeb)" onclick="showSHO()"><div class="menu-icon">🔄</div><div class="menu-label" style="font-size:16px;font-weight:900;color:#d97706">Bitácora / SHO</div><div class="menu-desc">Entrega de turno</div></div>
+        <div class="menu-btn" style="border-color:#1a3c5e;background:linear-gradient(135deg,#fff 60%,#e0f2fe)" onclick="showDORWOR()"><div class="menu-icon">📊</div><div class="menu-label" style="font-size:16px;font-weight:900;color:#1a3c5e">DOR / WOR</div><div class="menu-desc">Daily · Weekly Review</div></div>
         <div class="menu-btn pm01" onclick="iniciarPM('PM01')"><div class="menu-icon">🚨</div><div class="menu-label">PM01</div><div class="menu-desc">Avería</div></div>
         <div class="menu-btn pm02" onclick="iniciarPM('PM02')"><div class="menu-icon">📋</div><div class="menu-label">PM02</div><div class="menu-desc">Anormalidad</div></div>
         <div class="menu-btn pm03" onclick="showPM03()" id="btn-pm03-menu"><div class="menu-icon">📅</div><div class="menu-label">PM03</div><div class="menu-desc" id="pm03-menu-desc">Mtto Planeado</div></div>
@@ -444,6 +445,35 @@ tr:nth-child(even) td{background:#F8FAFC}
 </div>
 
 <!-- ===== SHO — ENTREGA DE TURNO ===== -->
+<div id="screen-dorwor" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">📊 DOR / WOR Mtto</div></div></div>
+  <div class="content" style="padding:16px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px">
+      <div onclick="showDOR()" style="background:linear-gradient(135deg,#1a3c5e,#2a5a8f);border-radius:16px;padding:24px 12px;text-align:center;cursor:pointer;box-shadow:0 4px 12px rgba(26,60,94,.3)">
+        <div style="font-size:32px;margin-bottom:8px">📋</div>
+        <div style="font-size:18px;font-weight:900;color:#fff">DOR</div>
+        <div style="font-size:11px;color:#93c5fd;margin-top:4px">Daily Operations Review</div>
+      </div>
+      <div onclick="showAlert('WOR próximamente','info')" style="background:linear-gradient(135deg,#374151,#4b5563);border-radius:16px;padding:24px 12px;text-align:center;cursor:pointer;box-shadow:0 4px 12px rgba(55,65,81,.3)">
+        <div style="font-size:32px;margin-bottom:8px">📈</div>
+        <div style="font-size:18px;font-weight:900;color:#fff">WOR</div>
+        <div style="font-size:11px;color:#d1d5db;margin-top:4px">Weekly Operations Review</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="screen-dor" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showDORWOR()">←</button><div><div class="topbar-title">📋 DOR — Mtto</div><div class="topbar-sub" id="dor-sub"></div></div></div>
+  <div class="content" id="dor-content" style="padding:12px"></div>
+</div>
+
+<div id="screen-dor-planes" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showDOR()">←</button><div><div class="topbar-title">✅ Planes de Acción</div></div></div>
+  <div id="dor-planes-filtros" style="padding:10px"></div>
+  <div id="dor-planes-list" style="padding:0 10px 16px"></div>
+</div>
+
 <div id="screen-sho" class="screen">
   <div class="topbar">
     <button class="topbar-back" onclick="goMenu()">←</button>
