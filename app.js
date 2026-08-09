@@ -22563,3 +22563,5 @@ function eliminarEquipo(id){
 }
 // ── FIN EQUIPOS POR LÍNEA ─────────────────────────────────────────
 
+
+
