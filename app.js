@@ -22565,3 +22565,5 @@ function eliminarEquipo(id){
 
 
 
+
+        
