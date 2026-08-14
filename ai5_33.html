@@ -1248,7 +1248,7 @@ async function irDor(){
   dorToggle('planes');
 }
 async function cargarDOR(){
-  var rows=await db('ai_dor_planes','GET',null,'order=estado.asc,fecha_vencimiento.asc.nullslast&limit=500')||[];
+  var rows=await db('ai_dor_planes','GET',null,'select=*&limit=500')||[];
   DOR_PLANES=rows.map(function(r){return{
     id:r.id,tipo:r.tipo,descripcion:r.descripcion,responsable:r.responsable,
     fechaVencimiento:r.fecha_vencimiento,tema:r.tema,estado:r.estado||'abierto',
