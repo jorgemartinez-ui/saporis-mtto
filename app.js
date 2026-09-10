@@ -5177,7 +5177,7 @@ function syncSupabase(){
   // Sync componentes de priorización de líneas
   supaFetch('priorizacion_componentes','GET',null,'limit=4000').then(function(rows){
     if(rows){
-      PRIORIZACION_COMPONENTES=rows.map(function(r){return{id:r.id,lineaPrioId:r.linea_prio_id,nombre:r.nombre,prioridad:r.prioridad,registradoPor:r.registrado_por,registradoId:r.registrado_id,ts:r.ts};});
+      PRIORIZACION_COMPONENTES=rows.map(function(r){return{id:r.id,lineaPrioId:r.linea_prio_id,nombre:r.nombre,tipo:r.tipo,prioridad:r.prioridad,registradoPor:r.registrado_por,registradoId:r.registrado_id,ts:r.ts};});
       saveDB('priorizacion_componentes',PRIORIZACION_COMPONENTES);
       if(document.getElementById('screen-priorizacion-lineas')&&document.getElementById('screen-priorizacion-lineas').classList.contains('active')) renderPriorizacionLista();
     }
@@ -13381,7 +13381,7 @@ function syncSupabase(){
   // Sync componentes de priorización de líneas
   supaFetch('priorizacion_componentes','GET',null,'limit=4000').then(function(rows){
     if(rows){
-      PRIORIZACION_COMPONENTES=rows.map(function(r){return{id:r.id,lineaPrioId:r.linea_prio_id,nombre:r.nombre,prioridad:r.prioridad,registradoPor:r.registrado_por,registradoId:r.registrado_id,ts:r.ts};});
+      PRIORIZACION_COMPONENTES=rows.map(function(r){return{id:r.id,lineaPrioId:r.linea_prio_id,nombre:r.nombre,tipo:r.tipo,prioridad:r.prioridad,registradoPor:r.registrado_por,registradoId:r.registrado_id,ts:r.ts};});
       saveDB('priorizacion_componentes',PRIORIZACION_COMPONENTES);
       if(document.getElementById('screen-priorizacion-lineas')&&document.getElementById('screen-priorizacion-lineas').classList.contains('active')) renderPriorizacionLista();
     }
@@ -15062,6 +15062,8 @@ function eliminarPriorizacionLinea(id){
   renderPriorizacionLista();
 }
 
+var PRIO_COMP_TIPOS=['Alimentación','Almacenamiento','Operación'];
+
 function abrirFormPrioComponente(lineaPrioId,compId){
   var esAdmin=currentUser.rol==='admin'||currentUser.rol==='super';
   if(!esAdmin) return;
@@ -15075,6 +15077,11 @@ function abrirFormPrioComponente(lineaPrioId,compId){
     +'<div style="font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:14px">'+(c?'✏️ Editar componente':'➕ Nuevo componente')+' — '+linea.linea+'</div>'
     +'<div class="form-group"><label class="form-label">Nombre *</label>'
     +'<input type="text" class="form-control" id="prio-comp-nombre" value="'+(c?c.nombre:'')+'" style="padding:10px" placeholder="Ej: Tanque que alimenta, Bomba 1..."></div>'
+    +'<div class="form-group"><label class="form-label">Tipo *</label>'
+    +'<select class="form-control" id="prio-comp-tipo" style="padding:10px">'
+    +'<option value="">-- Selecciona --</option>'
+    +PRIO_COMP_TIPOS.map(function(t){return '<option value="'+t+'"'+((c&&c.tipo)===t?' selected':'')+'>'+t+'</option>';}).join('')
+    +'</select></div>'
     +'<div class="form-group"><label class="form-label">Prioridad *</label>'
     +'<select class="form-control" id="prio-comp-prioridad" style="padding:10px">'
     +'<option value="">-- Selecciona --</option>'
@@ -15089,21 +15096,23 @@ function abrirFormPrioComponente(lineaPrioId,compId){
 
 function guardarPrioComponente(lineaPrioId,compId){
   var nombre=(document.getElementById('prio-comp-nombre')?document.getElementById('prio-comp-nombre').value:'').trim();
+  var tipo=document.getElementById('prio-comp-tipo')?document.getElementById('prio-comp-tipo').value:'';
   var prioridad=document.getElementById('prio-comp-prioridad')?document.getElementById('prio-comp-prioridad').value:'';
   if(!nombre){showAlert('Escribe el nombre del componente','error');return;}
+  if(!tipo){showAlert('Selecciona el tipo','error');return;}
   if(!prioridad){showAlert('Selecciona la prioridad','error');return;}
 
   if(compId){
     var c=PRIORIZACION_COMPONENTES.find(function(x){return x.id===compId;});
     if(!c){showAlert('No se encontró el componente','error');return;}
-    c.nombre=nombre;c.prioridad=prioridad;
+    c.nombre=nombre;c.tipo=tipo;c.prioridad=prioridad;
     saveDB('priorizacion_componentes',PRIORIZACION_COMPONENTES);
-    supaFetch('priorizacion_componentes','PATCH',{nombre:nombre,prioridad:prioridad},'id=eq.'+compId).catch(function(){});
+    supaFetch('priorizacion_componentes','PATCH',{nombre:nombre,tipo:tipo,prioridad:prioridad},'id=eq.'+compId).catch(function(){});
     showAlert('✅ Componente actualizado');
   } else {
     var row={
       id:genID('PRIOCOMP'),
-      lineaPrioId:lineaPrioId,nombre:nombre,prioridad:prioridad,
+      lineaPrioId:lineaPrioId,nombre:nombre,tipo:tipo,prioridad:prioridad,
       registradoPor:nombreEfectivo()||currentUser.nombre,
       registradoId:currentUser.id,
       ts:Date.now()
@@ -15111,7 +15120,7 @@ function guardarPrioComponente(lineaPrioId,compId){
     PRIORIZACION_COMPONENTES.push(row);
     saveDB('priorizacion_componentes',PRIORIZACION_COMPONENTES);
     supaFetch('priorizacion_componentes','POST',{
-      id:row.id,linea_prio_id:row.lineaPrioId,nombre:row.nombre,prioridad:row.prioridad,
+      id:row.id,linea_prio_id:row.lineaPrioId,nombre:row.nombre,tipo:row.tipo,prioridad:row.prioridad,
       registrado_por:row.registradoPor,registrado_id:row.registradoId,ts:row.ts
     },'').catch(function(){});
     showAlert('✅ Componente agregado');
@@ -15160,7 +15169,7 @@ function _prioCardHtml(p,esAdmin){
       +comps.map(function(c){
         var ccc=ACT_CRIT_COLORS[c.prioridad];
         return '<div style="display:flex;align-items:center;gap:4px;padding:4px 6px;background:#f9fafb;border-radius:6px;margin-bottom:3px">'
-          +'<span style="flex:1;font-size:12px">'+c.nombre+(ccc?' <span style="background:'+ccc.bg+';color:'+ccc.color+';font-size:9px;font-weight:800;padding:1px 5px;border-radius:8px;vertical-align:middle">'+c.prioridad+'</span>':'')+'</span>'
+          +'<span style="flex:1;font-size:12px">'+c.nombre+(c.tipo?' <span style="color:var(--txt3)">('+c.tipo+')</span>':'')+(ccc?' <span style="background:'+ccc.bg+';color:'+ccc.color+';font-size:9px;font-weight:800;padding:1px 5px;border-radius:8px;vertical-align:middle">'+c.prioridad+'</span>':'')+'</span>'
           +(esAdmin?('<button onclick="abrirFormPrioComponente(\''+p.id+'\',\''+c.id+'\')" style="padding:2px 6px;background:#dbeafe;border:none;border-radius:4px;color:#1d4ed8;font-size:11px;cursor:pointer">✏️</button>'
             +'<button onclick="eliminarPrioComponente(\''+c.id+'\')" style="padding:2px 6px;background:#fee2e2;border:none;border-radius:4px;color:#dc2626;font-size:11px;cursor:pointer">✕</button>'):'')
           +'</div>';
@@ -15216,17 +15225,17 @@ function descargarPriorizacionExcel(){
     return (a.linea||'').localeCompare(b.linea||'');
   });
   if(!base.length){ showAlert('No hay datos para exportar','error'); return; }
-  var hdrs=['Área','Línea','Descripción','% Ocupación','Prioridad Línea','Componente','Prioridad Componente'];
+  var hdrs=['Área','Línea','Descripción','% Ocupación','Prioridad Línea','Componente','Tipo Componente','Prioridad Componente'];
   var rows=[];
   base.forEach(function(p){
     var areaLbl=(PM_AREAS.find(function(a){return a.id===p.areaId;})||{}).label||p.areaId||'';
     var comps=PRIORIZACION_COMPONENTES.filter(function(c){return c.lineaPrioId===p.id;});
     if(comps.length){
       comps.forEach(function(c){
-        rows.push([areaLbl,p.linea,p.descripcion||'',p.ocupacionPct!=null?p.ocupacionPct:'',p.prioridad,c.nombre,c.prioridad]);
+        rows.push([areaLbl,p.linea,p.descripcion||'',p.ocupacionPct!=null?p.ocupacionPct:'',p.prioridad,c.nombre,c.tipo||'',c.prioridad]);
       });
     } else {
-      rows.push([areaLbl,p.linea,p.descripcion||'',p.ocupacionPct!=null?p.ocupacionPct:'',p.prioridad,'','']);
+      rows.push([areaLbl,p.linea,p.descripcion||'',p.ocupacionPct!=null?p.ocupacionPct:'',p.prioridad,'','','']);
     }
   });
   generarExcelXML(hdrs, rows, 'Saporis_Priorizacion_Lineas_'+new Date().toISOString().slice(0,10)+'.xlsx', 'Priorización');
