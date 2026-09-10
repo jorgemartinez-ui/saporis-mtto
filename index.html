@@ -230,7 +230,7 @@ tr:nth-child(even) td{background:#F8FAFC}
 </script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="app.js?v=20260910h" defer></script>
+<script src="app.js?v=20260910i" defer></script>
 
 <style id="lup-css">
 .lup-doc{background:#fff;border:2px solid #1a3c5e;border-radius:10px;overflow:hidden;margin:12px;font-family:Arial,sans-serif}
@@ -943,7 +943,17 @@ tr:nth-child(even) td{background:#F8FAFC}
 <div id="screen-priorizacion-lineas" class="screen">
   <div class="topbar"><button class="topbar-back" onclick="showActivos()">←</button><div><div class="topbar-title">🎯 Priorización de Líneas</div></div></div>
   <div class="scroll-content" style="padding:16px">
-    <button id="btn-prio-nuevo" class="btn btn-primary mb12" style="display:none" onclick="abrirFormPriorizacion()">➕ Agregar línea</button>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button id="btn-prio-nuevo" class="btn btn-primary" style="display:none;flex:1;margin:0" onclick="abrirFormPriorizacion()">➕ Agregar línea</button>
+      <button class="btn btn-outline" style="flex:1;margin:0" onclick="descargarPriorizacionExcel()">📥 Descargar Excel</button>
+    </div>
+    <div id="prio-filtro-area-wrap" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap"></div>
+    <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+      <div class="filter-chip active" onclick="filtPrioPrioridad('',this)">Todas las prioridades</div>
+      <div class="filter-chip" onclick="filtPrioPrioridad('A',this)">Prioridad A</div>
+      <div class="filter-chip" onclick="filtPrioPrioridad('B',this)">Prioridad B</div>
+      <div class="filter-chip" onclick="filtPrioPrioridad('C',this)">Prioridad C</div>
+    </div>
     <div id="prio-form-wrap" class="card hidden" style="margin-bottom:16px">
       <div class="card-title mb8" id="prio-form-titulo">➕ Agregar línea</div>
       <div class="form-group"><label class="form-label">Área</label>

@@ -525,6 +525,7 @@ var ACTIVO_COMPONENTES=loadDB('activo_componentes',[]);
 var ACTIVOS_ESTADOS=['Operando','En mantenimiento','Fuera de servicio'];
 var ACTIVOS_CRITICIDAD=['A','B','C'];
 var PRIORIZACION_LINEAS=loadDB('priorizacion_lineas',[]);
+var PRIORIZACION_COMPONENTES=loadDB('priorizacion_componentes',[]);
 function getLineasPorArea(a){
   if(a==='proceso')return LISTAS.lineas_proceso||[];
   if(a==='envasado')return LISTAS.lineas_envasado||[];
@@ -5170,6 +5171,14 @@ function syncSupabase(){
     if(rows){
       PRIORIZACION_LINEAS=rows.map(function(r){return{id:r.id,areaId:r.area_id,linea:r.linea,descripcion:r.descripcion,ocupacionPct:r.ocupacion_pct,prioridad:r.prioridad,registradoPor:r.registrado_por,registradoId:r.registrado_id,ts:r.ts};});
       saveDB('priorizacion_lineas',PRIORIZACION_LINEAS);
+      if(document.getElementById('screen-priorizacion-lineas')&&document.getElementById('screen-priorizacion-lineas').classList.contains('active')) renderPriorizacionLista();
+    }
+  }).catch(function(){});
+  // Sync componentes de priorización de líneas
+  supaFetch('priorizacion_componentes','GET',null,'limit=4000').then(function(rows){
+    if(rows){
+      PRIORIZACION_COMPONENTES=rows.map(function(r){return{id:r.id,lineaPrioId:r.linea_prio_id,nombre:r.nombre,prioridad:r.prioridad,registradoPor:r.registrado_por,registradoId:r.registrado_id,ts:r.ts};});
+      saveDB('priorizacion_componentes',PRIORIZACION_COMPONENTES);
       if(document.getElementById('screen-priorizacion-lineas')&&document.getElementById('screen-priorizacion-lineas').classList.contains('active')) renderPriorizacionLista();
     }
   }).catch(function(){});
@@ -13369,6 +13378,14 @@ function syncSupabase(){
       if(document.getElementById('screen-priorizacion-lineas')&&document.getElementById('screen-priorizacion-lineas').classList.contains('active')) renderPriorizacionLista();
     }
   }).catch(function(){});
+  // Sync componentes de priorización de líneas
+  supaFetch('priorizacion_componentes','GET',null,'limit=4000').then(function(rows){
+    if(rows){
+      PRIORIZACION_COMPONENTES=rows.map(function(r){return{id:r.id,lineaPrioId:r.linea_prio_id,nombre:r.nombre,prioridad:r.prioridad,registradoPor:r.registrado_por,registradoId:r.registrado_id,ts:r.ts};});
+      saveDB('priorizacion_componentes',PRIORIZACION_COMPONENTES);
+      if(document.getElementById('screen-priorizacion-lineas')&&document.getElementById('screen-priorizacion-lineas').classList.contains('active')) renderPriorizacionLista();
+    }
+  }).catch(function(){});
   // Sync componentes de activos
   supaFetch('activo_componentes','GET',null,'activo=eq.true&limit=4000').then(function(rows){
     if(rows&&rows.length){
@@ -14919,7 +14936,31 @@ function showPriorizacionLineas(){
   if(lineaSel){ lineaSel.innerHTML='<option value="">-- Primero selecciona área --</option>'; lineaSel.disabled=true; }
   var btnNuevo=document.getElementById('btn-prio-nuevo');
   if(btnNuevo) btnNuevo.style.display=esAdmin?'block':'none';
+  var filtAreaWrap=document.getElementById('prio-filtro-area-wrap');
+  if(filtAreaWrap){
+    var activeArea=window._prioFiltroArea||'';
+    filtAreaWrap.innerHTML='<div class="filter-chip'+(activeArea===''?' active':'')+'" onclick="filtPrioArea(\'\',this)">Todas las áreas</div>'
+      +PM_AREAS.map(function(a){return '<div class="filter-chip'+(activeArea===a.id?' active':'')+'" onclick="filtPrioArea(\''+a.id+'\',this)">'+a.icon+' '+a.label+'</div>';}).join('');
+  }
   cerrarFormPriorizacion();
+  renderPriorizacionLista();
+}
+
+function filtPrioArea(val,el){
+  window._prioFiltroArea=val;
+  if(el&&el.parentElement){
+    Array.prototype.forEach.call(el.parentElement.children,function(c){c.classList.remove('active');});
+    el.classList.add('active');
+  }
+  renderPriorizacionLista();
+}
+
+function filtPrioPrioridad(val,el){
+  window._prioFiltroPrioridad=val;
+  if(el&&el.parentElement){
+    Array.prototype.forEach.call(el.parentElement.children,function(c){c.classList.remove('active');});
+    el.classList.add('active');
+  }
   renderPriorizacionLista();
 }
 
@@ -15007,16 +15048,100 @@ function guardarPriorizacionLinea(){
 }
 
 function eliminarPriorizacionLinea(id){
-  if(!confirm('¿Eliminar esta línea de priorización?')) return;
+  if(!confirm('¿Eliminar esta línea de priorización? También se eliminarán sus componentes.')) return;
   PRIORIZACION_LINEAS=PRIORIZACION_LINEAS.filter(function(x){return x.id!==id;});
   saveDB('priorizacion_lineas',PRIORIZACION_LINEAS);
   supaFetch('priorizacion_lineas','DELETE',null,'id=eq.'+id).catch(function(){});
+  // Cascada: eliminar también los componentes de esta línea
+  var compsAEliminar=PRIORIZACION_COMPONENTES.filter(function(c){return c.lineaPrioId===id;});
+  if(compsAEliminar.length){
+    PRIORIZACION_COMPONENTES=PRIORIZACION_COMPONENTES.filter(function(c){return c.lineaPrioId!==id;});
+    saveDB('priorizacion_componentes',PRIORIZACION_COMPONENTES);
+    supaFetch('priorizacion_componentes','DELETE',null,'linea_prio_id=eq.'+id).catch(function(){});
+  }
   renderPriorizacionLista();
+}
+
+function abrirFormPrioComponente(lineaPrioId,compId){
+  var esAdmin=currentUser.rol==='admin'||currentUser.rol==='super';
+  if(!esAdmin) return;
+  var linea=PRIORIZACION_LINEAS.find(function(x){return x.id===lineaPrioId;});
+  if(!linea) return;
+  var c=compId?PRIORIZACION_COMPONENTES.find(function(x){return x.id===compId;}):null;
+  var modal=document.createElement('div');
+  modal.id='modal-form-prio-componente';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;overflow-y:auto;padding:12px;box-sizing:border-box';
+  modal.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;max-width:420px;margin:auto">'
+    +'<div style="font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:14px">'+(c?'✏️ Editar componente':'➕ Nuevo componente')+' — '+linea.linea+'</div>'
+    +'<div class="form-group"><label class="form-label">Nombre *</label>'
+    +'<input type="text" class="form-control" id="prio-comp-nombre" value="'+(c?c.nombre:'')+'" style="padding:10px" placeholder="Ej: Tanque que alimenta, Bomba 1..."></div>'
+    +'<div class="form-group"><label class="form-label">Prioridad *</label>'
+    +'<select class="form-control" id="prio-comp-prioridad" style="padding:10px">'
+    +'<option value="">-- Selecciona --</option>'
+    +ACTIVOS_CRITICIDAD.map(function(cr){return '<option value="'+cr+'"'+((c&&c.prioridad)===cr?' selected':'')+'>'+cr+'</option>';}).join('')
+    +'</select></div>'
+    +'<div style="display:flex;gap:8px;margin-top:8px">'
+    +'<button onclick="document.getElementById(\'modal-form-prio-componente\').remove()" style="flex:1;padding:12px;background:#f3f4f6;border:none;border-radius:10px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="guardarPrioComponente(\''+lineaPrioId+'\',\''+(compId||'')+'\')" style="flex:2;padding:12px;background:#1e3a8a;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">💾 Guardar</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function guardarPrioComponente(lineaPrioId,compId){
+  var nombre=(document.getElementById('prio-comp-nombre')?document.getElementById('prio-comp-nombre').value:'').trim();
+  var prioridad=document.getElementById('prio-comp-prioridad')?document.getElementById('prio-comp-prioridad').value:'';
+  if(!nombre){showAlert('Escribe el nombre del componente','error');return;}
+  if(!prioridad){showAlert('Selecciona la prioridad','error');return;}
+
+  if(compId){
+    var c=PRIORIZACION_COMPONENTES.find(function(x){return x.id===compId;});
+    if(!c){showAlert('No se encontró el componente','error');return;}
+    c.nombre=nombre;c.prioridad=prioridad;
+    saveDB('priorizacion_componentes',PRIORIZACION_COMPONENTES);
+    supaFetch('priorizacion_componentes','PATCH',{nombre:nombre,prioridad:prioridad},'id=eq.'+compId).catch(function(){});
+    showAlert('✅ Componente actualizado');
+  } else {
+    var row={
+      id:genID('PRIOCOMP'),
+      lineaPrioId:lineaPrioId,nombre:nombre,prioridad:prioridad,
+      registradoPor:nombreEfectivo()||currentUser.nombre,
+      registradoId:currentUser.id,
+      ts:Date.now()
+    };
+    PRIORIZACION_COMPONENTES.push(row);
+    saveDB('priorizacion_componentes',PRIORIZACION_COMPONENTES);
+    supaFetch('priorizacion_componentes','POST',{
+      id:row.id,linea_prio_id:row.lineaPrioId,nombre:row.nombre,prioridad:row.prioridad,
+      registrado_por:row.registradoPor,registrado_id:row.registradoId,ts:row.ts
+    },'').catch(function(){});
+    showAlert('✅ Componente agregado');
+  }
+  document.getElementById('modal-form-prio-componente')&&document.getElementById('modal-form-prio-componente').remove();
+  renderPriorizacionLista();
+}
+
+function eliminarPrioComponente(id){
+  if(!confirm('¿Eliminar este componente?')) return;
+  PRIORIZACION_COMPONENTES=PRIORIZACION_COMPONENTES.filter(function(c){return c.id!==id;});
+  saveDB('priorizacion_componentes',PRIORIZACION_COMPONENTES);
+  supaFetch('priorizacion_componentes','DELETE',null,'id=eq.'+id).catch(function(){});
+  renderPriorizacionLista();
+}
+
+// Expande/retrae la lista de componentes de una línea de priorización (empieza retraída)
+function togglePrioComponentes(lineaPrioId){
+  var list=document.getElementById('prio-comp-list-'+lineaPrioId);
+  var arrow=document.getElementById('prio-comp-arrow-'+lineaPrioId);
+  if(!list) return;
+  var abierto=list.style.display!=='none';
+  list.style.display=abierto?'none':'block';
+  if(arrow) arrow.textContent=abierto?'▶':'▼';
 }
 
 function _prioCardHtml(p,esAdmin){
   var cc=ACT_CRIT_COLORS[p.prioridad];
   var areaLbl=(PM_AREAS.find(function(a){return a.id===p.areaId;})||{}).label||p.areaId||'';
+  var comps=PRIORIZACION_COMPONENTES.filter(function(c){return c.lineaPrioId===p.id;});
   return '<div class="card" style="margin-bottom:8px;padding:14px">'
     +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
     +'<div style="flex:1;min-width:0">'
@@ -15028,8 +15153,23 @@ function _prioCardHtml(p,esAdmin){
       +'<div style="font-size:18px;font-weight:800;color:#1a3c5e">'+p.ocupacionPct+'%</div>'
       +'<div style="font-size:10px;color:var(--txt3)">Ocupación</div></div>'):'')
     +'</div>'
+    +(comps.length?('<div style="margin-top:10px;padding-top:8px;border-top:1px solid #f0f0f0">'
+      +'<div style="font-size:11px;font-weight:700;color:#6b7280;margin-bottom:4px;cursor:pointer;display:flex;align-items:center;gap:4px;user-select:none" onclick="togglePrioComponentes(\''+p.id+'\')">'
+      +'<span id="prio-comp-arrow-'+p.id+'">▶</span> Componentes ('+comps.length+')</div>'
+      +'<div id="prio-comp-list-'+p.id+'" style="display:none">'
+      +comps.map(function(c){
+        var ccc=ACT_CRIT_COLORS[c.prioridad];
+        return '<div style="display:flex;align-items:center;gap:4px;padding:4px 6px;background:#f9fafb;border-radius:6px;margin-bottom:3px">'
+          +'<span style="flex:1;font-size:12px">'+c.nombre+(ccc?' <span style="background:'+ccc.bg+';color:'+ccc.color+';font-size:9px;font-weight:800;padding:1px 5px;border-radius:8px;vertical-align:middle">'+c.prioridad+'</span>':'')+'</span>'
+          +(esAdmin?('<button onclick="abrirFormPrioComponente(\''+p.id+'\',\''+c.id+'\')" style="padding:2px 6px;background:#dbeafe;border:none;border-radius:4px;color:#1d4ed8;font-size:11px;cursor:pointer">✏️</button>'
+            +'<button onclick="eliminarPrioComponente(\''+c.id+'\')" style="padding:2px 6px;background:#fee2e2;border:none;border-radius:4px;color:#dc2626;font-size:11px;cursor:pointer">✕</button>'):'')
+          +'</div>';
+      }).join('')
+      +'</div>'
+      +'</div>'):'')
     +(esAdmin?('<div style="display:flex;gap:6px;margin-top:10px">'
       +'<button onclick="abrirFormPriorizacion(\''+p.id+'\')" style="flex:1;padding:7px;background:#f9fafb;border:1px solid #d1d5db;border-radius:8px;font-size:12px;font-weight:700;color:#374151;cursor:pointer">✏️ Editar</button>'
+      +'<button onclick="abrirFormPrioComponente(\''+p.id+'\')" style="flex:1;padding:7px;background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;font-size:12px;font-weight:700;color:#1d4ed8;cursor:pointer">➕ Componente</button>'
       +'<button onclick="eliminarPriorizacionLinea(\''+p.id+'\')" style="flex:1;padding:7px;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;font-size:12px;font-weight:700;color:#dc2626;cursor:pointer">🗑️ Eliminar</button>'
       +'</div>'):'')
     +'</div>';
@@ -15043,14 +15183,53 @@ function renderPriorizacionLista(){
     cont.innerHTML='<div class="card text-center" style="padding:32px;color:var(--txt3)"><div style="font-size:40px;margin-bottom:8px">🎯</div><div style="font-weight:700">Sin líneas registradas</div></div>';
     return;
   }
+  var filtArea=window._prioFiltroArea||'';
+  var filtPrio=window._prioFiltroPrioridad||'';
+  var base=PRIORIZACION_LINEAS.filter(function(p){
+    return (!filtArea||p.areaId===filtArea)&&(!filtPrio||p.prioridad===filtPrio);
+  });
+  if(!base.length){
+    cont.innerHTML='<div class="card text-center" style="padding:32px;color:var(--txt3)"><div style="font-size:40px;margin-bottom:8px">🎯</div><div style="font-weight:700">Sin resultados con estos filtros</div></div>';
+    return;
+  }
   var ordenPrio={A:0,B:1,C:2};
-  var lista=PRIORIZACION_LINEAS.slice().sort(function(a,b){
+  var lista=base.slice().sort(function(a,b){
     var pa=ordenPrio.hasOwnProperty(a.prioridad)?ordenPrio[a.prioridad]:3;
     var pb=ordenPrio.hasOwnProperty(b.prioridad)?ordenPrio[b.prioridad]:3;
     if(pa!==pb) return pa-pb;
     return (a.linea||'').localeCompare(b.linea||'');
   });
   cont.innerHTML=lista.map(function(p){ return _prioCardHtml(p,esAdmin); }).join('');
+}
+
+function descargarPriorizacionExcel(){
+  var filtArea=window._prioFiltroArea||'';
+  var filtPrio=window._prioFiltroPrioridad||'';
+  var base=PRIORIZACION_LINEAS.filter(function(p){
+    return (!filtArea||p.areaId===filtArea)&&(!filtPrio||p.prioridad===filtPrio);
+  });
+  var ordenPrio={A:0,B:1,C:2};
+  base=base.slice().sort(function(a,b){
+    var pa=ordenPrio.hasOwnProperty(a.prioridad)?ordenPrio[a.prioridad]:3;
+    var pb=ordenPrio.hasOwnProperty(b.prioridad)?ordenPrio[b.prioridad]:3;
+    if(pa!==pb) return pa-pb;
+    return (a.linea||'').localeCompare(b.linea||'');
+  });
+  if(!base.length){ showAlert('No hay datos para exportar','error'); return; }
+  var hdrs=['Área','Línea','Descripción','% Ocupación','Prioridad Línea','Componente','Prioridad Componente'];
+  var rows=[];
+  base.forEach(function(p){
+    var areaLbl=(PM_AREAS.find(function(a){return a.id===p.areaId;})||{}).label||p.areaId||'';
+    var comps=PRIORIZACION_COMPONENTES.filter(function(c){return c.lineaPrioId===p.id;});
+    if(comps.length){
+      comps.forEach(function(c){
+        rows.push([areaLbl,p.linea,p.descripcion||'',p.ocupacionPct!=null?p.ocupacionPct:'',p.prioridad,c.nombre,c.prioridad]);
+      });
+    } else {
+      rows.push([areaLbl,p.linea,p.descripcion||'',p.ocupacionPct!=null?p.ocupacionPct:'',p.prioridad,'','']);
+    }
+  });
+  generarExcelXML(hdrs, rows, 'Saporis_Priorizacion_Lineas_'+new Date().toISOString().slice(0,10)+'.xlsx', 'Priorización');
 }
 // ── FIN PRIORIZACIÓN DE LÍNEAS ──────────────────────────────────────
 
