@@ -1,4 +1,12 @@
 <!DOCTYPE html>
+<!--
+  Desarrollado por: Jorge Martínez Zamora
+  Autor y propietario del código fuente de esta aplicación.
+  Este software fue creado de forma independiente por el autor;
+  no es propiedad de Saporis Comercial ni de ningún tercero.
+  Queda prohibida su copia, redistribución o uso sin autorización
+  expresa del autor.
+-->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -134,7 +142,7 @@ textarea.form-control{min-height:80px;resize:vertical}
 .tab-btn{padding:12px 16px;border:none;background:none;font-family:'Nunito',sans-serif;font-size:13px;font-weight:700;color:var(--txt3);cursor:pointer;white-space:nowrap;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s}
 .tab-btn.active{color:var(--mo);border-bottom-color:var(--mo)}
 /* ALERTS */
-.alert{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:999;padding:12px 20px;border-radius:var(--rsm);font-size:14px;font-weight:700;box-shadow:0 4px 20px rgba(0,0,0,.2);min-width:260px;text-align:center}
+.alert{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:100000;padding:12px 20px;border-radius:var(--rsm);font-size:14px;font-weight:700;box-shadow:0 4px 20px rgba(0,0,0,.2);min-width:260px;text-align:center}
 .alert-success{background:var(--vd);color:#fff}
 .alert-error{background:var(--rj);color:#fff}
 .alert-warning{background:var(--am2);color:#fff}
@@ -221,7 +229,8 @@ tr:nth-child(even) td{background:#F8FAFC}
   };
 </script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
-<script src="app.js" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="app.js?v=20260910h" defer></script>
 
 <style id="lup-css">
 .lup-doc{background:#fff;border:2px solid #1a3c5e;border-radius:10px;overflow:hidden;margin:12px;font-family:Arial,sans-serif}
@@ -292,7 +301,7 @@ tr:nth-child(even) td{background:#F8FAFC}
     <div class="form-group"><label class="form-label">Usuario</label><input type="text" id="inp-user" class="form-control" placeholder="Ingresa tu usuario" autocomplete="username"></div>
     <div class="form-group"><label class="form-label">Contraseña</label><input type="password" id="inp-pass" class="form-control" placeholder="Ingresa tu contraseña" autocomplete="current-password"></div>
     <button class="btn btn-primary" onclick="doLogin()">🔐 Ingresar</button>
-    <p style="font-size:11px;color:var(--txt3);text-align:center;margin-top:16px">Saporis v5.0 — Uso exclusivo interno</p>
+    <p style="font-size:10px;color:var(--txt3);text-align:center;margin-top:16px;opacity:.7">Desarrollado por Jorge Martínez Zamora</p>
   </div>
   <div style="width:100%;max-width:380px;margin-top:16px">
     <p style="font-size:11px;color:rgba(255,255,255,.6);text-align:center;margin-bottom:8px;text-transform:uppercase;letter-spacing:.08em">Nuestros productos</p>
@@ -327,7 +336,7 @@ tr:nth-child(even) td{background:#F8FAFC}
     <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
       <div style="text-align:left">
         <div class="user-pill" id="user-pill">👤 Usuario</div>
-        <div style="font-size:10px;opacity:.5;color:#fff;margin-top:4px;letter-spacing:.3px">Saporis MTTO · REG-MTT-01.02</div>
+        <div style="font-size:10px;opacity:.5;color:#fff;margin-top:4px;letter-spacing:.3px">Saporis MTTO · REG-MTT-01.01-CMMS</div>
       </div>
       <button onclick="showBuzon()" style="position:relative;background:rgba(255,255,255,.18);border:none;border-radius:14px;padding:10px 14px;cursor:pointer;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.2)" id="btn-buzon">
       <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -402,6 +411,7 @@ tr:nth-child(even) td{background:#F8FAFC}
         <div class="menu-btn" style="border-color:#1565C0;background:linear-gradient(135deg,#fff 60%,#E3F2FD)" onclick="showActivos()"><div class="menu-icon">⚙️</div><div class="menu-label">Activos</div><div class="menu-desc">Inventario de equipos</div></div>
         <div class="menu-btn" style="border-color:#E65100;background:linear-gradient(135deg,#fff 60%,#FFF3E0)" onclick="showManuales()"><div class="menu-icon">📚</div><div class="menu-label">Manuales</div><div class="menu-desc">Documentos y entrenamiento</div></div>
         <div class="menu-btn" style="border-color:#00695C;background:linear-gradient(135deg,#fff 60%,#E0F2F1)" onclick="showServicios()"><div class="menu-icon">🏭</div><div class="menu-label">Servicios</div><div class="menu-desc">Caldera, Agua, Aire, Elec.</div></div>
+        <div class="menu-btn" style="border-color:#0891b2;background:linear-gradient(135deg,#fff 60%,#e0f7fa)" onclick="showGestionPersonal()"><div class="menu-icon">👥</div><div class="menu-label">Gestión de Personal</div><div class="menu-desc">Horarios, vacaciones, incidencias</div></div>
 
 
       </div>
@@ -416,6 +426,7 @@ tr:nth-child(even) td{background:#F8FAFC}
           <div class="menu-btn" style="border-color:#7c3aed;background:linear-gradient(135deg,#fff 60%,#ede9fe);position:relative" onclick="showPM02PorAsignar()"><div class="menu-icon" id="icon-pm02-asignar" style="position:relative">📋<span id="badge-pm02-asignar" style="display:none;position:absolute;top:-8px;right:-10px;background:#dc2626;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:11px;font-weight:800;line-height:18px;text-align:center;padding:0 3px"></span></div><div class="menu-label">PM02 por Asignar</div><div class="menu-desc" id="desc-pm02-asignar">Anormalidades sin técnico</div></div>
           <div class="menu-btn" style="border-color:#dc2626;background:linear-gradient(135deg,#fff 60%,#fee2e2);position:relative" onclick="showPM03PorReprogramar()"><div class="menu-icon" id="icon-pm3-reprogram" style="position:relative">📅<span id="badge-pm03-reprog" style="display:none;position:absolute;top:-8px;right:-10px;background:#7c3aed;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:11px;font-weight:800;line-height:18px;text-align:center;padding:0 3px"></span></div><div class="menu-label">PM03 x Reprogramar</div><div class="menu-desc" id="desc-pm3-reprogram">PM03 vencidas</div></div>
         <div class="menu-btn" style="border-color:#374151;background:linear-gradient(135deg,#fff 60%,#f3f4f6)" onclick="showProveedores()"><div class="menu-icon">🏢</div><div class="menu-label">Proveedores</div><div class="menu-desc">Directorio de proveedores</div></div>
+          <div class="menu-btn" style="border-color:#14532d;background:linear-gradient(135deg,#fff 60%,#dcfce7)" onclick="showPlanMantenimiento()"><div class="menu-icon">📋</div><div class="menu-label">Plan Mtto</div><div class="menu-desc">Actividades y historial</div></div>
           <div class="menu-btn" style="border-color:#00695C;background:linear-gradient(135deg,#fff 60%,#E0F2F1)" onclick="showServicios()"><div class="menu-icon">🏭</div><div class="menu-label">Servicios</div><div class="menu-desc">Caldera, Agua, Aire, Elec.</div></div>
         <div class="menu-btn" style="border-color:#0891b2;background:linear-gradient(135deg,#fff 60%,#e0f7fa)" onclick="showGestionPersonal()"><div class="menu-icon">👥</div><div class="menu-label">Gestión de Personal</div><div class="menu-desc">Horarios, vacaciones, incidencias</div></div>
         </div>
@@ -535,7 +546,7 @@ tr:nth-child(even) td{background:#F8FAFC}
 
 <!-- ===== MIS ÓRDENES ===== -->
 <div id="screen-ordenes" class="screen">
-  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">📌 Mis Pendientes</div></div></div>
+  <div class="topbar"><button class="topbar-back" onclick="goBack()">←</button><div><div class="topbar-title">📌 Mis Pendientes</div></div></div>
   <div class="scroll-content" style="padding:16px"><div id="ordenes-filtros"></div>
     <div id="pend-chart-wrap" style="display:none;background:#fff;border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 2px 12px rgba(0,0,0,.08)">
       <div style="font-size:13px;font-weight:700;color:#3D2F8F;margin-bottom:10px">📊 Cumplimiento PM</div>
@@ -562,6 +573,7 @@ tr:nth-child(even) td{background:#F8FAFC}
     <input type="text" class="search-box" id="consulta-search" placeholder="🔍 Buscar por ID, área, técnico, descripción..." oninput="filtrarOrdenes()">
     <div class="filter-row" id="ft-tipo"><div class="filter-chip active" onclick="setFiltro('tipo','todas',this)">Todas</div><div class="filter-chip" onclick="setFiltro('tipo','PM01',this)">PM01</div><div class="filter-chip" onclick="setFiltro('tipo','PM02',this)">PM02</div><div class="filter-chip" onclick="setFiltro('tipo','PM03',this)">PM03</div><div class="filter-chip" onclick="setFiltro('tipo','PM04',this)">PM04</div><div class="filter-chip" onclick="setFiltro('tipo','temporal',this)" style="border-color:#F59E0B;color:#B45309">⚡ Temp</div><div class="filter-chip" onclick="setFiltro('tipo','bitacora',this)" style="border-color:#6d28d9;color:#6d28d9">📒 Bitácora</div></div>
     <div class="filter-row" id="ft-estado"><div class="filter-chip active" onclick="setFiltro('estado','todos',this)">Todos estados</div><div class="filter-chip" onclick="setFiltro('estado','abierta',this)">Abiertas</div><div class="filter-chip" onclick="setFiltro('estado','cerrada',this)">Cerradas</div></div>
+    <div class="filter-row" id="ft-area"><div class="filter-chip active" onclick="setFiltro('areaGroup','todas',this)">Todas las áreas</div><div class="filter-chip" onclick="setFiltro('areaGroup','fabricacion',this)">⚗️ Fabricación</div><div class="filter-chip" onclick="setFiltro('areaGroup','envasado',this)">📦 Envasado</div><div class="filter-chip" onclick="setFiltro('areaGroup','servicios',this)">🔧 Servicios / Instalaciones</div></div>
     <div class="filter-row" id="ft-color"><div class="filter-chip active" onclick="setFiltro('color','todos',this)">Todos colores</div><div class="filter-chip" onclick="setFiltro('color','azul',this)" style="border-color:var(--az)">🔵 Azul</div><div class="filter-chip" onclick="setFiltro('color','rojo',this)" style="border-color:var(--rj)">🔴 Rojo</div></div>
     <div class="filter-row" id="ft-prio"><div class="filter-chip active" onclick="setFiltro('prio','todas',this)">Prio: Todas</div><div class="filter-chip" onclick="setFiltro('prio','A',this)">Prio A</div><div class="filter-chip" onclick="setFiltro('prio','B',this)">Prio B</div><div class="filter-chip" onclick="setFiltro('prio','C',this)">Prio C</div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
@@ -618,6 +630,7 @@ tr:nth-child(even) td{background:#F8FAFC}
     <button onclick="showOrdenesRefaccion()" style="width:100%;padding:13px;background:#1a3c5e;color:#fff;border:none;border-radius:10px;font-family:Nunito,sans-serif;font-size:.9rem;font-weight:700;cursor:pointer;margin-bottom:12px">🔩 Órdenes con Gasto de Refacción</button>
     <button onclick="showRefacciones()" style="width:100%;padding:13px;background:#5D4037;color:#fff;border:none;border-radius:10px;font-family:Nunito,sans-serif;font-size:.9rem;font-weight:700;cursor:pointer;margin-bottom:12px">📦 Inventario de Refacciones</button>
     <button onclick="showRefFaltantes()" style="width:100%;padding:13px;background:#b45309;color:#fff;border:none;border-radius:10px;font-family:Nunito,sans-serif;font-size:.9rem;font-weight:700;cursor:pointer;margin-bottom:12px;position:relative" id="btn-ref-faltantes">🛒 Refacciones Faltantes <span id="badge-ref-faltantes" style="display:none;position:absolute;top:6px;right:10px;background:#dc2626;color:#fff;border-radius:50%;width:20px;height:20px;font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center"></span></button>
+    <button onclick="showRefConsumidas()" style="width:100%;padding:13px;background:#065f46;color:#fff;border:none;border-radius:10px;font-family:Nunito,sans-serif;font-size:.9rem;font-weight:700;cursor:pointer;margin-bottom:12px;position:relative" id="btn-ref-consumidas">🔩 Refacciones Consumidas <span id="badge-ref-consumidas" style="display:none;position:absolute;top:6px;right:10px;background:#dc2626;color:#fff;border-radius:50%;width:20px;height:20px;font-size:12px;font-weight:800;display:inline-flex;align-items:center;justify-content:center"></span></button>
     <div id="almacen-content"></div>
   </div>
 </div>
@@ -666,7 +679,7 @@ tr:nth-child(even) td{background:#F8FAFC}
   <div class="modal-sheet">
     <div class="modal-handle"></div>
     <h3 style="font-family:'Nunito',sans-serif;font-weight:800;margin-bottom:16px">✅ Cerrar Orden de Trabajo</h3>
-    <div class="form-group"><label class="form-label">Observaciones del cierre</label><textarea class="form-control" id="cierre-obs" placeholder="Describe el trabajo realizado..."></textarea></div>
+    <div class="form-group"><label class="form-label">Observaciones del cierre</label><div style="display:flex;gap:6px"><textarea class="form-control" id="cierre-obs" placeholder="Describe el trabajo realizado..." style="flex:1"></textarea><button type="button" id="mic-btn-cierre-obs" onclick="activarMic('cierre-obs')" style="padding:8px 10px;background:#f0f4ff;border:1px solid #bfdbfe;border-radius:8px;font-size:16px;cursor:pointer;align-self:flex-start;flex-shrink:0" title="Dictado por voz">🎤</button></div></div>
     <div id="cierre-tiempo-wrap" class="hidden">
       <div style="background:var(--az3);border-radius:10px;padding:12px;margin-bottom:12px">
         <div style="font-size:13px;font-weight:700;color:var(--az4);margin-bottom:8px">⏱️ Tiempo invertido (formato 24h)</div>
@@ -677,8 +690,24 @@ tr:nth-child(even) td{background:#F8FAFC}
         <div id="cierre-tiempo-calc" style="font-size:13px;font-weight:700;color:var(--mo);margin-top:8px;text-align:center"></div>
       </div>
     </div>
-    <div class="form-group" style="display:none"><label class="form-label">Horas empleadas</label><input type="number" class="form-control" id="cierre-horas" placeholder="0.0" step="0.5" min="0"></div>
-    <div class="form-group" id="cierre-ref-wrap"><label class="form-label">Refacciones utilizadas</label><input type="text" class="form-control" id="cierre-refacciones" placeholder="Código o descripción..."></div>
+    <div class="form-group"><label class="form-label">⏱️ Horas de trabajo *</label><input type="number" class="form-control" id="cierre-horas" placeholder="Ej: 1.5" step="0.5" min="0.5" required style="border:2px solid #f97316"></div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700;color:#374151">
+        <input type="checkbox" id="cierre-uso-refacciones" onchange="toggleCierreRefacciones(this.checked)" style="width:18px;height:18px;cursor:pointer">
+        🔩 Usé refacciones / materiales
+      </label>
+      <div id="cierre-ref-wrap" class="hidden" style="margin-top:8px">
+        <div id="cierre-ref-lista" style="display:flex;flex-direction:column;gap:6px;margin-bottom:6px">
+          <div class="cierre-ref-row" style="display:flex;gap:6px">
+            <input type="text" class="form-control cierre-ref-input" placeholder="Ej: Balero 6205, O-ring 2&quot;..." style="flex:1;font-size:13px">
+            <input type="text" class="form-control cierre-ref-input" placeholder="Ej: Balero 6205, O-ring 2&quot;..." style="flex:1;font-size:13px">
+            <input type="number" class="form-control cierre-ref-cant" placeholder="Cant." min="1" style="width:64px;font-size:13px">
+          </div>
+        </div>
+        <button type="button" onclick="cierreRefAgregar()" style="width:100%;padding:8px;background:#f0f4ff;border:1px dashed #2563eb;border-radius:8px;font-size:12px;font-weight:700;color:#2563eb;cursor:pointer">+ Agregar refacción</button>
+        <div style="font-size:10px;color:#9ca3af;margin-top:4px">Una refacción por línea</div>
+      </div>
+    </div>
     <!-- LIMPIEZA -->
     <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:10px;padding:12px;margin-bottom:12px">
       <div style="font-size:13px;font-weight:700;color:#856404;margin-bottom:10px">🧹 ¿Se requiere limpieza por el usuario después de la intervención?</div>
@@ -689,6 +718,9 @@ tr:nth-child(even) td{background:#F8FAFC}
       <div id="limpieza-aviso-wrap" style="display:none">
         <label class="form-label" style="font-size:12px">¿A quién se le avisó de la limpieza?</label>
         <input type="text" class="form-control" id="limpieza-aviso" placeholder="Nombre del usuario avisado..." style="padding:9px">
+        <label class="form-label" style="font-size:12px;margin-top:8px">Firma de quien recibe el aviso</label>
+        <canvas id="limpieza-firma-canvas" width="300" height="110" style="width:100%;max-width:300px;border:2px solid #e5e7eb;border-radius:8px;background:#fff;touch-action:none;display:block"></canvas>
+        <button type="button" onclick="limpFirmaLimpiar('limpieza-firma-canvas')" style="margin-top:6px;padding:6px 12px;font-size:11px;background:#f3f4f6;border:none;border-radius:8px;cursor:pointer">🗑️ Borrar firma</button>
       </div>
     </div>
     <div class="btn-row"><button class="btn btn-gray" onclick="cerrarModal('modal-cierre')">Cancelar</button><button class="btn btn-success" onclick="confirmarCierre()">✅ Confirmar</button></div>
@@ -782,6 +814,24 @@ tr:nth-child(even) td{background:#F8FAFC}
 <div id="screen-activos" class="screen">
   <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">⚙️ Activos</div></div></div>
   <div class="scroll-content" style="padding:16px">
+    <div class="card" style="padding:16px;cursor:pointer;display:flex;align-items:center;gap:14px;margin-bottom:16px" onclick="showRegistroActivos()">
+      <div style="font-size:32px">📋</div>
+      <div style="flex:1"><div style="font-weight:800;font-size:15px">Registro de Activos</div>
+      <div style="font-size:12px;color:var(--txt2)">Equipos principales por línea</div></div>
+      <div style="color:var(--txt3);font-size:20px">›</div>
+    </div>
+    <div class="card" style="padding:16px;cursor:pointer;display:flex;align-items:center;gap:14px;margin-bottom:16px" onclick="showCementerio()">
+      <div style="font-size:32px">🪦</div>
+      <div style="flex:1"><div style="font-weight:800;font-size:15px">Cementerio de Equipos</div>
+      <div style="font-size:12px;color:var(--txt2)">Equipos fuera de operación</div></div>
+      <div style="color:var(--txt3);font-size:20px">›</div>
+    </div>
+    <div class="card" style="padding:16px;cursor:pointer;display:flex;align-items:center;gap:14px;margin-bottom:16px" onclick="showPriorizacionLineas()">
+      <div style="font-size:32px">🎯</div>
+      <div style="flex:1"><div style="font-weight:800;font-size:15px">Priorización de Líneas</div>
+      <div style="font-size:12px;color:var(--txt2)">Ocupación y prioridad por línea</div></div>
+      <div style="color:var(--txt3);font-size:20px">›</div>
+    </div>
     <div class="card" style="text-align:center;padding:40px 20px">
       <div style="font-size:56px;margin-bottom:12px">⚙️</div>
       <div style="font-family:Nunito,sans-serif;font-size:20px;font-weight:800;color:var(--mo);margin-bottom:8px">Módulo de Activos</div>
@@ -795,6 +845,131 @@ tr:nth-child(even) td{background:#F8FAFC}
         <div>• Carga masiva desde Excel</div>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- ===== CEMENTERIO DE EQUIPOS ===== -->
+<div id="screen-cementerio" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showActivos()">←</button><div><div class="topbar-title">🪦 Cementerio de Equipos</div></div></div>
+  <div class="scroll-content" style="padding:16px">
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button id="btn-cem-nuevo" class="btn btn-primary" style="display:none;flex:1;margin:0" onclick="abrirFormCementerio()">➕ Registrar equipo</button>
+      <button id="btn-cem-historial" class="btn btn-outline" style="display:none;flex:1;margin:0" onclick="showCementerioHistorial()">🗂️ Historial de bajas</button>
+    </div>
+    <input type="text" class="form-control mb12" id="cem-buscar" placeholder="🔍 Buscar por nombre, modelo, serie o estado..." oninput="renderCementerioLista()">
+    <div id="cementerio-form-wrap" class="card hidden" style="margin-bottom:16px">
+      <div class="card-title mb8" id="cem-form-titulo">➕ Registrar equipo</div>
+      <div class="form-group"><label class="form-label">Nombre del equipo</label><input type="text" class="form-control" id="cem-nombre" placeholder="Ej: Bomba centrífuga 5HP"></div>
+      <div class="form-group"><label class="form-label">Modelo</label><input type="text" class="form-control" id="cem-modelo" placeholder="Modelo"></div>
+      <div class="form-group"><label class="form-label">Serie</label><input type="text" class="form-control" id="cem-serie" placeholder="Número de serie"></div>
+      <div class="form-group"><label class="form-label">Estado</label>
+        <select class="form-control" id="cem-estado">
+          <option value="">-- Selecciona --</option>
+          <option value="Nuevo">Nuevo</option>
+          <option value="Usado">Usado</option>
+          <option value="Dañado">Dañado</option>
+          <option value="Operable">Operable</option>
+          <option value="Para venta">Para venta</option>
+        </select>
+      </div>
+      <button class="btn btn-success" onclick="guardarEquipoCementerio()">✅ Guardar</button>
+      <button class="btn btn-gray mt8" onclick="cerrarFormCementerio()">Cancelar</button>
+    </div>
+    <div id="cementerio-lista"></div>
+  </div>
+</div>
+
+<!-- ===== CEMENTERIO DE EQUIPOS — HISTORIAL DE BAJAS ===== -->
+<div id="screen-cementerio-historial" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showCementerio()">←</button><div><div class="topbar-title">🗂️ Historial de bajas</div></div></div>
+  <div class="scroll-content" style="padding:16px">
+    <input type="text" class="form-control mb12" id="cem-hist-buscar" placeholder="🔍 Buscar por nombre, modelo, serie o motivo..." oninput="renderCementerioHistorial()">
+    <div id="cementerio-historial-lista"></div>
+  </div>
+</div>
+
+<!-- ===== REGISTRO DE ACTIVOS ===== -->
+<div id="screen-registro-activos" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showActivos()">←</button><div><div class="topbar-title">📋 Registro de Activos</div></div></div>
+  <div class="scroll-content" style="padding:16px">
+    <button id="btn-act-ver-todos" class="btn btn-outline mb12" onclick="toggleActVerTodos()">📊 Ver todos</button>
+    <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+      <div class="filter-chip active" onclick="filtActCriticidad('',this)">Todas</div>
+      <div class="filter-chip" onclick="filtActCriticidad('A',this)">Criticidad A</div>
+      <div class="filter-chip" onclick="filtActCriticidad('B',this)">Criticidad B</div>
+      <div class="filter-chip" onclick="filtActCriticidad('C',this)">Criticidad C</div>
+    </div>
+    <div class="form-group"><label class="form-label">Área</label>
+      <select class="form-control" id="act-area" onchange="onChangeActArea()">
+        <option value="">-- Selecciona área --</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Línea</label>
+      <select class="form-control" id="act-linea" onchange="onChangeActLinea()" disabled>
+        <option value="">-- Primero selecciona área --</option>
+      </select>
+    </div>
+    <button id="btn-act-nuevo" class="btn btn-primary mb12" style="display:none" onclick="abrirFormActivo()">➕ Registrar activo</button>
+    <div id="activo-form-wrap" class="card hidden" style="margin-bottom:16px">
+      <div class="card-title mb8" id="act-form-titulo">➕ Registrar activo</div>
+      <div class="form-group"><label class="form-label">Nombre del activo</label><input type="text" class="form-control" id="act-nombre" placeholder="Ej: Llenadora 1"></div>
+      <div class="form-group"><label class="form-label">Marca</label><input type="text" class="form-control" id="act-marca" placeholder="Marca"></div>
+      <div class="form-group"><label class="form-label">Modelo</label><input type="text" class="form-control" id="act-modelo" placeholder="Modelo"></div>
+      <div class="form-group"><label class="form-label">Serie</label><input type="text" class="form-control" id="act-serie" placeholder="Número de serie"></div>
+      <div class="form-group"><label class="form-label">Año de instalación</label><input type="text" class="form-control" id="act-anio" placeholder="Ej: 2019"></div>
+      <div class="form-group"><label class="form-label">Estado operativo</label>
+        <select class="form-control" id="act-estado">
+          <option value="Operando">Operando</option>
+          <option value="En mantenimiento">En mantenimiento</option>
+          <option value="Fuera de servicio">Fuera de servicio</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Nivel de criticidad</label>
+        <select class="form-control" id="act-criticidad">
+          <option value="">-- Selecciona --</option>
+          <option value="A">A</option>
+          <option value="B">B</option>
+          <option value="C">C</option>
+        </select>
+      </div>
+      <button class="btn btn-success" onclick="guardarActivo()">✅ Guardar</button>
+      <button class="btn btn-gray mt8" onclick="cerrarFormActivo()">Cancelar</button>
+    </div>
+    <div id="registro-activos-lista"></div>
+  </div>
+</div>
+
+<!-- ===== PRIORIZACIÓN DE LÍNEAS ===== -->
+<div id="screen-priorizacion-lineas" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showActivos()">←</button><div><div class="topbar-title">🎯 Priorización de Líneas</div></div></div>
+  <div class="scroll-content" style="padding:16px">
+    <button id="btn-prio-nuevo" class="btn btn-primary mb12" style="display:none" onclick="abrirFormPriorizacion()">➕ Agregar línea</button>
+    <div id="prio-form-wrap" class="card hidden" style="margin-bottom:16px">
+      <div class="card-title mb8" id="prio-form-titulo">➕ Agregar línea</div>
+      <div class="form-group"><label class="form-label">Área</label>
+        <select class="form-control" id="prio-area" onchange="onChangePrioArea()">
+          <option value="">-- Selecciona área --</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Línea</label>
+        <select class="form-control" id="prio-linea" disabled>
+          <option value="">-- Primero selecciona área --</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Descripción</label><textarea class="form-control" id="prio-descripcion" placeholder="Descripción de la línea..." rows="2"></textarea></div>
+      <div class="form-group"><label class="form-label">% de ocupación</label><input type="number" class="form-control" id="prio-ocupacion" min="0" max="100" step="1" placeholder="Ej: 85"></div>
+      <div class="form-group"><label class="form-label">Prioridad</label>
+        <select class="form-control" id="prio-prioridad">
+          <option value="">-- Selecciona --</option>
+          <option value="A">A</option>
+          <option value="B">B</option>
+          <option value="C">C</option>
+        </select>
+      </div>
+      <button class="btn btn-success" onclick="guardarPriorizacionLinea()">✅ Guardar</button>
+      <button class="btn btn-gray mt8" onclick="cerrarFormPriorizacion()">Cancelar</button>
+    </div>
+    <div id="priorizacion-lista"></div>
   </div>
 </div>
 
@@ -972,8 +1147,8 @@ tr:nth-child(even) td{background:#F8FAFC}
       <div class="menu-btn" style="border-color:#F44336;background:linear-gradient(135deg,#fff 60%,#FFEBEE)" onclick="showAlert('Módulo en desarrollo','info')">
         <div class="menu-icon">🔥</div><div class="menu-label">Caldera</div><div class="menu-desc">En desarrollo</div>
       </div>
-      <div class="menu-btn" style="border-color:#2196F3;background:linear-gradient(135deg,#fff 60%,#E3F2FD)" onclick="showAlert('Módulo en desarrollo','info')">
-        <div class="menu-icon">💧</div><div class="menu-label">Agua</div><div class="menu-desc">En desarrollo</div>
+      <div class="menu-btn" style="border-color:#1e3a8a;background:linear-gradient(135deg,#fff 60%,#dbeafe)" onclick="showAgua()">
+        <div class="menu-icon">💧</div><div class="menu-label">Agua</div><div class="menu-desc">Consumo diario</div>
       </div>
       <div class="menu-btn" style="border-color:#607D8B;background:linear-gradient(135deg,#fff 60%,#ECEFF1)" onclick="showAlert('Módulo en desarrollo','info')">
         <div class="menu-icon">💨</div><div class="menu-label">Aire Comprimido</div><div class="menu-desc">En desarrollo</div>
@@ -987,5 +1162,29 @@ tr:nth-child(even) td{background:#F8FAFC}
     </div>
   </div>
 </div>
+<div id="screen-agua" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showServicios()">←</button>
+    <div><div class="topbar-title">💧 Agua</div><div class="topbar-sub" id="agua-topbar-sub">Consumo diario</div></div>
+  </div>
+  <div class="scroll-content" style="padding:14px" id="agua-content"></div>
+</div>
+
+<div id="screen-plan" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="goBack()">←</button>
+    <div><div class="topbar-title">📋 Plan de Mantenimiento</div><div class="topbar-sub" id="plan-topbar-sub">Gestión de actividades</div></div>
+  </div>
+  <div class="scroll-content" style="padding:14px" id="plan-content"></div>
+</div>
+
+<div id="screen-plan-historial" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="goBack()">←</button>
+    <div><div class="topbar-title">📊 Historial de Equipo</div><div class="topbar-sub" id="plan-hist-sub"></div></div>
+  </div>
+  <div class="scroll-content" style="padding:14px" id="plan-hist-content"></div>
+</div>
+
 </body>
 </html>

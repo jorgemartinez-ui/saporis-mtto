@@ -1,3 +1,4 @@
+// v20260807-2327
 // Saporis SW — includes Firebase messaging for background push
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging-compat.js');
