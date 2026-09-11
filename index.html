@@ -230,7 +230,7 @@ tr:nth-child(even) td{background:#F8FAFC}
 </script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="app.js?v=20260911d" defer></script>
+<script src="app.js?v=20260911e" defer></script>
 
 <style id="lup-css">
 .lup-doc{background:#fff;border:2px solid #1a3c5e;border-radius:10px;overflow:hidden;margin:12px;font-family:Arial,sans-serif}
@@ -707,6 +707,11 @@ tr:nth-child(even) td{background:#F8FAFC}
         <button type="button" onclick="cierreRefAgregar()" style="width:100%;padding:8px;background:#f0f4ff;border:1px dashed #2563eb;border-radius:8px;font-size:12px;font-weight:700;color:#2563eb;cursor:pointer">+ Agregar refacción</button>
         <div style="font-size:10px;color:#9ca3af;margin-top:4px">Una refacción por línea</div>
       </div>
+    </div>
+    <div id="cierre-tec-adic-wrap" class="hidden" style="margin-bottom:12px">
+      <div style="font-size:.78rem;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Técnicos adicionales (opcional)</div>
+      <div id="cierre-extra-tecs-container"></div>
+      <button type="button" onclick="cierreAddExtraTec()" style="width:100%;padding:10px;background:#f0f4ff;border:1px dashed #2563eb;border-radius:10px;font-size:.88rem;font-weight:600;color:#2563eb;cursor:pointer;margin-top:4px">+ Agregar técnico de apoyo</button>
     </div>
     <!-- LIMPIEZA -->
     <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:10px;padding:12px;margin-bottom:12px">

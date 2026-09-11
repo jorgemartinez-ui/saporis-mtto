@@ -1415,8 +1415,52 @@ function abrirCierre(id){
   const showTime=['PM01','PM03','PM04'].includes(tipo);
   const wrap=document.getElementById('cierre-tiempo-wrap');
   if(wrap)wrap.classList.toggle('hidden',!showTime);
+  // Técnicos adicionales (apoyo) al cerrar — por ahora solo PM01 y PM04, que suelen
+  // quedar "abiertas" y cerrarse después por este modal genérico.
+  const showTecAdic=['PM01','PM04'].includes(tipo);
+  const wrapTA=document.getElementById('cierre-tec-adic-wrap');
+  if(wrapTA)wrapTA.classList.toggle('hidden',!showTecAdic);
+  window._cierreTecnicosAdicionales=(o&&o.tecnicosAdicionales)?JSON.parse(JSON.stringify(o.tecnicosAdicionales)):[];
+  cierreRenderExtraTecs();
   resetLimpiezaCierreUI();
   showModal('modal-cierre');
+}
+
+// ── TÉCNICOS ADICIONALES al cerrar una orden ya "abierta" (modal-cierre) ─────────
+function cierreRenderExtraTecs(){
+  var cont=document.getElementById('cierre-extra-tecs-container');
+  if(!cont) return;
+  var assignable=USERS.filter(function(u){return u.rol==='tecnico'&&u.id!=='u_super';});
+  cont.innerHTML=(window._cierreTecnicosAdicionales||[]).map(function(ta,i){
+    return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">'
+      +'<select class="form-control" style="flex:2" onchange="cierreUpdateExtraTec('+i+',this)">'
+      +'<option value="">-- Técnico --</option>'
+      +assignable.map(function(t){return '<option value="'+t.id+'"'+(ta.id===t.id?' selected':'')+'>'+t.nombre+'</option>';}).join('')
+      +'</select>'
+      +'<input type="number" class="form-control" placeholder="Hrs" min="0" max="24" step="0.5" style="width:70px" value="'+(ta.horas||'')+'" onchange="cierreUpdateExtraHrs('+i+',this)">'
+      +'<button type="button" onclick="cierreRemoveExtraTec('+i+')" style="background:#fee2e2;border:none;border-radius:8px;padding:6px 10px;color:#dc2626;cursor:pointer;font-size:14px">🗑</button>'
+      +'</div>';
+  }).join('');
+}
+function cierreAddExtraTec(){
+  if(!window._cierreTecnicosAdicionales) window._cierreTecnicosAdicionales=[];
+  window._cierreTecnicosAdicionales.push({id:'',nombre:'',horas:0});
+  cierreRenderExtraTecs();
+}
+function cierreRemoveExtraTec(idx){
+  if(!window._cierreTecnicosAdicionales) return;
+  window._cierreTecnicosAdicionales.splice(idx,1);
+  cierreRenderExtraTecs();
+}
+function cierreUpdateExtraTec(idx,sel){
+  if(!window._cierreTecnicosAdicionales) return;
+  var u=USERS.find(function(x){return x.id===sel.value;});
+  window._cierreTecnicosAdicionales[idx].id=sel.value;
+  window._cierreTecnicosAdicionales[idx].nombre=u?u.nombre:'';
+}
+function cierreUpdateExtraHrs(idx,inp){
+  if(!window._cierreTecnicosAdicionales) return;
+  window._cierreTecnicosAdicionales[idx].horas=parseFloat(inp.value)||0;
 }
 function toggleCierreRefacciones(checked){
   var wrap=document.getElementById('cierre-ref-wrap');
@@ -1505,6 +1549,11 @@ function confirmarCierre(){
   const horaIni=document.getElementById('cierre-hora-inicio')?.value||null;
   const horaFin=document.getElementById('cierre-hora-fin')?.value||null;
   o.estado='cerrada';o.observacionesCierre=obs;o.horasCierre=horas;o.refaccionesUsadas=refsStr;
+  // Técnicos adicionales (solo PM01/PM04, que es donde se ofrece esta sección aquí —
+  // no tocar tecnicosAdicionales de otros tipos que pudo haberse llenado en otro flujo).
+  if(['PM01','PM04'].includes(o.tipo)){
+    o.tecnicosAdicionales=(window._cierreTecnicosAdicionales||[]).filter(function(ta){return ta.id&&ta.horas>0;});
+  }
   if(o.tipo==='PM01'&&o.mttr==null&&horas>0){o.mttr=Math.round(horas*60);}
   o.cerradaTs=Date.now();o.cerradaPor=currentUser.nombre;
   if(horaIni)o.horaInicioTrabajo=horaIni; if(horaFin)o.horaFinTrabajo=horaFin;
@@ -1869,6 +1918,14 @@ function showDetallePM03(id){
   }
 
   document.getElementById('detalle-content').innerHTML=bannerRepro+`<div class="card"><div class="card-title">${p.esInspeccion?'✅ Inspección de Turno':'📅 '+p.linea}</div>${row('🔩 Componente',p.componente)}${row('🔧 Actividad',p.actividad)}${row('📅 Semana',p.semana?p.semana+' / '+p.año:'Sin programar')}${row('👤 Técnico',p.tecnicoNombre||'Sin asignar')}${row('📋 Estado',p.estado||'abierta')}${p.horaInicio?row('🕐 Inicio',p.horaInicio):''}${p.horaFin?row('🕐 Fin',p.horaFin):''}${p.horaInicio&&p.horaFin?row('⏱️ Tiempo',diffMin(p.horaInicio,p.horaFin)+' min'):''}</div>
+  ${p.diasTrabajo&&p.diasTrabajo.length?(function(){
+    var filas=p.diasTrabajo.map(function(d,i){
+      var mins=diffMin(d.horaInicio,d.horaFin);
+      return '<tr><td style="font-size:11px">Día '+(i+1)+'</td><td style="font-size:11px">'+(d.fecha?new Date(d.fecha+'T12:00:00').toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'}):'—')+'</td><td style="font-size:11px">'+(d.horaInicio||'—')+' → '+(d.horaFin||'—')+'</td><td style="font-size:11px;font-weight:800;color:#1a3c5e">'+(mins!=null?(mins/60).toFixed(1)+' h':'—')+'</td></tr>';
+    }).join('');
+    var totalHrs=p.diasTrabajo.reduce(function(s,d){var m=diffMin(d.horaInicio,d.horaFin);return s+(m!=null?m/60:0);},0);
+    return '<div class="card"><div class="card-title">📅 Días de trabajo</div><div class="table-wrap"><table><thead><tr><th>#</th><th>Fecha</th><th>Horario</th><th>Horas</th></tr></thead><tbody>'+filas+'</tbody></table></div><div style="text-align:right;margin-top:6px;font-size:12px;font-weight:800;color:#1a3c5e">Total: '+totalHrs.toFixed(1)+' h</div></div>';
+  })():''}
   ${p.observacionesCierre?`<div class="card"><div class="card-title">✅ Cierre</div>
     <p style="font-size:13px;color:var(--txt2)">${p.observacionesCierre}</p>
     ${row('⏱️ Horas',p.horasCierre+' h')}${row('Por',p.cerradaPor||'—')}
@@ -25178,6 +25235,15 @@ function renderResumenTecnicosOT(){
     var fechaCap = l.capturado_ts ? fechaLocal(l.capturado_ts) : l.fecha;
     if(fechasPeriodo.indexOf(fechaCap)<0) return;
     _sumaHorasExtra(l.capturado_por, Math.min(l.tiempo_llenado_hrs,1));
+  });
+  // Técnicos adicionales (apoyo) en una orden — se les suman SUS horas propias; el
+  // técnico principal conserva el total de la orden (igual que ya funciona en la
+  // matriz de horas del dashboard de KPIs).
+  base.forEach(function(o){
+    if(!o.tecnicosAdicionales || !o.tecnicosAdicionales.length) return;
+    o.tecnicosAdicionales.forEach(function(ta){
+      if(ta && ta.nombre && ta.horas>0) _sumaHorasExtra(ta.nombre, parseFloat(ta.horas)||0);
+    });
   });
 
   // Dynamic list from USERS — show all tecnico/admin regardless of activity
