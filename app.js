@@ -17941,6 +17941,7 @@ function guardarChecklist() {
     levantado_por: insp.tecnicoNombre,
     ts: insp.tsCierre,
     ts_cierre: insp.tsCierre,
+    ts_inicio: insp.tsInicio||null,
     fecha: new Date(insp.tsCierre||Date.now()).toISOString().split('T')[0],
     tecnico_nombre: insp.tecnicoNombre||currentUser.nombre,
     puntos_detalle: JSON.stringify(insp.puntos||[]),
@@ -18026,7 +18027,10 @@ function _crearOTInspeccionTurno(insp, verde, rojo, napl, total){
     año: insp.año,
     colorOT: rojo>0?'rojo':'azul',
     observacionesCierre: 'Inspeccion: '+verde+' verde, '+rojo+' rojo, '+napl+' no aplica. '+pct+'% cumplimiento.',
-    horasCierre: parseFloat(((insp.tsCierre-insp.tsInicio)/3600000).toFixed(2))||0,
+    // El tiempo del checklist ya se cuenta aparte (una sola vez, con candado de 1h) en
+    // el resumen de OTs por técnico — esta OT es solo para dar seguimiento a los puntos
+    // en rojo, no debe además sumar sus propias horas para no duplicarlas.
+    horasCierre: 0,
     cerradaTs: rojo===0?Date.now():null,
     cerradaPor: rojo===0?insp.tecnicoNombre:null,
     esInspeccion: true,
@@ -25092,6 +25096,16 @@ function renderResumenTecnicosOT(){
     tsHasta = tsDesde + 7*86400000;
   }
 
+  // Fechas de "día laboral" (6:30am—6:30am, ver fechaLocal) cubiertas por el período,
+  // para repartir por día real las horas de trabajos de varios días (PM02/PM03) y el
+  // tiempo de checklists / registro de agua, en vez de cargarlas todas al día de cierre.
+  var fechasPeriodo = [];
+  if(filtFecha){
+    fechasPeriodo = [filtFecha];
+  } else if(filtSem){
+    for(var _fi=0; _fi<7; _fi++) fechasPeriodo.push(fechaLocal(tsDesde + _fi*86400000));
+  }
+
   // Filtrar OTs cerradas en el período usando cerradaTs
   var base = ORDENES.filter(function(o){
     if(o.estado !== 'cerrada') return false;
@@ -25111,9 +25125,60 @@ function renderResumenTecnicosOT(){
     if(!tsCierre) return false;
     return tsCierre >= tsDesde && tsCierre < tsHasta;
   }).map(function(p){
-    return {tipo:'PM03', tecnicoNombre:p.tecnicoNombre, horasCierre:p.horasCierre};
+    // Si es trabajo de varios días, sus horas se reparten por día más abajo — no sumar
+    // aquí también, para no duplicarlas cargándolas completas al día de cierre.
+    var esVariosDias = p.diasTrabajo && p.diasTrabajo.length;
+    return {tipo:'PM03', tecnicoNombre:p.tecnicoNombre, horasCierre: esVariosDias?0:p.horasCierre};
   });
   base = base.concat(basePM03);
+
+  // Reparto por día real de: PM02/PM03 de varios días, tiempo de checklists (desde que
+  // se inicia hasta que se guarda) y tiempo de llenado del registro de agua. Candado de
+  // máx. 1h por checklist/registro: más que eso es que se quedó abierto sin cerrarlo,
+  // no tiempo real de llenado.
+  var horasExtraPorTec = {}; // normNombre -> horas adicionales
+  function _sumaHorasExtra(tecnicoNombre, horas){
+    if(!tecnicoNombre || !(horas>0)) return;
+    var norm = normNombre(tecnicoNombre);
+    horasExtraPorTec[norm] = (horasExtraPorTec[norm]||0) + horas;
+  }
+  // PM02/PM03 de varios días capturados en ORDENES (trabajoDias:[{fecha,horas}])
+  ORDENES.forEach(function(o){
+    if(o.estado!=='cerrada' || o.fuenteBitacora) return;
+    if(!o.trabajoDias || !o.trabajoDias.length) return;
+    o.trabajoDias.forEach(function(d){
+      if(fechasPeriodo.indexOf(d.fecha)>=0) _sumaHorasExtra(o.tecnicoNombre, parseFloat(d.horas)||0);
+    });
+  });
+  // PM03 de varios días capturados en PM03_PLAN (diasTrabajo:[{fecha,horaInicio,horaFin}])
+  PM03_PLAN.forEach(function(p){
+    if(p.estado!=='cerrada') return;
+    if(!p.diasTrabajo || !p.diasTrabajo.length) return;
+    p.diasTrabajo.forEach(function(d){
+      if(fechasPeriodo.indexOf(d.fecha)>=0){
+        var hrsDia = parseFloat((diffMin(d.horaInicio,d.horaFin)/60).toFixed(2))||0;
+        _sumaHorasExtra(p.tecnicoNombre, hrsDia);
+      }
+    });
+  });
+  // Tiempo de checklists (Inspección de Turno, Arranque/Paro de Servicios, Chiller, etc.)
+  INSPECCIONES.forEach(function(insp){
+    if(insp.estado!=='cerrada') return;
+    var tsIni = insp.tsInicio || insp.ts_inicio;
+    var tsFin = insp.tsCierre || insp.ts_cierre;
+    if(!tsIni || !tsFin) return;
+    if(fechasPeriodo.indexOf(fechaLocal(tsFin))<0) return;
+    var dur = (tsFin - tsIni)/3600000;
+    if(!(dur>0)) return;
+    _sumaHorasExtra(insp.tecnicoNombre || insp.tecnico_nombre || insp.tecnico, Math.min(dur,1));
+  });
+  // Tiempo de llenado del registro de agua
+  AGUA_LECTURAS.forEach(function(l){
+    if(!(l.tiempo_llenado_hrs>0) || !l.capturado_por) return;
+    var fechaCap = l.capturado_ts ? fechaLocal(l.capturado_ts) : l.fecha;
+    if(fechasPeriodo.indexOf(fechaCap)<0) return;
+    _sumaHorasExtra(l.capturado_por, Math.min(l.tiempo_llenado_hrs,1));
+  });
 
   // Dynamic list from USERS — show all tecnico/admin regardless of activity
   var tecnicos = USERS.filter(function(u){return u.rol==='tecnico';}).map(function(u){return u.nombre;}).sort();
@@ -25169,7 +25234,13 @@ function renderResumenTecnicosOT(){
     var pm03 = mis.filter(function(o){ return o.tipo==='PM03'; }).length;
     var pm04 = mis.filter(function(o){ return o.tipo==='PM04'; }).length;
     var total = mis.length;
-    var horas = mis.reduce(function(acc,o){ return acc+(parseFloat(o.horasCierre)||0); },0);
+    var horas = mis.reduce(function(acc,o){
+      // Los de varios días ya se reparten por día arriba (horasExtraPorTec) — no sumar
+      // aquí también su horasCierre completo, para no duplicarlo.
+      if(o.trabajoDias && o.trabajoDias.length) return acc;
+      return acc+(parseFloat(o.horasCierre)||0);
+    },0);
+    horas += horasExtraPorTec[normN] || 0;
     return {nombre:nombre,pm01:pm01,pm02:pm02,pm03:pm03,pm04:pm04,total:total,horas:horas.toFixed(1)};
   }).filter(function(r){ return r!==null; });
 
@@ -27112,6 +27183,9 @@ function _renderAguaGraficaSemana(){
 
 function abrirCapturaDiariaAgua(fecha){
   _aguaCaptureFecha=fecha;
+  // Marca el inicio de captura (si no había una ya en curso) para medir cuánto tarda
+  // el técnico en llenar el registro, desde que abre el formulario hasta que lo guarda.
+  if(!loadDB('agua_inicio_'+fecha,null)) saveDB('agua_inicio_'+fecha, Date.now());
   var lectAyer=AGUA_LECTURAS.find(function(l){
     var ayer=new Date(new Date(fecha).getTime()-86400000).toISOString().slice(0,10);
     return l.fecha===ayer;
@@ -27266,6 +27340,12 @@ function guardarLecturaAgua(fecha){
     }
   }
 
+  // Tiempo que tardó en llenarlo, desde que abrió el formulario hasta ahora — con
+  // candado de máx. 1h (más que eso es que lo dejó abierto sin terminarlo, no tiempo
+  // real de llenado).
+  var _aguaInicioTs = loadDB('agua_inicio_'+fecha, null);
+  var tiempoLlenadoHrs = _aguaInicioTs ? Math.min((Date.now()-_aguaInicioTs)/3600000, 1) : 0;
+
   var id='AGUA-'+fecha;
   var row={
     id:id, fecha:fecha,
@@ -27274,7 +27354,8 @@ function guardarLecturaAgua(fecha){
     consumo_cip:consumoCIP, consumo_proceso:consumoProceso,
     consumo_red_fabrica:consumoRedFab, consumo_total_entrada:totalEntrada,
     balance_diferencia:balance, notas:notas,
-    capturado_por:currentUser.nombre, capturado_ts:Date.now()
+    capturado_por:currentUser.nombre, capturado_ts:Date.now(),
+    tiempo_llenado_hrs: parseFloat(tiempoLlenadoHrs.toFixed(2))
   };
 
   var idx=AGUA_LECTURAS.findIndex(function(l){return l.fecha===fecha;});
@@ -27286,6 +27367,7 @@ function guardarLecturaAgua(fecha){
     supaFetch('agua_lecturas','PATCH',row,'id=eq.'+id).catch(function(){});
   });
 
+  saveDB('agua_inicio_'+fecha, null); // ya se guardó, limpiar la marca de inicio
   _aguaLimpiarBorrador(fecha);
   document.getElementById('modal-agua-captura')?.remove();
   showAlert('✅ Lectura guardada — Balance: '+(balance>0?'+':'')+balance+' m³');
