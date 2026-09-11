@@ -17560,7 +17560,13 @@ function iniciarChecklist(tipoId) {
   // Buscar primero si ya hay un checklist en progreso compartido (de este u otro técnico)
   supaFetch('checklist_progreso','GET',null,'id=eq.'+encodeURIComponent(tipoId)).then(function(rows){
     if(rows && rows.length){
-      _chkContinuarDesdeProgreso(rows[0], tipo, puntos);
+      // Inspección de Turno es personal — nunca debe continuar el progreso de OTRO
+      // técnico (a diferencia de Arranque/Paro/Chiller, donde sí es intencional).
+      if(tipoId==='inspeccion_turno' && rows[0].tecnico_id && rows[0].tecnico_id!==currentUser.id){
+        _chkContinuarLocalONuevo(tipoId, tipo, puntos);
+      } else {
+        _chkContinuarDesdeProgreso(rows[0], tipo, puntos);
+      }
     } else {
       _chkContinuarLocalONuevo(tipoId, tipo, puntos);
     }
@@ -17618,6 +17624,12 @@ function _chkContinuarDesdeProgreso(row, tipo, puntosConfig){
 function _chkContinuarLocalONuevo(tipoId, tipo, puntos){
   // Sin progreso compartido en Supabase (offline, o aún no sincroniza) — usar borrador local si existe
   var draft = loadDB('chk_draft_'+tipoId, null);
+  // Inspección de Turno es personal — un borrador local de OTRO técnico (p.ej. tablet
+  // compartida) nunca debe ofrecerse para continuar, ni quedar a nombre de quien no lo hizo.
+  if(tipoId==='inspeccion_turno' && draft && draft.tecnicoId && draft.tecnicoId!==currentUser.id){
+    draft = null;
+    saveDB('chk_draft_'+tipoId, null);
+  }
   if(draft && draft.puntos && draft.estado !== 'cerrada'){
     var marcados = draft.puntos.filter(function(p){return p.estado && p.tipo!=='seccion' && p.tipo!=='informativo';}).length;
     if(marcados > 0 && confirm('Tienes un checklist en progreso ('+marcados+' puntos marcados). ¿Continuarlo?')){
@@ -17955,6 +17967,40 @@ function guardarChecklist() {
   showChecklistMenu();
 }
 
+// Botón "←" del checklist: si hay algo en progreso, pregunta qué hacer en vez de
+// salir directo (para no dejar borradores/progreso colgado a nombre de nadie).
+function salirChecklist(){
+  if(!_chkActual || _chkActual.estado==='cerrada'){
+    showChecklistMenu();
+    return;
+  }
+  var modal=document.createElement('div');
+  modal.id='modal-chk-salir';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;overflow-y:auto;padding:12px;box-sizing:border-box;display:flex;align-items:center';
+  modal.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;max-width:380px;margin:auto">'
+    +'<div style="font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:10px">¿Qué quieres hacer?</div>'
+    +'<div style="font-size:13px;color:#6b7280;margin-bottom:16px">Vas a salir del check list sin haberlo guardado.</div>'
+    +'<button onclick="document.getElementById(\'modal-chk-salir\').remove();guardarChecklist();" style="width:100%;padding:12px;margin-bottom:8px;background:#1e3a8a;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">💾 Guardar y salir</button>'
+    +'<button onclick="document.getElementById(\'modal-chk-salir\').remove();_chkDescartarYSalir();" style="width:100%;padding:12px;margin-bottom:8px;background:#fef2f2;border:1px solid #fca5a5;color:#dc2626;border-radius:10px;font-weight:700;cursor:pointer">🗑️ Borrar y salir</button>'
+    +'<button onclick="document.getElementById(\'modal-chk-salir\').remove();" style="width:100%;padding:12px;background:#f3f4f6;border:none;border-radius:10px;cursor:pointer">Seguir llenando</button>'
+    +'</div>';
+  document.body.appendChild(modal);
+}
+
+function _chkDescartarYSalir(){
+  if(_chkActual){
+    var tipoId=_chkActual.tipoId;
+    saveDB('chk_draft_'+tipoId, null);
+    // Liberar el progreso compartido en Supabase para que no quede colgado a nombre de nadie
+    fetch(SUPA_URL+'/rest/v1/checklist_progreso?id=eq.'+encodeURIComponent(tipoId),{
+      method:'DELETE',
+      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}
+    }).catch(function(){});
+  }
+  _chkActual = null;
+  showChecklistMenu();
+}
+
 // Preserva el comportamiento histórico de "Inspección de Turno": genera una OT PM02 que
 // queda abierta (persistente) mientras haya puntos en rojo, y se cierra sola si no hay ninguno.
 function _crearOTInspeccionTurno(insp, verde, rojo, napl, total){
@@ -18010,10 +18056,17 @@ function _verDetalleChkHist(id){
     if(!chkPuntoVisible(puntos, p)) return ''; // punto condicional que quedó oculto en esta inspección
     var indent = (p.nivel||0)*16;
     var ic  = p.estado==='verde'?'✅':p.estado==='rojo'?'🔴':p.estado==='no_aplica'?'⬛':'⚪';
+    // Punto tipo "valor": mostrar el número capturado (y su rango), no solo el estado
+    var valorHTML = '';
+    if(p.tipo==='valor' && p.estado && p.estado!=='no_aplica'){
+      var rangoTxt = (p.valorMin!=null && p.valorMax!=null) ? ' <span style="font-weight:400;color:#9ca3af">(rango '+p.valorMin+'–'+p.valorMax+(p.unidad?' '+p.unidad:'')+')</span>' : '';
+      valorHTML = '<div style="font-size:.82rem;font-weight:700;color:'+(p.estado==='rojo'?'#dc2626':'#16a34a')+';margin-top:2px">🔢 '+(p.valorCapturado!=null?p.valorCapturado:'—')+(p.unidad?' '+p.unidad:'')+rangoTxt+'</div>';
+    }
     return '<div style="display:flex;align-items:flex-start;gap:8px;padding:8px 0;margin-left:'+indent+'px;border-bottom:1px solid #f3f4f6">'
       + '<span style="font-size:1rem">'+ic+'</span>'
       + '<div style="flex:1">'
       + '<div style="font-size:.85rem;font-weight:600;color:#111827">'+(p.padreId?'↳ ':'')+(p.texto||p.nombre)+'</div>'
+      + valorHTML
       + (p.hora ? '<div style="font-size:.72rem;color:#6b7280;margin-top:2px">⏱ '+p.hora+(p.iniciales?' · '+p.iniciales:'')+'</div>' : '<div style="font-size:.72rem;color:#9ca3af;margin-top:2px">Sin marcar</div>')
       + (p.comentario ? '<div style="font-size:.78rem;color:#7f1d1d;margin-top:3px"><em>'+p.comentario+'</em></div>' : '')
       + '</div></div>';
@@ -25990,7 +26043,10 @@ function cerrarPlanDOR(id){
   saveDB('dor_planes',DOR_PLANES);
   supaFetch('dor_planes','PATCH',{estado:'cerrado',cierre_ts:p.cierreTs,cerrado_por:p.cerradoPor,cierre_nota:nota},'id=eq.'+id).catch(function(){});
   showAlert('✅ Plan cerrado');
+  // Refrescar ambas pantallas (DOR y Planes) para que el cierre se vea al instante,
+  // sin importar desde cuál de las dos se haya cerrado.
   renderDOR();
+  if(document.getElementById('dor-planes-list')) renderDORPlanesList();
 }
 
 function reabrirPlanDOR(id){
@@ -26186,7 +26242,9 @@ function guardarNuevoPlan(){
   supaFetch('dor_planes','POST',plan,'').catch(function(){});
   document.getElementById('modal-nuevo-plan')?.remove();
   showAlert('✅ '+( planTipo==='prioridad'?'Prioridad':'Plan de acción')+' guardado');
+  // Refrescar ambas pantallas (DOR y Planes) — este botón se puede abrir desde cualquiera de las dos.
   renderDOR();
+  if(document.getElementById('dor-planes-list')) renderDORPlanesList();
 }
 
 
@@ -26235,7 +26293,10 @@ function cerrarPlanDOR(id){
   // Update in Supabase
   supaFetch('dor_planes','PATCH',{estado:'cerrado',cierre_ts:p.cierreTs,cierre_nota:nota,cerrado_por:p.cerradoPor},'id=eq.'+id).catch(function(){});
   showAlert('✅ Plan cerrado');
+  // Refrescar ambas pantallas (DOR y Planes) para que el cierre se vea al instante,
+  // sin importar desde cuál de las dos se haya cerrado.
   renderDORPlanesList();
+  if(document.getElementById('dor-content')) renderDOR();
 }
 
 function togglePlanBloqueo(id,tipo){
