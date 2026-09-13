@@ -71,6 +71,10 @@ textarea.form-control{min-height:80px;resize:vertical}
 .topbar-title{font-family:'Nunito',sans-serif;font-size:17px;font-weight:800;flex:1}
 .topbar-sub{font-size:11px;opacity:.8;margin-top:1px}
 .topbar-badge{background:rgba(255,255,255,.2);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.btn-refresh-header{background:radial-gradient(circle at 35% 28%,#a5e8a5 0%,#4caf50 40%,#2e7d32 100%);border:none;border-radius:50%;width:52px;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;cursor:pointer;flex-shrink:0;padding:0;box-shadow:0 3px 8px rgba(0,0,0,.35),inset 0 2px 3px rgba(255,255,255,.55),inset 0 -3px 4px rgba(0,0,0,.25)}
+.btn-refresh-header:active{transform:scale(.94)}
+.btn-refresh-header svg{filter:drop-shadow(0 1px 1px rgba(0,0,0,.2))}
+.btn-refresh-label{color:#fff;font-size:7px;font-weight:800;letter-spacing:.2px;text-transform:uppercase;line-height:1}
 /* CARDS */
 .card{background:var(--card);border-radius:var(--r);padding:16px;box-shadow:var(--shadow);margin-bottom:12px}
 .card-title{font-family:'Nunito',sans-serif;font-size:16px;font-weight:800;color:var(--txt);margin-bottom:8px}
@@ -230,7 +234,7 @@ tr:nth-child(even) td{background:#F8FAFC}
 </script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="app.js?v=20260913b" defer></script>
+<script src="app.js?v=20260913d" defer></script>
 
 <style id="lup-css">
 .lup-doc{background:#fff;border:2px solid #1a3c5e;border-radius:10px;overflow:hidden;margin:12px;font-family:Arial,sans-serif}
@@ -327,6 +331,13 @@ tr:nth-child(even) td{background:#F8FAFC}
         <div class="user-pill" id="user-pill">👤 Usuario</div>
         <div style="font-size:10px;opacity:.5;color:#fff;margin-top:4px;letter-spacing:.3px">Saporis MTTO · REG-MTT-01.01-CMMS</div>
       </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
+      <button onclick="actualizarManual()" class="btn-refresh-header" id="btn-actualizar-global" title="Actualizar">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="#fff"/>
+        </svg>
+        <span class="btn-refresh-label">Actualizar</span>
+      </button>
       <button onclick="showBuzon()" style="position:relative;background:rgba(255,255,255,.18);border:none;border-radius:14px;padding:10px 14px;cursor:pointer;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.2)" id="btn-buzon">
       <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect x="2" y="7" width="28" height="20" rx="3" fill="white" opacity="0.95"/>
@@ -335,6 +346,7 @@ tr:nth-child(even) td{background:#F8FAFC}
       </svg>
       <span id="badge-buzon" style="display:none;position:absolute;top:-6px;right:-6px;background:#dc2626;color:#fff;border-radius:50%;min-width:22px;height:22px;font-size:12px;font-weight:800;line-height:22px;text-align:center;padding:0 4px;box-shadow:0 2px 4px rgba(0,0,0,.3)"></span>
     </button>
+    </div>
     </div>
   </div>
   <div style="background:linear-gradient(90deg,var(--mo4),var(--mo),var(--verde4));padding:10px 16px;overflow:hidden">

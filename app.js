@@ -1261,9 +1261,32 @@ function renderOTCard(o){
 // ================================================================
 // DETALLE OT
 // ================================================================
+var _ordenFotoFetched={};
 function showDetalle(id){
   const o=ORDENES.find(x=>x.id===id);
   if(!o){const p=PM03_PLAN.find(x=>x.id===id);if(p){showDetallePM03(id);return;}return;}
+  otCerrandoId=id;
+  // La foto (base64) ya no viaja en la sincronización general (para no bajar
+  // imágenes de órdenes que nadie está viendo); se pide puntual al abrir el
+  // detalle, una sola vez por orden por sesión.
+  if(o.foto || _ordenFotoFetched[id]){
+    _renderDetalleOrden(id,o);
+    return;
+  }
+  supaFetch('ordenes','GET',null,'id=eq.'+id+'&select=id,foto').then(function(rows){
+    if(rows){
+      _ordenFotoFetched[id]=true;
+      // Asignar SIEMPRE un valor definitivo (aunque sea null = confirmado sin
+      // foto), para que quede registrado como "ya se sabe" y no como
+      // "desconocido" — así un guardado posterior no se equivoca de estado.
+      if(rows[0]) o.foto=rows[0].foto||null;
+      saveDB('ordenes',ORDENES);
+    }
+    if(otCerrandoId!==id) return; // el usuario ya salió de este detalle
+    _renderDetalleOrden(id,o);
+  });
+}
+function _renderDetalleOrden(id,o){
   var _activaD=document.querySelector('.screen.active');
   otCerrandoId=id;
   document.getElementById('detalle-topbar').textContent=id;
@@ -1874,8 +1897,39 @@ function renderPM03(){
   if(isAdmin) html+='<button class="btn btn-outline mt8" onclick="showAdmin();setAdminTab(\'pm03carga\',null)">⚙️ Gestionar Plan PM03</button>';
   cont.innerHTML=html;
 }
+var _pm3ImgsFetched={};
 function showDetallePM03(id){
   const p=PM03_PLAN.find(x=>x.id===id);if(!p)return;
+  otCerrandoId=id;
+  // Fotos y firmas (base64) ya no viajan en la sincronización general (para no
+  // bajar imágenes de PM03 que nadie está viendo); se piden puntual al abrir
+  // el detalle, una sola vez por PM03 por sesión.
+  if(_pm3ImgsFetched[id]){
+    _renderDetallePM03(id,p);
+    return;
+  }
+  supaFetch('pm03_plan','GET',null,'id=eq.'+id+'&select=id,fotos,firma_img_operador,firma_img_lider,firma_img_calidad,firma_img_admin').then(function(rows){
+    if(rows){
+      _pm3ImgsFetched[id]=true;
+      if(rows[0]){
+        var r=rows[0];
+        // Asignar SIEMPRE un valor definitivo (array vacío / null = confirmado
+        // sin foto o firma), para que quede registrado como "ya se sabe" y no
+        // como "desconocido" — así un guardado posterior no borra por error
+        // lo que ya existe en Supabase.
+        try{ p.fotos = r.fotos?JSON.parse(r.fotos):[]; }catch(e){ p.fotos = p.fotos||[]; }
+        p.firmaImgOperador = r.firma_img_operador||null;
+        p.firmaImgLider = r.firma_img_lider||null;
+        p.firmaImgCalidad = r.firma_img_calidad||null;
+        p.firmaImgAdmin = r.firma_img_admin||null;
+        saveDB('pm03_plan',PM03_PLAN);
+      }
+    }
+    if(otCerrandoId!==id) return; // el usuario ya salió de este detalle
+    _renderDetallePM03(id,p);
+  });
+}
+function _renderDetallePM03(id,p){
   var _activaPM3=document.querySelector('.screen.active');
   otCerrandoId=id;document.getElementById('detalle-topbar').textContent=p.id;
   // Solo actualizar backScreen si la pantalla activa NO es ya el detalle
@@ -7026,8 +7080,6 @@ document.addEventListener('visibilitychange', function(){
     if(currentUser.rol === 'operador' || currentUser.rol === 'lider' || currentUser.rol === 'admin'){
       iniciarPollingOperador();
     }
-    // Also sync
-    syncSupabase();
   }
 });
 
@@ -13474,7 +13526,7 @@ function syncSupabase(){
     USERS=USERS.concat(superLocal);
     saveDB('users',USERS);
   }).catch(function(){});
-  supaFetch('ordenes','GET',null,'order=ts.desc&limit=999999').then(function(rows){
+  supaFetch('ordenes','GET',null,'order=ts.desc&limit=999999&select=anio,aprobado_por,area,causa_raiz,cerrada_por,cerrada_ts,color_ot,componente,conciliado_con,conciliado_con_nombre,detalle,es_resuelta_temporal,estado,fecha_trabajo,foto_vista_ts,fuente_bitacora,fuente_label,historial_modificacion,historial_reasignacion,hora_entrega,hora_fin_trabajo,hora_inicio,hora_inicio_trabajo,hora_llamado,horas_cierre,id,levantado_id,levantado_por,lider_pm04,limpieza_avisado_a,limpieza_requerida,linea,motivo_rechazo,mttr,observaciones_cierre,pendiente_asignacion,pm03_definitiva,pre_cierre_por,pre_cierre_ts,prioridad,rechazado_por,refacciones_usadas,rol_levantador,semana,semana_resolucion,tecnico_asignado,tecnico_nombre,tecnicos_adicionales,tiempo_respuesta,tipo,tipo_anormalidad,trabajo_dias,ts,turno').then(function(rows){
     if(!rows)return;
     var localOrdenes = loadDB('ordenes',[]);
     var syncedIds = new Set(rows.map(function(r){return r.id;}));
@@ -13503,7 +13555,7 @@ function syncSupabase(){
         estadoFinal = local.estado;
         setTimeout(function(){ saveOrdenSupa(local); }, 1000);
       }
-      return {id:r.id,tipo:r.tipo,area:r.area,linea:r.linea,componente:r.componente,prioridad:r.prioridad,tipoAnormalidad:r.tipo_anormalidad,detalle:r.detalle,foto:r.foto||(local?local.foto:null),fotoVistaTs:r.foto_vista_ts||null,tecnicoAsignado:r.tecnico_asignado,tecnicoNombre:r.tecnico_nombre,levantadoPor:r.levantado_por,levantadoId:r.levantado_id,estado:estadoFinal,colorOT:r.color_ot,semana:r.semana,año:r.anio,ts:r.ts,observacionesCierre:r.observaciones_cierre,horasCierre:r.horas_cierre||0,horaInicioTrabajo:r.hora_inicio_trabajo,horaFinTrabajo:r.hora_fin_trabajo,fechaTrabajo:r.fecha_trabajo||null,cerradaTs:r.cerrada_ts,cerradaPor:r.cerrada_por,refaccionesUsadas:r.refacciones_usadas,causaRaiz:r.causa_raiz,horaLlamado:r.hora_llamado,horaInicio:r.hora_inicio,horaEntrega:r.hora_entrega,tiempoRespuesta:r.tiempo_respuesta,mttr:r.mttr,turno:r.turno,liderPM04:r.lider_pm04,historialReasignacion:r.historial_reasignacion||[],historialModificacion:r.historial_modificacion||[],motivoRechazo:r.motivo_rechazo||null,rechazadoPor:r.rechazado_por||null,preCierreTs:r.pre_cierre_ts||null,preCierrePor:r.pre_cierre_por||null,aprobadoPor:r.aprobado_por||null,rolLevantador:r.rol_levantador||null,esResueltaTemporal:r.es_resuelta_temporal||false,pm03Definitiva:r.pm03_definitiva||null,fuenteBitacora:r.fuente_bitacora||false,fuenteLabel:r.fuente_label||null,limpiezaRequerida:r.limpieza_requerida!=null?r.limpieza_requerida:null,limpiezaAvisadoA:r.limpieza_avisado_a||null,tecnicosAdicionales:(function(){try{return r.tecnicos_adicionales?JSON.parse(r.tecnicos_adicionales):[];}catch(e){return [];}})(),trabajoDias:(function(){try{return r.trabajo_dias?JSON.parse(r.trabajo_dias):[];}catch(e){return [];}})(),pendienteAsignacion:r.pendiente_asignacion||false,conciliadoCon:r.conciliado_con||null,conciliadoConNombre:r.conciliado_con_nombre||null,semanaResolucion:r.semana_resolucion||null};
+      return {id:r.id,tipo:r.tipo,area:r.area,linea:r.linea,componente:r.componente,prioridad:r.prioridad,tipoAnormalidad:r.tipo_anormalidad,detalle:r.detalle,foto:local?local.foto:undefined,fotoVistaTs:r.foto_vista_ts||null,tecnicoAsignado:r.tecnico_asignado,tecnicoNombre:r.tecnico_nombre,levantadoPor:r.levantado_por,levantadoId:r.levantado_id,estado:estadoFinal,colorOT:r.color_ot,semana:r.semana,año:r.anio,ts:r.ts,observacionesCierre:r.observaciones_cierre,horasCierre:r.horas_cierre||0,horaInicioTrabajo:r.hora_inicio_trabajo,horaFinTrabajo:r.hora_fin_trabajo,fechaTrabajo:r.fecha_trabajo||null,cerradaTs:r.cerrada_ts,cerradaPor:r.cerrada_por,refaccionesUsadas:r.refacciones_usadas,causaRaiz:r.causa_raiz,horaLlamado:r.hora_llamado,horaInicio:r.hora_inicio,horaEntrega:r.hora_entrega,tiempoRespuesta:r.tiempo_respuesta,mttr:r.mttr,turno:r.turno,liderPM04:r.lider_pm04,historialReasignacion:r.historial_reasignacion||[],historialModificacion:r.historial_modificacion||[],motivoRechazo:r.motivo_rechazo||null,rechazadoPor:r.rechazado_por||null,preCierreTs:r.pre_cierre_ts||null,preCierrePor:r.pre_cierre_por||null,aprobadoPor:r.aprobado_por||null,rolLevantador:r.rol_levantador||null,esResueltaTemporal:r.es_resuelta_temporal||false,pm03Definitiva:r.pm03_definitiva||null,fuenteBitacora:r.fuente_bitacora||false,fuenteLabel:r.fuente_label||null,limpiezaRequerida:r.limpieza_requerida!=null?r.limpieza_requerida:null,limpiezaAvisadoA:r.limpieza_avisado_a||null,tecnicosAdicionales:(function(){try{return r.tecnicos_adicionales?JSON.parse(r.tecnicos_adicionales):[];}catch(e){return [];}})(),trabajoDias:(function(){try{return r.trabajo_dias?JSON.parse(r.trabajo_dias):[];}catch(e){return [];}})(),pendienteAsignacion:r.pendiente_asignacion||false,conciliadoCon:r.conciliado_con||null,conciliadoConNombre:r.conciliado_con_nombre||null,semanaResolucion:r.semana_resolucion||null};
     // Agregar órdenes locales no sincronizadas al array (pendientes de llegar a Supabase)
     }).concat(localSoloIds.map(function(l){
       // Intentar resync de estas órdenes
@@ -13512,7 +13564,7 @@ function syncSupabase(){
     }));
     saveDB('ordenes',ORDENES);
   }).catch(function(){});
-  supaFetch('pm03_plan','GET',null,'order=semana.asc&limit=999999').then(function(rows){
+  supaFetch('pm03_plan','GET',null,'order=semana.asc&limit=999999&select=actividad,actividades_estado,actividades_estado_final,actividades_estado_inicial,anio,area,cerrada_por,cerrada_ts,comentarios_actividades,componente,desinf_produccion,dias_trabajo,draft_ts,es_inspeccion,estado,estado_calidad,estado_flujo,firma_nombre_admin,firma_nombre_calidad,firma_nombre_lider,firma_nombre_operador,firma_tecnico,firma_tecnico_ts,firma_ts_admin,firma_ts_calidad,firma_ts_lider,firma_ts_operador,fuente_excel,generado_por,grasa_aceite,herramienta_ingresada,herramienta_salida,hora_fin,hora_inicio,horas_actividades,horas_cierre,id,liberado_admin_por,liberado_admin_ts,liberado_por,liberado_prod_por,liberado_prod_ts,liberado_ts,limpieza_mtto,linea,mediciones_actividades,observaciones_cierre,personas_actividades,rechazo_calidad,refacciones_nuevas,refacciones_usadas,reporte_actividades,semana,tecnico_id,tecnico_nombre,ts').then(function(rows){
     if(!rows)return;
     var localPM03=loadDB('pm03_plan',[]);
     PM03_PLAN=rows.map(function(r){
@@ -13566,20 +13618,20 @@ function syncSupabase(){
         liberadoProdTs:r.liberado_prod_ts||(local?local.liberadoProdTs:null),
         liberadoAdminPor:r.liberado_admin_por||(local?local.liberadoAdminPor:null),
         liberadoAdminTs:r.liberado_admin_ts||(local?local.liberadoAdminTs:null),
-        firmaImgOperador:r.firma_img_operador||(local?local.firmaImgOperador:null),
+        firmaImgOperador:local?local.firmaImgOperador:undefined,
         firmaNombreOperador:r.firma_nombre_operador||(local?local.firmaNombreOperador:null),
         firmaTsOperador:r.firma_ts_operador||(local?local.firmaTsOperador:null),
-        firmaImgLider:r.firma_img_lider||(local?local.firmaImgLider:null),
+        firmaImgLider:local?local.firmaImgLider:undefined,
         firmaNombreLider:r.firma_nombre_lider||(local?local.firmaNombreLider:null),
         firmaTsLider:r.firma_ts_lider||(local?local.firmaTsLider:null),
-        firmaImgCalidad:r.firma_img_calidad||(local?local.firmaImgCalidad:null),
+        firmaImgCalidad:local?local.firmaImgCalidad:undefined,
         firmaNombreCalidad:r.firma_nombre_calidad||(local?local.firmaNombreCalidad:null),
         firmaTsCalidad:r.firma_ts_calidad||(local?local.firmaTsCalidad:null),
-        firmaImgAdmin:r.firma_img_admin||(local?local.firmaImgAdmin:null),
+        firmaImgAdmin:local?local.firmaImgAdmin:undefined,
         firmaNombreAdmin:r.firma_nombre_admin||(local?local.firmaNombreAdmin:null),
         firmaTsAdmin:r.firma_ts_admin||(local?local.firmaTsAdmin:null),
         estadoFlujo:r.estado_flujo||(local?local.estadoFlujo:'ejecucion'),
-        fotos:(function(){try{if(r.fotos)return JSON.parse(r.fotos);return local&&local.fotos?local.fotos:[];}catch(e){return local&&local.fotos?local.fotos:[];}}()),
+        fotos:local&&local.fotos!==undefined?local.fotos:undefined,
         // Campos de borrador — priorizar Supabase sobre local
         comentariosActividades:(function(){
           var sup=r.comentarios_actividades;
@@ -13629,7 +13681,9 @@ function saveOrdenSupa(o){
   var payload = {
     id:o.id, tipo:o.tipo||'PM02', area:o.area||'', linea:o.linea||'',
     componente:o.componente||'', prioridad:o.prioridad||'C',
-    foto:o.foto||null,
+    // foto ya no viaja en la sincronización general; si nunca se cargó en este
+    // dispositivo (undefined) se omite para no borrar en Supabase lo que sí exista.
+    foto:o.foto!==undefined?(o.foto||null):undefined,
     tipo_anormalidad:o.tipoAnormalidad||null, detalle:(o.detalle||'').substring(0,500),
     tecnico_asignado:o.tecnicoAsignado||null,
     tecnico_nombre:o.tecnicoNombre||null,
@@ -13737,7 +13791,11 @@ function reintentarOrdenesSync(){
 }
 setTimeout(reintentarOrdenesSync, 5000);
 setInterval(reintentarOrdenesSync, 5*60*1000);
-function savePM03Supa(p){supaUpsert('pm03_plan',{id:p.id,linea:p.linea,componente:p.componente||null,actividad:p.actividad,area:p.area||null,semana:p.semana,anio:p.año||2026,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null,estado:p.estado||'abierta',prioridad:p.prioridad||null,fuente_excel:p.fuenteExcel||false,horas_cierre:p.horasCierre||0,observaciones_cierre:p.observacionesCierre||null,cerrada_ts:p.cerradaTs||null,cerrada_por:p.cerradaPor||null,generado_por:p.generadoPor||null,origen_ot:p.origenOT||null,ts:p.ts||Date.now(),liberado_por:p.liberadoPor||null,liberado_ts:p.liberadoTs||null,estado_calidad:p.estadoCalidad||null,rechazo_calidad:p.rechazoCalidad||null,actividades_estado:p.actividadesEstado?JSON.stringify(p.actividadesEstado):null,refacciones_usadas:p.refaccionesUsadas||null,herramienta_ingresada:p.herramientaIngresada||null,herramienta_salida:p.herramientaSalida||null,grasa_aceite:p.grasaAceite||null,limpieza_mtto:typeof p.limpiezaMtto==='boolean'?p.limpiezaMtto:null,desinf_produccion:typeof p.desinfProduccion==='boolean'?p.desinfProduccion:null,firma_tecnico:p.firmaTecnico||null,firma_tecnico_ts:p.firmaTecnicoTs||null,comentarios_actividades:p.comentariosActividades?JSON.stringify(p.comentariosActividades):null,mediciones_actividades:p.medicionesActividades?JSON.stringify(p.medicionesActividades):null,liberado_prod_por:p.liberadoProdPor||null,liberado_prod_ts:p.liberadoProdTs||null,liberado_admin_por:p.liberadoAdminPor||null,liberado_admin_ts:p.liberadoAdminTs||null,estado_flujo:p.estadoFlujo||'ejecucion',comentario_firma_calidad:p.comentarioFirmaCalidad||null,comentario_firma_prod:p.comentarioFirmaProd||null,comentario_firma_admin:p.comentarioFirmaAdmin||null,fotos:p.fotos&&p.fotos.length?JSON.stringify(p.fotos):null,firma_img_operador:p.firmaImgOperador||null,firma_nombre_operador:p.firmaNombreOperador||null,firma_ts_operador:p.firmaTsOperador||null,firma_img_lider:p.firmaImgLider||null,firma_nombre_lider:p.firmaNombreLider||null,firma_ts_lider:p.firmaTsLider||null,firma_img_calidad:p.firmaImgCalidad||null,firma_nombre_calidad:p.firmaNombreCalidad||null,firma_ts_calidad:p.firmaTsCalidad||null,firma_img_admin:p.firmaImgAdmin||null,firma_nombre_admin:p.firmaNombreAdmin||null,firma_ts_admin:p.firmaTsAdmin||null}).then(function(data){
+function savePM03Supa(p){supaUpsert('pm03_plan',{id:p.id,linea:p.linea,componente:p.componente||null,actividad:p.actividad,area:p.area||null,semana:p.semana,anio:p.año||2026,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null,estado:p.estado||'abierta',prioridad:p.prioridad||null,fuente_excel:p.fuenteExcel||false,horas_cierre:p.horasCierre||0,observaciones_cierre:p.observacionesCierre||null,cerrada_ts:p.cerradaTs||null,cerrada_por:p.cerradaPor||null,generado_por:p.generadoPor||null,origen_ot:p.origenOT||null,ts:p.ts||Date.now(),liberado_por:p.liberadoPor||null,liberado_ts:p.liberadoTs||null,estado_calidad:p.estadoCalidad||null,rechazo_calidad:p.rechazoCalidad||null,actividades_estado:p.actividadesEstado?JSON.stringify(p.actividadesEstado):null,refacciones_usadas:p.refaccionesUsadas||null,herramienta_ingresada:p.herramientaIngresada||null,herramienta_salida:p.herramientaSalida||null,grasa_aceite:p.grasaAceite||null,limpieza_mtto:typeof p.limpiezaMtto==='boolean'?p.limpiezaMtto:null,desinf_produccion:typeof p.desinfProduccion==='boolean'?p.desinfProduccion:null,firma_tecnico:p.firmaTecnico||null,firma_tecnico_ts:p.firmaTecnicoTs||null,comentarios_actividades:p.comentariosActividades?JSON.stringify(p.comentariosActividades):null,mediciones_actividades:p.medicionesActividades?JSON.stringify(p.medicionesActividades):null,liberado_prod_por:p.liberadoProdPor||null,liberado_prod_ts:p.liberadoProdTs||null,liberado_admin_por:p.liberadoAdminPor||null,liberado_admin_ts:p.liberadoAdminTs||null,estado_flujo:p.estadoFlujo||'ejecucion',comentario_firma_calidad:p.comentarioFirmaCalidad||null,comentario_firma_prod:p.comentarioFirmaProd||null,comentario_firma_admin:p.comentarioFirmaAdmin||null,
+  // fotos/firma_img_* ya no se sincronizan en bloque (viajan bajo demanda al abrir
+  // el detalle) — si en este dispositivo nunca se cargaron (p.campo===undefined),
+  // se omiten del payload para NO borrar en Supabase lo que otro dispositivo sí guardó.
+  fotos:p.fotos!==undefined?(p.fotos&&p.fotos.length?JSON.stringify(p.fotos):null):undefined,firma_img_operador:p.firmaImgOperador!==undefined?(p.firmaImgOperador||null):undefined,firma_nombre_operador:p.firmaNombreOperador||null,firma_ts_operador:p.firmaTsOperador||null,firma_img_lider:p.firmaImgLider!==undefined?(p.firmaImgLider||null):undefined,firma_nombre_lider:p.firmaNombreLider||null,firma_ts_lider:p.firmaTsLider||null,firma_img_calidad:p.firmaImgCalidad!==undefined?(p.firmaImgCalidad||null):undefined,firma_nombre_calidad:p.firmaNombreCalidad||null,firma_ts_calidad:p.firmaTsCalidad||null,firma_img_admin:p.firmaImgAdmin!==undefined?(p.firmaImgAdmin||null):undefined,firma_nombre_admin:p.firmaNombreAdmin||null,firma_ts_admin:p.firmaTsAdmin||null}).then(function(data){
   if(data===null){
     // supaUpsert nunca rechaza; en falla resuelve null — así detectamos el error real.
     showAlert('⚠️ Error al sincronizar PM03 '+p.id.substring(0,15),'error');
@@ -15909,104 +15967,109 @@ var alertaPollingInterval = null;
 var ultimaAlertaVista = 0; // Reset on each load — only block duplicates within same session
 
 var operadorPollingInterval = null;
+function checkConfirmacionesOperador(){
+  if(!currentUser||(currentUser.rol!=='operador'&&currentUser.rol!=='lider'&&currentUser.rol!=='admin')) return;
+  supaFetch('config','GET',null,'key=like.confirmacion*').then(function(rows){
+    if(!rows||!rows.length) return;
+    rows.forEach(function(r){
+      if(!r.key||!r.key.startsWith('confirmacion_')) return;
+      if(!r.value||r.value==='null') return;
+      try{
+        var conf=JSON.parse(r.value);
+        var key='confirmacion_vista_'+conf.alertaId;
+        if(!loadDB(key,false)){
+          saveDB(key,true);
+          // Show green confirmation to operator
+          var el=document.getElementById('alerta-enviada-'+conf.alertaId);
+          if(el){
+            el.style.background='var(--vd3)';
+            el.style.borderColor='var(--vd)';
+            el.innerHTML='<div style="font-size:32px">✅</div><div style="font-weight:800;color:var(--vd);font-size:16px">'+conf.tecnico+' está en camino</div><div style="font-size:13px;color:var(--txt2);margin-top:4px">'+conf.area+'</div><button onclick="this.parentElement.remove()" style="margin-top:10px;background:none;border:1px solid var(--vd);border-radius:8px;padding:4px 14px;font-size:12px;cursor:pointer">Cerrar</button>';
+            // Clear auto-remove timer — let operator close manually
+            el._keepAlive = true;
+          } else {
+            // Card already gone — show persistent banner
+            var banner=document.createElement('div');
+            banner.style.cssText='position:fixed;bottom:80px;left:16px;right:16px;background:var(--vd3);border:2px solid var(--vd);border-radius:14px;padding:16px;text-align:center;z-index:500';
+            banner.innerHTML='<div style="font-size:28px">✅</div><div style="font-weight:800;color:var(--vd)">'+conf.tecnico+' confirmó</div><div style="font-size:13px;color:var(--txt2)">Va a atender: '+conf.area+'</div><button onclick="this.parentElement.remove()" style="margin-top:8px;background:none;border:1px solid var(--vd);border-radius:8px;padding:4px 14px;font-size:12px;cursor:pointer">Cerrar</button>';
+            document.body.appendChild(banner);
+          }
+          // Clean up confirmation from Supabase
+          supaUpsert('config',{key:r.key,value:null}).catch(function(){});
+        }
+      }catch(e){}
+    });
+  }).catch(function(){});
+}
 function iniciarPollingOperador(){
   if(operadorPollingInterval) clearInterval(operadorPollingInterval);
-  // Operator/líder/admin polls for confirmations from technician
-  operadorPollingInterval = setInterval(function(){
-    if(!currentUser||(currentUser.rol!=='operador'&&currentUser.rol!=='lider'&&currentUser.rol!=='admin')) return;
-    supaFetch('config','GET',null,'key=like.confirmacion*').then(function(rows){
-      if(!rows||!rows.length) return;
-      rows.forEach(function(r){
-        if(!r.key||!r.key.startsWith('confirmacion_')) return;
-        if(!r.value||r.value==='null') return;
-        try{
-          var conf=JSON.parse(r.value);
-          var key='confirmacion_vista_'+conf.alertaId;
-          if(!loadDB(key,false)){
-            saveDB(key,true);
-            // Show green confirmation to operator
-            var el=document.getElementById('alerta-enviada-'+conf.alertaId);
-            if(el){
-              el.style.background='var(--vd3)';
-              el.style.borderColor='var(--vd)';
-              el.innerHTML='<div style="font-size:32px">✅</div><div style="font-weight:800;color:var(--vd);font-size:16px">'+conf.tecnico+' está en camino</div><div style="font-size:13px;color:var(--txt2);margin-top:4px">'+conf.area+'</div><button onclick="this.parentElement.remove()" style="margin-top:10px;background:none;border:1px solid var(--vd);border-radius:8px;padding:4px 14px;font-size:12px;cursor:pointer">Cerrar</button>';
-              // Clear auto-remove timer — let operator close manually
-              el._keepAlive = true;
-            } else {
-              // Card already gone — show persistent banner
-              var banner=document.createElement('div');
-              banner.style.cssText='position:fixed;bottom:80px;left:16px;right:16px;background:var(--vd3);border:2px solid var(--vd);border-radius:14px;padding:16px;text-align:center;z-index:500';
-              banner.innerHTML='<div style="font-size:28px">✅</div><div style="font-weight:800;color:var(--vd)">'+conf.tecnico+' confirmó</div><div style="font-size:13px;color:var(--txt2)">Va a atender: '+conf.area+'</div><button onclick="this.parentElement.remove()" style="margin-top:8px;background:none;border:1px solid var(--vd);border-radius:8px;padding:4px 14px;font-size:12px;cursor:pointer">Cerrar</button>';
-              document.body.appendChild(banner);
-            }
-            // Clean up confirmation from Supabase
-            supaUpsert('config',{key:r.key,value:null}).catch(function(){});
-          }
-        }catch(e){}
-      });
-    }).catch(function(){});
-  }, 8000);
+  // Chequeo inmediato al iniciar/reanudar + repetir cada 5 min (antes cada 8 seg)
+  checkConfirmacionesOperador();
+  operadorPollingInterval = setInterval(checkConfirmacionesOperador, 5*60*1000);
 }
 
 function mostrarDebugToast(msg){ console.log('[DBG]',msg); } // silent in production
 
+function checkAlertasTecnico(){
+  if(!currentUser || currentUser.rol !== 'tecnico') return;
+  supaFetch('config','GET',null,'').then(function(rows){
+    if(!rows || !rows.length){ mostrarDebugToast('Poll OK — 0 rows'); return; }
+
+    // Am I in turno at all?
+    var estoyEnTurno = (TURNO_ACTIVO && TURNO_ACTIVO.tecnicoId === currentUser.id) || false;
+    rows.forEach(function(tr){
+      if(!tr.key||!tr.key.startsWith('turno_activo_')) return;
+      try{ var t=JSON.parse(tr.value); if(t&&t.tecnicoId===currentUser.id) estoyEnTurno=true; }catch(e){}
+    });
+
+    var alertRows = rows.filter(function(r){return r.key&&r.key.startsWith('alerta_');});
+    mostrarDebugToast('Poll: '+rows.length+' rows, '+alertRows.length+' alertas, enTurno:'+estoyEnTurno+', ultimaVista:'+ultimaAlertaVista);
+
+    rows.forEach(function(r){
+      if(!r.key || !r.key.startsWith('alerta_')) return;
+      if(!r.value || r.value === 'null') return;
+      var alerta;
+      try{ alerta = JSON.parse(r.value); }catch(e){ mostrarDebugToast('JSON error: '+r.key); return; }
+      if(!alerta || !alerta.ts) return;
+
+      var ahoraMs = Date.now();
+      var alertaAge = ahoraMs - alerta.ts;
+
+      mostrarDebugToast('Alerta '+alerta.id+' estado:'+alerta.estado+' age:'+(Math.round(alertaAge/1000))+'s ts:'+alerta.ts+' ultVista:'+ultimaAlertaVista);
+
+      if(alerta.estado !== 'activa') return;
+      if(alerta.ts <= ultimaAlertaVista) return;
+      if(alertaAge > 600000) return; // antes 300000 (5 min); se amplia a 10 min porque ahora se revisa cada 5 min en vez de cada 8 seg
+
+      // Who should receive this alert?
+      var esMiAlerta = false;
+      if(alerta.tecnicoDestinoId){
+        // Directed to specific tecnico
+        esMiAlerta = (alerta.tecnicoDestinoId === currentUser.id);
+      } else {
+        // soloResponsable OR broadcast — any tecnico in turno receives it
+        esMiAlerta = estoyEnTurno;
+      }
+
+      mostrarDebugToast('esMiAlerta:'+esMiAlerta+' destino:'+(alerta.tecnicoDestinoId||'todos')+' soloResp:'+alerta.soloResponsable);
+
+      if(esMiAlerta){
+        ultimaAlertaVista = alerta.ts;
+        saveDB('ultima_alerta_vista', ultimaAlertaVista);
+        mostrarAlertaEmergencia(alerta);
+        supaUpsert('config',{key:r.key,value:JSON.stringify(Object.assign({},alerta,{estado:'vista'}))}).catch(function(){});
+        if(navigator.serviceWorker && navigator.serviceWorker.controller){
+          navigator.serviceWorker.controller.postMessage({type:'ALERTA_VISTA', ts: alerta.ts});
+        }
+      }
+    });
+  }).catch(function(e){ mostrarDebugToast('Fetch ERROR: '+e); });
+}
 function iniciarPollingAlertas(){
   if(alertaPollingInterval) clearInterval(alertaPollingInterval);
-  alertaPollingInterval = setInterval(function(){
-    if(!currentUser || currentUser.rol !== 'tecnico') return;
-    supaFetch('config','GET',null,'').then(function(rows){
-      if(!rows || !rows.length){ mostrarDebugToast('Poll OK — 0 rows'); return; }
-
-      // Am I in turno at all?
-      var estoyEnTurno = (TURNO_ACTIVO && TURNO_ACTIVO.tecnicoId === currentUser.id) || false;
-      rows.forEach(function(tr){
-        if(!tr.key||!tr.key.startsWith('turno_activo_')) return;
-        try{ var t=JSON.parse(tr.value); if(t&&t.tecnicoId===currentUser.id) estoyEnTurno=true; }catch(e){}
-      });
-
-      var alertRows = rows.filter(function(r){return r.key&&r.key.startsWith('alerta_');});
-      mostrarDebugToast('Poll: '+rows.length+' rows, '+alertRows.length+' alertas, enTurno:'+estoyEnTurno+', ultimaVista:'+ultimaAlertaVista);
-
-      rows.forEach(function(r){
-        if(!r.key || !r.key.startsWith('alerta_')) return;
-        if(!r.value || r.value === 'null') return;
-        var alerta;
-        try{ alerta = JSON.parse(r.value); }catch(e){ mostrarDebugToast('JSON error: '+r.key); return; }
-        if(!alerta || !alerta.ts) return;
-
-        var ahoraMs = Date.now();
-        var alertaAge = ahoraMs - alerta.ts;
-
-        mostrarDebugToast('Alerta '+alerta.id+' estado:'+alerta.estado+' age:'+(Math.round(alertaAge/1000))+'s ts:'+alerta.ts+' ultVista:'+ultimaAlertaVista);
-
-        if(alerta.estado !== 'activa') return;
-        if(alerta.ts <= ultimaAlertaVista) return;
-        if(alertaAge > 300000) return; // older than 5 min
-
-        // Who should receive this alert?
-        var esMiAlerta = false;
-        if(alerta.tecnicoDestinoId){
-          // Directed to specific tecnico
-          esMiAlerta = (alerta.tecnicoDestinoId === currentUser.id);
-        } else {
-          // soloResponsable OR broadcast — any tecnico in turno receives it
-          esMiAlerta = estoyEnTurno;
-        }
-
-        mostrarDebugToast('esMiAlerta:'+esMiAlerta+' destino:'+(alerta.tecnicoDestinoId||'todos')+' soloResp:'+alerta.soloResponsable);
-
-        if(esMiAlerta){
-          ultimaAlertaVista = alerta.ts;
-          saveDB('ultima_alerta_vista', ultimaAlertaVista);
-          mostrarAlertaEmergencia(alerta);
-          supaUpsert('config',{key:r.key,value:JSON.stringify(Object.assign({},alerta,{estado:'vista'}))}).catch(function(){});
-          if(navigator.serviceWorker && navigator.serviceWorker.controller){
-            navigator.serviceWorker.controller.postMessage({type:'ALERTA_VISTA', ts: alerta.ts});
-          }
-        }
-      });
-    }).catch(function(e){ mostrarDebugToast('Fetch ERROR: '+e); });
-  }, 8000);
+  // Chequeo inmediato al iniciar/reanudar + repetir cada 5 min (antes cada 8 seg)
+  checkAlertasTecnico();
+  alertaPollingInterval = setInterval(checkAlertasTecnico, 5*60*1000);
 }
 
 function mostrarAlertaEmergencia(alerta){
@@ -16487,10 +16550,26 @@ document.addEventListener('visibilitychange', function(){
     if(currentUser.rol === 'operador' || currentUser.rol === 'lider' || currentUser.rol === 'admin'){
       iniciarPollingOperador();
     }
-    // Also sync
-    syncSupabase();
   }
 });
+
+// Sincronizacion automatica de fondo cada 5 min (antes se disparaba en cada
+// regreso a la app); solo corre si hay sesion iniciada. El resto de las
+// actualizaciones (alertas, confirmaciones, datos) ahora se piden bajo
+// demanda con el boton "Actualizar" del encabezado.
+setInterval(function(){
+  if(currentUser) syncSupabase();
+}, 5*60*1000);
+
+// Boton "Actualizar" del encabezado (menu principal) — sincroniza todo bajo demanda
+function actualizarManual(){
+  showAlert('🔄 Actualizando...');
+  syncSupabase();
+  if(currentUser){
+    if(currentUser.rol==='tecnico') checkAlertasTecnico();
+    if(currentUser.rol==='operador'||currentUser.rol==='lider'||currentUser.rol==='admin') checkConfirmacionesOperador();
+  }
+}
 
 // ================================================================
 // SERVICE WORKER — Background notifications
@@ -23628,7 +23707,23 @@ function guardarEditorCompleto(id){
 function abrirGestorPM02(id){
   var o=ORDENES.find(function(x){return x.id===id;});
   if(!o) return;
-
+  // Esta ventana puede abrirse directo desde una lista, sin pasar antes por
+  // showDetalle(), así que también necesita pedir la foto puntual si falta
+  // (comparte la misma cache de _ordenFotoFetched para no duplicar peticiones).
+  if(!(o.foto || _ordenFotoFetched[id])){
+    supaFetch('ordenes','GET',null,'id=eq.'+id+'&select=id,foto').then(function(rows){
+      if(rows){
+        _ordenFotoFetched[id]=true;
+        if(rows[0]) o.foto=rows[0].foto||null;
+        saveDB('ordenes',ORDENES);
+      }
+      _abrirGestorPM02Render(id,o);
+    });
+    return;
+  }
+  _abrirGestorPM02Render(id,o);
+}
+function _abrirGestorPM02Render(id,o){
   var tecsList=USERS.filter(function(u){
     return u.rol==='tecnico'||(u.rol==='admin'&&(u.nombre.toLowerCase().includes('jorge')||u.nombre.toLowerCase().includes('mauricio')));
   });
