@@ -2613,23 +2613,9 @@ function guardarInspeccion(){
   inspeccionActual.tsFin=fmtTime(Date.now());
   const idx=INSPECCIONES.findIndex(i=>i.id===inspeccionActual.id);
   if(idx>=0)INSPECCIONES[idx]=inspeccionActual;else INSPECCIONES.push(inspeccionActual);
-  saveDB('inspecciones',INSPECCIONES);supaUpsert('inspecciones',{
-    id:inspeccionActual.id,
-    turno:inspeccionActual.turno||'',
-    tipo:'inspeccion_turno',
-    momento_inspeccion:inspeccionActual.momentoInspeccion||'',
-    estado:inspeccionActual.estado||'cerrada',
-    semana:inspeccionActual.semana||currentWeek(),
-    anio:inspeccionActual.año||currentYear(),
-    tecnico:inspeccionActual.tecnico||currentUser.nombre,
-    tecnico_nombre:inspeccionActual.tecnicoNombre||currentUser.nombre,
-    tecnico_id:inspeccionActual.tecnicoId||currentUser.id,
-    levantado_por:nombreEfectivo(),
-    ts:inspeccionActual.tsCierre||Date.now(),
-    ts_cierre:inspeccionActual.tsCierre||Date.now(),
-    fecha:new Date(inspeccionActual.tsCierre||Date.now()).toISOString().split('T')[0],
-    puntos_detalle:inspeccionActual.puntos?JSON.stringify(inspeccionActual.puntos):null
-  }).catch(function(){});
+  saveDB('inspecciones',INSPECCIONES);
+  // Sync a Supabase (avisa y encola reintento si falla — ver syncInspeccionTurnoSupa)
+  syncInspeccionTurnoSupa(inspeccionActual);
   // Registrar como PM03
   const pmId=genID('PM03');
   const verde=inspeccionActual.puntos.filter(p=>p.estado==='verde').length;
@@ -13715,22 +13701,126 @@ function saveOrdenSupa(o){
   });
 }
 
-// Reintentar órdenes fallidas
+// Reintentar órdenes, PM03, checklists y registros de agua que fallaron al
+// sincronizar. Los pendientes que llevan menos de 7 días en la cola se reintentan
+// (así sobreviven a un corte de Supabase de un par de días) y además de correr al
+// abrir la app, se repite cada 5 minutos para reintentar solo en cuanto Supabase
+// vuelva a responder, sin que nadie tenga que recargar la app.
 function reintentarOrdenesSync(){
-  var local = loadDB('ordenes',[]);
-  var pendientes = loadDB('ordenes_retry_queue',[]);
+  var pendientes = loadDB('supa_retry_queue',[]);
   if(!pendientes.length) return;
-  var nuevasCola = [];
+  var local = loadDB('ordenes',[]);
+  var localPM03 = loadDB('pm03_plan',[]);
+  var localInsp = loadDB('inspecciones',[]);
+  var localAgua = loadDB('agua_lecturas',[]);
+  var SIETE_DIAS = 7*24*60*60*1000;
   pendientes.forEach(function(item){
-    var o = local.find(function(x){return x.id===item.id;});
-    if(o && (Date.now()-item.ts) < 3600000){ // máximo 1 hora
-      saveOrdenSupa(o);
+    if((Date.now()-item.ts) >= SIETE_DIAS) return; // máximo 7 días
+    if(item.table==='pm03_plan'){
+      var p = localPM03.find(function(x){return x.id===item.id;});
+      if(p) savePM03Supa(p);
+    } else if(item.table==='checklist'){
+      var insp = localInsp.find(function(x){return x.id===item.id;});
+      if(insp) syncChecklistSupa(insp, item.momento||null);
+    } else if(item.table==='inspeccion_turno'){
+      var it = localInsp.find(function(x){return x.id===item.id;});
+      if(it) syncInspeccionTurnoSupa(it);
+    } else if(item.table==='agua_lecturas'){
+      var row = localAgua.find(function(x){return x.id===item.id;});
+      if(row) syncAguaSupa(row);
+    } else {
+      var o = local.find(function(x){return x.id===item.id;});
+      if(o) saveOrdenSupa(o);
     }
   });
-  saveDB('ordenes_retry_queue',[]);
+  saveDB('supa_retry_queue',[]);
 }
 setTimeout(reintentarOrdenesSync, 5000);
-function savePM03Supa(p){supaUpsert('pm03_plan',{id:p.id,linea:p.linea,componente:p.componente||null,actividad:p.actividad,area:p.area||null,semana:p.semana,anio:p.año||2026,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null,estado:p.estado||'abierta',prioridad:p.prioridad||null,fuente_excel:p.fuenteExcel||false,horas_cierre:p.horasCierre||0,observaciones_cierre:p.observacionesCierre||null,cerrada_ts:p.cerradaTs||null,cerrada_por:p.cerradaPor||null,generado_por:p.generadoPor||null,origen_ot:p.origenOT||null,ts:p.ts||Date.now(),liberado_por:p.liberadoPor||null,liberado_ts:p.liberadoTs||null,estado_calidad:p.estadoCalidad||null,rechazo_calidad:p.rechazoCalidad||null,actividades_estado:p.actividadesEstado?JSON.stringify(p.actividadesEstado):null,refacciones_usadas:p.refaccionesUsadas||null,herramienta_ingresada:p.herramientaIngresada||null,herramienta_salida:p.herramientaSalida||null,grasa_aceite:p.grasaAceite||null,limpieza_mtto:typeof p.limpiezaMtto==='boolean'?p.limpiezaMtto:null,desinf_produccion:typeof p.desinfProduccion==='boolean'?p.desinfProduccion:null,firma_tecnico:p.firmaTecnico||null,firma_tecnico_ts:p.firmaTecnicoTs||null,comentarios_actividades:p.comentariosActividades?JSON.stringify(p.comentariosActividades):null,mediciones_actividades:p.medicionesActividades?JSON.stringify(p.medicionesActividades):null,liberado_prod_por:p.liberadoProdPor||null,liberado_prod_ts:p.liberadoProdTs||null,liberado_admin_por:p.liberadoAdminPor||null,liberado_admin_ts:p.liberadoAdminTs||null,estado_flujo:p.estadoFlujo||'ejecucion',comentario_firma_calidad:p.comentarioFirmaCalidad||null,comentario_firma_prod:p.comentarioFirmaProd||null,comentario_firma_admin:p.comentarioFirmaAdmin||null,fotos:p.fotos&&p.fotos.length?JSON.stringify(p.fotos):null,firma_img_operador:p.firmaImgOperador||null,firma_nombre_operador:p.firmaNombreOperador||null,firma_ts_operador:p.firmaTsOperador||null,firma_img_lider:p.firmaImgLider||null,firma_nombre_lider:p.firmaNombreLider||null,firma_ts_lider:p.firmaTsLider||null,firma_img_calidad:p.firmaImgCalidad||null,firma_nombre_calidad:p.firmaNombreCalidad||null,firma_ts_calidad:p.firmaTsCalidad||null,firma_img_admin:p.firmaImgAdmin||null,firma_nombre_admin:p.firmaNombreAdmin||null,firma_ts_admin:p.firmaTsAdmin||null}).catch(function(){});}
+setInterval(reintentarOrdenesSync, 5*60*1000);
+function savePM03Supa(p){supaUpsert('pm03_plan',{id:p.id,linea:p.linea,componente:p.componente||null,actividad:p.actividad,area:p.area||null,semana:p.semana,anio:p.año||2026,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null,estado:p.estado||'abierta',prioridad:p.prioridad||null,fuente_excel:p.fuenteExcel||false,horas_cierre:p.horasCierre||0,observaciones_cierre:p.observacionesCierre||null,cerrada_ts:p.cerradaTs||null,cerrada_por:p.cerradaPor||null,generado_por:p.generadoPor||null,origen_ot:p.origenOT||null,ts:p.ts||Date.now(),liberado_por:p.liberadoPor||null,liberado_ts:p.liberadoTs||null,estado_calidad:p.estadoCalidad||null,rechazo_calidad:p.rechazoCalidad||null,actividades_estado:p.actividadesEstado?JSON.stringify(p.actividadesEstado):null,refacciones_usadas:p.refaccionesUsadas||null,herramienta_ingresada:p.herramientaIngresada||null,herramienta_salida:p.herramientaSalida||null,grasa_aceite:p.grasaAceite||null,limpieza_mtto:typeof p.limpiezaMtto==='boolean'?p.limpiezaMtto:null,desinf_produccion:typeof p.desinfProduccion==='boolean'?p.desinfProduccion:null,firma_tecnico:p.firmaTecnico||null,firma_tecnico_ts:p.firmaTecnicoTs||null,comentarios_actividades:p.comentariosActividades?JSON.stringify(p.comentariosActividades):null,mediciones_actividades:p.medicionesActividades?JSON.stringify(p.medicionesActividades):null,liberado_prod_por:p.liberadoProdPor||null,liberado_prod_ts:p.liberadoProdTs||null,liberado_admin_por:p.liberadoAdminPor||null,liberado_admin_ts:p.liberadoAdminTs||null,estado_flujo:p.estadoFlujo||'ejecucion',comentario_firma_calidad:p.comentarioFirmaCalidad||null,comentario_firma_prod:p.comentarioFirmaProd||null,comentario_firma_admin:p.comentarioFirmaAdmin||null,fotos:p.fotos&&p.fotos.length?JSON.stringify(p.fotos):null,firma_img_operador:p.firmaImgOperador||null,firma_nombre_operador:p.firmaNombreOperador||null,firma_ts_operador:p.firmaTsOperador||null,firma_img_lider:p.firmaImgLider||null,firma_nombre_lider:p.firmaNombreLider||null,firma_ts_lider:p.firmaTsLider||null,firma_img_calidad:p.firmaImgCalidad||null,firma_nombre_calidad:p.firmaNombreCalidad||null,firma_ts_calidad:p.firmaTsCalidad||null,firma_img_admin:p.firmaImgAdmin||null,firma_nombre_admin:p.firmaNombreAdmin||null,firma_ts_admin:p.firmaTsAdmin||null}).then(function(data){
+  if(data===null){
+    // supaUpsert nunca rechaza; en falla resuelve null — así detectamos el error real.
+    showAlert('⚠️ Error al sincronizar PM03 '+p.id.substring(0,15),'error');
+    var q=loadDB('supa_retry_queue',[]);
+    q.push({table:'pm03_plan',id:p.id,ts:Date.now()});
+    saveDB('supa_retry_queue',q);
+  }
+});}
+
+// Checklists (incluye inspección de turno con puntos verde/rojo/no_aplica) —
+// si falla la sincronización, avisar y encolar para reintento (antes era silencioso).
+function syncChecklistSupa(insp, momentoTurno){
+  supaUpsert('inspecciones', {
+    id: insp.id,
+    tipo: insp.tipoId||insp.tipo,
+    turno: insp.turno,
+    momento_inspeccion: momentoTurno || insp.tipoId || insp.tipo,
+    estado: 'cerrada',
+    semana: insp.semana,
+    anio: insp.año,
+    tecnico: insp.tecnicoNombre,
+    tecnico_id: insp.tecnicoId,
+    levantado_por: insp.tecnicoNombre,
+    ts: insp.tsCierre,
+    ts_cierre: insp.tsCierre,
+    ts_inicio: insp.tsInicio||null,
+    fecha: new Date(insp.tsCierre||Date.now()).toISOString().split('T')[0],
+    tecnico_nombre: insp.tecnicoNombre||(currentUser&&currentUser.nombre),
+    puntos_detalle: JSON.stringify(insp.puntos||[]),
+  }).then(function(data){
+    if(data===null){
+      showAlert('⚠️ Error al sincronizar checklist '+(insp.id||'').substring(0,15),'error');
+      var q=loadDB('supa_retry_queue',[]);
+      q.push({table:'checklist',id:insp.id,ts:Date.now(),momento:momentoTurno||null});
+      saveDB('supa_retry_queue',q);
+    }
+  });
+}
+
+// Inspección de turno (checklist específico de verde/rojo por turno) — mismo trato.
+function syncInspeccionTurnoSupa(inspeccionActual){
+  supaUpsert('inspecciones',{
+    id:inspeccionActual.id,
+    turno:inspeccionActual.turno||'',
+    tipo:'inspeccion_turno',
+    momento_inspeccion:inspeccionActual.momentoInspeccion||'',
+    estado:inspeccionActual.estado||'cerrada',
+    semana:inspeccionActual.semana||currentWeek(),
+    anio:inspeccionActual.año||currentYear(),
+    tecnico:inspeccionActual.tecnico||(currentUser&&currentUser.nombre),
+    tecnico_nombre:inspeccionActual.tecnicoNombre||(currentUser&&currentUser.nombre),
+    tecnico_id:inspeccionActual.tecnicoId||(currentUser&&currentUser.id),
+    levantado_por:nombreEfectivo(),
+    ts:inspeccionActual.tsCierre||Date.now(),
+    ts_cierre:inspeccionActual.tsCierre||Date.now(),
+    fecha:new Date(inspeccionActual.tsCierre||Date.now()).toISOString().split('T')[0],
+    puntos_detalle:inspeccionActual.puntos?JSON.stringify(inspeccionActual.puntos):null
+  }).then(function(data){
+    if(data===null){
+      showAlert('⚠️ Error al sincronizar inspección '+(inspeccionActual.id||'').substring(0,15),'error');
+      var q=loadDB('supa_retry_queue',[]);
+      q.push({table:'inspeccion_turno',id:inspeccionActual.id,ts:Date.now()});
+      saveDB('supa_retry_queue',q);
+    }
+  });
+}
+
+// Registro de agua — antes el .catch() nunca se disparaba (supaFetch no rechaza),
+// así que el reintento con PATCH tampoco pasaba nunca. Ahora sí se detecta la falla.
+function syncAguaSupa(row){
+  supaFetch('agua_lecturas','POST',row,'').then(function(data){
+    if(data===null){
+      supaFetch('agua_lecturas','PATCH',row,'id=eq.'+row.id).then(function(data2){
+        if(data2===null){
+          showAlert('⚠️ Error al sincronizar registro de agua '+row.fecha,'error');
+          var q=loadDB('supa_retry_queue',[]);
+          q.push({table:'agua_lecturas',id:row.id,ts:Date.now()});
+          saveDB('supa_retry_queue',q);
+        }
+      });
+    }
+  });
+}
 function deleteOrdenSupa(id){fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+id,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}}).catch(function(){});}
 
 // PM03 Excel Plan
@@ -17984,25 +18074,8 @@ function guardarChecklist() {
   if (idx >= 0) INSPECCIONES[idx] = insp; else INSPECCIONES.push(insp);
   saveDB('inspecciones', INSPECCIONES);
 
-  // Sync a Supabase
-  supaUpsert('inspecciones', {
-    id: insp.id,
-    tipo: insp.tipoId,
-    turno: insp.turno,
-    momento_inspeccion: momentoTurno || insp.tipoId,
-    estado: 'cerrada',
-    semana: insp.semana,
-    anio: insp.año,
-    tecnico: insp.tecnicoNombre,
-    tecnico_id: insp.tecnicoId,
-    levantado_por: insp.tecnicoNombre,
-    ts: insp.tsCierre,
-    ts_cierre: insp.tsCierre,
-    ts_inicio: insp.tsInicio||null,
-    fecha: new Date(insp.tsCierre||Date.now()).toISOString().split('T')[0],
-    tecnico_nombre: insp.tecnicoNombre||currentUser.nombre,
-    puntos_detalle: JSON.stringify(insp.puntos||[]),
-  }).catch(function(){});
+  // Sync a Supabase (avisa y encola reintento si falla — ver syncChecklistSupa)
+  syncChecklistSupa(insp, momentoTurno);
 
   saveDB('chk_draft_'+(insp.tipoId||''), null); // Limpiar borrador
   // Liberar el progreso compartido en Supabase (ya se cerró el checklist)
@@ -27428,10 +27501,8 @@ function guardarLecturaAgua(fecha){
   if(idx>=0) AGUA_LECTURAS[idx]=row; else AGUA_LECTURAS.unshift(row);
   saveDB('agua_lecturas',AGUA_LECTURAS);
 
-  // Save to Supabase
-  supaFetch('agua_lecturas','POST',row,'').catch(function(){
-    supaFetch('agua_lecturas','PATCH',row,'id=eq.'+id).catch(function(){});
-  });
+  // Save to Supabase (avisa y encola reintento si falla — ver syncAguaSupa)
+  syncAguaSupa(row);
 
   saveDB('agua_inicio_'+fecha, null); // ya se guardó, limpiar la marca de inicio
   _aguaLimpiarBorrador(fecha);
