@@ -1971,7 +1971,7 @@ function _renderDetallePM03(id,p){
     bannerRepro='<div style="background:#fef3c7;border:2px solid #d97706;border-radius:14px;padding:12px;margin-bottom:12px;font-size:13px;color:#92400e;font-weight:700">⚠️ Esta PM03 está pendiente de programar — espera asignación del administrador</div>';
   }
 
-  document.getElementById('detalle-content').innerHTML=bannerRepro+`<div class="card"><div class="card-title">${p.esInspeccion?'✅ Inspección de Turno':'📅 '+p.linea}</div>${row('🔩 Componente',p.componente)}${row('🔧 Actividad',p.actividad)}${row('📅 Semana',p.semana?p.semana+' / '+p.año:'Sin programar')}${row('👤 Técnico',p.tecnicoNombre||'Sin asignar')}${row('📋 Estado',p.estado||'abierta')}${p.horaInicio?row('🕐 Inicio',p.horaInicio):''}${p.horaFin?row('🕐 Fin',p.horaFin):''}${p.horaInicio&&p.horaFin?row('⏱️ Tiempo',diffMin(p.horaInicio,p.horaFin)+' min'):''}</div>
+  document.getElementById('detalle-content').innerHTML=bannerRepro+`<div class="card"><div class="card-title">${p.esInspeccion?'✅ Inspección de Turno':'📅 '+p.linea}</div>${row('🔩 Componente',p.componente)}${row('🔧 Actividad',p.actividad)}${row('📅 Semana',p.semana?p.semana+' / '+p.año:'Sin programar')}${row('👤 Responsable de ejecutar',p.tecnicoNombre||'Sin asignar')}${row('🧑‍💼 Responsable de área',p.responsableAreaNombre||'Sin asignar')}${row('📋 Estado',p.estado||'abierta')}${p.horaInicio?row('🕐 Inicio',p.horaInicio):''}${p.horaFin?row('🕐 Fin',p.horaFin):''}${p.horaInicio&&p.horaFin?row('⏱️ Tiempo',diffMin(p.horaInicio,p.horaFin)+' min'):''}</div>
   ${p.diasTrabajo&&p.diasTrabajo.length?(function(){
     var filas=p.diasTrabajo.map(function(d,i){
       var mins=diffMin(d.horaInicio,d.horaFin);
@@ -3818,9 +3818,10 @@ function agregarPM03(){
   const linea=document.getElementById('p3-linea')?.value,act=document.getElementById('p3-act')?.value?.trim(),comp=document.getElementById('p3-comp')?.value?.trim();
   const sem=parseInt(document.getElementById('p3-sem')?.value);
   const tecSel=document.getElementById('p3-tec');const tecId=tecSel?.value,tecNom=tecId?(tecSel.options[tecSel.selectedIndex]?.text||''):'Sin asignar';
+  const respAreaSel=document.getElementById('p3-resp-area');const respAreaId=respAreaSel?.value,respAreaNom=respAreaId?(respAreaSel.options[respAreaSel.selectedIndex]?.text||''):'';
   const pasos=document.getElementById('p3-pasos')?.value?.trim();
   if(!linea||!act){showAlert('Línea y actividad requeridos','error');return;}
-  PM03_PLAN.push({id:genID('PM03'),linea,componente:comp||'—',actividad:act,semana:sem,año:currentYear(),tecnicoId:tecId||'',tecnicoNombre:tecNom,estado:'abierta',pasoAPaso:pasos||'',generadoPor:nombreEfectivo()||'Sistema',ts:Date.now(),horaCreacion:new Date().toISOString()});
+  PM03_PLAN.push({id:genID('PM03'),linea,componente:comp||'—',actividad:act,semana:sem,año:currentYear(),tecnicoId:tecId||'',tecnicoNombre:tecNom,responsableAreaId:respAreaId||'',responsableAreaNombre:respAreaNom,estado:'abierta',pasoAPaso:pasos||'',generadoPor:nombreEfectivo()||'Sistema',ts:Date.now(),horaCreacion:new Date().toISOString()});
   saveDB('pm03_plan',PM03_PLAN);savePM03Supa(PM03_PLAN[PM03_PLAN.length-1]);showAlert('PM03 agregada');renderAdminPM03(document.getElementById('admin-content'));
 }
 function renderAdminMTBF(cont){
@@ -4648,7 +4649,7 @@ function aplicarFiltrosPendientes(){updatePendChart();
       if(p.año!==añoFiltro) return false;
       if(semsDelMes&&!semsDelMes.includes(p.semana)) return false;
       if(!semsDelMes&&semFiltro>0&&p.semana!==semFiltro) return false;
-      if(r==='tecnico'&&p.tecnicoId!==currentUser.id) return false;
+      if(r==='tecnico'&&p.tecnicoId!==currentUser.id&&p.responsableAreaId!==currentUser.id) return false;
       if(filtrosPend.estado==='cerrada'&&p.estado!=='cerrada') return false;
       if(filtrosPend.estado==='abierta'&&p.estado==='cerrada') return false;
       if(tecFiltro&&p.tecnicoId!==tecFiltro) return false;
@@ -4675,6 +4676,7 @@ function aplicarFiltrosPendientes(){updatePendChart();
       <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:var(--txt3)">
         <span>👨‍🔧 ${p.tecnicoNombre||'Sin asignar'}</span><span>📅 Semana ${p.semana}/${p.año}</span>
       </div>
+      ${p.responsableAreaNombre?`<div style="font-size:11px;color:var(--txt3);margin-top:2px">🧑‍💼 Resp. área: ${p.responsableAreaNombre}</div>`:''}
       <div style="font-size:11px;color:var(--txt3);margin-top:2px">Generó: ${p.generadoPor||'Sistema'}</div>
       ${isAdmin&&p.estado!=='cerrada'?`<button class="btn btn-outline btn-sm mt8" style="font-size:12px;padding:5px 12px" onclick="event.stopPropagation();reprogramarPM03('${p.id}')">📅 Reprogramar</button>`:''}
     </div>`;
@@ -4824,7 +4826,8 @@ function renderAdminPM03(cont){
     <div class="form-group"><label class="form-label">Componente</label><input type="text" class="form-control" id="p3-comp"></div>
     <div class="form-group"><label class="form-label">Actividad</label><textarea class="form-control" id="p3-act"></textarea></div>
     <div class="form-group"><label class="form-label">Semana</label><select class="form-control" id="p3-sem">${sems.map(s=>`<option value="${s}" ${s===currentWeek()?'selected':''}>Semana ${s}</option>`).join('')}</select></div>
-    <div class="form-group"><label class="form-label">Técnico</label><select class="form-control" id="p3-tec"><option value="">Sin asignar</option>${tecs.map(t=>`<option value="${t.id}">${t.nombre}</option>`).join('')}</select></div>
+    <div class="form-group"><label class="form-label">Responsable de ejecutar</label><select class="form-control" id="p3-tec"><option value="">Sin asignar</option>${tecs.map(t=>`<option value="${t.id}">${t.nombre}</option>`).join('')}</select></div>
+    <div class="form-group"><label class="form-label">Responsable de área</label><select class="form-control" id="p3-resp-area"><option value="">Sin asignar</option>${tecs.map(t=>`<option value="${t.id}">${t.nombre}</option>`).join('')}</select></div>
     <div class="form-group"><label class="form-label">Paso a paso (opcional)</label><textarea class="form-control" id="p3-pasos"></textarea></div>
     <button class="btn btn-success" onclick="agregarPM03()">📅 Agregar</button>
   </div>
@@ -13564,7 +13567,7 @@ function syncSupabase(){
     }));
     saveDB('ordenes',ORDENES);
   }).catch(function(){});
-  supaFetch('pm03_plan','GET',null,'order=semana.asc&limit=999999&select=actividad,actividades_estado,actividades_estado_final,actividades_estado_inicial,anio,area,cerrada_por,cerrada_ts,comentarios_actividades,componente,desinf_produccion,dias_trabajo,draft_ts,es_inspeccion,estado,estado_calidad,estado_flujo,firma_nombre_admin,firma_nombre_calidad,firma_nombre_lider,firma_nombre_operador,firma_tecnico,firma_tecnico_ts,firma_ts_admin,firma_ts_calidad,firma_ts_lider,firma_ts_operador,fuente_excel,generado_por,grasa_aceite,herramienta_ingresada,herramienta_salida,hora_fin,hora_inicio,horas_actividades,horas_cierre,id,liberado_admin_por,liberado_admin_ts,liberado_por,liberado_prod_por,liberado_prod_ts,liberado_ts,limpieza_mtto,linea,mediciones_actividades,observaciones_cierre,personas_actividades,rechazo_calidad,refacciones_nuevas,refacciones_usadas,reporte_actividades,semana,tecnico_id,tecnico_nombre,ts').then(function(rows){
+  supaFetch('pm03_plan','GET',null,'order=semana.asc&limit=999999&select=actividad,actividades_estado,actividades_estado_final,actividades_estado_inicial,anio,area,cerrada_por,cerrada_ts,comentarios_actividades,componente,desinf_produccion,dias_trabajo,draft_ts,es_inspeccion,estado,estado_calidad,estado_flujo,firma_nombre_admin,firma_nombre_calidad,firma_nombre_lider,firma_nombre_operador,firma_tecnico,firma_tecnico_ts,firma_ts_admin,firma_ts_calidad,firma_ts_lider,firma_ts_operador,fuente_excel,generado_por,grasa_aceite,herramienta_ingresada,herramienta_salida,hora_fin,hora_inicio,horas_actividades,horas_cierre,id,liberado_admin_por,liberado_admin_ts,liberado_por,liberado_prod_por,liberado_prod_ts,liberado_ts,limpieza_mtto,linea,mediciones_actividades,observaciones_cierre,personas_actividades,rechazo_calidad,refacciones_nuevas,refacciones_usadas,reporte_actividades,responsable_area_id,responsable_area_nombre,semana,tecnico_id,tecnico_nombre,ts').then(function(rows){
     if(!rows)return;
     var localPM03=loadDB('pm03_plan',[]);
     PM03_PLAN=rows.map(function(r){
@@ -13590,7 +13593,7 @@ function syncSupabase(){
       // Preservar actividadesEstado local si Supabase no lo tiene
       if(!actEst && local && local.actividadesEstado) actEst = local.actividadesEstado;
       return {id:r.id,linea:r.linea,componente:r.componente,actividad:r.actividad,area:r.area,
-        semana:r.semana,año:r.anio,tecnicoId:r.tecnico_id,tecnicoNombre:r.tecnico_nombre,
+        semana:r.semana,año:r.anio,tecnicoId:r.tecnico_id,tecnicoNombre:r.tecnico_nombre,responsableAreaId:r.responsable_area_id,responsableAreaNombre:r.responsable_area_nombre,
         estado:estadoFinal,fuenteExcel:r.fuente_excel,esInspeccion:r.es_inspeccion,
         horasCierre:estadoFinal==='cerrada'&&local?local.horasCierre||r.horas_cierre||0:r.horas_cierre||0,
         horaInicio:r.hora_inicio||(local?local.horaInicio:null),
@@ -13791,7 +13794,7 @@ function reintentarOrdenesSync(){
 }
 setTimeout(reintentarOrdenesSync, 5000);
 setInterval(reintentarOrdenesSync, 5*60*1000);
-function savePM03Supa(p){supaUpsert('pm03_plan',{id:p.id,linea:p.linea,componente:p.componente||null,actividad:p.actividad,area:p.area||null,semana:p.semana,anio:p.año||2026,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null,estado:p.estado||'abierta',prioridad:p.prioridad||null,fuente_excel:p.fuenteExcel||false,horas_cierre:p.horasCierre||0,observaciones_cierre:p.observacionesCierre||null,cerrada_ts:p.cerradaTs||null,cerrada_por:p.cerradaPor||null,generado_por:p.generadoPor||null,origen_ot:p.origenOT||null,ts:p.ts||Date.now(),liberado_por:p.liberadoPor||null,liberado_ts:p.liberadoTs||null,estado_calidad:p.estadoCalidad||null,rechazo_calidad:p.rechazoCalidad||null,actividades_estado:p.actividadesEstado?JSON.stringify(p.actividadesEstado):null,refacciones_usadas:p.refaccionesUsadas||null,herramienta_ingresada:p.herramientaIngresada||null,herramienta_salida:p.herramientaSalida||null,grasa_aceite:p.grasaAceite||null,limpieza_mtto:typeof p.limpiezaMtto==='boolean'?p.limpiezaMtto:null,desinf_produccion:typeof p.desinfProduccion==='boolean'?p.desinfProduccion:null,firma_tecnico:p.firmaTecnico||null,firma_tecnico_ts:p.firmaTecnicoTs||null,comentarios_actividades:p.comentariosActividades?JSON.stringify(p.comentariosActividades):null,mediciones_actividades:p.medicionesActividades?JSON.stringify(p.medicionesActividades):null,liberado_prod_por:p.liberadoProdPor||null,liberado_prod_ts:p.liberadoProdTs||null,liberado_admin_por:p.liberadoAdminPor||null,liberado_admin_ts:p.liberadoAdminTs||null,estado_flujo:p.estadoFlujo||'ejecucion',comentario_firma_calidad:p.comentarioFirmaCalidad||null,comentario_firma_prod:p.comentarioFirmaProd||null,comentario_firma_admin:p.comentarioFirmaAdmin||null,
+function savePM03Supa(p){supaUpsert('pm03_plan',{id:p.id,linea:p.linea,componente:p.componente||null,actividad:p.actividad,area:p.area||null,semana:p.semana,anio:p.año||2026,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null,responsable_area_id:p.responsableAreaId||null,responsable_area_nombre:p.responsableAreaNombre||null,estado:p.estado||'abierta',prioridad:p.prioridad||null,fuente_excel:p.fuenteExcel||false,horas_cierre:p.horasCierre||0,observaciones_cierre:p.observacionesCierre||null,cerrada_ts:p.cerradaTs||null,cerrada_por:p.cerradaPor||null,generado_por:p.generadoPor||null,origen_ot:p.origenOT||null,ts:p.ts||Date.now(),liberado_por:p.liberadoPor||null,liberado_ts:p.liberadoTs||null,estado_calidad:p.estadoCalidad||null,rechazo_calidad:p.rechazoCalidad||null,actividades_estado:p.actividadesEstado?JSON.stringify(p.actividadesEstado):null,refacciones_usadas:p.refaccionesUsadas||null,herramienta_ingresada:p.herramientaIngresada||null,herramienta_salida:p.herramientaSalida||null,grasa_aceite:p.grasaAceite||null,limpieza_mtto:typeof p.limpiezaMtto==='boolean'?p.limpiezaMtto:null,desinf_produccion:typeof p.desinfProduccion==='boolean'?p.desinfProduccion:null,firma_tecnico:p.firmaTecnico||null,firma_tecnico_ts:p.firmaTecnicoTs||null,comentarios_actividades:p.comentariosActividades?JSON.stringify(p.comentariosActividades):null,mediciones_actividades:p.medicionesActividades?JSON.stringify(p.medicionesActividades):null,liberado_prod_por:p.liberadoProdPor||null,liberado_prod_ts:p.liberadoProdTs||null,liberado_admin_por:p.liberadoAdminPor||null,liberado_admin_ts:p.liberadoAdminTs||null,estado_flujo:p.estadoFlujo||'ejecucion',comentario_firma_calidad:p.comentarioFirmaCalidad||null,comentario_firma_prod:p.comentarioFirmaProd||null,comentario_firma_admin:p.comentarioFirmaAdmin||null,
   // fotos/firma_img_* ya no se sincronizan en bloque (viajan bajo demanda al abrir
   // el detalle) — si en este dispositivo nunca se cargaron (p.campo===undefined),
   // se omiten del payload para NO borrar en Supabase lo que otro dispositivo sí guardó.
@@ -14112,7 +14115,7 @@ function updatePendChart(){
     if(p.año !== año) return false;
     if(tecId && p.tecnicoId !== tecId) return false;
     // For tecnico: only their assigned PM03
-    if(r==='tecnico' && !tecId && p.tecnicoId!==currentUser.id) return false;
+    if(r==='tecnico' && !tecId && p.tecnicoId!==currentUser.id && p.responsableAreaId!==currentUser.id) return false;
     return true;
   });
   // Also include PM02 and PM04 for the chart
@@ -19406,9 +19409,14 @@ function abrirEditarPM03Admin(id){
     +'<button id="epm3-btn-abierta" onclick="epm3SetEstado(\'abierta\')" style="flex:1;padding:11px;border-radius:9px;border:2px solid '+(p.estado==='abierta'?'#f59e0b':'#d1d5db')+';background:'+(p.estado==='abierta'?'#fef3c7':'#fff')+';font-weight:700;cursor:pointer">📂 Abierta</button>'
     +'<button id="epm3-btn-cerrada" onclick="epm3SetEstado(\'cerrada\')" style="flex:1;padding:11px;border-radius:9px;border:2px solid '+(p.estado==='cerrada'?'#16a34a':'#d1d5db')+';background:'+(p.estado==='cerrada'?'#dcfce7':'#fff')+';font-weight:700;cursor:pointer">✅ Cerrada</button>'
     +'</div></div>'
-    +'<div style="margin-bottom:14px"><label style="font-size:.75rem;font-weight:700;color:#374151;text-transform:uppercase;display:block;margin-bottom:6px">Técnico</label>'
+    +'<div style="margin-bottom:14px"><label style="font-size:.75rem;font-weight:700;color:#374151;text-transform:uppercase;display:block;margin-bottom:6px">Responsable de ejecutar</label>'
     +'<select id="epm3-tecnico" class="form-control" style="padding:10px">'
     +getTecnicos().map(function(u){return '<option value="'+u.id+'"'+(p.tecnicoId===u.id?' selected':'')+'>'+u.nombre+'</option>';}).join('')
+    +'</select></div>'
+    +'<div style="margin-bottom:14px"><label style="font-size:.75rem;font-weight:700;color:#374151;text-transform:uppercase;display:block;margin-bottom:6px">Responsable de área</label>'
+    +'<select id="epm3-resp-area" class="form-control" style="padding:10px">'
+    +'<option value="">-- Sin asignar --</option>'
+    +getTecnicos().map(function(u){return '<option value="'+u.id+'"'+(p.responsableAreaId===u.id?' selected':'')+'>'+u.nombre+'</option>';}).join('')
     +'</select></div>'
     +'<div style="margin-bottom:16px"><label style="font-size:.75rem;font-weight:700;color:#374151;text-transform:uppercase;display:block;margin-bottom:6px">Observaciones</label>'
     +'<textarea id="epm3-obs" class="form-control" rows="2" style="padding:10px">'+(p.observacionesCierre||'')+'</textarea></div>'
@@ -19434,10 +19442,19 @@ function guardarEditarPM03Admin(id){
   if(!p) return;
   var nuevoEst=window._epm3Estado||p.estado;
   var tecSel=document.getElementById('epm3-tecnico');
+  var respAreaSel=document.getElementById('epm3-resp-area');
   var obs=document.getElementById('epm3-obs').value.trim();
   var tObj=tecSel?USERS.find(function(u){return u.id===tecSel.value;}):null;
   p.estado=nuevoEst;
   if(tObj){p.tecnicoId=tObj.id;p.tecnicoNombre=tObj.nombre;}
+  if(respAreaSel){
+    var raVal=respAreaSel.value;
+    if(!raVal){p.responsableAreaId='';p.responsableAreaNombre='';}
+    else{
+      var raObj=getTecnicos().find(function(u){return u.id===raVal;});
+      if(raObj){p.responsableAreaId=raObj.id;p.responsableAreaNombre=raObj.nombre;}
+    }
+  }
   if(obs) p.observacionesCierre=obs;
   if(nuevoEst==='cerrada'&&!p.cerradaTs){p.cerradaTs=Date.now();p.cerradaPor=nombreEfectivo();}
   p._editadoTs=Date.now(); // Marca para que sync no sobreescriba
@@ -28832,6 +28849,13 @@ function _freqBucketDeActividad(actDef){
   if(dias===365||sem===52) return 'Anual';
   return 'Otra frecuencia';
 }
+// Normaliza texto para comparar actividades/componentes sin que un acento, mayúscula
+// o punto final de más los trate como "actividades distintas" (solo para comparar,
+// nunca se usa para guardar ni mostrar el texto).
+function _normTxtAct(s){
+  if(!s) return '';
+  return s.toString().normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim().replace(/[.\s]+$/,'');
+}
 function showPlanCalendario(areaId,linea){
   var cont=document.getElementById('plan-content');
   if(!cont) return;
@@ -28893,12 +28917,12 @@ function showPlanCalendario(areaId,linea){
   // Also add equipos that appear in planKeys but not in the list
   Object.keys(planKeys).forEach(function(k){
     var eq=planKeys[k].eq;
-    if(eq!=='General'&&equipos.indexOf(eq)<0) equipos.push(eq);
+    if(eq!=='General'&&!equipos.some(function(e){return _normTxtAct(e)===_normTxtAct(eq);})) equipos.push(eq);
   });
   // Also add equipos that only have una actividad definida sin programación en este año
   actDefsLinea.forEach(function(p){
     var eq=p.componente||'General';
-    if(eq!=='General'&&equipos.indexOf(eq)<0) equipos.push(eq);
+    if(eq!=='General'&&!equipos.some(function(e){return _normTxtAct(e)===_normTxtAct(eq);})) equipos.push(eq);
   });
   equipos.sort();
 
@@ -28925,8 +28949,12 @@ function showPlanCalendario(areaId,linea){
   // este año no le tocó ejecución (por su frecuencia), en vez de desaparecer por completo.
   actDefsLinea.forEach(function(p){
     var eq=p.componente||'General';
+    // Si ya existe una clave de equipo equivalente (mismo texto ignorando acentos/
+    // mayúsculas/espacios) usarla, para no separar el mismo equipo en dos grupos.
+    var eqExistente=Object.keys(eqActMap).find(function(k){return _normTxtAct(k)===_normTxtAct(eq);});
+    if(eqExistente) eq=eqExistente;
     if(!eqActMap[eq]) eqActMap[eq]=[];
-    var yaTiene=eqActMap[eq].some(function(a){return a.label===p.descripcion;});
+    var yaTiene=eqActMap[eq].some(function(a){return _normTxtAct(a.label)===_normTxtAct(p.descripcion);});
     if(!yaTiene) eqActMap[eq].push({label:p.descripcion,programado:{},realizado:{},sinProgEsteAnio:true});
   });
 
@@ -28966,7 +28994,7 @@ function showPlanCalendario(areaId,linea){
     var acts=eqActMap[eq]||[];
     if(!acts.length){ equiposSinActividad.push(eq); return; }
     acts.forEach(function(act){
-      var _actDef=PLAN_ACTIVIDADES.find(function(x){return x.area_id===areaId&&x.linea===linea&&(x.componente||'General')===eq&&x.descripcion===act.label;});
+      var _actDef=PLAN_ACTIVIDADES.find(function(x){return x.area_id===areaId&&x.linea===linea&&_normTxtAct(x.componente||'General')===_normTxtAct(eq)&&_normTxtAct(x.descripcion)===_normTxtAct(act.label);});
       var bucket=_freqBucketDeActividad(_actDef);
       if(!bucketed[bucket][eq]) bucketed[bucket][eq]=[];
       bucketed[bucket][eq].push({act:act,_actDef:_actDef});
