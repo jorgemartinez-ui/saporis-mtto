@@ -29139,11 +29139,17 @@ function showPlanCalendario(areaId,linea){
 
 // ── Detonar PM03 anticipada desde el Calendario + resincronizar frecuencia ──────────
 // Convierte (año, semana ISO) a la fecha (lunes) de esa semana — inverso de getWeekNumber.
+// IMPORTANTE: se construye y se ajusta en hora LOCAL (no UTC) a propósito, porque
+// getWeekNumber() y el resto del código que avanza fechas (fechaIter.setDate/getDate en
+// _resincronizarSeriePM03, guardarNuevaActividad, etc.) también trabajan en hora local.
+// Mezclar UTC aquí con local en el resto del flujo causaba que, en cualquier huso horario
+// detrás de UTC (como México, UTC-6), la semana calculada saliera 1 semana antes de la
+// real (bug reportado: "detoné semana 38, mantener cada 4, y me dio semana 41 en vez de 42").
 function _fechaDeSemanaISO(anio,semana){
-  var simple=new Date(Date.UTC(anio,0,1+(semana-1)*7));
-  var dow=simple.getUTCDay();
-  if(dow<=4) simple.setUTCDate(simple.getUTCDate()-dow+1);
-  else simple.setUTCDate(simple.getUTCDate()+8-dow);
+  var simple=new Date(anio,0,1+(semana-1)*7);
+  var dow=simple.getDay();
+  if(dow<=4) simple.setDate(simple.getDate()-dow+1);
+  else simple.setDate(simple.getDate()+8-dow);
   return simple;
 }
 
