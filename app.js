@@ -28282,6 +28282,15 @@ function freqToSemanas(freqVal,manualVal,manualUnit){
     return Math.max(1,Math.round(v/7)); // dias
   }
   var dias=parseInt((freqVal||'d7').replace('d',''))||7;
+  // Mapeo exacto días->semanas para las frecuencias predefinidas del selector (d1,d7,
+  // d14,d30,d60,d90,d180,d365) — debe coincidir EXACTO con las semanas que usan las
+  // demás pantallas (Editar actividad, Generar plan preventivo, bucket del Calendario:
+  // 1,2,4,8,12,24,52). Antes se calculaba con Math.round(dias/7), que no da un número
+  // exacto para 60/90/180 días (9/13/26 en vez de 8/12/24) y provocaba que el Calendario
+  // mostrara "Trimestral" (coincide por días) mientras Editar mostraba otra cosa (no
+  // encontraba coincidencia en semanas y caía en la primera opción de la lista).
+  var MAPA_DIAS_SEMANAS={1:1,7:1,14:2,30:4,60:8,90:12,180:24,365:52};
+  if(MAPA_DIAS_SEMANAS[dias]!==undefined) return MAPA_DIAS_SEMANAS[dias];
   return Math.max(1,Math.round(dias/7));
 }
 
