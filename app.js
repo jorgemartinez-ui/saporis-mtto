@@ -29022,7 +29022,15 @@ function showPlanCalendario(areaId,linea){
           var bg=isVenc?'#7f1d1d':'#1e3a8a';
           html+='<td style="background:'+bg+';text-align:center;cursor:pointer" data-pm3id="'+p.id+'" onclick="if(this.dataset.pm3id)showDetallePM03(this.dataset.pm3id)" title="Sem '+s+' — '+act.label+' — '+(p.tecnicoNombre||'Sin asignar')+'"><span style="color:#fff;font-size:9px;pointer-events:none">P</span></td>';
         } else {
-          html+='<td style="background:'+(s===semActual?'#fed7aa':'transparent')+'">&nbsp;</td>';
+          // Celda en blanco: admin/super puede detonar aquí una PM03 anticipada (semana actual
+          // o futura) para actividades ya definidas en el plan, sin afectar el render normal
+          // para técnicos ni para semanas pasadas.
+          var puedeDetonar=_actDef&&currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super')&&(anio>currentYear()||(anio===currentYear()&&s>=semActual));
+          if(puedeDetonar){
+            html+='<td style="background:'+(s===semActual?'#fed7aa':'transparent')+';cursor:pointer" onclick="abrirDetonarPM03Anticipada(\''+_actDef.id+'\','+s+','+anio+')" title="⚡ Detonar PM03 anticipada — Sem '+s+' — '+act.label+'">&nbsp;</td>';
+          } else {
+            html+='<td style="background:'+(s===semActual?'#fed7aa':'transparent')+'">&nbsp;</td>';
+          }
         }
       });
     }
@@ -29118,6 +29126,162 @@ function showPlanCalendario(areaId,linea){
 
   html+='</tbody></table></div>';
   cont.innerHTML=html;
+}
+
+// ── Detonar PM03 anticipada desde el Calendario + resincronizar frecuencia ──────────
+// Convierte (año, semana ISO) a la fecha (lunes) de esa semana — inverso de getWeekNumber.
+function _fechaDeSemanaISO(anio,semana){
+  var simple=new Date(Date.UTC(anio,0,1+(semana-1)*7));
+  var dow=simple.getUTCDay();
+  if(dow<=4) simple.setUTCDate(simple.getUTCDate()-dow+1);
+  else simple.setUTCDate(simple.getUTCDate()+8-dow);
+  return simple;
+}
+
+function abrirDetonarPM03Anticipada(actividadPlanId,semana,anio){
+  var p=PLAN_ACTIVIDADES.find(function(x){return x.id===actividadPlanId;});
+  if(!p) return;
+  var modal=document.createElement('div');
+  modal.id='modal-detonar-pm03';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
+  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#1a3c5e;margin-bottom:4px">⚡ Detonar PM03 anticipada</div>'
+    +'<div style="font-size:13px;color:#374151;margin:10px 0 4px">'+(p.componente||'General')+' — '+p.descripcion+'</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:16px">Se creará una PM03 para la semana '+semana+'/'+anio+', fuera de la programación normal (hoy cada '+p.frecuencia_semanas+' semanas).</div>'
+    +'<div style="display:flex;gap:10px">'
+    +'<button onclick="var m=document.getElementById(\'modal-detonar-pm03\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="confirmarDetonarPM03Anticipada(\''+actividadPlanId+'\','+semana+','+anio+')" style="flex:1;padding:13px;background:#1e3a8a;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">⚡ Detonar</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function confirmarDetonarPM03Anticipada(actividadPlanId,semana,anio){
+  var p=PLAN_ACTIVIDADES.find(function(x){return x.id===actividadPlanId;});
+  var m=document.getElementById('modal-detonar-pm03');if(m)m.remove();
+  if(!p){showAlert('No se encontró la actividad del plan','error');return;}
+  var nuevo={id:_genPM03IdUnico({}),linea:p.linea,area:p.area_id,componente:p.componente||'—',actividad:p.descripcion,
+    semana:semana,año:anio,tecnicoId:'',tecnicoNombre:'Sin asignar',estado:'abierta',
+    pasoAPaso:p.protocolo||'',generadoPor:'Plan Mtto',actividadPlanId:p.id,
+    ts:Date.now(),horaCreacion:new Date().toISOString()};
+  PM03_PLAN.push(nuevo);
+  saveDB('pm03_plan',PM03_PLAN);
+  savePM03Supa(nuevo);
+  showAlert('✅ PM03 detonada para semana '+semana+'/'+anio);
+  abrirPreguntaFrecuenciaPM03(actividadPlanId,semana,anio,nuevo.id);
+}
+
+function abrirPreguntaFrecuenciaPM03(actividadPlanId,semanaDeton,anioDeton,pm3IdCreado){
+  var p=PLAN_ACTIVIDADES.find(function(x){return x.id===actividadPlanId;});
+  if(!p) return;
+  var fechaDeton=_fechaDeSemanaISO(anioDeton,semanaDeton);
+  var compClave=p.componente||'General';
+  // Última PM03 CERRADA de esta misma actividad, comparando por texto (línea+componente+
+  // descripción, insensible a acentos/mayúsculas) y no por actividadPlanId — ese campo no
+  // viaja a Supabase y puede faltar si este dispositivo sincronizó después de crearla.
+  var cerradas=PM03_PLAN.filter(function(x){
+    return x.linea===p.linea && _normTxtAct(x.componente||'General')===_normTxtAct(compClave) && _normTxtAct(x.actividad)===_normTxtAct(p.descripcion) && x.estado==='cerrada' && x.semana && x.año;
+  }).map(function(x){ return {x:x,fecha:_fechaDeSemanaISO(x.año,x.semana)}; })
+   .filter(function(o){ return o.fecha<fechaDeton; })
+   .sort(function(a,b){ return b.fecha-a.fecha; });
+  var sugerida=p.frecuencia_semanas;
+  var hayBase=false;
+  if(cerradas.length){
+    var diasDesde=Math.round((fechaDeton-cerradas[0].fecha)/86400000);
+    var semDesde=Math.round(diasDesde/7);
+    if(semDesde>=1){ sugerida=semDesde; hayBase=true; }
+  }
+  var modal=document.createElement('div');
+  modal.id='modal-frecuencia-pm03';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
+  var msgBase=hayBase
+    ? ('Desde la última ejecución cerrada pasaron <b>'+sugerida+'</b> semana(s), en vez de las '+p.frecuencia_semanas+' de siempre.')
+    : ('No se encontró una ejecución cerrada previa de esta actividad para comparar — no hay una frecuencia nueva que sugerir.');
+  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#1a3c5e;margin-bottom:4px">🔄 ¿Actualizar frecuencia?</div>'
+    +'<div style="font-size:13px;color:#374151;margin:10px 0 4px">'+msgBase+'</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:16px">El calendario a futuro de esta actividad se va a resincronizar a partir de la semana '+semanaDeton+'/'+anioDeton+', usando la frecuencia con la que te quedes.</div>'
+    +'<div style="display:flex;gap:10px">'
+    +'<button onclick="_resincronizarSeriePM03(\''+actividadPlanId+'\','+semanaDeton+','+anioDeton+','+p.frecuencia_semanas+',\''+pm3IdCreado+'\')" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer;font-weight:700">No, mantener en '+p.frecuencia_semanas+' sem.</button>'
+    +(hayBase?('<button onclick="_resincronizarSeriePM03(\''+actividadPlanId+'\','+semanaDeton+','+anioDeton+','+sugerida+',\''+pm3IdCreado+'\')" style="flex:1;padding:13px;background:#1e3a8a;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">Sí, actualizar a '+sugerida+' sem.</button>'):'')
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function _resincronizarSeriePM03(actividadPlanId,semanaDeton,anioDeton,nuevaFrecuencia,pm3IdCreado){
+  var p=PLAN_ACTIVIDADES.find(function(x){return x.id===actividadPlanId;});
+  var mF=document.getElementById('modal-frecuencia-pm03');if(mF)mF.remove();
+  if(!p){showAlert('No se encontró la actividad del plan','error');return;}
+  var freqAnterior=p.frecuencia_semanas;
+  var cambioFrecuencia=nuevaFrecuencia!==freqAnterior;
+
+  if(cambioFrecuencia){
+    p.frecuencia_semanas=nuevaFrecuencia;
+    saveDB('plan_actividades',PLAN_ACTIVIDADES);
+    supaFetch('plan_actividades','PATCH',{frecuencia_semanas:nuevaFrecuencia},'id=eq.'+p.id).catch(function(){});
+    var histRow={id:genID('FH'),actividad_id:p.id,frecuencia_anterior:freqAnterior,frecuencia_nueva:nuevaFrecuencia,fecha_cambio:new Date().toISOString().slice(0,10),motivo:'Detonación anticipada desde Calendario — semana '+semanaDeton+'/'+anioDeton,cambiado_por:currentUser.nombre,creado_ts:Date.now()};
+    supaFetch('plan_frecuencia_historial','POST',histRow,'').catch(function(){});
+  }
+
+  var compClave=p.componente||'General';
+  var fechaDeton=_fechaDeSemanaISO(anioDeton,semanaDeton);
+
+  // PM03 futuras de esta misma actividad que sigan abiertas — nunca se tocan las cerradas
+  // (ya ejecutadas) ni las de semanas pasadas, y nunca la recién creada en este flujo.
+  var aBorrar=PM03_PLAN.filter(function(x){
+    if(x.id===pm3IdCreado) return false;
+    if(x.estado==='cerrada') return false;
+    if(x.linea!==p.linea) return false;
+    if(_normTxtAct(x.componente||'General')!==_normTxtAct(compClave)) return false;
+    if(_normTxtAct(x.actividad)!==_normTxtAct(p.descripcion)) return false;
+    if(!x.semana||!x.año) return false;
+    return _fechaDeSemanaISO(x.año,x.semana)>fechaDeton;
+  });
+
+  if(aBorrar.length){
+    var idsBorrar=aBorrar.map(function(x){return x.id;});
+    PM03_PLAN=PM03_PLAN.filter(function(x){return idsBorrar.indexOf(x.id)<0;});
+    saveDB('pm03_plan',PM03_PLAN);
+    var elim=loadDB('pm03_eliminadas',[]);
+    idsBorrar.forEach(function(id){ if(elim.indexOf(id)<0) elim.push(id); });
+    saveDB('pm03_eliminadas',elim);
+    fetch(SUPA_URL+'/rest/v1/pm03_plan?id=in.('+idsBorrar.join(',')+')',{
+      method:'DELETE',
+      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'}
+    }).then(function(r){
+      if(!r.ok) r.text().then(function(t){console.error('Error borrando serie PM03 vieja:',t);});
+    }).catch(function(){});
+  }
+
+  // Regenerar la serie futura desde la semana detonada + la frecuencia vigente, hasta 10
+  // años adelante (mismo criterio que al crear una actividad nueva en guardarNuevaActividad).
+  var anioLimite=currentYear()+10;
+  var usados={};
+  var nuevasPM03=[];
+  var fechaIter=new Date(fechaDeton.getTime());
+  fechaIter.setDate(fechaIter.getDate()+nuevaFrecuencia*7);
+  while(fechaIter.getFullYear()<=anioLimite){
+    var pm3Id=_genPM03IdUnico(usados);
+    nuevasPM03.push({
+      id:pm3Id,linea:p.linea,area:p.area_id,componente:p.componente||'—',actividad:p.descripcion,
+      semana:getWeekNumber(fechaIter),año:fechaIter.getFullYear(),
+      tecnicoId:'',tecnicoNombre:'Sin asignar',estado:'abierta',
+      pasoAPaso:p.protocolo||'',generadoPor:'Plan Mtto',actividadPlanId:p.id,
+      ts:Date.now(),horaCreacion:new Date().toISOString()
+    });
+    fechaIter=new Date(fechaIter.getTime());
+    fechaIter.setDate(fechaIter.getDate()+nuevaFrecuencia*7);
+  }
+  nuevasPM03.forEach(function(pp){ PM03_PLAN.push(pp); });
+  saveDB('pm03_plan',PM03_PLAN);
+  var supaRows=nuevasPM03.map(function(pp){
+    return {id:pp.id,linea:pp.linea,componente:pp.componente||null,actividad:pp.actividad,area:pp.area||null,
+      semana:pp.semana,anio:pp.año,tecnico_id:pp.tecnicoId||null,tecnico_nombre:pp.tecnicoNombre||null,
+      estado:pp.estado||'abierta',generado_por:pp.generadoPor||null,ts:pp.ts||Date.now(),estado_flujo:'ejecucion',fuente_excel:false};
+  });
+  if(supaRows.length) supaUpsert('pm03_plan',supaRows).catch(function(){});
+
+  showAlert('✅ Calendario resincronizado'+(cambioFrecuencia?' — frecuencia actualizada a '+nuevaFrecuencia+' semanas':'')+' — '+aBorrar.length+' PM03 futuras reemplazadas, '+nuevasPM03.length+' nuevas generadas');
+  showPlanCalendario(p.area_id,p.linea);
 }
 
 function exportarCalendarioExcel(areaId,linea){
