@@ -234,7 +234,7 @@ tr:nth-child(even) td{background:#F8FAFC}
 </script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="app.js?v=20260921a" defer></script>
+<script src="app.js?v=20260921b" defer></script>
 
 <style id="lup-css">
 .lup-doc{background:#fff;border:2px solid #1a3c5e;border-radius:10px;overflow:hidden;margin:12px;font-family:Arial,sans-serif}
@@ -422,7 +422,8 @@ tr:nth-child(even) td{background:#F8FAFC}
           <div class="menu-btn admin" onclick="showAdmin()"><div class="menu-icon">⚙️</div><div class="menu-label">Administrar</div><div class="menu-desc">Usuarios, listas, app</div></div>
           <div class="menu-btn desempeno" onclick="showDesempeno()"><div class="menu-icon">🏆</div><div class="menu-label">Desempeño</div><div class="menu-desc">Indicadores por técnico</div></div>
           <div class="menu-btn" id="btn-aprobacion-admin" style="border-color:#7c3aed;background:linear-gradient(135deg,#fff 60%,#ede9fe)" onclick="showLiberacionAdmin()"><div class="menu-icon" id="icon-aprobacion-admin">📋</div><div class="menu-label">Aprobación PM03</div><div class="menu-desc" id="desc-aprobacion-admin">Aprobación final</div></div>
-          <div class="menu-btn" style="border-color:#1a3c5e;background:linear-gradient(135deg,#fff 60%,#e8edf5)" onclick="showAdminProtocolos()"><div class="menu-icon">🗂️</div><div class="menu-label">Protocolos PM03</div><div class="menu-desc">Gestionar formatos</div></div>
+          <div class="menu-btn" style="border-color:#1a3c5e;background:linear-gradient(135deg,#fff 60%,#e8edf5)" onclick="showAdminProtocolos()"><div class="menu-icon">🗂️</div><div class="menu-label">Protocolos existentes</div><div class="menu-desc">Ver y filtrar formatos</div></div>
+          <div class="menu-btn" style="border-color:#1a3c5e;background:linear-gradient(135deg,#fff 60%,#e8edf5)" onclick="showProtocolosProximaSemana()"><div class="menu-icon">📅</div><div class="menu-label">PM03 próxima semana</div><div class="menu-desc">Generar/editar protocolos</div></div>
           <div class="menu-btn" style="border-color:#C62828;background:linear-gradient(135deg,#fff 60%,#ffebee)" onclick="showKPIAnormalidades()"><div class="menu-icon">📊</div><div class="menu-label">KPI Anormalidades</div><div class="menu-desc">Indicadores operador/lider</div></div>
           <div class="menu-btn" style="border-color:#7c3aed;background:linear-gradient(135deg,#fff 60%,#ede9fe);position:relative" onclick="showPM02PorAsignar()"><div class="menu-icon" id="icon-pm02-asignar" style="position:relative">📋<span id="badge-pm02-asignar" style="display:none;position:absolute;top:-8px;right:-10px;background:#dc2626;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:11px;font-weight:800;line-height:18px;text-align:center;padding:0 3px"></span></div><div class="menu-label">PM02 por Asignar</div><div class="menu-desc" id="desc-pm02-asignar">Anormalidades sin técnico</div></div>
           <div class="menu-btn" style="border-color:#dc2626;background:linear-gradient(135deg,#fff 60%,#fee2e2);position:relative" onclick="showPM03PorReprogramar()"><div class="menu-icon" id="icon-pm3-reprogram" style="position:relative">📅<span id="badge-pm03-reprog" style="display:none;position:absolute;top:-8px;right:-10px;background:#7c3aed;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:11px;font-weight:800;line-height:18px;text-align:center;padding:0 3px"></span></div><div class="menu-label">PM03 x Reprogramar</div><div class="menu-desc" id="desc-pm3-reprogram">PM03 vencidas</div></div>

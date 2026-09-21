@@ -1992,7 +1992,7 @@ function _renderDetallePM03(id,p){
     ${p.desinfProduccion!=null?row('🧴 Desinfección',p.desinfProduccion?'SI':'NO'):''}
   </div>`:''}
   ${p.actividadesEstado&&Object.keys(p.actividadesEstado).length?(function(){
-    var proto=getProtocoloPM03(p.linea);
+    var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
     if(!proto) return '';
     var rows=proto.actividades.map(function(a){
       var e=p.actividadesEstado[a.id]||'—';
@@ -2109,7 +2109,7 @@ function abrirCierrePM03(id){
     return;
   }
   var p=PM03_PLAN.find(function(x){return x.id===id;});if(!p)return;
-  var proto=getProtocoloPM03(p.linea);
+  var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
   if(!p.actividadesEstado) p.actividadesEstado={};
   if(!p.actividadesEstadoInicial) p.actividadesEstadoInicial={};
   if(!p.actividadesEstadoFinal) p.actividadesEstadoFinal={};
@@ -2205,7 +2205,7 @@ function abrirCierrePM03(id){
           return '<div style="background:#f8fafc;border-radius:8px;padding:8px;margin-bottom:8px">'
             +'<div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:6px">🔢 Medición'+(uni?' ('+uni+')':'')+' — tolerancia ±'+tol+'%</div>'
             +puntosHTML
-            +'<button type="button" onclick="showHistorialMedicion(\''+String(p.linea||'').replace(/'/g,"\\'")+'\','+a.id+')" style="padding:5px 10px;background:#eff6ff;border:none;border-radius:6px;font-size:.72rem;color:#1a3c5e;cursor:pointer;margin-top:2px">📈 Ver historial</button>'
+            +'<button type="button" onclick="showHistorialMedicion(\''+String(p.linea||'').replace(/'/g,"\\'")+'\','+a.id+',\''+String(p.componente||'').replace(/'/g,"\\'")+'\',\''+String(p.actividad||'').replace(/'/g,"\\'")+'\')" style="padding:5px 10px;background:#eff6ff;border:none;border-radius:6px;font-size:.72rem;color:#1a3c5e;cursor:pointer;margin-top:2px">📈 Ver historial</button>'
             +'</div>';
         })()
 
@@ -2230,7 +2230,7 @@ function abrirCierrePM03(id){
     +'<div><div style="font-size:.7rem;color:#9ca3af;font-weight:700">FECHA</div><div style="font-size:.88rem;font-weight:700">'+fechaStr+'</div></div>'
     +'<div><div style="font-size:.7rem;color:#9ca3af;font-weight:700">SEMANA</div><div style="font-size:.88rem;font-weight:700">'+semStr+'</div></div>'
     +'<div><div style="font-size:.7rem;color:#9ca3af;font-weight:700">TÉCNICO</div><div style="font-size:.88rem;font-weight:700">'+(p.tecnicoNombre||currentUser.nombre)+'</div></div>'
-    +'<div><div style="font-size:.7rem;color:#9ca3af;font-weight:700">EQUIPO</div><div style="font-size:.88rem;font-weight:700">'+(proto?proto.equipoSecundario:p.linea)+'</div></div>'
+    +'<div><div style="font-size:.7rem;color:#9ca3af;font-weight:700">ACTIVIDAD</div><div style="font-size:.88rem;font-weight:700">'+(proto&&proto.equipoSecundario?proto.equipoSecundario:(p.actividad||p.componente||p.linea))+'</div></div>'
     +'<div style="grid-column:1/-1">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">'
     +'<div style="font-size:.7rem;color:#9ca3af;font-weight:700">DÍAS DE TRABAJO</div>'
@@ -2320,7 +2320,7 @@ function pm3SetActividad(id, actId, estado){
   p.actividadesEstado[actId]=estado;
   saveDB('pm03_plan',PM03_PLAN);
   // Actualizar botones visualmente
-  var proto=getProtocoloPM03(p.linea);
+  var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
   if(!proto) return;
   ['A','B','C'].forEach(function(e){
     var btns=document.querySelectorAll('[data-act="'+actId+'"][data-est="'+e+'"]');
@@ -2357,7 +2357,7 @@ function confirmarCierrePM03(id){
   var hi=p.diasTrabajo[0].horaInicio;
   var hf=p.diasTrabajo[p.diasTrabajo.length-1].horaFin;
 
-  var proto=getProtocoloPM03(p.linea);
+  var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
 
   // Validar limpieza obligatoria
   if(window._pm3Limp===null||window._pm3Limp===undefined){
@@ -19034,19 +19034,44 @@ function idEfectivo(){
 var PROTOCOLOS_PM03_SUPA = []; // Cargados de Supabase
 var PROTOCOLOS_PM03 = {}; // Los protocolos se gestionan desde Admin → Protocolos PM03
 
-function getProtocoloPM03(linea){
+function getProtocoloPM03(linea,equipo,actividad){
   if(!linea) return null;
-  // Buscar primero en protocolos de Supabase (dinámicos)
-  for(var i=0;i<PROTOCOLOS_PM03_SUPA.length;i++){
-    var s=PROTOCOLOS_PM03_SUPA[i];
-    if(s.linea===linea||linea.indexOf(s.linea)>=0||s.linea.indexOf(linea)>=0)
-      return {equipo:s.equipo,equipoSecundario:s.equipo_secundario,codigo:s.codigo||'REG-MTT-002.02',actividades:s.actividades||[]};
+  function _protoNorm(s){return (s||'').toString().trim().toLowerCase();}
+  var nLinea=_protoNorm(linea), nEquipo=_protoNorm(equipo), nAct=_protoNorm(actividad);
+  function _protoToResult(s){
+    return {equipo:s.equipo,equipoSecundario:s.equipo_secundario,codigo:s.codigo||'REG-MTT-002.02',actividades:s.actividades||[]};
+  }
+  // Buscar primero en protocolos de Supabase (dinámicos), filtrando por línea
+  var candidatos=PROTOCOLOS_PM03_SUPA.filter(function(s){
+    var sl=_protoNorm(s.linea);
+    return sl&&(sl===nLinea||nLinea.indexOf(sl)>=0||sl.indexOf(nLinea)>=0);
+  });
+  if(candidatos.length){
+    // Emparejamiento por niveles: 1) línea+equipo+actividad (match más específico —
+    // "Equipo Secundario" ahora representa la Actividad, cada actividad puede tener su
+    // propio protocolo), 2) línea+equipo (protocolo genérico de ese equipo), 3) línea sola
+    // (compatibilidad con protocolos antiguos que sólo tenían línea).
+    if(nEquipo&&nAct){
+      for(var i=0;i<candidatos.length;i++){
+        var s=candidatos[i], se=_protoNorm(s.equipo), sa=_protoNorm(s.equipo_secundario);
+        if(se&&sa&&(se===nEquipo||nEquipo.indexOf(se)>=0||se.indexOf(nEquipo)>=0)&&(sa===nAct||nAct.indexOf(sa)>=0||sa.indexOf(nAct)>=0))
+          return _protoToResult(s);
+      }
+    }
+    if(nEquipo){
+      for(var j=0;j<candidatos.length;j++){
+        var s2=candidatos[j], se2=_protoNorm(s2.equipo);
+        if(se2&&(se2===nEquipo||nEquipo.indexOf(se2)>=0||se2.indexOf(nEquipo)>=0))
+          return _protoToResult(s2);
+      }
+    }
+    return _protoToResult(candidatos[0]);
   }
   // Fallback a hardcoded
   var keys=Object.keys(PROTOCOLOS_PM03);
-  for(var j=0;j<keys.length;j++){
-    if(linea===keys[j]||linea.indexOf(keys[j])>=0||keys[j].indexOf(linea)>=0)
-      return PROTOCOLOS_PM03[keys[j]];
+  for(var k=0;k<keys.length;k++){
+    if(linea===keys[k]||linea.indexOf(keys[k])>=0||keys[k].indexOf(linea)>=0)
+      return PROTOCOLOS_PM03[keys[k]];
   }
   return null;
 }
@@ -19172,7 +19197,7 @@ function rechazarLiberacionPM03(id){
 function showLiberacionDetalle(id){
   var p = PM03_PLAN.find(function(x){return x.id===id;});
   if(!p){ showAlert('PM03 no encontrada','error'); return; }
-  var proto = getProtocoloPM03(p.linea);
+  var proto = getProtocoloPM03(p.linea,p.componente,p.actividad);
   var actHTML = '';
   if(proto && proto.actividades){
     actHTML = '<div class="card"><div class="card-title">📋 Actividades del Protocolo</div>'
@@ -19248,7 +19273,7 @@ function firmaCelda(titulo, nombre, ts, comentario){
 function imprimirProtocoloPM03(id){
   var p = PM03_PLAN.find(function(x){return x.id===id;});
   if(!p){showAlert('PM03 no encontrada','error');return;}
-  var proto = getProtocoloPM03(p.linea);
+  var proto = getProtocoloPM03(p.linea,p.componente,p.actividad);
   var win = window.open('','_blank');
   if(!win){showAlert('Activa ventanas emergentes para imprimir','error');return;}
 
@@ -19337,8 +19362,8 @@ function imprimirProtocoloPM03(id){
     +'<table style="margin-bottom:6px"><tr>'
     +'<td style="width:60px;border:1px solid #000;padding:3px;font-weight:700">Equipo:</td>'
     +'<td style="border:1px solid #000;padding:3px">'+(proto?proto.equipo:p.linea)+'</td>'
-    +'<td style="width:120px;border:1px solid #000;padding:3px;font-weight:700">Equipo Secundario:</td>'
-    +'<td style="border:1px solid #000;padding:3px">'+(proto?proto.equipoSecundario:p.componente||'—')+'</td>'
+    +'<td style="width:120px;border:1px solid #000;padding:3px;font-weight:700">Actividad:</td>'
+    +'<td style="border:1px solid #000;padding:3px">'+(proto&&proto.equipoSecundario?proto.equipoSecundario:(p.actividad||p.componente||'—'))+'</td>'
     +'</tr></table>'
 
     // Fechas y responsable
@@ -19693,7 +19718,7 @@ function pm3SetEstadoCampo(pmId, actId, campo, estado){
 function pm3CalcMedicion(pmId, actId){
   var p=PM03_PLAN.find(function(x){return x.id===pmId;});
   if(!p) return;
-  var proto=getProtocoloPM03(p.linea);
+  var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
   var a=proto&&proto.actividades?proto.actividades.find(function(x){return String(x.id)===String(actId);}):null;
   if(!a||!a.medicion) return;
   var tol=a.medicion.tolerancia!=null?a.medicion.tolerancia:3;
@@ -19794,7 +19819,7 @@ function pm3ToggleHerrOut(val){
 function pm3SaveCache(pmId){
   var p=PM03_PLAN.find(function(x){return x.id===pmId;});
   if(!p) return;
-  var proto=getProtocoloPM03(p.linea);
+  var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
   if(!proto) return;
   proto.actividades.forEach(function(a){
     var com=document.getElementById('pm3-com-'+a.id);
@@ -19946,14 +19971,17 @@ var _editandoProtocolo = null; // null = nuevo, string = linea editando
 
 // Historial de validaciones/mediciones de una actividad de protocolo PM03 (referencia vs medido, 3 puntos),
 // para ver si un medidor se acerca o se aleja de la curva a lo largo del tiempo.
-function showHistorialMedicion(linea, actId){
-  var proto = getProtocoloPM03(linea);
+function showHistorialMedicion(linea, actId, componente, actividad){
+  var proto = getProtocoloPM03(linea, componente, actividad);
   var act = proto && proto.actividades ? proto.actividades.find(function(a){ return String(a.id)===String(actId); }) : null;
   if(!act || !act.medicion){ showAlert('Esta actividad no tiene medición configurada', 'error'); return; }
   var tol = act.medicion.tolerancia!=null ? act.medicion.tolerancia : 3;
   var uni = act.medicion.unidad||'';
 
-  supaFetch('pm03_plan','GET',null,'linea=eq.'+encodeURIComponent(linea)+'&estado=eq.cerrada&mediciones_actividades=not.is.null&order=cerrada_ts.desc&limit=12').then(function(rows){
+  // Si conocemos el componente (equipo), filtramos también por él para no mezclar
+  // historial de otro equipo de la misma línea que use el mismo id de punto numérico.
+  var qFiltro='linea=eq.'+encodeURIComponent(linea)+(componente?'&componente=eq.'+encodeURIComponent(componente):'')+'&estado=eq.cerrada&mediciones_actividades=not.is.null&order=cerrada_ts.desc&limit=12';
+  supaFetch('pm03_plan','GET',null,qFiltro).then(function(rows){
     rows = rows||[];
     var puntos = rows.map(function(r){
       var meds;
@@ -20015,58 +20043,238 @@ function showHistorialMedicion(linea, actId){
 
 function showAdminProtocolos(){
   detalleBackScreen = 'screen-menu';
+  window._protoVolverASemana=false;
   var fDiv=document.getElementById('ordenes-filtros');
   var lDiv=document.getElementById('mis-ordenes-list');
 
   fDiv.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-    +'<div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800;color:#1a3c5e">📋 Protocolos PM03</div>'
+    +'<div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800;color:#1a3c5e">📋 Protocolos existentes</div>'
     +'<button onclick="abrirEditorProtocolo(null)" style="padding:8px 14px;background:#1a3c5e;color:#fff;border:none;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer">+ Nuevo Protocolo</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;margin-bottom:4px">'
+    +'<select class="form-control" id="proto-filtro-area" onchange="_protoFiltrarLista()" style="flex:1;padding:8px;font-size:.82rem">'
+    +'<option value="">Todas las áreas</option>'
+    +PM_AREAS.map(function(ar){return '<option value="'+ar.id+'">'+ar.label+'</option>';}).join('')
+    +'</select>'
+    +'<select class="form-control" id="proto-filtro-linea" onchange="_protoFiltrarLista()" style="flex:1;padding:8px;font-size:.82rem">'
+    +'<option value="">Todas las líneas</option>'
+    +'</select>'
     +'</div>';
 
+  lDiv.innerHTML='<div class="card text-center" style="padding:30px;color:var(--txt3)">Cargando…</div>';
   supaFetch('protocolos_pm03','GET',null,'order=linea.asc').then(function(rows){
     PROTOCOLOS_PM03_SUPA=rows||[];
-    if(!rows||!rows.length){
-      lDiv.innerHTML='<div class="card text-center" style="padding:40px"><div style="font-size:48px">📋</div><div style="font-weight:700;margin-top:12px">Sin protocolos registrados</div><div style="font-size:13px;color:var(--txt3);margin-top:8px">Crea el primer protocolo para comenzar</div></div>';
+    _protoFiltrarLista();
+  });
+  showScreen('screen-ordenes');
+}
+
+// Re-renderiza la lista de "Protocolos existentes" aplicando los filtros de Área/Línea.
+// La lista de líneas del segundo select se recalcula a partir de los protocolos ya
+// cargados (no del catálogo de líneas), para no ocultar líneas viejas/libres.
+function _protoFiltrarLista(){
+  var lDiv=document.getElementById('mis-ordenes-list');
+  if(!lDiv) return;
+  var areaSel=document.getElementById('proto-filtro-area');
+  var lineaSel=document.getElementById('proto-filtro-linea');
+  var areaVal=areaSel?areaSel.value:'';
+  var rows=PROTOCOLOS_PM03_SUPA||[];
+
+  if(lineaSel){
+    var lineaActual=lineaSel.value;
+    var lineasDisponibles=rows.filter(function(p){return !areaVal||proto_areaFromLinea(p.linea)===areaVal;})
+      .map(function(p){return p.linea;})
+      .filter(function(l,i,arr){return l&&arr.indexOf(l)===i;}).sort();
+    lineaSel.innerHTML='<option value="">Todas las líneas</option>'+lineasDisponibles.map(function(l){return '<option value="'+l+'"'+(l===lineaActual?' selected':'')+'>'+l+'</option>';}).join('');
+    if(lineasDisponibles.indexOf(lineaActual)<0) lineaSel.value='';
+  }
+  var lineaVal=lineaSel?lineaSel.value:'';
+
+  var filtradas=rows.filter(function(p){
+    if(areaVal && proto_areaFromLinea(p.linea)!==areaVal) return false;
+    if(lineaVal && p.linea!==lineaVal) return false;
+    return true;
+  });
+
+  if(!filtradas.length){
+    lDiv.innerHTML='<div class="card text-center" style="padding:40px"><div style="font-size:48px">📋</div><div style="font-weight:700;margin-top:12px">Sin protocolos'+((areaVal||lineaVal)?' con este filtro':' registrados')+'</div>'+((areaVal||lineaVal)?'':'<div style="font-size:13px;color:var(--txt3);margin-top:8px">Crea el primer protocolo para comenzar</div>')+'</div>';
+    return;
+  }
+  lDiv.innerHTML=filtradas.map(function(p){
+    return '<div class="card" style="margin-bottom:10px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start">'
+      +'<div>'
+      +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800">'+p.linea+'</div>'
+      +'<div style="font-size:12px;color:var(--txt2);margin-top:2px">🔧 '+( p.equipo||'—')+' · 📝 '+(p.equipo_secundario||'—')+'</div>'
+      +'<div style="font-size:11px;color:var(--txt3);margin-top:2px">'+( p.codigo||'REG-MTT-002.02')+' · <strong>'+(p.actividades?p.actividades.length:0)+'</strong> actividades'+(p.activo===false?' · <span style="color:#dc2626;font-weight:700">Inactivo</span>':'')+'</div>'
+      +'</div>'
+      +'<div style="display:flex;gap:6px">'
+      +'<button onclick="abrirEditorProtocolo(\''+p.id+'\')" style="padding:6px 12px;background:#f3f4f6;border:none;border-radius:7px;font-size:.8rem;cursor:pointer">✏️ Editar</button>'
+      +(p.activo?'<button onclick="toggleProtocolo(\''+p.id+'\',false)" style="padding:6px 12px;background:#fee2e2;border:none;border-radius:7px;font-size:.8rem;color:#dc2626;cursor:pointer">🚫 Desactivar</button>'
+                :'<button onclick="toggleProtocolo(\''+p.id+'\',true)" style="padding:6px 12px;background:#dcfce7;border:none;border-radius:7px;font-size:.8rem;color:#16a34a;cursor:pointer">✅ Activar</button>')
+      +'</div></div>'
+      +((p.actividades&&p.actividades.some(function(a){return a.medicion;}))
+        ? '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">'
+          +p.actividades.filter(function(a){return a.medicion;}).map(function(a){
+            return '<button onclick="showHistorialMedicion(\''+String(p.linea||'').replace(/'/g,"\\'")+'\','+a.id+',\''+String(p.equipo||'').replace(/'/g,"\\'")+'\',\''+String(p.equipo_secundario||'').replace(/'/g,"\\'")+'\')" style="padding:4px 10px;background:#eff6ff;border:none;border-radius:6px;font-size:.72rem;color:#1a3c5e;cursor:pointer">📈 '+(a.desc||('Punto '+a.id))+'</button>';
+          }).join('')
+          +'</div>'
+        : '')
+      +'</div>';
+  }).join('');
+}
+
+// ================================================================
+// PM03 PRÓXIMA SEMANA — vista semanal para ir preparando protocolos
+// ================================================================
+// Nivel de cobertura de protocolo para una PM03 dada (sólo considera protocolos activos):
+// 3 = específico (línea+equipo+actividad), 2 = genérico por equipo, 1 = genérico por línea, 0 = sin protocolo.
+function _protoNivelCobertura(linea,equipo,actividad){
+  if(!linea) return 0;
+  function n(s){return (s||'').toString().trim().toLowerCase();}
+  var nLinea=n(linea), nEquipo=n(equipo), nAct=n(actividad);
+  var candidatos=(PROTOCOLOS_PM03_SUPA||[]).filter(function(s){
+    if(s.activo===false) return false;
+    var sl=n(s.linea);
+    return sl&&(sl===nLinea||nLinea.indexOf(sl)>=0||sl.indexOf(nLinea)>=0);
+  });
+  if(!candidatos.length) return 0;
+  if(nEquipo&&nAct){
+    var hit1=candidatos.some(function(s){
+      var se=n(s.equipo), sa=n(s.equipo_secundario);
+      return se&&sa&&(se===nEquipo||nEquipo.indexOf(se)>=0||se.indexOf(nEquipo)>=0)&&(sa===nAct||nAct.indexOf(sa)>=0||sa.indexOf(nAct)>=0);
+    });
+    if(hit1) return 3;
+  }
+  if(nEquipo){
+    var hit2=candidatos.some(function(s){
+      var se2=n(s.equipo);
+      return se2&&(se2===nEquipo||nEquipo.indexOf(se2)>=0||se2.indexOf(nEquipo)>=0);
+    });
+    if(hit2) return 2;
+  }
+  return 1;
+}
+
+function showProtocolosProximaSemana(){
+  detalleBackScreen = 'screen-menu';
+  var fDiv=document.getElementById('ordenes-filtros');
+  var lDiv=document.getElementById('mis-ordenes-list');
+
+  var hoy=new Date();
+  var enOchoDias=new Date(hoy.getTime()+7*86400000);
+  var semSig=getWeekNumber(enOchoDias), anioSig=enOchoDias.getFullYear();
+  window._protoSemSig=semSig; window._protoAnioSig=anioSig;
+
+  fDiv.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800;color:#1a3c5e">📅 PM03 próxima semana</div>'
+    +'<span style="font-size:12px;color:var(--txt2);font-weight:700">Semana '+semSig+' / '+anioSig+'</span>'
+    +'</div>'
+    +'<div style="font-size:11px;color:var(--txt3);margin-bottom:4px">Toca una PM03 para generar, editar o eliminar su protocolo</div>';
+
+  lDiv.innerHTML='<div class="card text-center" style="padding:30px;color:var(--txt3)">Cargando…</div>';
+
+  // Sólo protocolos activos: son los únicos que realmente aplican al cerrar una PM03 (getProtocoloPM03)
+  supaFetch('protocolos_pm03','GET',null,'activo=eq.true&order=linea.asc').then(function(rows){
+    PROTOCOLOS_PM03_SUPA=rows||[];
+    var pm3s=PM03_PLAN.filter(function(p){return p.semana===semSig&&p.año===anioSig&&p.estado==='abierta';})
+      .sort(function(a,b){ return (a.linea||'').localeCompare(b.linea||'')||(a.componente||'').localeCompare(b.componente||''); });
+
+    if(!pm3s.length){
+      lDiv.innerHTML='<div class="card text-center" style="padding:40px"><div style="font-size:48px">📅</div><div style="font-weight:700;margin-top:12px">Sin PM03 programadas para la próxima semana</div></div>';
       return;
     }
-    lDiv.innerHTML=rows.map(function(p){
-      return '<div class="card" style="margin-bottom:10px">'
-        +'<div style="display:flex;justify-content:space-between;align-items:flex-start">'
-        +'<div>'
-        +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800">'+p.linea+'</div>'
-        +'<div style="font-size:12px;color:var(--txt2);margin-top:2px">'+( p.equipo||'—')+' · '+(p.equipo_secundario||'—')+'</div>'
-        +'<div style="font-size:11px;color:var(--txt3);margin-top:2px">'+( p.codigo||'REG-MTT-002.02')+' · <strong>'+(p.actividades?p.actividades.length:0)+'</strong> actividades</div>'
+
+    lDiv.innerHTML=pm3s.map(function(p){
+      var nivel=_protoNivelCobertura(p.linea,p.componente,p.actividad);
+      var badge = nivel===3?{t:'✅ Específico',bg:'#dcfce7',c:'#16a34a'}
+                : nivel===2?{t:'⚠️ Genérico (equipo)',bg:'#fef3c7',c:'#92400e'}
+                : nivel===1?{t:'⚠️ Genérico (línea)',bg:'#fef3c7',c:'#92400e'}
+                : {t:'❌ Sin protocolo',bg:'#fee2e2',c:'#dc2626'};
+      return '<div class="ot-card pm03" onclick="_protoAccionesPM03(\''+p.id+'\')" style="border-left:4px solid '+badge.c+'">'
+        +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
+        +'<span style="font-size:11px;color:#6b7280;font-weight:700">'+p.id+'</span>'
+        +'<span class="badge" style="background:'+badge.bg+';color:'+badge.c+'">'+badge.t+'</span>'
         +'</div>'
-        +'<div style="display:flex;gap:6px">'
-        +'<button onclick="abrirEditorProtocolo(\''+p.id+'\')" style="padding:6px 12px;background:#f3f4f6;border:none;border-radius:7px;font-size:.8rem;cursor:pointer">✏️ Editar</button>'
-        +(p.activo?'<button onclick="toggleProtocolo(\''+p.id+'\',false)" style="padding:6px 12px;background:#fee2e2;border:none;border-radius:7px;font-size:.8rem;color:#dc2626;cursor:pointer">🚫 Desactivar</button>'
-                  :'<button onclick="toggleProtocolo(\''+p.id+'\',true)" style="padding:6px 12px;background:#dcfce7;border:none;border-radius:7px;font-size:.8rem;color:#16a34a;cursor:pointer">✅ Activar</button>')
-        +'</div></div>'
-        +((p.actividades&&p.actividades.some(function(a){return a.medicion;}))
-          ? '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">'
-            +p.actividades.filter(function(a){return a.medicion;}).map(function(a){
-              return '<button onclick="showHistorialMedicion(\''+String(p.linea||'').replace(/'/g,"\\'")+'\','+a.id+')" style="padding:4px 10px;background:#eff6ff;border:none;border-radius:6px;font-size:.72rem;color:#1a3c5e;cursor:pointer">📈 '+(a.desc||('Punto '+a.id))+'</button>';
-            }).join('')
-            +'</div>'
-          : '')
+        +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+' — '+(p.componente||'—')+'</div>'
+        +'<div style="font-size:12px;color:var(--txt2)">'+(p.actividad||'—')+'</div>'
         +'</div>';
     }).join('');
   });
   showScreen('screen-ordenes');
 }
 
-function abrirEditorProtocolo(id){
+function _protoAccionesPM03(pmId){
+  var p=PM03_PLAN.find(function(x){return x.id===pmId;});
+  if(!p) return;
+  function n(x){return (x||'').toString().trim().toLowerCase();}
+  var nLinea=n(p.linea), nEquipo=n(p.componente);
+  var match=null;
+  // Preferir un protocolo que ya coincida por equipo; si no hay, tomar el genérico de la línea
+  (PROTOCOLOS_PM03_SUPA||[]).forEach(function(s){
+    if(match) return;
+    var sl=n(s.linea);
+    if(!sl||!(sl===nLinea||nLinea.indexOf(sl)>=0||sl.indexOf(nLinea)>=0)) return;
+    var se=n(s.equipo);
+    if(nEquipo&&se&&(se===nEquipo||nEquipo.indexOf(se)>=0||se.indexOf(nEquipo)>=0)) match=s;
+  });
+  if(!match){
+    (PROTOCOLOS_PM03_SUPA||[]).forEach(function(s){
+      if(match) return;
+      var sl=n(s.linea);
+      if(sl&&(sl===nLinea||nLinea.indexOf(sl)>=0||sl.indexOf(nLinea)>=0)) match=s;
+    });
+  }
+
+  var lineaEsc=String(p.linea||'').replace(/'/g,"\\'");
+  var compEsc=String(p.componente||'').replace(/'/g,"\\'");
+  var actEsc=String(p.actividad||'').replace(/'/g,"\\'");
+
+  var modal=document.createElement('div');
+  modal.id='modal-proto-acciones-pm03';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;overflow-y:auto;padding:12px;box-sizing:border-box';
+  modal.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;max-width:440px;margin:auto">'
+    +'<div style="font-size:15px;font-weight:800;color:#1a3c5e;margin-bottom:4px">'+(p.linea||'—')+' — '+(p.componente||'—')+'</div>'
+    +'<div style="font-size:13px;color:#6b7280;margin-bottom:16px">'+(p.actividad||'—')+'</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px">'
+    +'<button onclick="window._protoVolverASemana=true;document.getElementById(\'modal-proto-acciones-pm03\').remove();abrirEditorProtocolo(null,{linea:\''+lineaEsc+'\',equipo:\''+compEsc+'\',actividad:\''+actEsc+'\'})" style="padding:12px;background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;font-weight:700;color:#1d4ed8;cursor:pointer;text-align:left">🆕 Generar protocolo nuevo</button>'
+    +(match?('<button onclick="window._protoVolverASemana=true;document.getElementById(\'modal-proto-acciones-pm03\').remove();abrirEditorProtocolo(\''+match.id+'\')" style="padding:12px;background:#f3f4f6;border:none;border-radius:10px;font-weight:700;color:#374151;cursor:pointer;text-align:left">✏️ Editar protocolo ('+(match.equipo||match.linea)+(match.equipo_secundario?' · '+match.equipo_secundario:'')+')</button>'):'')
+    +(match?('<button onclick="_protoEliminarDesdeAccion(\''+match.id+'\')" style="padding:12px;background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;font-weight:700;color:#dc2626;cursor:pointer;text-align:left">🗑️ Eliminar protocolo</button>'):'')
+    +'<button onclick="document.getElementById(\'modal-proto-acciones-pm03\').remove()" style="padding:12px;background:#f3f4f6;border:none;border-radius:10px;cursor:pointer">Cancelar</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function _protoEliminarDesdeAccion(protoId){
+  if(!confirm('¿Eliminar este protocolo? Esta acción no se puede deshacer.')) return;
+  fetch(SUPA_URL+'/rest/v1/protocolos_pm03?id=eq.'+protoId,{
+    method:'DELETE',
+    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}
+  }).then(function(r){
+    var m=document.getElementById('modal-proto-acciones-pm03'); if(m) m.remove();
+    if(!r.ok){ showAlert('⚠️ No se pudo eliminar el protocolo','error'); return; }
+    PROTOCOLOS_PM03_SUPA=(PROTOCOLOS_PM03_SUPA||[]).filter(function(s){return s.id!==protoId;});
+    showAlert('✅ Protocolo eliminado');
+    if(typeof window._protoSemSig!=='undefined') showProtocolosProximaSemana();
+  }).catch(function(){ showAlert('⚠️ Error de conexión al eliminar','error'); });
+}
+
+function abrirEditorProtocolo(id, prefill){
   supaFetch('protocolos_pm03','GET',null,'order=linea.asc').then(function(rows){
     var p = id ? (rows||[]).find(function(r){return r.id===id;}) : null;
     var acts = p&&p.actividades ? p.actividades : [];
     _editandoProtocolo = id||null;
 
-    var areaInicial = p ? proto_areaFromLinea(p.linea) : '';
+    // Prefill (viene de "PM03 próxima semana" → Generar): sólo aplica cuando se crea uno nuevo (sin id)
+    var pLinea = p ? p.linea : (prefill&&prefill.linea?prefill.linea:'');
+    var pEquipo = p ? (p.equipo||'') : (prefill&&prefill.equipo?prefill.equipo:'');
+    var pActividad = p ? (p.equipo_secundario||'') : (prefill&&prefill.actividad?prefill.actividad:'');
+
+    var areaInicial = pLinea ? proto_areaFromLinea(pLinea) : '';
     var lineasInicial = areaInicial ? getLineasPorArea(areaInicial) : [];
-    var lineaLibre = !!(p && lineasInicial.indexOf(p.linea) === -1);
-    var equiposInicial = areaInicial ? getEquiposPorLinea(areaInicial, p?p.linea:'') : [];
-    var equipoLibre = !!(p && p.equipo && equiposInicial.indexOf(p.equipo) === -1);
-    var equipo2Libre = !!(p && p.equipo_secundario && equiposInicial.indexOf(p.equipo_secundario) === -1);
+    var lineaLibre = !!(pLinea && lineasInicial.indexOf(pLinea) === -1);
+    var equiposInicial = areaInicial ? getEquiposPorLinea(areaInicial, pLinea) : [];
+    var equipoLibre = !!(pEquipo && equiposInicial.indexOf(pEquipo) === -1);
 
     var modal=document.createElement('div');
     modal.id='modal-editor-proto';
@@ -20115,19 +20323,16 @@ function abrirEditorProtocolo(id){
       +'<input type="text" id="proto-codigo" class="form-control" value="'+(p?p.codigo||'REG-MTT-002.02':'REG-MTT-002.02')+'" style="padding:9px"></div>'
       +'<div style="grid-column:1/-1"><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Línea *</label>'
       +'<select class="form-control" id="proto-linea-sel" onchange="proto_onLineaChange()" style="padding:9px">'
-      +proto_lineaOptionsHTML(areaInicial, p?p.linea:'')
+      +proto_lineaOptionsHTML(areaInicial, pLinea)
       +'</select>'
-      +'<input type="text" id="proto-linea-txt" class="form-control" placeholder="Escribe la línea" value="'+(p?p.linea:'')+'" style="padding:9px;margin-top:6px;display:'+(lineaLibre?'block':'none')+'"></div>'
+      +'<input type="text" id="proto-linea-txt" class="form-control" placeholder="Escribe la línea" value="'+pLinea+'" style="padding:9px;margin-top:6px;display:'+(lineaLibre?'block':'none')+'"></div>'
       +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Equipo</label>'
       +'<select class="form-control" id="proto-equipo-sel" onchange="proto_onComboChange(\'equipo\')" style="padding:9px">'
-      +proto_equipoOptionsHTML(areaInicial, p?p.linea:'', p?p.equipo||'':'')
+      +proto_equipoOptionsHTML(areaInicial, pLinea, pEquipo)
       +'</select>'
-      +'<input type="text" id="proto-equipo-txt" class="form-control" placeholder="Ej: Línea de Galón" value="'+(p?p.equipo||'':'')+'" style="padding:9px;margin-top:6px;display:'+(equipoLibre?'block':'none')+'"></div>'
-      +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Equipo Secundario</label>'
-      +'<select class="form-control" id="proto-equipo2-sel" onchange="proto_onComboChange(\'equipo2\')" style="padding:9px">'
-      +proto_equipoOptionsHTML(areaInicial, p?p.linea:'', p?p.equipo_secundario||'':'')
-      +'</select>'
-      +'<input type="text" id="proto-equipo2-txt" class="form-control" placeholder="Ej: Llenadora Galón 1" value="'+(p?p.equipo_secundario||'':'')+'" style="padding:9px;margin-top:6px;display:'+(equipo2Libre?'block':'none')+'"></div>'
+      +'<input type="text" id="proto-equipo-txt" class="form-control" placeholder="Ej: Línea de Galón" value="'+pEquipo+'" style="padding:9px;margin-top:6px;display:'+(equipoLibre?'block':'none')+'"></div>'
+      +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Actividad</label>'
+      +'<input type="text" id="proto-actividad-txt" class="form-control" placeholder="Ej: Reemplazo de filtro, Lubricación mensual..." value="'+pActividad+'" style="padding:9px"></div>'
       +'</div>'
       +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
       +'<div style="font-size:.8rem;font-weight:800;color:#1a3c5e;text-transform:uppercase">Actividades</div>'
@@ -20244,7 +20449,7 @@ function proto_refreshEquipos(){
   var lineaSel=document.getElementById('proto-linea-sel');
   var lineaTxt=document.getElementById('proto-linea-txt');
   var lineaVal = (lineaSel&&lineaSel.value==='__otro__') ? (lineaTxt?lineaTxt.value.trim():'') : (lineaSel?lineaSel.value:'');
-  ['equipo','equipo2'].forEach(function(campo){
+  ['equipo'].forEach(function(campo){
     var sel=document.getElementById('proto-'+campo+'-sel');
     if(sel) sel.innerHTML=proto_equipoOptionsHTML(areaId, lineaVal, '');
     var txt=document.getElementById('proto-'+campo+'-txt');
@@ -20274,7 +20479,9 @@ function guardarProtocolo(id){
   if(!linea){showAlert('La línea es obligatoria','error');return;}
   var codigo=document.getElementById('proto-codigo').value.trim();
   var equipo=proto_readCombo('equipo');
-  var equipo2=proto_readCombo('equipo2');
+  // "equipo_secundario" ahora representa la Actividad (campo de texto libre, ver abrirEditorProtocolo)
+  var actividadTxt=document.getElementById('proto-actividad-txt');
+  var equipo2=actividadTxt?actividadTxt.value.trim():'';
 
   // Leer actividades
   var acts=[];
@@ -20321,7 +20528,8 @@ function guardarProtocolo(id){
       cargarProtocolosSupa();
       var m=document.getElementById('modal-editor-proto');if(m)m.remove();
       showAlert('✅ Protocolo guardado: '+linea);
-      showAdminProtocolos();
+      if(window._protoVolverASemana){ window._protoVolverASemana=false; showProtocolosProximaSemana(); }
+      else { showAdminProtocolos(); }
     } else {
       r.text().then(function(t){showAlert('⚠️ Error: '+t.substring(0,80),'error');});
     }
@@ -28481,7 +28689,7 @@ function verDetalleActividad(id){
   var freqLbl=(function(s){return s===1?'Semanal':s===2?'Quincenal':s===4?'Mensual':s===8?'Bimestral':s===12?'Trimestral':s===24?'Semestral':s===52?'Anual':'Cada '+s+' sem';})(p.frecuencia_semanas);
   var esDetallado=!!p.protocolo_detallado;
   var protoHtml;
-  var protoMedicion=getProtocoloPM03(p.linea);
+  var protoMedicion=getProtocoloPM03(p.linea,p.componente,p.descripcion);
   var actsMedicion=protoMedicion&&protoMedicion.actividades?protoMedicion.actividades.filter(function(a){return a&&a.medicion;}):[];
   function escHtml(s){return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
   if(actsMedicion.length){
@@ -28543,7 +28751,7 @@ function verProcedimientoPDF(id){
   var p=PLAN_ACTIVIDADES.find(function(x){return x.id===id;});
   if(!p) return;
   if(typeof jspdf==='undefined'||!jspdf.jsPDF){ showAlert('No se pudo cargar el generador de PDF','error'); return; }
-  var proto=getProtocoloPM03(p.linea);
+  var proto=getProtocoloPM03(p.linea,p.componente,p.descripcion);
   var actsMedicion=proto&&proto.actividades?proto.actividades.filter(function(a){return a&&a.medicion&&a.medicion.procedimiento;}):[];
 
   var doc=new jspdf.jsPDF();
