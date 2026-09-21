@@ -20128,7 +20128,8 @@ function _protoFiltrarLista(){
       +'<div style="font-size:12px;color:var(--txt2);margin-top:2px">🔧 '+( p.equipo||'—')+' · 📝 '+(p.equipo_secundario||'—')+'</div>'
       +'<div style="font-size:11px;color:var(--txt3);margin-top:2px">'+( p.codigo||'REG-MTT-002.02')+' · <strong>'+(p.actividades?p.actividades.length:0)+'</strong> actividades'+(p.activo===false?' · <span style="color:#dc2626;font-weight:700">Inactivo</span>':'')+'</div>'
       +'</div>'
-      +'<div style="display:flex;gap:6px">'
+      +'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
+      +'<button onclick="verProtocoloFormato(\''+p.id+'\')" style="padding:6px 12px;background:#eff6ff;border:none;border-radius:7px;font-size:.8rem;color:#1d4ed8;cursor:pointer">👁️ Ver</button>'
       +'<button onclick="abrirEditorProtocolo(\''+p.id+'\')" style="padding:6px 12px;background:#f3f4f6;border:none;border-radius:7px;font-size:.8rem;cursor:pointer">✏️ Editar</button>'
       +(p.activo?'<button onclick="toggleProtocolo(\''+p.id+'\',false)" style="padding:6px 12px;background:#fee2e2;border:none;border-radius:7px;font-size:.8rem;color:#dc2626;cursor:pointer">🚫 Desactivar</button>'
                 :'<button onclick="toggleProtocolo(\''+p.id+'\',true)" style="padding:6px 12px;background:#dcfce7;border:none;border-radius:7px;font-size:.8rem;color:#16a34a;cursor:pointer">✅ Activar</button>')
@@ -20142,6 +20143,50 @@ function _protoFiltrarLista(){
         : '')
       +'</div>';
   }).join('');
+}
+
+// Vista de sólo consulta del formato de un protocolo (desde "Protocolos existentes" → 👁️ Ver).
+// Muestra los mismos datos que trae el protocolo: encabezado (línea/equipo/actividad/código) y
+// el listado de actividades tal cual quedarán en la PM03 (incluyendo su medición, si aplica).
+function verProtocoloFormato(id){
+  var p=(PROTOCOLOS_PM03_SUPA||[]).find(function(s){return s.id===id;});
+  if(!p){ showAlert('No se encontró el protocolo','error'); return; }
+  function esc(s){return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+  var acts=p.actividades||[];
+
+  var filas=acts.map(function(a,i){
+    var med=a.medicion||null;
+    var pts=(med&&med.puntos)?med.puntos.filter(function(v){return v!=null;}).join(', '):'';
+    return '<div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:8px">'
+      +'<div style="display:flex;gap:8px;align-items:baseline">'
+      +'<span style="font-size:.75rem;font-weight:700;color:#6b7280;min-width:20px">'+(i+1)+'.</span>'
+      +'<div style="flex:1">'
+      +'<div style="font-weight:700;color:#1a3c5e;font-size:13.5px">'+esc(a.desc)+'</div>'
+      +'<div style="font-size:11px;color:#6b7280;margin-top:2px">'+esc(a.tipo||a.esp||'Inspección')+' · '+(a.hrs||1)+' h</div>'
+      +(med
+        ? '<div style="margin-top:6px;background:#f8fafc;border-radius:6px;padding:8px;font-size:11.5px;color:#374151">'
+          +'<div style="font-weight:700;color:#6b7280;margin-bottom:2px">🔢 Requiere medición</div>'
+          +(med.unidad?('Unidad: '+esc(med.unidad)+' · '):'')+'Tolerancia: ±'+(med.tolerancia!=null?med.tolerancia:3)+'%'+(pts?(' · Puntos esperados: '+esc(pts)):'')
+          +(med.procedimiento?('<div style="white-space:pre-wrap;margin-top:4px">'+esc(med.procedimiento)+'</div>'):'')
+          +'</div>'
+        : '')
+      +'</div></div></div>';
+  }).join('');
+
+  var modal=document.createElement('div');
+  modal.id='modal-ver-protocolo';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;overflow-y:auto;padding:16px;box-sizing:border-box';
+  modal.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;max-width:560px;margin:auto;box-sizing:border-box">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#1a3c5e;margin-bottom:4px">👁️ '+esc(p.linea)+'</div>'
+    +'<div style="font-size:12.5px;color:#6b7280;margin-bottom:14px">🔧 '+esc(p.equipo||'—')+' · 📝 '+esc(p.equipo_secundario||'—')+' · '+esc(p.codigo||'REG-MTT-002.02')+(p.activo===false?' · <span style="color:#dc2626;font-weight:700">Inactivo</span>':'')+'</div>'
+    +'<div style="font-size:.8rem;font-weight:800;color:#1a3c5e;text-transform:uppercase;margin-bottom:8px">Actividades ('+acts.length+')</div>'
+    +(acts.length?filas:'<div style="color:#9ca3af;font-style:italic;font-size:13px">Este protocolo no tiene actividades</div>')
+    +'<div style="display:flex;gap:10px;margin-top:16px">'
+    +'<button onclick="document.getElementById(\'modal-ver-protocolo\').remove()" style="flex:1;padding:12px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cerrar</button>'
+    +'<button onclick="document.getElementById(\'modal-ver-protocolo\').remove();abrirEditorProtocolo(\''+p.id+'\')" style="flex:1;padding:12px;background:#1a3c5e;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">✏️ Editar</button>'
+    +'</div>'
+    +'</div>';
+  document.body.appendChild(modal);
 }
 
 // ================================================================
