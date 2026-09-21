@@ -20041,6 +20041,26 @@ function showHistorialMedicion(linea, actId, componente, actividad){
   }).catch(function(){ showAlert('No se pudo cargar el historial — revisa tu conexión','error'); });
 }
 
+// Submenú del botón "Protocolos PM03" del menú principal: da a elegir entre ver los
+// protocolos ya creados (con filtros) o trabajar la preparación semanal.
+function showMenuProtocolosPM03(){
+  detalleBackScreen = 'screen-menu';
+  var fDiv=document.getElementById('ordenes-filtros');
+  var lDiv=document.getElementById('mis-ordenes-list');
+  fDiv.innerHTML='<div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:8px">🗂️ Protocolos PM03</div>';
+  lDiv.innerHTML='<div class="card" style="padding:16px;margin-bottom:10px;cursor:pointer" onclick="showAdminProtocolos()">'
+      +'<div style="display:flex;align-items:center;gap:12px">'
+      +'<div style="font-size:28px">📋</div>'
+      +'<div><div style="font-weight:800;color:#1a3c5e;font-size:15px">Protocolos existentes</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">Ver y filtrar los formatos ya creados (por área y línea)</div></div>'
+      +'</div></div>'
+    +'<div class="card" style="padding:16px;cursor:pointer" onclick="showProtocolosProximaSemana()">'
+      +'<div style="display:flex;align-items:center;gap:12px">'
+      +'<div style="font-size:28px">📅</div>'
+      +'<div><div style="font-weight:800;color:#1a3c5e;font-size:15px">PM03 próxima semana</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">Generar, editar o eliminar el protocolo de cada PM03 de la semana que sigue</div></div>'
+      +'</div></div>';
+  showScreen('screen-ordenes');
+}
+
 function showAdminProtocolos(){
   detalleBackScreen = 'screen-menu';
   window._protoVolverASemana=false;
