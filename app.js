@@ -2346,10 +2346,16 @@ function confirmarCierrePM03(id){
   var p=PM03_PLAN.find(function(x){return x.id===id;});if(!p)return;
   // Guardar cache antes de validar
   pm3SaveCache(id);
-  // Leer días de trabajo
-  if(!p.diasTrabajo||!p.diasTrabajo.length) p.diasTrabajo=[{fecha:todayStr(),horaInicio:nowTimeStr(),horaFin:nowTimeStr()}];
-  var hi=p.diasTrabajo[0].horaInicio||'00:00';
-  var hf=p.diasTrabajo[p.diasTrabajo.length-1].horaFin||'00:00';
+  // Leer días de trabajo — hora de inicio y hora final ahora son obligatorias
+  if(!p.diasTrabajo||!p.diasTrabajo.length){
+    pm3ShowError('Indica la hora de inicio y hora final del trabajo');return;
+  }
+  var faltanHoras=p.diasTrabajo.some(function(d){return !d.horaInicio||!d.horaFin;});
+  if(faltanHoras){
+    pm3ShowError('Indica la hora de inicio y hora final de todos los días de trabajo');return;
+  }
+  var hi=p.diasTrabajo[0].horaInicio;
+  var hf=p.diasTrabajo[p.diasTrabajo.length-1].horaFin;
 
   var proto=getProtocoloPM03(p.linea);
 
@@ -13558,7 +13564,10 @@ function syncSupabase(){
         estadoFinal = local.estado;
         setTimeout(function(){ saveOrdenSupa(local); }, 1000);
       }
-      return {id:r.id,tipo:r.tipo,area:r.area,linea:r.linea,componente:r.componente,prioridad:r.prioridad,tipoAnormalidad:r.tipo_anormalidad,detalle:r.detalle,foto:local?local.foto:undefined,fotoVistaTs:r.foto_vista_ts||null,tecnicoAsignado:r.tecnico_asignado,tecnicoNombre:r.tecnico_nombre,levantadoPor:r.levantado_por,levantadoId:r.levantado_id,estado:estadoFinal,colorOT:r.color_ot,semana:r.semana,año:r.anio,ts:r.ts,observacionesCierre:r.observaciones_cierre,horasCierre:r.horas_cierre||0,horaInicioTrabajo:r.hora_inicio_trabajo,horaFinTrabajo:r.hora_fin_trabajo,fechaTrabajo:r.fecha_trabajo||null,cerradaTs:r.cerrada_ts,cerradaPor:r.cerrada_por,refaccionesUsadas:r.refacciones_usadas,causaRaiz:r.causa_raiz,horaLlamado:r.hora_llamado,horaInicio:r.hora_inicio,horaEntrega:r.hora_entrega,tiempoRespuesta:r.tiempo_respuesta,mttr:r.mttr,turno:r.turno,liderPM04:r.lider_pm04,historialReasignacion:r.historial_reasignacion||[],historialModificacion:r.historial_modificacion||[],motivoRechazo:r.motivo_rechazo||null,rechazadoPor:r.rechazado_por||null,preCierreTs:r.pre_cierre_ts||null,preCierrePor:r.pre_cierre_por||null,aprobadoPor:r.aprobado_por||null,rolLevantador:r.rol_levantador||null,esResueltaTemporal:r.es_resuelta_temporal||false,pm03Definitiva:r.pm03_definitiva||null,fuenteBitacora:r.fuente_bitacora||false,fuenteLabel:r.fuente_label||null,limpiezaRequerida:r.limpieza_requerida!=null?r.limpieza_requerida:null,limpiezaAvisadoA:r.limpieza_avisado_a||null,tecnicosAdicionales:(function(){try{return r.tecnicos_adicionales?JSON.parse(r.tecnicos_adicionales):[];}catch(e){return [];}})(),trabajoDias:(function(){try{return r.trabajo_dias?JSON.parse(r.trabajo_dias):[];}catch(e){return [];}})(),pendienteAsignacion:r.pendiente_asignacion||false,conciliadoCon:r.conciliado_con||null,conciliadoConNombre:r.conciliado_con_nombre||null,semanaResolucion:r.semana_resolucion||null};
+      return {id:r.id,tipo:r.tipo,area:r.area,linea:r.linea,componente:r.componente,prioridad:r.prioridad,tipoAnormalidad:r.tipo_anormalidad,detalle:r.detalle,foto:local?local.foto:undefined,fotoVistaTs:r.foto_vista_ts||null,
+      // Mismo arreglo que en pm03_plan: si Supabase todavía no trae técnico (retraso de
+      // sincronización), se conserva el que ya estaba guardado localmente.
+      tecnicoAsignado:r.tecnico_asignado||(local?local.tecnicoAsignado:null),tecnicoNombre:r.tecnico_nombre||(local?local.tecnicoNombre:null),levantadoPor:r.levantado_por,levantadoId:r.levantado_id,estado:estadoFinal,colorOT:r.color_ot,semana:r.semana,año:r.anio,ts:r.ts,observacionesCierre:r.observaciones_cierre,horasCierre:r.horas_cierre||0,horaInicioTrabajo:r.hora_inicio_trabajo,horaFinTrabajo:r.hora_fin_trabajo,fechaTrabajo:r.fecha_trabajo||null,cerradaTs:r.cerrada_ts,cerradaPor:r.cerrada_por,refaccionesUsadas:r.refacciones_usadas,causaRaiz:r.causa_raiz,horaLlamado:r.hora_llamado,horaInicio:r.hora_inicio,horaEntrega:r.hora_entrega,tiempoRespuesta:r.tiempo_respuesta,mttr:r.mttr,turno:r.turno,liderPM04:r.lider_pm04,historialReasignacion:r.historial_reasignacion||[],historialModificacion:r.historial_modificacion||[],motivoRechazo:r.motivo_rechazo||null,rechazadoPor:r.rechazado_por||null,preCierreTs:r.pre_cierre_ts||null,preCierrePor:r.pre_cierre_por||null,aprobadoPor:r.aprobado_por||null,rolLevantador:r.rol_levantador||null,esResueltaTemporal:r.es_resuelta_temporal||false,pm03Definitiva:r.pm03_definitiva||null,fuenteBitacora:r.fuente_bitacora||false,fuenteLabel:r.fuente_label||null,limpiezaRequerida:r.limpieza_requerida!=null?r.limpieza_requerida:null,limpiezaAvisadoA:r.limpieza_avisado_a||null,tecnicosAdicionales:(function(){try{return r.tecnicos_adicionales?JSON.parse(r.tecnicos_adicionales):[];}catch(e){return [];}})(),trabajoDias:(function(){try{return r.trabajo_dias?JSON.parse(r.trabajo_dias):[];}catch(e){return [];}})(),pendienteAsignacion:r.pendiente_asignacion||false,conciliadoCon:r.conciliado_con||null,conciliadoConNombre:r.conciliado_con_nombre||null,semanaResolucion:r.semana_resolucion||null};
     // Agregar órdenes locales no sincronizadas al array (pendientes de llegar a Supabase)
     }).concat(localSoloIds.map(function(l){
       // Intentar resync de estas órdenes
@@ -13593,7 +13602,13 @@ function syncSupabase(){
       // Preservar actividadesEstado local si Supabase no lo tiene
       if(!actEst && local && local.actividadesEstado) actEst = local.actividadesEstado;
       return {id:r.id,linea:r.linea,componente:r.componente,actividad:r.actividad,area:r.area,
-        semana:r.semana,año:r.anio,tecnicoId:r.tecnico_id,tecnicoNombre:r.tecnico_nombre,responsableAreaId:r.responsable_area_id,responsableAreaNombre:r.responsable_area_nombre,
+        semana:r.semana,año:r.anio,
+        // Igual que horaInicio/refaccionesUsadas/etc.: si Supabase todavía no trae técnico
+        // (retraso de sincronización), se conserva el que ya estaba guardado localmente,
+        // en vez de borrarlo — antes esto sí se borraba porque tomaba el valor de Supabase
+        // sin respaldo local, y una PM03 recién asignada podía verse "Sin asignar" de nuevo.
+        tecnicoId:r.tecnico_id||(local?local.tecnicoId:null),tecnicoNombre:r.tecnico_nombre||(local?local.tecnicoNombre:null),
+        responsableAreaId:r.responsable_area_id,responsableAreaNombre:r.responsable_area_nombre,
         estado:estadoFinal,fuenteExcel:r.fuente_excel,esInspeccion:r.es_inspeccion,
         horasCierre:estadoFinal==='cerrada'&&local?local.horasCierre||r.horas_cierre||0:r.horas_cierre||0,
         horaInicio:r.hora_inicio||(local?local.horaInicio:null),
@@ -18953,7 +18968,11 @@ function guardarAtencionTemporal(){
   if(atencionState.horaLlamado&&atencionState.horaInicio)tr=Math.round((atencionState.horaInicio-atencionState.horaLlamado)/60000);
   if(atencionState.horaInicio&&atencionState.horaEntrega)mttr=Math.round((atencionState.horaEntrega-atencionState.horaInicio)/60000);
   var ot={id:idPM,tipo,area:'productiva',linea:atencionState.lineaDisplay||'—',componente:atencionState.componente||'—',prioridad:'A',tipoAnormalidad:'Paro Menor',colorOT:tipo==='PM02'?'rojo':null,detalle:atencionState.falla||'Atención a línea',causaRaiz:atencionState.causaRaiz,foto:atencionState.foto||null,tecnicoAsignado:currentUser.id,tecnicoNombre:currentUser.nombre,levantadoPor:nombreEfectivo(),levantadoId:currentUser.id,rolLevantador:currentUser.rol,ts:Date.now(),fecha:atencionState.fecha||todayStr(),esAtencion:true,turno:getTurno(),estado:'cerrada',semana:currentWeek(),año:currentYear(),horaLlamado:atencionState.horaLlamado,horaInicio:atencionState.horaInicio,horaEntrega:atencionState.horaEntrega,tiempoRespuesta:tr,mttr,liderPM04:atencionState.liderPM04||null,refaccionesUsadas:atencionState.refacciones||'',horasCierre:hrs,observacionesCierre:'Resuelta temporalmente. PM03 generada: '+idPM3,cerradaTs:Date.now(),cerradaPor:nombreEfectivo(),esResueltaTemporal:true,pm03Definitiva:idPM3,historialReasignacion:[],historialModificacion:[]};
-  var pm03={id:idPM3,linea:atencionState.lineaDisplay||'—',componente:atencionState.componente||'—',actividad:'Solución definitiva — '+tipo+' '+idPM+' — '+(atencionState.falla||'Atención a línea'),area:'productiva',semana:currentWeek(),año:currentYear(),tecnicoId:currentUser.id,tecnicoNombre:currentUser.nombre,estado:'abierta',generadoPor:nombreEfectivo()||'Sistema',origenPM02:idPM,esResueltaTemporal:true,ts:Date.now(),horaCreacion:new Date().toISOString(),observacionesCierre:null,horasCierre:0};
+  // Igual que guardarRessueltaTemporalmente(): la PM03 de solución definitiva debe
+  // nacer SIN asignar y sin semana, para que caiga en el botón PM03 'Por Asignar' y
+  // sea el administrador quien la programe y asigne — no el técnico que hizo la
+  // atención temporal.
+  var pm03={id:idPM3,linea:atencionState.lineaDisplay||'—',componente:atencionState.componente||'—',actividad:'Solución definitiva — '+tipo+' '+idPM+' — '+(atencionState.falla||'Atención a línea'),area:'productiva',semana:null,año:currentYear(),tecnicoId:'',tecnicoNombre:'Sin asignar',estado:'abierta',estadoFlujo:'por_reprogramar',generadoPor:nombreEfectivo()||'Sistema',origenPM02:idPM,esResueltaTemporal:true,ts:Date.now(),horaCreacion:new Date().toISOString(),observacionesCierre:null,horasCierre:0};
   ORDENES.push(ot);saveDB('ordenes',ORDENES);saveOrdenSupa(ot);
   PM03_PLAN.push(pm03);saveDB('pm03_plan',PM03_PLAN);savePM03Supa(pm03);
   if(currentSlot){ATENCION_SLOTS[currentSlot]=null;saveDB('atencion_slots',ATENCION_SLOTS);updateSlotPreview();}
@@ -19839,7 +19858,9 @@ function pm3SaveCacheSupa(pmId){
 // Generar HTML de días de trabajo
 function pm3DiasHTML(p){
   if(!p.diasTrabajo||!p.diasTrabajo.length){
-    p.diasTrabajo=[{fecha:todayStr(),horaInicio:nowTimeStr(),horaFin:nowTimeStr()}];
+    // Hora de inicio y hora final quedan vacías a propósito: ahora son obligatorias,
+    // el técnico debe capturarlas (ver validación en confirmarCierrePM03).
+    p.diasTrabajo=[{fecha:todayStr(),horaInicio:'',horaFin:''}];
   }
   return p.diasTrabajo.map(function(d,idx){
     return '<div class="pm3-dia-row" style="display:grid;grid-template-columns:auto 1fr 1fr auto;gap:6px;align-items:center;margin-bottom:6px;background:#f8fafc;border-radius:8px;padding:6px">'
@@ -19858,7 +19879,8 @@ function pm3AddDia(pmId){
   var p=PM03_PLAN.find(function(x){return x.id===pmId;});
   if(!p) return;
   if(!p.diasTrabajo) p.diasTrabajo=[];
-  p.diasTrabajo.push({fecha:todayStr(),horaInicio:nowTimeStr(),horaFin:nowTimeStr()});
+  // Hora de inicio/fin vacías a propósito: son obligatorias, se validan en confirmarCierrePM03
+  p.diasTrabajo.push({fecha:todayStr(),horaInicio:'',horaFin:''});
   saveDB('pm03_plan',PM03_PLAN);
   var cont=document.getElementById('pm3-dias-container');
   if(cont) cont.innerHTML=pm3DiasHTML(p);
