@@ -18209,6 +18209,7 @@ function guardarChecklist() {
   var verde = visibles.filter(function(p){ return p.estado==='verde'; }).length;
   var rojo  = visibles.filter(function(p){ return p.estado==='rojo'; }).length;
   var napl  = visibles.filter(function(p){ return p.estado==='no_aplica'; }).length;
+  var nombresRojos = visibles.filter(function(p){ return p.estado==='rojo'; }).map(function(p){ return p.nombre||p.texto||''; }).filter(Boolean);
   var momentoTurno = _chkActual.momento || null; // solo tiene valor real para Inspección de Turno
 
   // Guardar en INSPECCIONES con tipo diferenciador
@@ -18237,7 +18238,7 @@ function guardarChecklist() {
   // Notificar si hay puntos rojos, según lo que el admin configuró para este checklist
   if(rojo>0){
     var notifCfg = getChecklistNotifCfg(insp.tipoId);
-    if(notifCfg.buzon!==false) crearNotificacion('checklist_rojo','🔴 Checklist con Puntos Fuera',''+insp.tipoLabel+' — '+rojo+' punto(s) en rojo | '+insp.tecnicoNombre,'admin',null,insp.id);
+    if(notifCfg.buzon!==false) crearNotificacion('checklist_rojo','🔴 Checklist con Puntos Fuera',''+insp.tipoLabel+' — '+rojo+' punto(s) en rojo | '+insp.tecnicoNombre+(nombresRojos.length?' | Puntos: '+nombresRojos.join(', '):''),'admin',null,insp.id);
     if(notifCfg.dor!==false) crearAlertaChecklist(insp);
   }
   // Comportamiento propio de Inspección de Turno: crea/mantiene abierta una OT PM02 si hay rojos
@@ -21493,12 +21494,22 @@ function showPM02PorAsignar(){
   window._pm02AsigEstado='pendiente';
   window._pm02AsigPrio='';
   window._pm02AsigTec='';
-  // Actualizar badge del botón
-  var pend=ORDENES.filter(function(o){return o.pendienteAsignacion&&o.tipo==='PM02';}).length;
+  // Actualizar descripción del botón — misma fórmula que la pestaña "Sin asignar"
+  // (ver actualizarBadgesAdmin, que además actualiza el numerito sin destruir el elemento)
+  var pendBase = ORDENES.filter(function(o){
+    if(o.tipo!=='PM02') return false;
+    if(o.estado==='conciliar') return false;
+    if(o.estado==='en_espera') return false;
+    var r=o.rolLevantador||'';
+    return r==='operador'||r==='lider'||r==='inspector_calidad'||r==='lider_calidad'||r==='administrativo'||r==='supply'||o.pendienteAsignacion===true;
+  });
+  var pend = pendBase.filter(function(o){
+    var sinTec=!o.tecnicoAsignado||o.tecnicoAsignado==='';
+    return sinTec&&o.estado!=='cerrada'&&o.estado!=='pre_cierre';
+  }).length;
   var dBtn=document.getElementById('desc-pm02-asignar');
-  var iBtn=document.getElementById('icon-pm02-asignar');
   if(dBtn) dBtn.textContent=pend>0?pend+' sin asignar':'Sin pendientes';
-  if(iBtn) iBtn.innerHTML='📋'+(pend>0?'<span style="position:absolute;top:-4px;right:-8px;background:#7f1d1d;color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center">'+pend+'</span>':'');
+  actualizarBadgesAdmin();
 
   _renderPM02Asignar();
   showScreen('screen-ordenes');
@@ -25691,20 +25702,38 @@ function syncNotificaciones(){
 
 function actualizarBadgesAdmin(){
   if(!currentUser||(currentUser.rol!=='admin'&&currentUser.rol!=='super')) return;
-  // PM02 sin asignar
-  var pm02Sin = ORDENES.filter(function(o){
+  // PM02 sin asignar — misma fórmula que la pestaña "Sin asignar" de _renderPM02Asignar
+  // (base: excluye conciliar/en_espera + pertenece al universo de "por asignar";
+  //  luego filtra sin técnico y no cerrada/pre_cierre)
+  var pm02Base = ORDENES.filter(function(o){
     if(o.tipo!=='PM02') return false;
-    if(o.estado==='cerrada'||o.estado==='pre_cierre') return false;
-    if(o.tecnicoAsignado&&o.tecnicoAsignado!=='') return false;
+    if(o.estado==='conciliar') return false;
+    if(o.estado==='en_espera') return false;
     var r=o.rolLevantador||'';
     return r==='operador'||r==='lider'||r==='inspector_calidad'||r==='lider_calidad'||r==='administrativo'||r==='supply'||o.pendienteAsignacion===true;
+  });
+  var pm02Sin = pm02Base.filter(function(o){
+    var sinTec=!o.tecnicoAsignado||o.tecnicoAsignado==='';
+    return sinTec&&o.estado!=='cerrada'&&o.estado!=='pre_cierre';
   }).length;
   var b1 = document.getElementById('badge-pm02-asignar');
   if(b1){ b1.textContent=pm02Sin; b1.style.display=pm02Sin>0?'block':'none'; }
 
-  // PM03 por reprogramar
+  // PM03 por reprogramar — mismo universo "vencidas" que usa showPM03PorReprogramar
+  // (incluye marcadas explícitamente 'por_reprogramar' + las vencidas por fecha),
+  // sin restringir a la semana/mes que esté filtrado en pantalla en ese momento.
+  var SEMANA_LANZAMIENTO=21, ANIO_LANZAMIENTO=2026;
+  function _esVencidaBadge(semPM,añoPM){
+    if(añoPM<currentYear()) return true;
+    if(añoPM===currentYear()&&semPM<currentWeek()) return true;
+    return false;
+  }
   var pm03Rep = PM03_PLAN.filter(function(p){
-    return p.estadoFlujo==='por_reprogramar' && p.estado!=='cerrada';
+    if(p.estado==='cerrada'||p.estado==='reprogramada') return false;
+    if(p.estadoFlujo==='por_reprogramar') return true;
+    if((p.año||2026)<ANIO_LANZAMIENTO) return false;
+    if((p.año||2026)===ANIO_LANZAMIENTO&&p.semana<SEMANA_LANZAMIENTO) return false;
+    return _esVencidaBadge(p.semana,p.año||2026);
   }).length;
   var b2 = document.getElementById('badge-pm03-reprog');
   if(b2){ b2.textContent=pm03Rep; b2.style.display=pm03Rep>0?'block':'none'; }
