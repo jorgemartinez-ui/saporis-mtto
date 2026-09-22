@@ -1988,7 +1988,7 @@ function _renderDetallePM03(id,p){
   var bannerRepro='';
   if(necesitaAsignacion&&esAdmin){
     var tecOpts='<option value="">-- Selecciona técnico --</option>'
-      +USERS.filter(function(u){return u.rol==='tecnico'&&u.id!=='u_super';}).map(function(u){
+      +getTecnicos().filter(function(u){return u.id!=='u_super';}).map(function(u){
         return'<option value="'+u.id+'" data-nombre="'+u.nombre+'">'+u.nombre+'</option>';
       }).join('');
     var semOpts='<option value="">-- Selecciona semana --</option>'
@@ -20093,10 +20093,10 @@ function showMenuProtocolosPM03(){
       +'<div style="font-size:28px">📋</div>'
       +'<div><div style="font-weight:800;color:#1a3c5e;font-size:15px">Protocolos existentes</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">Ver y filtrar los formatos ya creados (por área y línea)</div></div>'
       +'</div></div>'
-    +'<div class="card" style="padding:16px;cursor:pointer" onclick="showProtocolosProximaSemana()">'
+    +'<div class="card" style="padding:16px;cursor:pointer" onclick="window._protoSemFiltro=null;window._protoAnioFiltro=null;showProtocolosProximaSemana()">'
       +'<div style="display:flex;align-items:center;gap:12px">'
       +'<div style="font-size:28px">📅</div>'
-      +'<div><div style="font-weight:800;color:#1a3c5e;font-size:15px">PM03 próxima semana</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">Generar, editar o eliminar el protocolo de cada PM03 de la semana que sigue</div></div>'
+      +'<div><div style="font-weight:800;color:#1a3c5e;font-size:15px">PM03 por semana</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">Generar, editar o eliminar el protocolo de cada PM03 — semana actual o futuras</div></div>'
       +'</div></div>';
   showScreen('screen-ordenes');
 }
@@ -20319,14 +20319,24 @@ function showProtocolosProximaSemana(){
   var fDiv=document.getElementById('ordenes-filtros');
   var lDiv=document.getElementById('mis-ordenes-list');
 
-  var hoy=new Date();
-  var enOchoDias=new Date(hoy.getTime()+7*86400000);
-  var semSig=getWeekNumber(enOchoDias), anioSig=enOchoDias.getFullYear();
-  window._protoSemSig=semSig; window._protoAnioSig=anioSig;
+  if(window._protoSemFiltro==null||window._protoAnioFiltro==null){
+    window._protoSemFiltro=currentWeek();
+    window._protoAnioFiltro=currentYear();
+  }
+  var sem=window._protoSemFiltro, anio=window._protoAnioFiltro;
+  // Compatibilidad: _protoEliminarDesdeAccion sólo checa que esto exista
+  window._protoSemSig=sem; window._protoAnioSig=anio;
+
+  var esSemActual=(sem===currentWeek()&&anio===currentYear());
 
   fDiv.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'
-    +'<div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800;color:#1a3c5e">📅 PM03 próxima semana</div>'
-    +'<span style="font-size:12px;color:var(--txt2);font-weight:700">Semana '+semSig+' / '+anioSig+'</span>'
+    +'<div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800;color:#1a3c5e">📅 PM03 por semana</div>'
+    +'</div>'
+    +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">'
+    +'<button onclick="_protoCambiarSemana(-1)" style="padding:6px 12px;background:#f1f5f9;border:none;border-radius:8px;font-weight:800;cursor:pointer;color:#1a3c5e">◀</button>'
+    +'<div style="flex:1;text-align:center;font-size:13px;font-weight:800;color:#1a3c5e">Semana '+sem+' / '+anio+(esSemActual?' <span style="background:#dcfce7;color:#16a34a;font-size:10px;padding:2px 6px;border-radius:4px;margin-left:4px;font-weight:800">ACTUAL</span>':'')+'</div>'
+    +'<button onclick="_protoCambiarSemana(1)" style="padding:6px 12px;background:#f1f5f9;border:none;border-radius:8px;font-weight:800;cursor:pointer;color:#1a3c5e">▶</button>'
+    +(esSemActual?'':'<button onclick="_protoIrSemanaActual()" style="padding:6px 10px;background:#eff6ff;border:none;border-radius:8px;font-weight:700;cursor:pointer;color:#1d4ed8;font-size:11px">Hoy</button>')
     +'</div>'
     +'<div style="font-size:11px;color:var(--txt3);margin-bottom:4px">Toca una PM03 para generar, editar o eliminar su protocolo</div>';
 
@@ -20334,12 +20344,13 @@ function showProtocolosProximaSemana(){
 
   // Sólo protocolos activos: son los únicos que realmente aplican al cerrar una PM03 (getProtocoloPM03)
   supaFetch('protocolos_pm03','GET',null,'activo=eq.true&order=linea.asc').then(function(rows){
+    if(sem!==window._protoSemFiltro||anio!==window._protoAnioFiltro) return; // el usuario ya cambió de semana mientras cargaba
     PROTOCOLOS_PM03_SUPA=rows||[];
-    var pm3s=PM03_PLAN.filter(function(p){return p.semana===semSig&&p.año===anioSig&&p.estado==='abierta';})
+    var pm3s=PM03_PLAN.filter(function(p){return p.semana===sem&&p.año===anio&&p.estado==='abierta';})
       .sort(function(a,b){ return (a.linea||'').localeCompare(b.linea||'')||(a.componente||'').localeCompare(b.componente||''); });
 
     if(!pm3s.length){
-      lDiv.innerHTML='<div class="card text-center" style="padding:40px"><div style="font-size:48px">📅</div><div style="font-weight:700;margin-top:12px">Sin PM03 programadas para la próxima semana</div></div>';
+      lDiv.innerHTML='<div class="card text-center" style="padding:40px"><div style="font-size:48px">📅</div><div style="font-weight:700;margin-top:12px">Sin PM03 programadas para esta semana</div></div>';
       return;
     }
 
@@ -20360,6 +20371,20 @@ function showProtocolosProximaSemana(){
     }).join('');
   });
   showScreen('screen-ordenes');
+}
+
+function _protoCambiarSemana(delta){
+  var sem=(window._protoSemFiltro||currentWeek())+delta;
+  var anio=window._protoAnioFiltro||currentYear();
+  if(sem<1){ sem=52; anio--; } else if(sem>52){ sem=1; anio++; }
+  window._protoSemFiltro=sem; window._protoAnioFiltro=anio;
+  showProtocolosProximaSemana();
+}
+
+function _protoIrSemanaActual(){
+  window._protoSemFiltro=currentWeek();
+  window._protoAnioFiltro=currentYear();
+  showProtocolosProximaSemana();
 }
 
 function _protoAccionesPM03(pmId){
@@ -29935,7 +29960,7 @@ function showCalendarioCompleto(){
       var cell;
       if(real){
         var col=real.enTiempo?'#14532d':'#d97706';
-        cell='<td style="background:'+col+';text-align:center"><span style="color:#fff;font-size:8px">✓</span></td>';
+        cell='<td style="background:'+col+';text-align:center;cursor:pointer" onclick="showDetallePM03(\''+real.id+'\')" title="Ver protocolo ejecutado"><span style="color:#fff;font-size:8px">✓</span></td>';
       } else if(prog&&isPast&&!isCur){
         var sv=semActual-s;
         cell='<td style="background:'+(sv>=4?'#7f1d1d':sv>=2?'#b91c1c':'#ef4444')+';text-align:center"><span style="color:#fff;font-size:8px">✗</span></td>';
