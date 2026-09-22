@@ -8,6 +8,46 @@
 // ================================================================
 
 // ================================================================
+// AVISO DE NUEVA VERSIÓN DISPONIBLE
+// Detecta cuando el servidor tiene una versión de app.js distinta a la
+// que está corriendo en este dispositivo (típico en apps instaladas/PWA
+// que se quedan con el código viejo en caché) y muestra un aviso para
+// que el usuario recargue manualmente. No recarga solo, para no perder
+// información que el usuario esté capturando en ese momento.
+// ================================================================
+var APP_VERSION = (function(){
+  try{
+    var src = (document.currentScript && document.currentScript.src) || '';
+    var m = src.match(/[?&]v=([^&]+)/);
+    return m ? m[1] : '';
+  }catch(e){ return ''; }
+})();
+
+function _checkNuevaVersion(){
+  if(!APP_VERSION) return;
+  fetch('index.html?t='+Date.now(), {cache:'no-store'}).then(function(r){ return r.text(); }).then(function(html){
+    var m = html.match(/app\.js\?v=([^"']+)/);
+    var serverVersion = m ? m[1] : '';
+    if(serverVersion && serverVersion!==APP_VERSION) _mostrarAvisoNuevaVersion();
+  }).catch(function(){});
+}
+
+function _mostrarAvisoNuevaVersion(){
+  if(document.getElementById('aviso-nueva-version')) return;
+  var bar=document.createElement('div');
+  bar.id='aviso-nueva-version';
+  bar.style.cssText='position:fixed;top:0;left:0;right:0;z-index:99999;background:#1a3c5e;color:#fff;padding:10px 16px;text-align:center;font-family:Nunito,sans-serif;font-size:.85rem;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.25)';
+  bar.innerHTML='🔄 Hay una nueva versión disponible — toca aquí para actualizar';
+  bar.onclick=function(){ location.reload(); };
+  if(document.body) document.body.appendChild(bar);
+}
+
+document.addEventListener('visibilitychange', function(){
+  if(document.visibilityState==='visible') _checkNuevaVersion();
+});
+setInterval(_checkNuevaVersion, 10*60*1000);
+
+// ================================================================
 // DB
 // ================================================================
 
