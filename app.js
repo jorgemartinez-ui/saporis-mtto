@@ -329,9 +329,12 @@ function goMenu(){
   showScreen('screen-menu');
 }
 function showScreen(id){
-  // Guardar scroll de pantalla activa antes de cambiar
+  // Si ya estamos en esta pantalla, no tocar el scroll (evita que un refresco
+  // de contenido en la misma pantalla "brinque" al usuario a otra posición).
   var prev=document.querySelector('.screen.active');
-  if(prev&&prev.id&&prev.id!==id){
+  if(prev&&prev.id===id) return;
+  // Guardar scroll de pantalla activa antes de cambiar
+  if(prev&&prev.id){
     var sc=prev.querySelector('.scroll-content')||prev;
     saveDB('scroll_pos_'+prev.id, sc.scrollTop);
   }
@@ -352,6 +355,17 @@ function showScreen(id){
       },40);
     })();
   }
+}
+
+// Ejecuta fn() (normalmente un re-render de una lista) conservando la posición
+// de scroll de la pantalla activa, para que refrescar un listado tras una
+// acción (asignar, reprogramar, cerrar, etc.) no regrese al usuario arriba.
+function _refrescarConScroll(fn){
+  var activo=document.querySelector('.screen.active');
+  var sc=activo?(activo.querySelector('.scroll-content')||activo):null;
+  var pos=sc?sc.scrollTop:0;
+  fn();
+  if(sc) sc.scrollTop=pos;
 }
 function getWeekNumber(d){d=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()));d.setUTCDate(d.getUTCDate()+4-(d.getUTCDay()||7));const y=new Date(Date.UTC(d.getUTCFullYear(),0,1));return Math.ceil((((d-y)/86400000)+1)/7);}
 function currentWeek(){return getWeekNumber(new Date());}
@@ -20749,7 +20763,7 @@ function abrirReprogramarPM03(id){
   var tecOpts=getTecnicos().map(function(u){
     return '<option value="'+u.id+'"'+(p.tecnicoId===u.id?' selected':'')+'>'+u.nombre+'</option>';
   }).join('');
-  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box">'
+  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box;max-height:85vh;overflow-y:auto">'
     +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#1a3c5e;margin-bottom:4px">📅 Reprogramar PM03</div>'
     +'<div style="font-size:12px;color:#6b7280;margin-bottom:16px">'+p.id+' — '+p.linea+' (Sem '+pSem+'/'+pAño+')</div>'
     +'<div style="margin-bottom:12px"><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Nueva semana</label>'
@@ -20894,16 +20908,102 @@ function showPM03PorReprogramar(){
     lDiv.innerHTML='<div class="card text-center" style="padding:40px"><div style="font-size:48px">✅</div><div style="font-weight:700;margin-top:12px">Sin PM03 vencidas en este período</div></div>';
   } else {
     lDiv.innerHTML=pm3Vencidas.map(function(p){
+      var esAdminOSuper=currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super');
       // Determine reason for being here
       var razon='';
       if(p.motivoReprogramacion) razon='📝 '+p.motivoReprogramacion;
       else if(p.estadoFlujo==='por_reprogramar') razon='📋 Marcada manualmente para reprogramar';
       else if(p.origenPM02) razon='🔗 Originada desde PM02: '+p.origenPM02;
       else razon='⏰ No ejecutada antes del lunes 6:30am (Sem '+p.semana+')';
-      return '<div class="ot-card pm03" style="border-left:4px solid #dc2626">'        +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'        +'<span style="font-size:11px;color:#dc2626;font-weight:700">'+p.id+'</span>'        +'<span class="badge" style="background:#7f1d1d;color:#fff">Sem '+p.semana+' — Vencida</span>'        +'</div>'        +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+'</div>'        +'<div style="font-size:12px;color:var(--txt2);margin-bottom:4px">'+(p.componente||p.actividad||'—').substring(0,50)+'</div>'        +'<div style="font-size:12px;color:#6b7280;margin-bottom:4px">👨‍🔧 '+(p.tecnicoNombre||'Sin asignar')+'</div>'        +'<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px;color:#92400e;font-weight:600">'        +'💡 Razón: '+razon+'</div>'        +'<div style="margin-top:4px;display:flex;gap:6px">'        +'<button class="btn" onclick="event.stopPropagation();window._reprogDesdeLista=true;abrirReprogramarPM03(\''+p.id+'\')" style="flex:1;background:#f59e0b;color:#fff;border:none;font-size:12px;padding:8px;border-radius:8px">📅 Reprogramar</button>'        +'<button onclick="event.stopPropagation();window._fromReprogramar=true;showDetallePM03(\''+p.id+'\')" style="flex:1;background:#f1f5f9;border:1px solid #d1d5db;font-size:12px;padding:8px;border-radius:8px;cursor:pointer">👁️ Ver detalle</button>'        +'</div></div>';
+      return '<div class="ot-card pm03" style="border-left:4px solid #dc2626">'        +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'        +'<span style="font-size:11px;color:#dc2626;font-weight:700">'+p.id+'</span>'        +'<span class="badge" style="background:#7f1d1d;color:#fff">Sem '+p.semana+' — Vencida</span>'        +'</div>'        +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+'</div>'        +'<div style="font-size:12px;color:var(--txt2);margin-bottom:4px">'+(p.componente||p.actividad||'—').substring(0,50)+'</div>'        +'<div style="font-size:12px;color:#6b7280;margin-bottom:4px">👨‍🔧 '+(p.tecnicoNombre||'Sin asignar')+'</div>'        +'<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px;color:#92400e;font-weight:600">'        +'💡 Razón: '+razon+'</div>'        +'<div style="margin-top:4px;display:flex;gap:6px">'        +'<button class="btn" onclick="event.stopPropagation();window._reprogDesdeLista=true;abrirReprogramarPM03(\''+p.id+'\')" style="flex:1;background:#f59e0b;color:#fff;border:none;font-size:12px;padding:8px;border-radius:8px">📅 Reprogramar</button>'        +'<button onclick="event.stopPropagation();window._fromReprogramar=true;showDetallePM03(\''+p.id+'\')" style="flex:1;background:#f1f5f9;border:1px solid #d1d5db;font-size:12px;padding:8px;border-radius:8px;cursor:pointer">👁️ Ver detalle</button>'        +(esAdminOSuper?'<div style="margin-top:6px;display:flex;gap:6px">'+'<button onclick="event.stopPropagation();adminCerrarPM03Prompt(\''+p.id+'\')" style="flex:1;background:#1a3c5e;color:#fff;border:none;font-size:11px;padding:7px;border-radius:8px;cursor:pointer">🔒 Cerrar</button>'+'<button onclick="event.stopPropagation();adminEliminarPM03Prompt(\''+p.id+'\')" style="flex:1;background:#fff;color:#dc2626;border:1px solid #dc2626;font-size:11px;padding:7px;border-radius:8px;cursor:pointer">🗑️ Eliminar</button>'+'</div>':'')+'</div>';
     }).join('');
   }
   showScreen('screen-ordenes');
+}
+
+// ================================================================
+// ADMIN: Cerrar / Eliminar PM03 desde "Por Reprogramar" (con motivo obligatorio)
+// ================================================================
+function adminCerrarPM03Prompt(id){
+  var p=PM03_PLAN.find(function(x){return x.id===id;});
+  if(!p) return;
+  var modal=document.createElement('div');
+  modal.id='modal-admin-cerrar-pm3';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
+  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box;max-height:85vh;overflow-y:auto">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#1a3c5e;margin-bottom:4px">🔒 Cerrar PM03 (administrativo)</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:16px">'+p.id+' — '+p.linea+' (Sem '+(p.semana||'')+'/'+(p.año||'')+')</div>'
+    +'<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:10px;margin-bottom:14px;font-size:.82rem;color:#92400e">⚠️ Esto cerrará la PM03 directamente sin pasar por el flujo normal de ejecución del técnico.</div>'
+    +'<div style="margin-bottom:16px"><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Motivo del cierre administrativo <span style="color:#dc2626">*obligatorio</span></label>'
+    +'<textarea id="admin-cierre-nota" class="form-control" rows="3" style="padding:10px;resize:none" placeholder="Explica por qué se cierra de forma administrativa..."></textarea></div>'
+    +'<div style="display:flex;gap:10px">'
+    +'<button onclick="var m=document.getElementById(\'modal-admin-cerrar-pm3\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="adminCerrarPM03Confirmar(\''+id+'\')" style="flex:1;padding:13px;background:#1a3c5e;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">🔒 Cerrar PM03</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function adminCerrarPM03Confirmar(id){
+  var p=PM03_PLAN.find(function(x){return x.id===id;});
+  if(!p) return;
+  var notaEl=document.getElementById('admin-cierre-nota');
+  var nota=notaEl?notaEl.value.trim():'';
+  if(!nota){showAlert('El motivo del cierre es obligatorio','error');return;}
+  p.estado='cerrada';
+  p.estadoFlujo='completo';
+  p.cerradaTs=Date.now();
+  p.cerradaPor=nombreEfectivo();
+  p.observacionesCierre='[Cierre administrativo] '+nota;
+  saveDB('pm03_plan',PM03_PLAN);
+  savePM03Supa(p);
+  var m=document.getElementById('modal-admin-cerrar-pm3');if(m)m.remove();
+  showAlert('🔒 PM03 '+id+' cerrada');
+  _refrescarConScroll(showPM03PorReprogramar);
+}
+
+function adminEliminarPM03Prompt(id){
+  var p=PM03_PLAN.find(function(x){return x.id===id;});
+  if(!p) return;
+  var modal=document.createElement('div');
+  modal.id='modal-admin-eliminar-pm3';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
+  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box;max-height:85vh;overflow-y:auto">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#dc2626;margin-bottom:4px">🗑️ Eliminar PM03</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:16px">'+p.id+' — '+p.linea+' (Sem '+(p.semana||'')+'/'+(p.año||'')+')</div>'
+    +'<div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;padding:10px;margin-bottom:14px;font-size:.82rem;color:#991b1b">⚠️ Esta acción elimina permanentemente la PM03. No se puede deshacer.</div>'
+    +'<div style="margin-bottom:16px"><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Motivo de la eliminación <span style="color:#dc2626">*obligatorio</span></label>'
+    +'<textarea id="admin-eliminar-nota" class="form-control" rows="3" style="padding:10px;resize:none" placeholder="Explica por qué se elimina esta PM03..."></textarea></div>'
+    +'<div style="display:flex;gap:10px">'
+    +'<button onclick="var m=document.getElementById(\'modal-admin-eliminar-pm3\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="adminEliminarPM03Confirmar(\''+id+'\')" style="flex:1;padding:13px;background:#dc2626;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">🗑️ Eliminar</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function adminEliminarPM03Confirmar(id){
+  var p=PM03_PLAN.find(function(x){return x.id===id;});
+  if(!p) return;
+  var notaEl=document.getElementById('admin-eliminar-nota');
+  var nota=notaEl?notaEl.value.trim():'';
+  if(!nota){showAlert('El motivo de la eliminación es obligatorio','error');return;}
+  // Registro de auditoría local (no altera el mecanismo de sync existente de pm03_eliminadas)
+  var log=loadDB('pm03_eliminadas_motivos',[]);
+  log.push({id:id,linea:p.linea,motivo:nota,por:nombreEfectivo(),ts:Date.now()});
+  saveDB('pm03_eliminadas_motivos',log);
+  PM03_PLAN=PM03_PLAN.filter(function(x){return x.id!==id;});
+  saveDB('pm03_plan',PM03_PLAN);
+  var del=loadDB('pm03_eliminadas',[]);
+  if(del.indexOf(id)<0){del.push(id);saveDB('pm03_eliminadas',del);}
+  fetch(SUPA_URL+'/rest/v1/pm03_plan?id=eq.'+id,{
+    method:'DELETE',
+    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'}
+  }).then(function(r){
+    if(r.ok) console.log('PM03 '+id+' eliminada de Supabase (admin)');
+    else r.text().then(function(t){console.error('Error:',t);});
+  });
+  var m=document.getElementById('modal-admin-eliminar-pm3');if(m)m.remove();
+  showAlert('🗑️ PM03 '+id+' eliminada');
+  _refrescarConScroll(showPM03PorReprogramar);
 }
 
 // ================================================================
@@ -24318,7 +24418,7 @@ function gpGuardar(id){
   }
   var m=document.getElementById('modal-gestor-pm02');if(m)m.remove();
   showAlert('✅ PM02 actualizada'+(tObj?' — asignada a '+tObj.nombre:'')+(eraConciliar?' · Reasignada desde conciliación':''));
-  if(eraConciliar){showPM02PorConciliar();}else{_renderPM02Asignar();}
+  if(eraConciliar){showPM02PorConciliar();}else{_refrescarConScroll(_renderPM02Asignar);}
 }
 
 function gpCerrar(id){
@@ -24337,7 +24437,7 @@ function gpCerrar(id){
   supabaseStatePatch(o.id,{estado:'cerrada',cerrada_ts:o.cerradaTs,cerrada_por:o.cerradaPor,pendiente_asignacion:false});
   var m=document.getElementById('modal-gestor-pm02');if(m)m.remove();
   showAlert('✅ PM02 cerrada');
-  _renderPM02Asignar();
+  _refrescarConScroll(_renderPM02Asignar);
 }
 
 function gpEliminar(id){
@@ -27074,10 +27174,17 @@ function cerrarPlanDOR(id){
   // Update in Supabase
   supaFetch('dor_planes','PATCH',{estado:'cerrado',cierre_ts:p.cierreTs,cierre_nota:nota,cerrado_por:p.cerradoPor},'id=eq.'+id).catch(function(){});
   showAlert('✅ Plan cerrado');
-  // Refrescar ambas pantallas (DOR y Planes) para que el cierre se vea al instante,
-  // sin importar desde cuál de las dos se haya cerrado.
+  // Refrescar sin perder de vista lo que el usuario tenía abierto: si venía de
+  // la pantalla dedicada de Planes, refrescar esa lista; si tenía abierta la
+  // sección inline de Planes/Prioridades dentro de DOR, refrescar sólo esa
+  // sección (no todo el DOR) para no colapsarla ni perder el scroll.
   renderDORPlanesList();
-  if(document.getElementById('dor-content')) renderDOR();
+  var wrap=document.getElementById('dor-seccion-wrap');
+  if(wrap&&wrap.dataset.tipo){
+    dorRenderSeccionInline(wrap,wrap.dataset.tipo);
+  } else if(document.getElementById('dor-content')){
+    renderDOR();
+  }
 }
 
 function togglePlanBloqueo(id,tipo){
