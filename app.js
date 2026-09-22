@@ -20148,40 +20148,93 @@ function _protoFiltrarLista(){
 // Vista de sólo consulta del formato de un protocolo (desde "Protocolos existentes" → 👁️ Ver).
 // Muestra los mismos datos que trae el protocolo: encabezado (línea/equipo/actividad/código) y
 // el listado de actividades tal cual quedarán en la PM03 (incluyendo su medición, si aplica).
+// Vista de sólo consulta del formato de un protocolo (desde "Protocolos existentes" → 👁️ Ver).
+// Reproduce visualmente la MISMA pantalla que ve el técnico al cerrar su PM03 (abrirCierrePM03):
+// Estado Inicial/Final, personas, comentario y medición por actividad — pero en modo demo,
+// con todo deshabilitado y sin ningún botón que guarde o envíe datos reales.
+// Es DISTINTA del PDF (imprimirProtocoloPM03): el PDF es el formato impreso REG-MTT-002.02 con
+// firmas de autorización (técnico/producción/calidad/jefe mtto); esta vista es la pantalla de
+// trabajo del técnico mientras ejecuta, sin firmas.
 function verProtocoloFormato(id){
   var p=(PROTOCOLOS_PM03_SUPA||[]).find(function(s){return s.id===id;});
   if(!p){ showAlert('No se encontró el protocolo','error'); return; }
   function esc(s){return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
   var acts=p.actividades||[];
 
-  var filas=acts.map(function(a,i){
+  function estadoBtnsDemo(){
+    return [['Bien','#16a34a'],['Regular','#d97706'],['Reprogramar','#dc2626']].map(function(x){
+      return '<div style="flex:1;padding:6px 2px;border:2px solid #e5e7eb;border-radius:6px;background:#fff;font-weight:400;color:#9ca3af;font-size:.78rem;text-align:center">'+x[0]+'</div>';
+    }).join('');
+  }
+
+  var actHTML=acts.map(function(a,i){
     var med=a.medicion||null;
-    var pts=(med&&med.puntos)?med.puntos.filter(function(v){return v!=null;}).join(', '):'';
-    return '<div style="border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:8px">'
-      +'<div style="display:flex;gap:8px;align-items:baseline">'
-      +'<span style="font-size:.75rem;font-weight:700;color:#6b7280;min-width:20px">'+(i+1)+'.</span>'
-      +'<div style="flex:1">'
-      +'<div style="font-weight:700;color:#1a3c5e;font-size:13.5px">'+esc(a.desc)+'</div>'
-      +'<div style="font-size:11px;color:#6b7280;margin-top:2px">'+esc(a.tipo||a.esp||'Inspección')+' · '+(a.hrs||1)+' h</div>'
+    return '<div style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin-bottom:10px">'
+      +'<div style="font-size:.78rem;color:#374151;margin-bottom:8px;line-height:1.4">'
+      +'<strong>'+(i+1)+'.</strong> '+esc(a.desc)
+      +'<span style="color:#9ca3af;font-size:.7rem;margin-left:4px">['+esc(a.tipo||a.esp||'Inspección')+']</span></div>'
+
+      +'<div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:4px">Estado Inicial</div>'
+      +'<div style="display:flex;gap:4px;margin-bottom:8px">'+estadoBtnsDemo()+'</div>'
+
+      +'<div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:4px">Estado Final (A=Bien, R=Regular, C=Reprogramar)</div>'
+      +'<div style="display:flex;gap:4px;margin-bottom:8px">'+estadoBtnsDemo()+'</div>'
+
+      +'<div style="margin-bottom:6px"><div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:3px">Personas en esta actividad</div>'
+      +'<div style="padding:7px;font-size:.82rem;max-width:120px;color:#9ca3af;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px">1</div></div>'
+
+      +'<div style="font-size:.72rem;font-weight:700;color:#dc2626;margin-bottom:3px">Comentario <span style="color:#dc2626">*</span></div>'
+      +'<div style="padding:7px;font-size:.82rem;color:#9ca3af;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;min-height:34px">Describe las observaciones de esta actividad...</div>'
+
       +(med
-        ? '<div style="margin-top:6px;background:#f8fafc;border-radius:6px;padding:8px;font-size:11.5px;color:#374151">'
-          +'<div style="font-weight:700;color:#6b7280;margin-bottom:2px">🔢 Requiere medición</div>'
-          +(med.unidad?('Unidad: '+esc(med.unidad)+' · '):'')+'Tolerancia: ±'+(med.tolerancia!=null?med.tolerancia:3)+'%'+(pts?(' · Puntos esperados: '+esc(pts)):'')
-          +(med.procedimiento?('<div style="white-space:pre-wrap;margin-top:4px">'+esc(med.procedimiento)+'</div>'):'')
+        ? '<div style="background:#f8fafc;border-radius:8px;padding:8px;margin-top:8px">'
+          +'<div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:6px">🔢 Medición'+(med.unidad?(' ('+esc(med.unidad)+')'):'')+' — tolerancia ±'+(med.tolerancia!=null?med.tolerancia:3)+'%</div>'
+          +[0,1,2].map(function(pi){
+            var pEsperado=(med.puntos||[])[pi];
+            var lbl='Punto '+(pi+1)+(pEsperado!=null?(' ('+pEsperado+(med.unidad?' '+esc(med.unidad):'')+')'):'');
+            return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:4px">'
+              +'<span style="font-size:.7rem;color:#9ca3af;min-width:70px">'+lbl+'</span>'
+              +'<div style="flex:1;padding:6px;font-size:.78rem;color:#9ca3af;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px">Referencia</div>'
+              +'<div style="flex:1;padding:6px;font-size:.78rem;color:#9ca3af;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px">Medido</div>'
+              +'<span style="min-width:52px;text-align:right;font-size:.75rem;font-weight:700;color:#9ca3af">—</span>'
+              +'</div>';
+          }).join('')
+          +(med.procedimiento?('<div style="white-space:pre-wrap;margin-top:6px;font-size:11px;color:#374151;border-top:1px solid #e5e7eb;padding-top:6px"><strong>Procedimiento:</strong><br>'+esc(med.procedimiento)+'</div>'):'')
           +'</div>'
         : '')
-      +'</div></div></div>';
+
+      +'<div style="margin-top:6px">'
+      +'<span style="padding:6px 10px;background:#f3f4f6;border-radius:7px;font-size:.78rem;color:#9ca3af;margin-right:4px">📷 Cámara</span>'
+      +'<span style="padding:6px 10px;background:#f3f4f6;border-radius:7px;font-size:.78rem;color:#9ca3af">🖼️ Galería</span>'
+      +'</div>'
+      +'</div>';
   }).join('');
 
   var modal=document.createElement('div');
   modal.id='modal-ver-protocolo';
   modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;overflow-y:auto;padding:16px;box-sizing:border-box';
-  modal.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;max-width:560px;margin:auto;box-sizing:border-box">'
-    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#1a3c5e;margin-bottom:4px">👁️ '+esc(p.linea)+'</div>'
-    +'<div style="font-size:12.5px;color:#6b7280;margin-bottom:14px">🔧 '+esc(p.equipo||'—')+' · 📝 '+esc(p.equipo_secundario||'—')+' · '+esc(p.codigo||'REG-MTT-002.02')+(p.activo===false?' · <span style="color:#dc2626;font-weight:700">Inactivo</span>':'')+'</div>'
-    +'<div style="font-size:.8rem;font-weight:800;color:#1a3c5e;text-transform:uppercase;margin-bottom:8px">Actividades ('+acts.length+')</div>'
-    +(acts.length?filas:'<div style="color:#9ca3af;font-style:italic;font-size:13px">Este protocolo no tiene actividades</div>')
-    +'<div style="display:flex;gap:10px;margin-top:16px">'
+  modal.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;width:100%;max-width:640px;margin:auto;box-sizing:border-box">'
+    +'<div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:8px 10px;font-size:11.5px;color:#1d4ed8;font-weight:700;margin-bottom:12px">🔍 Vista previa — así lo verá el técnico al ejecutar (no guarda ni firma nada)</div>'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#1a3c5e;margin-bottom:2px">✅ Protocolo PM03</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:16px">'+esc(p.codigo||'REG-MTT-002.02')+' · '+esc(p.linea)+(p.activo===false?' · <span style="color:#dc2626;font-weight:700">Inactivo</span>':'')+'</div>'
+
+    +'<div style="background:#f8fafc;border-radius:10px;padding:12px;margin-bottom:16px;display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    +'<div><div style="font-size:.7rem;color:#9ca3af;font-weight:700">FECHA</div><div style="font-size:.88rem;font-weight:700">'+fmtDate(Date.now())+'</div></div>'
+    +'<div><div style="font-size:.7rem;color:#9ca3af;font-weight:700">SEMANA</div><div style="font-size:.88rem;font-weight:700">'+currentWeek()+' / '+currentYear()+'</div></div>'
+    +'<div><div style="font-size:.7rem;color:#9ca3af;font-weight:700">TÉCNICO</div><div style="font-size:.88rem;font-weight:700;color:#9ca3af">(el que esté asignado)</div></div>'
+    +'<div><div style="font-size:.7rem;color:#9ca3af;font-weight:700">ACTIVIDAD</div><div style="font-size:.88rem;font-weight:700">'+esc(p.equipo_secundario||p.equipo||p.linea)+'</div></div>'
+    +'</div>'
+
+    +'<div style="font-size:.82rem;font-weight:800;color:#1a3c5e;text-transform:uppercase;margin-bottom:8px">Actividades ('+acts.length+')</div>'
+    +(acts.length?actHTML:'<div style="color:#9ca3af;font-style:italic;font-size:13px">Este protocolo no tiene actividades</div>')
+
+    +'<div style="font-size:.82rem;font-weight:800;color:#1a3c5e;text-transform:uppercase;margin:12px 0 8px">📝 Reporte de Actividades</div>'
+    +'<div style="padding:10px;color:#9ca3af;background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;margin-bottom:12px">Descripción general de las actividades realizadas...</div>'
+
+    +'<div style="font-size:.82rem;font-weight:800;color:#1a3c5e;text-transform:uppercase;margin-bottom:8px">🧹 Limpieza y Sanitizado</div>'
+    +'<div style="background:#f8fafc;border-radius:10px;padding:12px;margin-bottom:4px;color:#9ca3af;font-size:.85rem">Limpieza por Mantenimiento, desinfección y grasa/aceite grado alimenticio (el técnico los llena al cerrar)</div>'
+
+    +'<div style="display:flex;gap:8px;margin-top:16px">'
     +'<button onclick="document.getElementById(\'modal-ver-protocolo\').remove()" style="flex:1;padding:12px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cerrar</button>'
     +'<button onclick="document.getElementById(\'modal-ver-protocolo\').remove();abrirEditorProtocolo(\''+p.id+'\')" style="flex:1;padding:12px;background:#1a3c5e;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">✏️ Editar</button>'
     +'</div>'
@@ -21785,100 +21838,111 @@ function _renderHorarios(lDiv){
   var meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   var mesOpts=meses.map(function(m,i){return '<option value="'+(i+1)+'"'+(_gpMes===(i+1)?' selected':'')+'>'+m+'</option>';}).join('');
   var añoOpts=[_gpAño-1,_gpAño,_gpAño+1].map(function(a){return '<option value="'+a+'"'+(_gpAño===a?' selected':'')+'>'+a+'</option>';}).join('');
+  var mesActual=_gpMes, añoActual=_gpAño;
 
-  // Leer datos guardados en localStorage (key: hor_mes_año)
-  var storageKey='hor_'+_gpMes+'_'+_gpAño;
-  var savedData={};
-  try{ savedData=JSON.parse(localStorage.getItem(storageKey)||'{}'); }catch(e){}
+  lDiv.innerHTML='<div style="text-align:center;padding:20px;color:#9ca3af">Cargando...</div>';
 
-  // Si no hay datos guardados, usar los del Excel embebido
-  var empIds=Object.keys(_HORARIOS_EXCEL);
-  if(!Object.keys(savedData).length){
-    empIds.forEach(function(eid){
-      var mData=_HORARIOS_EXCEL[eid]||{};
-      var dData=mData[_gpMes]||mData[String(_gpMes)]||{};
-      if(Object.keys(dData).length) savedData[eid]=dData;
-    });
-  }
+  // Datos guardados en Supabase (tabla horarios_empleado, campo dias_config = {"1":"1","2":"D",...})
+  supaFetch('horarios_empleado','GET',null,'mes=eq.'+mesActual+'&anio=eq.'+añoActual).then(function(rows){
+    if(mesActual!==_gpMes||añoActual!==_gpAño) return; // el usuario ya cambió de mes/año mientras cargaba
 
-  var diasMes=new Date(_gpAño,_gpMes,0).getDate();
-  var diasSem=['D','L','M','X','J','V','S'];
-  var turnoColor={'1':'#16a34a','2':'#d97706','3':'#dc2626','D':'#9ca3af','I':'#7c3aed','V':'#0891b2','P':'#f59e0b'};
-  var turnoBg={'1':'#dcfce7','2':'#fef3c7','3':'#fee2e2','D':'#f3f4f6','I':'#ede9fe','V':'#e0f7fa','P':'#fffbeb'};
-
-  // Cabecera días
-  var headerDias='<tr><th style="position:sticky;left:0;background:#1a3c5e;z-index:2;padding:4px 8px;font-size:.7rem;color:#fff;white-space:nowrap">Técnico</th>';
-  for(var d=1;d<=diasMes;d++){
-    var dow=new Date(_gpAño+'-'+String(_gpMes).padStart(2,'0')+'-'+String(d).padStart(2,'0')+'T12:00:00').getDay();
-    var esFS=dow===0||dow===6;
-    headerDias+='<th style="background:'+(esFS?'#374151':'#1a3c5e')+';padding:2px;font-size:.6rem;font-weight:700;color:#fff;text-align:center;min-width:28px">'
-      +'<div>'+d+'</div><div style="opacity:.8">'+diasSem[dow]+'</div></th>';
-  }
-  headerDias+='</tr>';
-
-  // Lista de técnicos = los del Excel + los de empleados en Supabase
-  var EMPLEADOS_LISTA=[
-    {id:'emp_2196',nombre:'César'},
-    {id:'emp_2055',nombre:'Marco'},
-    {id:'emp_1923',nombre:'Ángel'},
-    {id:'emp_2064',nombre:'Alan'},
-    {id:'emp_1105',nombre:'Uriel'},
-    {id:'emp_1980',nombre:'Anthon'},
-    {id:'emp_804', nombre:'Lisandro'},
-    {id:'emp_461', nombre:'Eduardo'},
-  ];
-
-  var filas=EMPLEADOS_LISTA.map(function(e){
-    var diasEmp=savedData[e.id]||{};
-    var fila='<tr><td style="position:sticky;left:0;background:#fff;z-index:1;padding:4px 8px;font-size:.72rem;font-weight:800;white-space:nowrap;border-bottom:1px solid #e5e7eb">'+e.nombre+'</td>';
-    for(var d=1;d<=diasMes;d++){
-      var val=diasEmp[d]||diasEmp[String(d)]||'';
-      var bg=turnoBg[val]||'#fff';
-      var col=turnoColor[val]||'#d1d5db';
-      if(esAdmin){
-        fila+='<td style="padding:1px;border-bottom:1px solid #e5e7eb;min-width:28px">'
-          +'<select data-emp="'+e.id+'" data-dia="'+d+'" onchange="horSetVal(this)" onkeydown="horNavegar(this,event)" style="width:28px;height:28px;border:none;background:'+bg+';color:'+col+';font-size:.65rem;font-weight:800;text-align:center;cursor:pointer;padding:0">'
-          +'<option value="">-</option>'
-          +'<option value="1"'+(val==='1'?' selected':'')+'>1</option>'
-          +'<option value="2"'+(val==='2'?' selected':'')+'>2</option>'
-          +'<option value="3"'+(val==='3'?' selected':'')+'>3</option>'
-          +'<option value="D"'+(val==='D'?' selected':'')+'>D</option>'
-          +'<option value="I"'+(val==='I'?' selected':'')+'>I</option>'
-          +'<option value="V"'+(val==='V'?' selected':'')+'>V</option>'
-          +'<option value="P"'+(val==='P'?' selected':'')+'>P</option>'
-          +'</select></td>';
-      } else {
-        fila+='<td style="background:'+bg+';text-align:center;font-size:.65rem;font-weight:800;color:'+col+';padding:3px 2px;border-bottom:1px solid #e5e7eb;min-width:28px">'+(val||'')+'</td>';
+    var storageKey='hor_'+_gpMes+'_'+_gpAño;
+    var savedData={};
+    (rows||[]).forEach(function(r){
+      if(r.dias_config){
+        try{ savedData[r.empleado_id]=JSON.parse(r.dias_config); }catch(e){}
       }
+    });
+
+    // Si no hay nada guardado en Supabase para este mes/año, usar el respaldo del Excel embebido
+    if(!Object.keys(savedData).length){
+      var empIds0=Object.keys(_HORARIOS_EXCEL);
+      empIds0.forEach(function(eid){
+        var mData=_HORARIOS_EXCEL[eid]||{};
+        var dData=mData[_gpMes]||mData[String(_gpMes)]||{};
+        if(Object.keys(dData).length) savedData[eid]=dData;
+      });
     }
-    return fila+'</tr>';
-  }).join('');
 
-  var leyenda='<div style="display:flex;gap:6px;flex-wrap:wrap;font-size:.72rem;margin-bottom:8px">'
-    +'<span style="background:#f0fdf4;color:#14532d;padding:2px 8px;border-radius:4px;font-weight:700">1=T1</span>'
-    +'<span style="background:#f9fafb;color:#92400e;padding:2px 8px;border-radius:4px;font-weight:700">2=T2</span>'
-    +'<span style="background:#fef2f2;color:#7f1d1d;padding:2px 8px;border-radius:4px;font-weight:700">3=T3</span>'
-    +'<span style="background:#f3f4f6;color:#9ca3af;padding:2px 8px;border-radius:4px;font-weight:700">D=Desc</span>'
-    +'<span style="background:#f5f3ff;color:#4c1d95;padding:2px 8px;border-radius:4px;font-weight:700">I=Inc</span>'
-    +'<span style="background:#e0f7fa;color:#0891b2;padding:2px 8px;border-radius:4px;font-weight:700">V=Vac</span>'
-    +'<span style="background:#fffbeb;color:#f59e0b;padding:2px 8px;border-radius:4px;font-weight:700">P=Permiso</span>'
-    +(esAdmin?'<button onclick="horGuardar()" style="margin-left:auto;padding:2px 12px;background:#1a3c5e;color:#fff;border:none;border-radius:6px;font-size:.72rem;font-weight:700;cursor:pointer">💾 Guardar</button>':'')
-    +'</div>';
+    var diasMes=new Date(_gpAño,_gpMes,0).getDate();
+    var diasSem=['D','L','M','X','J','V','S'];
+    var turnoColor={'1':'#16a34a','2':'#d97706','3':'#dc2626','D':'#9ca3af','I':'#7c3aed','V':'#0891b2','P':'#f59e0b'};
+    var turnoBg={'1':'#dcfce7','2':'#fef3c7','3':'#fee2e2','D':'#f3f4f6','I':'#ede9fe','V':'#e0f7fa','P':'#fffbeb'};
 
-  var selHTML='<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">'
-    +'<select class="form-control" style="flex:1;padding:8px" onchange="_gpMes=parseInt(this.value);_renderHorarios(document.getElementById(\'personal-content\'))">'+mesOpts+'</select>'
-    +'<select class="form-control" style="flex:1;padding:8px" onchange="_gpAño=parseInt(this.value);_renderHorarios(document.getElementById(\'personal-content\'))">'+añoOpts+'</select>'
-    +'</div>';
+    // Cabecera días
+    var headerDias='<tr><th style="position:sticky;left:0;background:#1a3c5e;z-index:2;padding:4px 8px;font-size:.7rem;color:#fff;white-space:nowrap">Técnico</th>';
+    for(var d=1;d<=diasMes;d++){
+      var dow=new Date(_gpAño+'-'+String(_gpMes).padStart(2,'0')+'-'+String(d).padStart(2,'0')+'T12:00:00').getDay();
+      var esFS=dow===0||dow===6;
+      headerDias+='<th style="background:'+(esFS?'#374151':'#1a3c5e')+';padding:2px;font-size:.6rem;font-weight:700;color:#fff;text-align:center;min-width:28px">'
+        +'<div>'+d+'</div><div style="opacity:.8">'+diasSem[dow]+'</div></th>';
+    }
+    headerDias+='</tr>';
 
-  lDiv.innerHTML=selHTML+leyenda
-    +'<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">'
-    +'<table style="border-collapse:collapse;width:100%">'
-    +'<thead>'+headerDias+'</thead>'
-    +'<tbody>'+filas+'</tbody>'
-    +'</table></div>';
+    // Lista de técnicos = los del Excel + los de empleados en Supabase
+    var EMPLEADOS_LISTA=[
+      {id:'emp_2196',nombre:'César'},
+      {id:'emp_2055',nombre:'Marco'},
+      {id:'emp_1923',nombre:'Ángel'},
+      {id:'emp_2064',nombre:'Alan'},
+      {id:'emp_1105',nombre:'Uriel'},
+      {id:'emp_1980',nombre:'Anthon'},
+      {id:'emp_804', nombre:'Lisandro'},
+      {id:'emp_461', nombre:'Eduardo'},
+    ];
 
-  window._horStorageKey=storageKey;
-  window._horData=savedData;
+    var filas=EMPLEADOS_LISTA.map(function(e){
+      var diasEmp=savedData[e.id]||{};
+      var fila='<tr><td style="position:sticky;left:0;background:#fff;z-index:1;padding:4px 8px;font-size:.72rem;font-weight:800;white-space:nowrap;border-bottom:1px solid #e5e7eb">'+e.nombre+'</td>';
+      for(var d=1;d<=diasMes;d++){
+        var val=diasEmp[d]||diasEmp[String(d)]||'';
+        var bg=turnoBg[val]||'#fff';
+        var col=turnoColor[val]||'#d1d5db';
+        if(esAdmin){
+          fila+='<td style="padding:1px;border-bottom:1px solid #e5e7eb;min-width:28px">'
+            +'<select data-emp="'+e.id+'" data-dia="'+d+'" onchange="horSetVal(this)" onkeydown="horNavegar(this,event)" style="width:28px;height:28px;border:none;background:'+bg+';color:'+col+';font-size:.65rem;font-weight:800;text-align:center;cursor:pointer;padding:0">'
+            +'<option value="">-</option>'
+            +'<option value="1"'+(val==='1'?' selected':'')+'>1</option>'
+            +'<option value="2"'+(val==='2'?' selected':'')+'>2</option>'
+            +'<option value="3"'+(val==='3'?' selected':'')+'>3</option>'
+            +'<option value="D"'+(val==='D'?' selected':'')+'>D</option>'
+            +'<option value="I"'+(val==='I'?' selected':'')+'>I</option>'
+            +'<option value="V"'+(val==='V'?' selected':'')+'>V</option>'
+            +'<option value="P"'+(val==='P'?' selected':'')+'>P</option>'
+            +'</select></td>';
+        } else {
+          fila+='<td style="background:'+bg+';text-align:center;font-size:.65rem;font-weight:800;color:'+col+';padding:3px 2px;border-bottom:1px solid #e5e7eb;min-width:28px">'+(val||'')+'</td>';
+        }
+      }
+      return fila+'</tr>';
+    }).join('');
+
+    var leyenda='<div style="display:flex;gap:6px;flex-wrap:wrap;font-size:.72rem;margin-bottom:8px">'
+      +'<span style="background:#f0fdf4;color:#14532d;padding:2px 8px;border-radius:4px;font-weight:700">1=T1</span>'
+      +'<span style="background:#f9fafb;color:#92400e;padding:2px 8px;border-radius:4px;font-weight:700">2=T2</span>'
+      +'<span style="background:#fef2f2;color:#7f1d1d;padding:2px 8px;border-radius:4px;font-weight:700">3=T3</span>'
+      +'<span style="background:#f3f4f6;color:#9ca3af;padding:2px 8px;border-radius:4px;font-weight:700">D=Desc</span>'
+      +'<span style="background:#f5f3ff;color:#4c1d95;padding:2px 8px;border-radius:4px;font-weight:700">I=Inc</span>'
+      +'<span style="background:#e0f7fa;color:#0891b2;padding:2px 8px;border-radius:4px;font-weight:700">V=Vac</span>'
+      +'<span style="background:#fffbeb;color:#f59e0b;padding:2px 8px;border-radius:4px;font-weight:700">P=Permiso</span>'
+      +(esAdmin?'<button onclick="horGuardar()" style="margin-left:auto;padding:2px 12px;background:#1a3c5e;color:#fff;border:none;border-radius:6px;font-size:.72rem;font-weight:700;cursor:pointer">💾 Guardar</button>':'')
+      +'</div>';
+
+    var selHTML='<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">'
+      +'<select class="form-control" style="flex:1;padding:8px" onchange="_gpMes=parseInt(this.value);_renderHorarios(document.getElementById(\'personal-content\'))">'+mesOpts+'</select>'
+      +'<select class="form-control" style="flex:1;padding:8px" onchange="_gpAño=parseInt(this.value);_renderHorarios(document.getElementById(\'personal-content\'))">'+añoOpts+'</select>'
+      +'</div>';
+
+    lDiv.innerHTML=selHTML+leyenda
+      +'<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">'
+      +'<table style="border-collapse:collapse;width:100%">'
+      +'<thead>'+headerDias+'</thead>'
+      +'<tbody>'+filas+'</tbody>'
+      +'</table></div>';
+
+    window._horStorageKey=storageKey;
+    window._horData=savedData;
+  });
 }
 
 function horSetVal(sel){
@@ -21940,12 +22004,39 @@ function horNavegar(sel, e){
 }
 
 function horGuardar(){
-  try{
-    localStorage.setItem(window._horStorageKey, JSON.stringify(window._horData));
-    showAlert('✅ Horario guardado');
-  }catch(e){
-    showAlert('Error al guardar','error');
-  }
+  if(!window._horData||!Object.keys(window._horData).length){ showAlert('Nada que guardar','error'); return; }
+  var empIds=Object.keys(window._horData);
+  var mes=_gpMes, anio=_gpAño;
+  showAlert('Guardando...');
+  var pend=empIds.length, ok=0, fail=0;
+  empIds.forEach(function(empId){
+    var diasConfig=JSON.stringify(window._horData[empId]||{});
+    fetch(SUPA_URL+'/rest/v1/horarios_empleado?empleado_id=eq.'+empId+'&mes=eq.'+mes+'&anio=eq.'+anio,{
+      method:'PATCH',
+      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify({dias_config:diasConfig})
+    }).then(function(patchR){
+      if(!(patchR.ok||patchR.status===204)) return false;
+      return fetch(SUPA_URL+'/rest/v1/horarios_empleado?empleado_id=eq.'+empId+'&mes=eq.'+mes+'&anio=eq.'+anio+'&select=id',{
+        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Accept':'application/json'}
+      }).then(function(chkR){ return chkR.json(); }).then(function(existing){
+        if(existing&&existing.length) return true;
+        return fetch(SUPA_URL+'/rest/v1/horarios_empleado',{
+          method:'POST',
+          headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+          body:JSON.stringify({empleado_id:empId,mes:mes,anio:anio,dias_config:diasConfig})
+        }).then(function(r2){ return r2.ok||r2.status===201||r2.status===204; });
+      });
+    }).catch(function(){ return false; }).then(function(success){
+      if(success) ok++; else fail++;
+      pend--;
+      if(pend===0){
+        try{ localStorage.setItem('hor_'+mes+'_'+anio, JSON.stringify(window._horData)); }catch(e){}
+        if(fail===0) showAlert('✅ Horario guardado');
+        else showAlert('⚠️ '+ok+' guardados, '+fail+' con error','error');
+      }
+    });
+  });
 }
 
 
