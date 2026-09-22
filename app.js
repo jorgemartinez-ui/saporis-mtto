@@ -20804,11 +20804,19 @@ function confirmarReprogramar(id){
   }).then(function(){savePM03Supa(nueva);}).catch(function(){savePM03Supa(p);savePM03Supa(nueva);});
   var m=document.getElementById('modal-reprog-pm3');if(m)m.remove();
   showAlert('📅 PM03 reprogramada para semana '+newSem);
-  // Regresar a la lista PM03 con botón de regreso funcional
-  detalleBackScreen='screen-pm03';
+  // Regresar a la pantalla donde se abrió el reprogramar (lista "PM03 por Reprogramar"
+  // si se disparó desde ahí; si no, a la lista general de PM03 como antes)
+  var volverALista=window._reprogDesdeLista;
+  window._reprogDesdeLista=false;
   setTimeout(function(){
-    renderPM03();
-    showScreen('screen-pm03');
+    if(volverALista){
+      detalleBackScreen='screen-menu';
+      showPM03PorReprogramar();
+    } else {
+      detalleBackScreen='screen-pm03';
+      renderPM03();
+      showScreen('screen-pm03');
+    }
   },200);
 }
 
@@ -20892,7 +20900,7 @@ function showPM03PorReprogramar(){
       else if(p.estadoFlujo==='por_reprogramar') razon='📋 Marcada manualmente para reprogramar';
       else if(p.origenPM02) razon='🔗 Originada desde PM02: '+p.origenPM02;
       else razon='⏰ No ejecutada antes del lunes 6:30am (Sem '+p.semana+')';
-      return '<div class="ot-card pm03" style="border-left:4px solid #dc2626">'        +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'        +'<span style="font-size:11px;color:#dc2626;font-weight:700">'+p.id+'</span>'        +'<span class="badge" style="background:#7f1d1d;color:#fff">Sem '+p.semana+' — Vencida</span>'        +'</div>'        +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+'</div>'        +'<div style="font-size:12px;color:var(--txt2);margin-bottom:4px">'+(p.componente||p.actividad||'—').substring(0,50)+'</div>'        +'<div style="font-size:12px;color:#6b7280;margin-bottom:4px">👨‍🔧 '+(p.tecnicoNombre||'Sin asignar')+'</div>'        +'<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px;color:#92400e;font-weight:600">'        +'💡 Razón: '+razon+'</div>'        +'<div style="margin-top:4px;display:flex;gap:6px">'        +'<button class="btn" onclick="event.stopPropagation();abrirReprogramarPM03(\''+p.id+'\')" style="flex:1;background:#f59e0b;color:#fff;border:none;font-size:12px;padding:8px;border-radius:8px">📅 Reprogramar</button>'        +'<button onclick="event.stopPropagation();window._fromReprogramar=true;showDetallePM03(\''+p.id+'\')" style="flex:1;background:#f1f5f9;border:1px solid #d1d5db;font-size:12px;padding:8px;border-radius:8px;cursor:pointer">👁️ Ver detalle</button>'        +'</div></div>';
+      return '<div class="ot-card pm03" style="border-left:4px solid #dc2626">'        +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'        +'<span style="font-size:11px;color:#dc2626;font-weight:700">'+p.id+'</span>'        +'<span class="badge" style="background:#7f1d1d;color:#fff">Sem '+p.semana+' — Vencida</span>'        +'</div>'        +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+'</div>'        +'<div style="font-size:12px;color:var(--txt2);margin-bottom:4px">'+(p.componente||p.actividad||'—').substring(0,50)+'</div>'        +'<div style="font-size:12px;color:#6b7280;margin-bottom:4px">👨‍🔧 '+(p.tecnicoNombre||'Sin asignar')+'</div>'        +'<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px;color:#92400e;font-weight:600">'        +'💡 Razón: '+razon+'</div>'        +'<div style="margin-top:4px;display:flex;gap:6px">'        +'<button class="btn" onclick="event.stopPropagation();window._reprogDesdeLista=true;abrirReprogramarPM03(\''+p.id+'\')" style="flex:1;background:#f59e0b;color:#fff;border:none;font-size:12px;padding:8px;border-radius:8px">📅 Reprogramar</button>'        +'<button onclick="event.stopPropagation();window._fromReprogramar=true;showDetallePM03(\''+p.id+'\')" style="flex:1;background:#f1f5f9;border:1px solid #d1d5db;font-size:12px;padding:8px;border-radius:8px;cursor:pointer">👁️ Ver detalle</button>'        +'</div></div>';
     }).join('');
   }
   showScreen('screen-ordenes');
