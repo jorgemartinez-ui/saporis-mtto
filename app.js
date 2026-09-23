@@ -20857,73 +20857,41 @@ function confirmarReprogramar(id){
 // ================================================================
 function showPM03PorReprogramar(){
   detalleBackScreen='screen-menu';
-  if(!window._pm3RepSem) window._pm3RepSem=currentWeek();
-  if(!window._pm3RepAnio) window._pm3RepAnio=currentYear();
-  if(!window._pm3RepMes) window._pm3RepMes=0;
-
-  var sw=window._pm3RepSem, año=window._pm3RepAnio;
   // Fecha de lanzamiento de la app: semana 21 de 2026
   var SEMANA_LANZAMIENTO=21, ANIO_LANZAMIENTO=2026;
 
-    // Determinar si una semana ya está vencida (pasó el lunes 6:30am siguiente)
-  var ahora=new Date();
-  var diaSemana=ahora.getDay(); // 0=dom,1=lun,...
-  var horaActual=ahora.getHours()+ahora.getMinutes()/60;
-  // Una semana S está vencida si ya pasó el lunes 6:30 de la semana S+1
-  // Es decir: currentWeek() > S, o (currentWeek()===S+1 y es lunes >=6:30) o semana anterior
+  // Determinar si una semana ya está vencida (pasó el lunes 6:30am siguiente)
   function esVencida(semPM,añoPM){
     if(añoPM<currentYear()) return true;
-    if(añoPM===currentYear()){
-      if(semPM<currentWeek()) return true;
-      if(semPM===currentWeek()){
-        // Vence el lunes siguiente a las 6:30 — aún no vence si estamos en la misma semana
-        // antes del lunes 6:30 de la semana siguiente
-        return false;
-      }
-      // semana futura — no vence
-      return false;
-    }
+    if(añoPM===currentYear()&&semPM<currentWeek()) return true;
     return false;
   }
 
+  // Sin filtros: se muestran TODAS las PM03 pendientes de reprogramar, sin
+  // importar la semana/mes/año — mientras no se les coloque una nueva fecha
+  // (reprogramada) o se cierren, deben seguir apareciendo aquí.
   var pm3Vencidas=PM03_PLAN.filter(function(p){
     if(p.estado==='cerrada'||p.estado==='reprogramada') return false;
     // Incluir siempre las marcadas explícitamente como por_reprogramar
     if(p.estadoFlujo==='por_reprogramar') return true;
-    // Solo mostrar desde semana 21/2026 en adelante
+    // Solo considerar desde semana 21/2026 en adelante
     if((p.año||2026)<ANIO_LANZAMIENTO) return false;
     if((p.año||2026)===ANIO_LANZAMIENTO&&p.semana<SEMANA_LANZAMIENTO) return false;
-    // Solo mostrar si ya está vencida
-    if(!esVencida(p.semana,p.año||2026)) return false;
-    // Filtrar por período seleccionado
-    if(window._pm3RepMes>0){
-      var sems=getWeeksInMonth(año,window._pm3RepMes);
-      return sems.indexOf(p.semana)>=0&&(p.año||2026)===año;
-    }
-    return p.semana===sw&&(p.año||2026)===año;
-  }).sort(function(a,b){return a.semana-b.semana;});
+    // Solo si ya está vencida
+    return esVencida(p.semana,p.año||2026);
+  }).sort(function(a,b){
+    var añoA=a.año||2026, añoB=b.año||2026;
+    if(añoA!==añoB) return añoA-añoB;
+    return a.semana-b.semana;
+  });
 
   var fDiv=document.getElementById('ordenes-filtros');
   var lDiv=document.getElementById('mis-ordenes-list');
 
-  // Filtros semana/mes/año
-  var semOpts=Array.from({length:52},function(_,i){return '<option value="'+(i+1)+'"'+(sw===(i+1)?' selected':'')+'>Sem '+(i+1)+'</option>';}).join('');
-  var meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  var mesOpts='<option value="0">Todas</option>'+meses.map(function(m,i){return '<option value="'+(i+1)+'"'+(window._pm3RepMes===(i+1)?' selected':'')+'>'+m+'</option>';}).join('');
-  var añoOpts=[año-1,año,año+1].map(function(a){return '<option value="'+a+'"'+(año===a?' selected':'')+'>'+a+'</option>';}).join('');
-
-  fDiv.innerHTML='<div style="background:#7f1d1d;color:#fff;border-radius:10px;padding:10px 14px;font-size:.88rem;font-weight:700;margin-bottom:8px">📅 PM03 por Reprogramar</div>'
-    +'<div style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap">'
-    +'<div style="flex:1;min-width:70px"><label style="font-size:.7rem;font-weight:700;color:#6b7280;display:block;margin-bottom:2px">Semana</label>'
-    +'<select class="form-control" style="padding:6px;font-size:.82rem" onchange="window._pm3RepSem=parseInt(this.value);window._pm3RepMes=0;showPM03PorReprogramar()">'+semOpts+'</select></div>'
-    +'<div style="flex:1;min-width:60px"><label style="font-size:.7rem;font-weight:700;color:#6b7280;display:block;margin-bottom:2px">Mes</label>'
-    +'<select class="form-control" style="padding:6px;font-size:.82rem" onchange="window._pm3RepMes=parseInt(this.value);if(window._pm3RepMes)window._pm3RepSem=0;showPM03PorReprogramar()">'+mesOpts+'</select></div>'
-    +'<div style="flex:1;min-width:60px"><label style="font-size:.7rem;font-weight:700;color:#6b7280;display:block;margin-bottom:2px">Año</label>'
-    +'<select class="form-control" style="padding:6px;font-size:.82rem" onchange="window._pm3RepAnio=parseInt(this.value);showPM03PorReprogramar()">'+añoOpts+'</select></div>'
-    +'</div>';
+  fDiv.innerHTML='<div style="background:#7f1d1d;color:#fff;border-radius:10px;padding:10px 14px;font-size:.88rem;font-weight:700">📅 PM03 por Reprogramar — '+pm3Vencidas.length+'</div>';
 
   if(!pm3Vencidas.length){
-    lDiv.innerHTML='<div class="card text-center" style="padding:40px"><div style="font-size:48px">✅</div><div style="font-weight:700;margin-top:12px">Sin PM03 vencidas en este período</div></div>';
+    lDiv.innerHTML='<div class="card text-center" style="padding:40px"><div style="font-size:48px">✅</div><div style="font-weight:700;margin-top:12px">Sin PM03 pendientes de reprogramar</div></div>';
   } else {
     lDiv.innerHTML=pm3Vencidas.map(function(p){
       var esAdminOSuper=currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super');
@@ -20933,7 +20901,7 @@ function showPM03PorReprogramar(){
       else if(p.estadoFlujo==='por_reprogramar') razon='📋 Marcada manualmente para reprogramar';
       else if(p.origenPM02) razon='🔗 Originada desde PM02: '+p.origenPM02;
       else razon='⏰ No ejecutada antes del lunes 6:30am (Sem '+p.semana+')';
-      return '<div class="ot-card pm03" style="border-left:4px solid #dc2626">'        +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'        +'<span style="font-size:11px;color:#dc2626;font-weight:700">'+p.id+'</span>'        +'<span class="badge" style="background:#7f1d1d;color:#fff">Sem '+p.semana+' — Vencida</span>'        +'</div>'        +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+'</div>'        +'<div style="font-size:12px;color:var(--txt2);margin-bottom:4px">'+(p.componente||p.actividad||'—').substring(0,50)+'</div>'        +'<div style="font-size:12px;color:#6b7280;margin-bottom:4px">👨‍🔧 '+(p.tecnicoNombre||'Sin asignar')+'</div>'        +'<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px;color:#92400e;font-weight:600">'        +'💡 Razón: '+razon+'</div>'        +'<div style="margin-top:4px;display:flex;gap:6px">'        +'<button class="btn" onclick="event.stopPropagation();window._reprogDesdeLista=true;abrirReprogramarPM03(\''+p.id+'\')" style="flex:1;background:#f59e0b;color:#fff;border:none;font-size:12px;padding:8px;border-radius:8px">📅 Reprogramar</button>'        +'<button onclick="event.stopPropagation();window._fromReprogramar=true;showDetallePM03(\''+p.id+'\')" style="flex:1;background:#f1f5f9;border:1px solid #d1d5db;font-size:12px;padding:8px;border-radius:8px;cursor:pointer">👁️ Ver detalle</button>'        +(esAdminOSuper?'<div style="margin-top:6px;display:flex;gap:6px">'+'<button onclick="event.stopPropagation();window._cierreDesdeListaReprogramar=true;abrirCierrePM03(\''+p.id+'\')" style="flex:1;background:#1a3c5e;color:#fff;border:none;font-size:11px;padding:7px;border-radius:8px;cursor:pointer">🔒 Cerrar</button>'+'<button onclick="event.stopPropagation();adminEliminarPM03Prompt(\''+p.id+'\')" style="flex:1;background:#fff;color:#dc2626;border:1px solid #dc2626;font-size:11px;padding:7px;border-radius:8px;cursor:pointer">🗑️ Eliminar</button>'+'</div>':'')+'</div></div>';
+      return '<div class="ot-card pm03" style="border-left:4px solid #dc2626">'        +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'        +'<span style="font-size:11px;color:#dc2626;font-weight:700">'+p.id+'</span>'        +'<span class="badge" style="background:#7f1d1d;color:#fff">Sem '+p.semana+'/'+(p.año||2026)+' — Vencida</span>'        +'</div>'        +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+'</div>'        +'<div style="font-size:12px;color:var(--txt2);margin-bottom:4px">'+(p.componente||p.actividad||'—').substring(0,50)+'</div>'        +'<div style="font-size:12px;color:#6b7280;margin-bottom:4px">👨‍🔧 '+(p.tecnicoNombre||'Sin asignar')+'</div>'        +'<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px;color:#92400e;font-weight:600">'        +'💡 Razón: '+razon+'</div>'        +'<div style="margin-top:4px;display:flex;gap:6px">'        +'<button class="btn" onclick="event.stopPropagation();window._reprogDesdeLista=true;abrirReprogramarPM03(\''+p.id+'\')" style="flex:1;background:#f59e0b;color:#fff;border:none;font-size:12px;padding:8px;border-radius:8px">📅 Reprogramar</button>'        +'<button onclick="event.stopPropagation();window._fromReprogramar=true;showDetallePM03(\''+p.id+'\')" style="flex:1;background:#f1f5f9;border:1px solid #d1d5db;font-size:12px;padding:8px;border-radius:8px;cursor:pointer">👁️ Ver detalle</button>'        +(esAdminOSuper?'<div style="margin-top:6px;display:flex;gap:6px">'+'<button onclick="event.stopPropagation();window._cierreDesdeListaReprogramar=true;abrirCierrePM03(\''+p.id+'\')" style="flex:1;background:#1a3c5e;color:#fff;border:none;font-size:11px;padding:7px;border-radius:8px;cursor:pointer">🔒 Cerrar</button>'+'<button onclick="event.stopPropagation();adminEliminarPM03Prompt(\''+p.id+'\')" style="flex:1;background:#fff;color:#dc2626;border:1px solid #dc2626;font-size:11px;padding:7px;border-radius:8px;cursor:pointer">🗑️ Eliminar</button>'+'</div>':'')+'</div></div>';
     }).join('');
   }
   showScreen('screen-ordenes');
