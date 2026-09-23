@@ -2396,6 +2396,19 @@ function pm3Toggle(tipo){
   no.style.background=!val&&val!==null?'#fee2e2':'#fff';no.style.borderColor=!val&&val!==null?'#dc2626':'#e5e7eb';no.style.color=!val&&val!==null?'#dc2626':'#374151';
 }
 
+// Al terminar de cerrar una PM03: si se abrió el cierre desde la lista "PM03 x
+// Reprogramar", regresa a esa lista refrescada (sin la tarjeta ya cerrada) y
+// conservando el scroll, en lugar de ir al detalle de la PM03.
+function _pm03CierreVolver(id){
+  if(window._cierreDesdeListaReprogramar){
+    window._cierreDesdeListaReprogramar=false;
+    detalleBackScreen='screen-menu';
+    _refrescarConScroll(showPM03PorReprogramar);
+  } else {
+    showDetallePM03(id);
+  }
+}
+
 function confirmarCierrePM03(id){
   var p=PM03_PLAN.find(function(x){return x.id===id;});if(!p)return;
   // Guardar cache antes de validar
@@ -2575,11 +2588,11 @@ function confirmarCierrePM03(id){
       +'<div style="font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:6px">✅ Protocolo completado</div>'
       +'<div style="font-size:13px;color:#6b7280;margin-bottom:16px">¿Deseas generar una PM03 de seguimiento ligada a este protocolo?</div>'
       +'<button onclick="generarPM03Seguimiento(\''+id+'\');document.getElementById(\'modal-seg-pm03\').remove()" style="width:100%;padding:13px;background:#1a3c5e;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer;margin-bottom:8px">➕ Generar PM03 de seguimiento</button>'
-      +'<button onclick="document.getElementById(\'modal-seg-pm03\').remove();showDetallePM03(\''+id+'\')" style="width:100%;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">No, continuar</button>'
+      +'<button onclick="document.getElementById(\'modal-seg-pm03\').remove();_pm03CierreVolver(\''+id+'\')" style="width:100%;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">No, continuar</button>'
       +'</div>';
     document.body.appendChild(modalSeg);
   } else {
-    showDetallePM03(id);
+    _pm03CierreVolver(id);
   }
   if(document.getElementById('screen-pm03')) setTimeout(renderPM03,100);
 }
@@ -2610,7 +2623,7 @@ function generarPM03Seguimiento(origenId){
   saveDB('pm03_plan',PM03_PLAN);
   savePM03Supa(pm03Seg);
   showAlert('✅ PM03 de seguimiento generada — aparece en PM03 por asignar');
-  showDetallePM03(origenId);
+  _pm03CierreVolver(origenId);
 }
 
 // ================================================================
@@ -20752,13 +20765,17 @@ function abrirReprogramarPM03(id){
   var modal=document.createElement('div');
   modal.id='modal-reprog-pm3';
   modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
-  // Semanas disponibles desde la semana de la PM3 en adelante
+  // Semanas disponibles: siempre desde la semana ACTUAL en adelante (para poder
+  // reprogramar incluso dentro de la misma semana), sin importar cuál sea la
+  // semana original de la PM03 — así el rango es consistente en todas las tarjetas.
   var semOpts='';
   var pSem=p.semana||currentWeek(), pAño=p.año||currentYear();
-  for(var i=1;i<=16;i++){
-    var s=pSem+i, a=pAño;
+  var baseSem=currentWeek(), baseAño=currentYear();
+  for(var i=0;i<=16;i++){
+    var s=baseSem+i, a=baseAño;
     if(s>52){s-=52;a++;}
-    semOpts+='<option value="'+s+'-'+a+'">Sem '+s+' / '+a+'</option>';
+    var sel=(s===pSem&&a===pAño)?' selected':'';
+    semOpts+='<option value="'+s+'-'+a+'"'+sel+'>Sem '+s+' / '+a+'</option>';
   }
   // Técnicos
   var tecOpts=getTecnicos().map(function(u){
@@ -20916,7 +20933,7 @@ function showPM03PorReprogramar(){
       else if(p.estadoFlujo==='por_reprogramar') razon='📋 Marcada manualmente para reprogramar';
       else if(p.origenPM02) razon='🔗 Originada desde PM02: '+p.origenPM02;
       else razon='⏰ No ejecutada antes del lunes 6:30am (Sem '+p.semana+')';
-      return '<div class="ot-card pm03" style="border-left:4px solid #dc2626">'        +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'        +'<span style="font-size:11px;color:#dc2626;font-weight:700">'+p.id+'</span>'        +'<span class="badge" style="background:#7f1d1d;color:#fff">Sem '+p.semana+' — Vencida</span>'        +'</div>'        +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+'</div>'        +'<div style="font-size:12px;color:var(--txt2);margin-bottom:4px">'+(p.componente||p.actividad||'—').substring(0,50)+'</div>'        +'<div style="font-size:12px;color:#6b7280;margin-bottom:4px">👨‍🔧 '+(p.tecnicoNombre||'Sin asignar')+'</div>'        +'<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px;color:#92400e;font-weight:600">'        +'💡 Razón: '+razon+'</div>'        +'<div style="margin-top:4px;display:flex;gap:6px">'        +'<button class="btn" onclick="event.stopPropagation();window._reprogDesdeLista=true;abrirReprogramarPM03(\''+p.id+'\')" style="flex:1;background:#f59e0b;color:#fff;border:none;font-size:12px;padding:8px;border-radius:8px">📅 Reprogramar</button>'        +'<button onclick="event.stopPropagation();window._fromReprogramar=true;showDetallePM03(\''+p.id+'\')" style="flex:1;background:#f1f5f9;border:1px solid #d1d5db;font-size:12px;padding:8px;border-radius:8px;cursor:pointer">👁️ Ver detalle</button>'        +(esAdminOSuper?'<div style="margin-top:6px;display:flex;gap:6px">'+'<button onclick="event.stopPropagation();abrirCierrePM03(\''+p.id+'\')" style="flex:1;background:#1a3c5e;color:#fff;border:none;font-size:11px;padding:7px;border-radius:8px;cursor:pointer">🔒 Cerrar</button>'+'<button onclick="event.stopPropagation();adminEliminarPM03Prompt(\''+p.id+'\')" style="flex:1;background:#fff;color:#dc2626;border:1px solid #dc2626;font-size:11px;padding:7px;border-radius:8px;cursor:pointer">🗑️ Eliminar</button>'+'</div>':'')+'</div></div>';
+      return '<div class="ot-card pm03" style="border-left:4px solid #dc2626">'        +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'        +'<span style="font-size:11px;color:#dc2626;font-weight:700">'+p.id+'</span>'        +'<span class="badge" style="background:#7f1d1d;color:#fff">Sem '+p.semana+' — Vencida</span>'        +'</div>'        +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+'</div>'        +'<div style="font-size:12px;color:var(--txt2);margin-bottom:4px">'+(p.componente||p.actividad||'—').substring(0,50)+'</div>'        +'<div style="font-size:12px;color:#6b7280;margin-bottom:4px">👨‍🔧 '+(p.tecnicoNombre||'Sin asignar')+'</div>'        +'<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px;color:#92400e;font-weight:600">'        +'💡 Razón: '+razon+'</div>'        +'<div style="margin-top:4px;display:flex;gap:6px">'        +'<button class="btn" onclick="event.stopPropagation();window._reprogDesdeLista=true;abrirReprogramarPM03(\''+p.id+'\')" style="flex:1;background:#f59e0b;color:#fff;border:none;font-size:12px;padding:8px;border-radius:8px">📅 Reprogramar</button>'        +'<button onclick="event.stopPropagation();window._fromReprogramar=true;showDetallePM03(\''+p.id+'\')" style="flex:1;background:#f1f5f9;border:1px solid #d1d5db;font-size:12px;padding:8px;border-radius:8px;cursor:pointer">👁️ Ver detalle</button>'        +(esAdminOSuper?'<div style="margin-top:6px;display:flex;gap:6px">'+'<button onclick="event.stopPropagation();window._cierreDesdeListaReprogramar=true;abrirCierrePM03(\''+p.id+'\')" style="flex:1;background:#1a3c5e;color:#fff;border:none;font-size:11px;padding:7px;border-radius:8px;cursor:pointer">🔒 Cerrar</button>'+'<button onclick="event.stopPropagation();adminEliminarPM03Prompt(\''+p.id+'\')" style="flex:1;background:#fff;color:#dc2626;border:1px solid #dc2626;font-size:11px;padding:7px;border-radius:8px;cursor:pointer">🗑️ Eliminar</button>'+'</div>':'')+'</div></div>';
     }).join('');
   }
   showScreen('screen-ordenes');
