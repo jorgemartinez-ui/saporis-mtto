@@ -2163,6 +2163,7 @@ function abrirCierrePM03(id){
     return;
   }
   var p=PM03_PLAN.find(function(x){return x.id===id;});if(!p)return;
+  window._pm3CierreActualId=id; // para que los toggles (limpieza/desinfección/grasa/herramienta) sepan qué PM03 autoguardar
   var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
   if(!p.actividadesEstado) p.actividadesEstado={};
   if(!p.actividadesEstadoInicial) p.actividadesEstadoInicial={};
@@ -2171,6 +2172,7 @@ function abrirCierrePM03(id){
   if(!p.medicionesActividades) p.medicionesActividades={};
   if(!p.fotosActividades) p.fotosActividades={};
   if(!p.horasActividades) p.horasActividades={};
+  if(!p.tecnicosAdicionales) p.tecnicosAdicionales=[];
   if(!p.personasActividades) p.personasActividades={};
   if(!p.pm02GeneradasActividades) p.pm02GeneradasActividades={};
 
@@ -2223,13 +2225,6 @@ function abrirCierrePM03(id){
         +'<div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:4px">Estado Final (A=Bien, R=Regular, C=Reprogramar)</div>'
         +'<div style="display:flex;gap:4px;margin-bottom:8px">'+estadoBtns('final',curF,a.id)+'</div>'
         +'<div id="pm3-aviso-c-'+a.id+'" style="background:#fee2e2;border-radius:6px;padding:6px 8px;font-size:.75rem;color:#dc2626;margin-bottom:6px;display:'+(curF==='C'?'block':'none')+'">⚠️ Se generará PM02 roja para reprogramar la próxima semana</div>'
-
-        // Solo personas (sin tiempo por actividad)
-        +'<div style="margin-bottom:6px"><div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:3px">Personas en esta actividad</div>'
-        +'<select id="pm3-pers-'+a.id+'" class="form-control" style="padding:7px;font-size:.82rem;max-width:120px">'
-        +[1,2,3,4,5].map(function(n){return '<option value="'+n+'"'+(pers==n?' selected':'')+'>'+n+'</option>';}).join('')
-        +'</select></div>'
-
 
         // Comentario obligatorio
         +'<div style="font-size:.72rem;font-weight:700;color:#dc2626;margin-bottom:3px">Comentario <span style="color:#dc2626">*</span></div>'
@@ -2294,21 +2289,29 @@ function abrirCierrePM03(id){
     +'</div>'
     +'</div>'
 
+    // Técnicos adicionales (apoyo) — se llena una sola vez para toda la PM03, no por
+    // actividad. Alimenta el resumen de horas por técnico (igual que en OT/PM02).
+    +'<div style="margin-bottom:16px">'
+    +'<div style="font-size:.82rem;font-weight:800;color:#1a3c5e;text-transform:uppercase;margin-bottom:8px">👥 Técnicos adicionales (apoyo)</div>'
+    +'<div id="pm3-extra-tecs-container">'+pm3ExtraTecsHTML(p)+'</div>'
+    +'<button id="pm3-extra-tec-btn" onclick="pm3AddExtraTec(\''+id+'\')" style="width:100%;padding:10px;background:#f0f4ff;border:1px dashed #2563eb;border-radius:10px;font-size:.85rem;font-weight:600;color:#2563eb;cursor:pointer;margin-top:4px;display:'+((p.tecnicosAdicionales||[]).length>=10?'none':'block')+'">+ Agregar técnico de apoyo</button>'
+    +'</div>'
+
     // Actividades
     +actHTML
 
     // Reporte de actividades
     +'<div style="font-size:.82rem;font-weight:800;color:#1a3c5e;text-transform:uppercase;margin-bottom:8px">📝 Reporte de Actividades</div>'
-    +'<div style="display:flex;gap:6px;margin-bottom:12px"><textarea id="pm3-reporte" class="form-control" rows="3" placeholder="Descripción general de las actividades realizadas..." style="padding:10px;flex:1;resize:none">'+(p.reporteActividades||'')+'</textarea>'+micBtn('pm3-reporte')+'</div>'
+    +'<div style="display:flex;gap:6px;margin-bottom:12px"><textarea id="pm3-reporte" class="form-control" rows="3" placeholder="Descripción general de las actividades realizadas..." oninput="pm3SaveCache(\''+id+'\')" style="padding:10px;flex:1;resize:none">'+(p.reporteActividades||'')+'</textarea>'+micBtn('pm3-reporte')+'</div>'
 
     // Refacciones
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
     +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Refacciones usadas</label>'
-    +'<input type="text" id="pm3-refs" class="form-control" placeholder="Ninguna" value="'+(p.refaccionesUsadas||'')+'" style="padding:9px;font-size:.85rem"></div>'
+    +'<input type="text" id="pm3-refs" class="form-control" placeholder="Ninguna" value="'+(p.refaccionesUsadas||'')+'" oninput="pm3SaveCache(\''+id+'\')" style="padding:9px;font-size:.85rem"></div>'
     +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Refacciones nuevas</label>'
-    +'<input type="text" id="pm3-refs-new" class="form-control" placeholder="Ninguna" value="'+(p.refaccionesNuevas||'')+'" style="padding:9px;font-size:.85rem"></div>'
+    +'<input type="text" id="pm3-refs-new" class="form-control" placeholder="Ninguna" value="'+(p.refaccionesNuevas||'')+'" oninput="pm3SaveCache(\''+id+'\')" style="padding:9px;font-size:.85rem"></div>'
     +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Herramienta ingresada</label>'
-    +'<input type="text" id="pm3-herr-in" class="form-control" placeholder="Ej: Multímetro, llave 13mm" value="'+(p.herramientaIngresada||'')+'" style="padding:9px;font-size:.85rem"></div>'
+    +'<input type="text" id="pm3-herr-in" class="form-control" placeholder="Ej: Multímetro, llave 13mm" value="'+(p.herramientaIngresada||'')+'" oninput="pm3SaveCache(\''+id+'\')" style="padding:9px;font-size:.85rem"></div>'
     +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Herramienta salida <span style="color:#dc2626">*</span></label>'
     +'<div style="display:flex;gap:6px;margin-bottom:4px">'
     +'<button id="pm3-hout-si" onclick="pm3ToggleHerrOut(true)" style="flex:1;padding:7px;border:2px solid '+(p.herramientaSalida==="si"?'#16a34a':'#e5e7eb')+';border-radius:7px;background:'+(p.herramientaSalida==="si"?'#dcfce7':'#fff')+';font-weight:700;font-size:.82rem;cursor:pointer">✅ SI — Salió completa</button>'
@@ -2334,7 +2337,7 @@ function abrirCierrePM03(id){
     +'<button id="pm3-desinf-no" onclick="pm3ToggleDesinf(false)" style="flex:1;padding:8px;border:2px solid '+(p.desinfProduccion===false?'#6b7280':'#e5e7eb')+';border-radius:8px;background:'+(p.desinfProduccion===false?'#f3f4f6':'#fff')+';font-weight:700;font-size:.85rem;cursor:pointer">NO</button>'
     +'</div>'
     +'<div id="pm3-desinf-com-wrap" style="display:'+(p.desinfProduccion===true?'block':'none')+'">'
-    +'<textarea id="pm3-desinf-com" class="form-control" rows="2" placeholder="¿Por qué se requiere desinfección?" style="padding:8px;font-size:.82rem;resize:none">'+(p.comentarioDesinfeccion||'')+'</textarea>'
+    +'<textarea id="pm3-desinf-com" class="form-control" rows="2" placeholder="¿Por qué se requiere desinfección?" oninput="pm3SaveCache(\''+id+'\')" style="padding:8px;font-size:.82rem;resize:none">'+(p.comentarioDesinfeccion||'')+'</textarea>'
     +'</div></div>'
 
     // Grasa/Aceite
@@ -2344,10 +2347,14 @@ function abrirCierrePM03(id){
     +'<button id="pm3-grasa-no" onclick="pm3ToggleGrasa(false)" style="flex:1;padding:8px;border:2px solid '+(p.usaGrasa===false?'#6b7280':'#e5e7eb')+';border-radius:8px;background:'+(p.usaGrasa===false?'#f3f4f6':'#fff')+';font-weight:700;font-size:.85rem;cursor:pointer">NO</button>'
     +'</div>'
     +'<div id="pm3-grasa-wrap" style="display:'+(p.usaGrasa===true?'block':'none')+'">'
-    +'<input type="text" id="pm3-grasa" class="form-control" placeholder="Tipo y cantidad (ej: Shell Gadus S2 V220 — 50g)" value="'+(p.grasaAceite||'')+'" style="padding:8px;font-size:.82rem">'
+    +'<input type="text" id="pm3-grasa" class="form-control" placeholder="Tipo y cantidad (ej: Shell Gadus S2 V220 — 50g)" value="'+(p.grasaAceite||'')+'" oninput="pm3SaveCache(\''+id+'\')" style="padding:8px;font-size:.82rem">'
     +'</div></div>'
 
     +'</div>' // fin limpieza
+
+    // Firmas de autorización — se piden aquí mismo, al cierre, para no poder
+    // guardar la PM03 sin las 4 firmas (ver validación en confirmarCierrePM03).
+    +'<div id="pm3-firmas-container">'+renderFirmasPhysical(p)+'</div>'
 
     // Guardar
     +'<div id="pm3-draft-indicator" style="text-align:center;font-size:.78rem;color:#9ca3af;margin-top:8px;height:16px"></div>'
@@ -2520,6 +2527,16 @@ function confirmarCierrePM03(id){
   if(faltanComentarios.length){pm3ShowError('Comentarios obligatorios en actividades: '+faltanComentarios.join(', '));return;}
   if(faltanEstadoFinal.length){pm3ShowError('Selecciona Estado Final (Bien/Regular/Reprogramar) en actividades: '+faltanEstadoFinal.join(', '));return;}
 
+  // Firmas de autorización obligatorias — no se puede cerrar la PM03 sin las 4
+  var _firmasLbl={Operador:'Operador',Lider:'Líder Producción',Calidad:'Inspector Calidad',Admin:'Jefe de Mantenimiento'};
+  var _firmasFaltan=Object.keys(_firmasLbl).filter(function(k){return !p['firmaImg'+k];});
+  if(_firmasFaltan.length){
+    pm3ShowError('Faltan firmas de autorización: '+_firmasFaltan.map(function(k){return _firmasLbl[k];}).join(', '));
+    var _fc=document.getElementById('pm3-firmas-container');
+    if(_fc) _fc.scrollIntoView({behavior:'smooth',block:'center'});
+    return;
+  }
+
   // Leer campos de limpieza/grasa
   var desinfCom=document.getElementById('pm3-desinf-com');
   var grasa=document.getElementById('pm3-grasa');
@@ -2587,7 +2604,7 @@ function confirmarCierrePM03(id){
       +'<div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 16px"></div>'
       +'<div style="font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:6px">✅ Protocolo completado</div>'
       +'<div style="font-size:13px;color:#6b7280;margin-bottom:16px">¿Deseas generar una PM03 de seguimiento ligada a este protocolo?</div>'
-      +'<button onclick="generarPM03Seguimiento(\''+id+'\');document.getElementById(\'modal-seg-pm03\').remove()" style="width:100%;padding:13px;background:#1a3c5e;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer;margin-bottom:8px">➕ Generar PM03 de seguimiento</button>'
+      +'<button onclick="document.getElementById(\'modal-seg-pm03\').remove();abrirDialogoSeguimientoPM03(\''+id+'\')" style="width:100%;padding:13px;background:#1a3c5e;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer;margin-bottom:8px">➕ Generar PM03 de seguimiento</button>'
       +'<button onclick="document.getElementById(\'modal-seg-pm03\').remove();_pm03CierreVolver(\''+id+'\')" style="width:100%;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">No, continuar</button>'
       +'</div>';
     document.body.appendChild(modalSeg);
@@ -2597,15 +2614,49 @@ function confirmarCierrePM03(id){
   if(document.getElementById('screen-pm03')) setTimeout(renderPM03,100);
 }
 
-function generarPM03Seguimiento(origenId){
+// Antes de generar la PM03 de seguimiento (caso sin protocolo, donde no hay
+// actividades individuales para marcar en rojo/verde), se pide al técnico que
+// especifique qué actividad o parte concreta requiere reprogramarse — así la
+// nueva PM03 no queda genérica y el motivo se ve reflejado en "PM03 x Reprogramar".
+function abrirDialogoSeguimientoPM03(origenId){
+  var modal=document.createElement('div');
+  modal.id='modal-motivo-seg-pm03';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px 20px 32px;width:100%;max-width:480px;box-sizing:border-box">'
+    +'<div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 16px"></div>'
+    +'<div style="font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:6px">📅 PM03 de seguimiento</div>'
+    +'<div style="font-size:13px;color:#6b7280;margin-bottom:10px">¿Qué actividad o parte específica requiere reprogramarse?</div>'
+    +'<textarea id="motivo-seg-pm03" class="form-control" rows="3" placeholder="Describe qué quedó pendiente y necesita reprogramarse..." style="padding:10px;font-size:.85rem;resize:none;width:100%;box-sizing:border-box"></textarea>'
+    +'<div id="motivo-seg-pm03-error" style="display:none;color:#dc2626;font-size:.78rem;font-weight:600;margin-top:6px">El motivo es obligatorio</div>'
+    +'<div style="display:flex;gap:8px;margin-top:14px">'
+    +'<button onclick="document.getElementById(\'modal-motivo-seg-pm03\').remove()" style="flex:1;padding:12px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="confirmarSeguimientoPM03(\''+origenId+'\')" style="flex:2;padding:12px;background:#1a3c5e;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">➕ Generar PM03</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function confirmarSeguimientoPM03(origenId){
+  var el=document.getElementById('motivo-seg-pm03');
+  var motivo=el?el.value.trim():'';
+  if(!motivo){
+    var err=document.getElementById('motivo-seg-pm03-error');
+    if(err) err.style.display='block';
+    return;
+  }
+  document.getElementById('modal-motivo-seg-pm03')?.remove();
+  generarPM03Seguimiento(origenId,motivo);
+}
+
+function generarPM03Seguimiento(origenId,motivo){
   var p=PM03_PLAN.find(function(x){return x.id===origenId;});
   if(!p) return;
   var id=genID('PM03');
+  var motivoTxt=(motivo||'').trim();
   var pm03Seg={
     id:id,
     linea:p.linea,
-    componente:p.componente||'—',
-    actividad:'Seguimiento — '+p.actividad,
+    componente:motivoTxt?motivoTxt.substring(0,60):(p.componente||'—'),
+    actividad:motivoTxt?'[Reprogramar] '+motivoTxt:('Seguimiento — '+p.actividad),
     area:p.area||'productiva',
     semana:null,
     año:currentYear(),
@@ -2613,6 +2664,8 @@ function generarPM03Seguimiento(origenId){
     tecnicoNombre:null,
     estado:'abierta',
     estadoFlujo:'por_reprogramar',
+    notaReprogramacion:motivoTxt||null,
+    motivoReprogramacion:motivoTxt||null,
     generadoPor:nombreEfectivo()||'Sistema',
     origenPM03:origenId,
     ts:Date.now(),
@@ -11027,7 +11080,15 @@ function firmaGuardar(){
 
   document.getElementById('modal-firma-canvas').remove();
   showAlert('✅ Firma guardada'+(todas?' — Protocolo completo':''));
-  showDetallePM03(_firmaOtId);
+  // Si se firmó desde dentro del modal de cierre (antes de guardar la PM03), solo
+  // refrescar la sección de firmas ahí mismo — navegar a showDetallePM03 perdería
+  // de vista todo lo que el técnico ya llenó en el formulario de cierre.
+  var contFirmas=document.getElementById('pm3-firmas-container');
+  if(contFirmas && document.getElementById('modal-cierre-pm03')){
+    contFirmas.innerHTML = renderFirmasPhysical(p);
+  } else {
+    showDetallePM03(_firmaOtId);
+  }
 }
 
 function renderFirmasPhysical(p){
@@ -13716,6 +13777,8 @@ function syncSupabase(){
         firmaNombreAdmin:r.firma_nombre_admin||(local?local.firmaNombreAdmin:null),
         firmaTsAdmin:r.firma_ts_admin||(local?local.firmaTsAdmin:null),
         estadoFlujo:r.estado_flujo||(local?local.estadoFlujo:'ejecucion'),
+        notaReprogramacion:r.nota_reprogramacion||(local?local.notaReprogramacion:null),
+        motivoReprogramacion:r.nota_reprogramacion||(local?local.motivoReprogramacion:null),
         fotos:local&&local.fotos!==undefined?local.fotos:undefined,
         // Campos de borrador — priorizar Supabase sobre local
         comentariosActividades:(function(){
@@ -13747,6 +13810,14 @@ function syncSupabase(){
         })(),
         reporteActividades:r.reporte_actividades||(local?local.reporteActividades:null),
         refaccionesNuevas:r.refacciones_nuevas||(local?local.refaccionesNuevas:null),
+        comentarioDesinfeccion:r.comentario_desinfeccion||(local?local.comentarioDesinfeccion:null),
+        tecnicosAdicionales:(function(){
+          var sup=r.tecnicos_adicionales; var loc=local?local.tecnicosAdicionales:null;
+          var supD=r.draft_ts||0, locD=local&&local._draftTs?local._draftTs:0;
+          try{ sup=sup?JSON.parse(sup):null; }catch(e){ sup=null; }
+          if(supD>=locD) return sup||loc||[];
+          return loc||sup||[];
+        })(),
         _draftTs:r.draft_ts||(local?local._draftTs:0)
       };
     });
@@ -13876,7 +13947,7 @@ function reintentarOrdenesSync(){
 }
 setTimeout(reintentarOrdenesSync, 5000);
 setInterval(reintentarOrdenesSync, 5*60*1000);
-function savePM03Supa(p){supaUpsert('pm03_plan',{id:p.id,linea:p.linea,componente:p.componente||null,actividad:p.actividad,area:p.area||null,semana:p.semana,anio:p.año||2026,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null,responsable_area_id:p.responsableAreaId||null,responsable_area_nombre:p.responsableAreaNombre||null,estado:p.estado||'abierta',prioridad:p.prioridad||null,fuente_excel:p.fuenteExcel||false,horas_cierre:p.horasCierre||0,observaciones_cierre:p.observacionesCierre||null,cerrada_ts:p.cerradaTs||null,cerrada_por:p.cerradaPor||null,generado_por:p.generadoPor||null,origen_ot:p.origenOT||null,ts:p.ts||Date.now(),liberado_por:p.liberadoPor||null,liberado_ts:p.liberadoTs||null,estado_calidad:p.estadoCalidad||null,rechazo_calidad:p.rechazoCalidad||null,actividades_estado:p.actividadesEstado?JSON.stringify(p.actividadesEstado):null,refacciones_usadas:p.refaccionesUsadas||null,herramienta_ingresada:p.herramientaIngresada||null,herramienta_salida:p.herramientaSalida||null,grasa_aceite:p.grasaAceite||null,limpieza_mtto:typeof p.limpiezaMtto==='boolean'?p.limpiezaMtto:null,desinf_produccion:typeof p.desinfProduccion==='boolean'?p.desinfProduccion:null,firma_tecnico:p.firmaTecnico||null,firma_tecnico_ts:p.firmaTecnicoTs||null,comentarios_actividades:p.comentariosActividades?JSON.stringify(p.comentariosActividades):null,mediciones_actividades:p.medicionesActividades?JSON.stringify(p.medicionesActividades):null,liberado_prod_por:p.liberadoProdPor||null,liberado_prod_ts:p.liberadoProdTs||null,liberado_admin_por:p.liberadoAdminPor||null,liberado_admin_ts:p.liberadoAdminTs||null,estado_flujo:p.estadoFlujo||'ejecucion',comentario_firma_calidad:p.comentarioFirmaCalidad||null,comentario_firma_prod:p.comentarioFirmaProd||null,comentario_firma_admin:p.comentarioFirmaAdmin||null,
+function savePM03Supa(p){supaUpsert('pm03_plan',{id:p.id,linea:p.linea,componente:p.componente||null,actividad:p.actividad,area:p.area||null,semana:p.semana,anio:p.año||2026,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null,responsable_area_id:p.responsableAreaId||null,responsable_area_nombre:p.responsableAreaNombre||null,estado:p.estado||'abierta',prioridad:p.prioridad||null,fuente_excel:p.fuenteExcel||false,horas_cierre:p.horasCierre||0,observaciones_cierre:p.observacionesCierre||null,cerrada_ts:p.cerradaTs||null,cerrada_por:p.cerradaPor||null,generado_por:p.generadoPor||null,origen_ot:p.origenOT||null,ts:p.ts||Date.now(),liberado_por:p.liberadoPor||null,liberado_ts:p.liberadoTs||null,estado_calidad:p.estadoCalidad||null,rechazo_calidad:p.rechazoCalidad||null,actividades_estado:p.actividadesEstado?JSON.stringify(p.actividadesEstado):null,refacciones_usadas:p.refaccionesUsadas||null,herramienta_ingresada:p.herramientaIngresada||null,herramienta_salida:p.herramientaSalida||null,grasa_aceite:p.grasaAceite||null,limpieza_mtto:typeof p.limpiezaMtto==='boolean'?p.limpiezaMtto:null,desinf_produccion:typeof p.desinfProduccion==='boolean'?p.desinfProduccion:null,firma_tecnico:p.firmaTecnico||null,firma_tecnico_ts:p.firmaTecnicoTs||null,comentarios_actividades:p.comentariosActividades?JSON.stringify(p.comentariosActividades):null,mediciones_actividades:p.medicionesActividades?JSON.stringify(p.medicionesActividades):null,liberado_prod_por:p.liberadoProdPor||null,liberado_prod_ts:p.liberadoProdTs||null,liberado_admin_por:p.liberadoAdminPor||null,liberado_admin_ts:p.liberadoAdminTs||null,estado_flujo:p.estadoFlujo||'ejecucion',nota_reprogramacion:p.notaReprogramacion||null,comentario_desinfeccion:p.comentarioDesinfeccion||null,tecnicos_adicionales:p.tecnicosAdicionales&&p.tecnicosAdicionales.length?JSON.stringify(p.tecnicosAdicionales):null,comentario_firma_calidad:p.comentarioFirmaCalidad||null,comentario_firma_prod:p.comentarioFirmaProd||null,comentario_firma_admin:p.comentarioFirmaAdmin||null,
   // fotos/firma_img_* ya no se sincronizan en bloque (viajan bajo demanda al abrir
   // el detalle) — si en este dispositivo nunca se cargaron (p.campo===undefined),
   // se omiten del payload para NO borrar en Supabase lo que otro dispositivo sí guardó.
@@ -18210,6 +18281,14 @@ function guardarChecklist() {
     return;
   }
   var visiblesAntes = chkPuntosVisibles(_chkActual.puntos);
+  // Los puntos tipo "valor" (capturas numéricas, ej. Chiller) son obligatorios — no se
+  // puede cerrar el checklist sin capturarlos. A diferencia de los puntos normales
+  // (verde/rojo/no aplica), aquí NO se permite guardar de todas formas.
+  var valoresFaltantes = visiblesAntes.filter(function(p){ return p.tipo==='valor' && !p.estado; });
+  if (valoresFaltantes.length > 0) {
+    showAlert('Captura el valor de: ' + valoresFaltantes.map(function(p){ return p.texto||p.nombre||''; }).join(', '), 'error');
+    return;
+  }
   var incompletos = visiblesAntes.filter(function(p){ return !p.estado; }).length;
   if (incompletos > 0) {
     if (!confirm('Hay ' + incompletos + ' punto(s) sin revisar. ¿Guardar de todas formas?')) return;
@@ -19357,7 +19436,6 @@ function imprimirProtocoloPM03(id){
       var estI = (p.actividadesEstadoInicial||{})[a.id] || '';
       var estF = (p.actividadesEstadoFinal||p.actividadesEstado||{})[a.id] || '';
       var com  = (p.comentariosActividades||{})[a.id] || '';
-      var pers = (p.personasActividades||{})[a.id] || 1;
       var hrs  = (p.horasActividades||{})[a.id] || '';
       // Colores estado
       function estCell(e){
@@ -19371,27 +19449,23 @@ function imprimirProtocoloPM03(id){
         +'<td style="text-align:center;width:28px">'+estCell(estI)+'</td>'
         +'<td style="text-align:center;width:28px">'+estCell(estF)+'</td>'
         +'<td style="text-align:center;width:25px;font-size:10px">'+(hrs||'')+'</td>'
-        +'<td style="text-align:center;width:25px;font-size:10px">'+pers+'</td>'
         +'<td style="font-size:9px;padding:3px 4px">'+com+'</td>'
         +'</tr>';
     });
     for(var i=(proto.actividades.length+1);i<=10;i++){
-      actRows+='<tr><td style="text-align:center;font-size:10px">'+i+'</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+      actRows+='<tr><td style="text-align:center;font-size:10px">'+i+'</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
     }
   }
 
   // Totales
   // Calcular totales reales
   var totalHrs = 0;
-  var totalPers = 1;
   if(proto && proto.actividades){
     proto.actividades.forEach(function(a){
       var h=(p.horasActividades||{})[a.id]||'';
       var hNum=parseFloat(h)||0;
       if(h.indexOf('min')>=0) hNum=hNum/60;
       totalHrs+=hNum;
-      var pe=(p.personasActividades||{})[a.id]||1;
-      if(pe>totalPers) totalPers=pe;
     });
     totalHrs=Math.round(totalHrs*10)/10||p.horasCierre||0;
   }
@@ -19453,11 +19527,11 @@ function imprimirProtocoloPM03(id){
     +'<tr style="background:#e8e8e8">'
     +'<th>#</th><th>Descripción</th><th>Tipo</th>'
     +'<th>Est. Inicial</th><th>Est. Final</th>'
-    +'<th>Hrs</th><th>Pers.</th><th>Comentarios</th>'
+    +'<th>Hrs</th><th>Comentarios</th>'
     +'</tr>'
     +actRows
-    +'<tr style="background:#e8e8e8"><td colspan="5" style="font-weight:700;text-align:right;font-size:10px">TOTAL HRS / PERSONAL</td>'
-    +'<td style="text-align:center;font-weight:800">'+totalHrs+'</td><td style="text-align:center;font-weight:800">'+totalPers+'</td><td></td></tr>'
+    +'<tr style="background:#e8e8e8"><td colspan="5" style="font-weight:700;text-align:right;font-size:10px">TOTAL HRS</td>'
+    +'<td style="text-align:center;font-weight:800">'+totalHrs+'</td><td></td></tr>'
     +'</table>'
 
     // Reporte de actividades
@@ -19825,6 +19899,7 @@ function pm3ToggleLimp(val){
   var no=document.getElementById('pm3-limp-no');
   if(si){si.style.background=val?'#dcfce7':'#fff';si.style.borderColor=val?'#16a34a':'#e5e7eb';si.style.color=val?'#16a34a':'#374151';}
   if(no){no.style.background=!val?'#fee2e2':'#fff';no.style.borderColor=!val?'#dc2626':'#e5e7eb';no.style.color=!val?'#dc2626':'#374151';}
+  pm3SaveCache(window._pm3CierreActualId);
 }
 
 function pm3ToggleDesinf(val){
@@ -19835,6 +19910,7 @@ function pm3ToggleDesinf(val){
   if(si){si.style.background=val?'#fef3c7':'#fff';si.style.borderColor=val?'#d97706':'#e5e7eb';}
   if(no){no.style.background=!val?'#f3f4f6':'#fff';no.style.borderColor=!val?'#6b7280':'#e5e7eb';}
   if(wrap) wrap.style.display='block'; // siempre visible
+  pm3SaveCache(window._pm3CierreActualId);
 }
 
 function pm3ToggleGrasa(val){
@@ -19845,6 +19921,7 @@ function pm3ToggleGrasa(val){
   if(si){si.style.background=val?'#e0f7fa':'#fff';si.style.borderColor=val?'#0891b2':'#e5e7eb';}
   if(no){no.style.background=!val?'#f3f4f6':'#fff';no.style.borderColor=!val?'#6b7280':'#e5e7eb';}
   if(wrap) wrap.style.display='block'; // siempre visible
+  pm3SaveCache(window._pm3CierreActualId);
 }
 
 function pm3CapturarFoto(pmId, actId, fuente){
@@ -19877,6 +19954,7 @@ function pm3ToggleHerrOut(val){
   if(si){si.style.background=val?'#dcfce7':'#fff';si.style.borderColor=val?'#16a34a':'#e5e7eb';}
   if(no){no.style.background=!val?'#fee2e2':'#fff';no.style.borderColor=!val?'#dc2626':'#e5e7eb';}
   if(!val) showAlert('⚠️ Retira toda la herramienta antes de cerrar','error');
+  pm3SaveCache(window._pm3CierreActualId);
 }
 
 // ================================================================
@@ -19888,16 +19966,19 @@ function pm3SaveCache(pmId){
   var p=PM03_PLAN.find(function(x){return x.id===pmId;});
   if(!p) return;
   var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
-  if(!proto) return;
-  proto.actividades.forEach(function(a){
-    var com=document.getElementById('pm3-com-'+a.id);
-    var hrs=document.getElementById('pm3-hrs-'+a.id);
-    var hrsUnit=document.getElementById('pm3-hrsunit-'+a.id);
-    var pers=document.getElementById('pm3-pers-'+a.id);
-    if(com) { if(!p.comentariosActividades) p.comentariosActividades={}; p.comentariosActividades[a.id]=com.value; }
-    if(hrs) { if(!p.horasActividades) p.horasActividades={}; p.horasActividades[a.id]=hrs.value+(hrsUnit?hrsUnit.value:'h'); }
-    if(pers){ if(!p.personasActividades) p.personasActividades={}; p.personasActividades[a.id]=parseInt(pers.value)||1; }
-  });
+  // Antes: si la PM03 no tenía protocolo se salía aquí y NO se guardaba nada
+  // (ni el reporte general ni limpieza/desinfección/grasa/herramienta). Ahora
+  // el bloque por actividad solo se salta cuando no hay protocolo, pero los
+  // campos generales de abajo se guardan siempre.
+  if(proto&&proto.actividades){
+    proto.actividades.forEach(function(a){
+      var com=document.getElementById('pm3-com-'+a.id);
+      var hrs=document.getElementById('pm3-hrs-'+a.id);
+      var hrsUnit=document.getElementById('pm3-hrsunit-'+a.id);
+      if(com) { if(!p.comentariosActividades) p.comentariosActividades={}; p.comentariosActividades[a.id]=com.value; }
+      if(hrs) { if(!p.horasActividades) p.horasActividades={}; p.horasActividades[a.id]=hrs.value+(hrsUnit?hrsUnit.value:'h'); }
+    });
+  }
   // Guardar campos generales
   var rpt=document.getElementById('pm3-reporte');
   var refs=document.getElementById('pm3-refs');
@@ -19907,6 +19988,16 @@ function pm3SaveCache(pmId){
   if(refs) p.refaccionesUsadas=refs.value;
   if(refsN) p.refaccionesNuevas=refsN.value;
   if(herrIn) p.herramientaIngresada=herrIn.value;
+  // Limpieza / desinfección / grasa / herramienta de salida — antes solo se
+  // guardaban hasta dar "Guardar y Firmar"; ahora también quedan en el borrador.
+  if(window._pm3Limp===true||window._pm3Limp===false) p.limpiezaMtto=window._pm3Limp;
+  if(window._pm3Desinf===true||window._pm3Desinf===false) p.desinfProduccion=window._pm3Desinf;
+  var desinfCom=document.getElementById('pm3-desinf-com');
+  if(desinfCom) p.comentarioDesinfeccion=desinfCom.value;
+  if(window._pm3UsaGrasa===true||window._pm3UsaGrasa===false) p.usaGrasa=window._pm3UsaGrasa;
+  var grasaEl=document.getElementById('pm3-grasa');
+  if(grasaEl) p.grasaAceite=grasaEl.value;
+  if(window._pm3HerrOut==='si'||window._pm3HerrOut==='no') p.herramientaSalida=window._pm3HerrOut;
   p._draftTs=Date.now();
   saveDB('pm03_plan',PM03_PLAN);
   // Guardar borrador en Supabase (debounced 3 segundos)
@@ -19935,6 +20026,12 @@ function pm3SaveCacheSupa(pmId){
       refacciones_usadas:p.refaccionesUsadas||null,
       refacciones_nuevas:p.refaccionesNuevas||null,
       herramienta_ingresada:p.herramientaIngresada||null,
+      limpieza_mtto:typeof p.limpiezaMtto==='boolean'?p.limpiezaMtto:null,
+      desinf_produccion:typeof p.desinfProduccion==='boolean'?p.desinfProduccion:null,
+      comentario_desinfeccion:p.comentarioDesinfeccion||null,
+      grasa_aceite:p.grasaAceite||null,
+      herramienta_salida:p.herramientaSalida||null,
+      tecnicos_adicionales:p.tecnicosAdicionales&&p.tecnicosAdicionales.length?JSON.stringify(p.tecnicosAdicionales):null,
       draft_ts:p._draftTs
     }).then(function(){
       // Mostrar indicador de guardado
@@ -19996,6 +20093,65 @@ function pm3UpdateDia(pmId,idx,campo,val){
   pm3SaveCacheSupa(pmId);
 }
 
+// ── TÉCNICOS ADICIONALES en cierre de PM03 (mismo patrón que en el wizard PM02) ──
+// Se llena una sola vez para toda la PM03 (no por actividad) y alimenta el resumen
+// de horas por técnico, igual que tecnicosAdicionales ya lo hace para OT/PM02.
+function pm3ExtraTecsHTML(p){
+  if(!p.tecnicosAdicionales) p.tecnicosAdicionales=[];
+  var tecnicos=getTecnicos();
+  return p.tecnicosAdicionales.map(function(ta,i){
+    return '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px" id="pm3-extra-tec-row-'+i+'">'
+      +'<select class="form-control" style="flex:2" onchange="pm3UpdateExtraTec(\''+p.id+'\','+i+',this)">'
+      +'<option value="">-- Técnico --</option>'
+      +tecnicos.map(function(t){return '<option value="'+t.id+'"'+(ta.id===t.id?' selected':'')+'>'+t.nombre+'</option>';}).join('')
+      +'</select>'
+      +'<input type="number" class="form-control" placeholder="Hrs" min="0" max="24" step="0.5" style="width:70px" value="'+(ta.horas||'')+'" onchange="pm3UpdateExtraHrs(\''+p.id+'\','+i+',this)">'
+      +'<button onclick="pm3RemoveExtraTec(\''+p.id+'\','+i+')" style="background:#fee2e2;border:none;border-radius:8px;padding:6px 10px;color:#dc2626;cursor:pointer;font-size:14px">🗑</button>'
+      +'</div>';
+  }).join('');
+}
+function pm3RefreshExtraTecsUI(pmId){
+  var p=PM03_PLAN.find(function(x){return x.id===pmId;});
+  if(!p) return;
+  var cont=document.getElementById('pm3-extra-tecs-container');
+  if(cont) cont.innerHTML=pm3ExtraTecsHTML(p);
+  var btn=document.getElementById('pm3-extra-tec-btn');
+  if(btn) btn.style.display=(p.tecnicosAdicionales.length>=10?'none':'block');
+}
+function pm3AddExtraTec(pmId){
+  var p=PM03_PLAN.find(function(x){return x.id===pmId;});
+  if(!p) return;
+  if(!p.tecnicosAdicionales) p.tecnicosAdicionales=[];
+  if(p.tecnicosAdicionales.length>=10){showAlert('Máximo 10 técnicos adicionales','error');return;}
+  p.tecnicosAdicionales.push({id:'',nombre:'',horas:0});
+  saveDB('pm03_plan',PM03_PLAN);
+  pm3RefreshExtraTecsUI(pmId);
+}
+function pm3RemoveExtraTec(pmId,idx){
+  var p=PM03_PLAN.find(function(x){return x.id===pmId;});
+  if(!p||!p.tecnicosAdicionales) return;
+  p.tecnicosAdicionales.splice(idx,1);
+  saveDB('pm03_plan',PM03_PLAN);
+  pm3SaveCacheSupa(pmId);
+  pm3RefreshExtraTecsUI(pmId);
+}
+function pm3UpdateExtraTec(pmId,idx,sel){
+  var p=PM03_PLAN.find(function(x){return x.id===pmId;});
+  if(!p||!p.tecnicosAdicionales||!p.tecnicosAdicionales[idx]) return;
+  var u=USERS.find(function(x){return x.id===sel.value;});
+  p.tecnicosAdicionales[idx].id=sel.value;
+  p.tecnicosAdicionales[idx].nombre=u?u.nombre:'';
+  saveDB('pm03_plan',PM03_PLAN);
+  pm3SaveCacheSupa(pmId);
+}
+function pm3UpdateExtraHrs(pmId,idx,inp){
+  var p=PM03_PLAN.find(function(x){return x.id===pmId;});
+  if(!p||!p.tecnicosAdicionales||!p.tecnicosAdicionales[idx]) return;
+  p.tecnicosAdicionales[idx].horas=parseFloat(inp.value)||0;
+  saveDB('pm03_plan',PM03_PLAN);
+  pm3SaveCacheSupa(pmId);
+}
+
 // Cancelar y limpiar todo el protocolo
 function pm3CancelarLimpiar(pmId){
   if(!confirm('¿Seguro? Se borrará todo lo llenado en este protocolo y no podrá recuperarse.')) return;
@@ -20015,9 +20171,11 @@ function pm3CancelarLimpiar(pmId){
   p.herramientaIngresada='';
   p.herramientaSalida='';
   p.limpiezaMtto=null;
+  p.comentarioDesinfeccion='';
   p.desinfProduccion=null;
   p.usaGrasa=null;
   p.grasaAceite='';
+  p.tecnicosAdicionales=[];
   saveDB('pm03_plan',PM03_PLAN);
   var m=document.getElementById('modal-cierre-pm03');if(m)m.remove();
   showAlert('🗑️ Protocolo limpiado');
@@ -22751,7 +22909,7 @@ function shoGetPM03(f){
 // ---- Cumplimiento PM (KPI1) — mismo cálculo que renderKPIs ----
 function shoKPI1(f){
   var pm03=PM03_PLAN||[];
-  if(!pm03.length)return{pct:100,color:'#4a7c59',label:'100%'};
+  if(!pm03.length)return{pct:100,color:'#4a7c59',label:'100%',ejecutadas:0,metaHoy:0};
   var anio=f.anio||currentYear();
   var sem=typeof currentWeek==='function'?currentWeek():0;
   // Filtrar por semana actual del año seleccionado
@@ -22759,7 +22917,7 @@ function shoKPI1(f){
     var pA=p.año||p.anio||new Date(p.ts||0).getFullYear();
     return pA===anio&&p.semana===sem&&!p.esInspeccion;
   });
-  if(!lista.length)return{pct:100,color:'#4a7c59',label:'100%'};
+  if(!lista.length)return{pct:100,color:'#4a7c59',label:'100%',ejecutadas:0,metaHoy:0};
   var ejecutadas=lista.filter(function(p){return p.estado==='cerrada';}).length;
   var total=lista.length;
   var hoy=new Date();
@@ -22767,34 +22925,37 @@ function shoKPI1(f){
   var metaHoy=total>0?Math.round((total/6)*(diaSem+1)):0;
   var pct=total>0?Math.min(100,Math.round((ejecutadas/total)*100)):100;
   var color=pct>=90?'#4a7c59':pct>=50?'#d97706':'#dc2626';
-  return{pct:pct,color:color,label:pct+'%'};
+  return{pct:pct,color:color,label:pct+'%',ejecutadas:ejecutadas,metaHoy:metaHoy};
 }
 
 // ---- Anormalidades seguridad abiertas ----
+// Nota: mientras una OT está en pre_cierre (esperando revisión final) ya no se
+// muestra ni se cuenta como anormalidad abierta; solo vuelve a contar si se
+// rechaza el pre-cierre y regresa a estado abierta.
 function shoAnomaliasSeg(){
   return ORDENES.filter(function(o){
-    return o.colorOT==='rojo'&&o.prioridad==='A'&&o.estado!=='cerrada'&&!o.fuenteBitacora
+    return o.colorOT==='rojo'&&o.prioridad==='A'&&o.estado!=='cerrada'&&o.estado!=='pre_cierre'&&!o.fuenteBitacora
       &&o.tipoAnormalidad&&o.tipoAnormalidad.toLowerCase().includes('segur');
   }).length;
 }
 
 function shoGetAnomaliasSeg(){
   return ORDENES.filter(function(o){
-    return o.colorOT==='rojo'&&o.prioridad==='A'&&o.estado!=='cerrada'&&!o.fuenteBitacora
+    return o.colorOT==='rojo'&&o.prioridad==='A'&&o.estado!=='cerrada'&&o.estado!=='pre_cierre'&&!o.fuenteBitacora
       &&o.tipoAnormalidad&&o.tipoAnormalidad.toLowerCase().includes('segur');
   });
 }
 
 function shoAnomaliasCalidad(){
   return ORDENES.filter(function(o){
-    return o.prioridad==='A'&&o.estado!=='cerrada'
+    return o.prioridad==='A'&&o.estado!=='cerrada'&&o.estado!=='pre_cierre'
       &&o.tipoAnormalidad&&o.tipoAnormalidad.toLowerCase().includes('calidad');
   }).length;
 }
 
 function shoGetAnomaliasCalidad(){
   return ORDENES.filter(function(o){
-    return o.prioridad==='A'&&o.estado!=='cerrada'
+    return o.prioridad==='A'&&o.estado!=='cerrada'&&o.estado!=='pre_cierre'
       &&o.tipoAnormalidad&&o.tipoAnormalidad.toLowerCase().includes('calidad');
   });
 }
@@ -25939,8 +26100,9 @@ function renderResumenTecnicosOT(){
     });
   });
   // PM03 de varios días capturados en PM03_PLAN (diasTrabajo:[{fecha,horaInicio,horaFin}])
+  // Se cuentan aunque la PM03 siga abierta (no cerrada): cada día capturado debe
+  // reflejarse de inmediato en el resumen de horas, sin esperar a que se firme el cierre.
   PM03_PLAN.forEach(function(p){
-    if(p.estado!=='cerrada') return;
     if(!p.diasTrabajo || !p.diasTrabajo.length) return;
     p.diasTrabajo.forEach(function(d){
       if(fechasPeriodo.indexOf(d.fecha)>=0){
@@ -25973,6 +26135,18 @@ function renderResumenTecnicosOT(){
   base.forEach(function(o){
     if(!o.tecnicosAdicionales || !o.tecnicosAdicionales.length) return;
     o.tecnicosAdicionales.forEach(function(ta){
+      if(ta && ta.nombre && ta.horas>0) _sumaHorasExtra(ta.nombre, parseFloat(ta.horas)||0);
+    });
+  });
+  // Técnicos adicionales (apoyo) en una PM03 — igual que en OT, pero aquí no se exige
+  // que esté cerrada: basta con que algún día de trabajo caiga en el periodo consultado
+  // (mismo criterio que el reparto por día de arriba), para que sume aunque siga abierta.
+  PM03_PLAN.forEach(function(p){
+    if(!p.tecnicosAdicionales || !p.tecnicosAdicionales.length) return;
+    if(!p.diasTrabajo || !p.diasTrabajo.length) return;
+    var aplicaPeriodo = p.diasTrabajo.some(function(d){ return fechasPeriodo.indexOf(d.fecha)>=0; });
+    if(!aplicaPeriodo) return;
+    p.tecnicosAdicionales.forEach(function(ta){
       if(ta && ta.nombre && ta.horas>0) _sumaHorasExtra(ta.nombre, parseFloat(ta.horas)||0);
     });
   });
@@ -26620,14 +26794,6 @@ function _renderDORInner(cont,dias,ultimoAcc){
 
   var html='';
 
-  // ── Alertas de checklist en rojo (banner) ──────────────────────
-  if(alertasAbiertas.length){
-    html+='<div onclick="dorToggleSeccion(\'alertas\')" style="background:#7f1d1d;border-radius:12px;padding:12px 14px;color:#fff;margin-bottom:14px;cursor:pointer;display:flex;justify-content:space-between;align-items:center">'
-      +'<div><div style="font-weight:900;font-size:14px">🚨 '+alertasAbiertas.length+' alerta(s) de checklist sin atender</div>'
-      +'<div style="font-size:11px;opacity:.85;margin-top:2px">Toca para ver el detalle</div></div>'
-      +'<span style="font-size:20px">›</span></div>';
-  }
-
   // ── Indicadores de Turno ──────────────────────────────────────
   html+='<div style="font-size:11px;font-weight:800;color:#374151;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📊 Indicadores de Turno</div>';
   html+='<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px">';
@@ -26650,7 +26816,8 @@ function _renderDORInner(cont,dias,ultimoAcc){
     +'<div style="font-size:9px;opacity:.85;margin-top:2px">Prioridad A abiertas</div>'
     +'</div>';
 
-  var kpiCol=kpi1.pct>=80?'#14532d':kpi1.pct>=50?'#78350f':'#7f1d1d';
+  // Rojo o verde nada más: verde si vamos al día o mejor contra la meta de hoy, rojo si vamos atrasados
+  var kpiCol=kpi1.ejecutadas>=kpi1.metaHoy?'#14532d':'#7f1d1d';
   html+='<div onclick="dorMostrarPM03Pendientes()" style="background:'+kpiCol+';border-radius:12px;padding:12px;color:#fff;text-align:center;cursor:pointer">'
     +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Avance PM Sem '+currentWeek()+'</div>'
     +'<div style="font-size:28px;font-weight:900;line-height:1.1">'+kpi1.label+'</div>'
@@ -26747,6 +26914,7 @@ function dorRenderAlertas(wrap){
   if(!lista.length){
     html+='<div style="text-align:center;color:#9ca3af;padding:20px;background:#fff;border-radius:8px">Sin alertas pendientes</div>';
   } else {
+    html+='<button onclick="limpiarTodasAlertasDOR()" style="width:100%;padding:9px;margin-bottom:10px;background:#374151;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">🧹 Limpiar todas las activas</button>';
     lista.forEach(function(a){
       var fecha=a.creadoTs?new Date(a.creadoTs).toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'})+' '+new Date(a.creadoTs).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}):'';
       html+='<div style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid #7f1d1d;border-radius:8px;padding:10px;margin-bottom:6px">'
@@ -26762,6 +26930,21 @@ function dorRenderAlertas(wrap){
   }
   html+='</div>';
   wrap.innerHTML=html;
+}
+
+function limpiarTodasAlertasDOR(){
+  var abiertas=DOR_ALERTAS.filter(function(a){return a.estado!=='atendida';});
+  if(!abiertas.length) return;
+  if(!confirm('¿Marcar como enteradas las '+abiertas.length+' alerta(s) activas?')) return;
+  var ts=Date.now();
+  abiertas.forEach(function(a){
+    a.estado='atendida';
+    a.enteradoPor=currentUser.nombre;
+    a.enteradoTs=ts;
+    supaFetch('dor_alertas','PATCH',{estado:'atendida',enterado_por:a.enteradoPor,enterado_ts:a.enteradoTs},'id=eq.'+a.id).catch(function(){});
+  });
+  saveDB('dor_alertas',DOR_ALERTAS);
+  renderDOR();
 }
 
 function marcarEnteradaAlerta(id){
@@ -26784,20 +26967,28 @@ function borrarAlertaDOR(id){
 }
 
 // Crea una alerta DOR por cada punto que quedó en rojo al cerrar un checklist dinámico
+// Si en el mismo día ya existe una alerta del mismo checklist + mismo punto, no se duplica
+// (evita que un mismo punto en rojo, revisado varias veces al día, sature la lista de alertas).
 function crearAlertaChecklist(insp){
   var rojos=(insp.puntos||[]).filter(function(p){return p.tipo!=='seccion'&&p.tipo!=='informativo'&&p.estado==='rojo';});
   if(!rojos.length) return;
+  var fechaHoy = new Date(insp.tsCierre||Date.now()).toISOString().split('T')[0];
   rojos.forEach(function(p){
+    var puntoTxt = p.texto||p.nombre||'';
+    var yaExiste = DOR_ALERTAS.some(function(a){
+      return a.fecha===fechaHoy && a.tipoChecklist===insp.tipoId && a.puntoTexto===puntoTxt;
+    });
+    if(yaExiste) return;
     var alerta={
       id: genID('ALDOR'),
       checklistId: insp.id,
       tipoChecklist: insp.tipoId,
       tipoLabel: insp.tipoLabel||insp.tipoId,
-      puntoTexto: p.texto||p.nombre||'',
+      puntoTexto: puntoTxt,
       iniciales: p.iniciales||'',
       hora: p.hora||'',
       turno: insp.turno||'',
-      fecha: new Date(insp.tsCierre||Date.now()).toISOString().split('T')[0],
+      fecha: fechaHoy,
       tecnicoNombre: insp.tecnicoNombre||'',
       estado: 'abierta',
       creadoTs: Date.now(),
