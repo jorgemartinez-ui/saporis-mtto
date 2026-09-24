@@ -21987,14 +21987,23 @@ function _renderHorarios(lDiv){
       }
     });
 
-    // Si no hay nada guardado en Supabase para este mes/año, usar el respaldo del Excel embebido
+    // Si no hay nada guardado en Supabase para este mes/año, buscar primero un
+    // guardado local de este mismo equipo (por si se capturó antes de que Supabase
+    // aceptara los datos, ej. por RLS mal configurado) para no perder lo ya
+    // capturado; si tampoco hay nada local, usar el respaldo del Excel embebido.
     if(!Object.keys(savedData).length){
-      var empIds0=Object.keys(_HORARIOS_EXCEL);
-      empIds0.forEach(function(eid){
-        var mData=_HORARIOS_EXCEL[eid]||{};
-        var dData=mData[_gpMes]||mData[String(_gpMes)]||{};
-        if(Object.keys(dData).length) savedData[eid]=dData;
-      });
+      var localData=null;
+      try{ localData=JSON.parse(localStorage.getItem(storageKey)||'null'); }catch(e){}
+      if(localData&&Object.keys(localData).length){
+        savedData=localData;
+      } else {
+        var empIds0=Object.keys(_HORARIOS_EXCEL);
+        empIds0.forEach(function(eid){
+          var mData=_HORARIOS_EXCEL[eid]||{};
+          var dData=mData[_gpMes]||mData[String(_gpMes)]||{};
+          if(Object.keys(dData).length) savedData[eid]=dData;
+        });
+      }
     }
 
     var diasMes=new Date(_gpAño,_gpMes,0).getDate();
