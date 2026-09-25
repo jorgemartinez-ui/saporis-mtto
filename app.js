@@ -19161,6 +19161,10 @@ function getProtocoloPM03(linea,equipo,actividad){
         if(se2&&(se2===nEquipo||nEquipo.indexOf(se2)>=0||se2.indexOf(nEquipo)>=0))
           return _protoToResult(s2);
       }
+      // Se pidió un equipo específico y ninguno coincidió: sólo usar como respaldo un
+      // protocolo realmente genérico (sin equipo asignado), nunca el de OTRO equipo de la misma línea.
+      var generico=candidatos.filter(function(s){return !_protoNorm(s.equipo);})[0];
+      return generico?_protoToResult(generico):null;
     }
     return _protoToResult(candidatos[0]);
   }
@@ -20585,10 +20589,15 @@ function _protoAccionesPM03(pmId){
     if(nEquipo&&se&&(se===nEquipo||nEquipo.indexOf(se)>=0||se.indexOf(nEquipo)>=0)) match=s;
   });
   if(!match){
+    // Respaldo: sólo aceptar un protocolo "genérico" de la línea (sin equipo propio) o,
+    // si esta PM03 no tiene componente, cualquiera de la línea. Nunca el de OTRO equipo distinto.
     (PROTOCOLOS_PM03_SUPA||[]).forEach(function(s){
       if(match) return;
       var sl=n(s.linea);
-      if(sl&&(sl===nLinea||nLinea.indexOf(sl)>=0||sl.indexOf(nLinea)>=0)) match=s;
+      if(!sl||!(sl===nLinea||nLinea.indexOf(sl)>=0||sl.indexOf(nLinea)>=0)) return;
+      var se=n(s.equipo);
+      if(nEquipo&&se) return;
+      match=s;
     });
   }
 
