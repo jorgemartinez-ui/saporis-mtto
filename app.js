@@ -29146,7 +29146,10 @@ function editarActividad(id){
   var p=PLAN_ACTIVIDADES.find(function(x){return x.id===id;});
   if(!p) return;
   var frecuencias=[{v:1,l:'Semanal'},{v:2,l:'Quincenal'},{v:4,l:'Mensual'},{v:8,l:'Bimestral'},{v:12,l:'Trimestral'},{v:24,l:'Semestral'},{v:52,l:'Anual'}];
-  if(p.frecuencia_semanas&&!frecuencias.some(function(f){return f.v===p.frecuencia_semanas;})) frecuencias=frecuencias.concat([{v:p.frecuencia_semanas,l:p.frecuencia_semanas+' semanas (actual)'}]);
+  var freqActual=p.frecuencia_semanas||null;
+  var esPreset=!!(freqActual&&frecuencias.some(function(f){return f.v===freqActual;}));
+  var selValue=!freqActual?'':(esPreset?freqActual:'manual');
+  var manualVal=(!esPreset&&freqActual)?freqActual:'';
   var equiposEd=getEquiposPorLinea(p.area_id,p.linea||'');
   if(p.componente&&equiposEd.indexOf(p.componente)<0) equiposEd=equiposEd.concat([p.componente]);
   var modal=document.createElement('div');
@@ -29163,10 +29166,15 @@ function editarActividad(id){
     +'</select>'
     +'<div style="font-size:10px;color:#9ca3af;margin-top:3px">Si no aparece, agrégalo en Admin → Listas → Áreas → Equipos</div>'
     +'</div>'
-    +'<div class="form-group"><label class="form-label">Nueva Frecuencia</label>'
-    +'<select class="form-control" id="ea-freq" style="padding:10px">'
-    +frecuencias.map(function(f){return'<option value="'+f.v+'"'+(f.v===p.frecuencia_semanas?' selected':'')+'>'+f.l+'</option>';}).join('')
-    +'</select></div>'
+    +'<div class="form-group"><label class="form-label">Nueva Frecuencia *</label>'
+    +'<select class="form-control" id="ea-freq" onchange="var w=document.getElementById(\'ea-freq-manual-wrap\');if(w)w.style.display=(this.value===\'manual\'?\'block\':\'none\')" style="padding:10px">'
+    +'<option value=""'+(selValue===''?' selected':'')+'>-- Selecciona --</option>'
+    +frecuencias.map(function(f){return'<option value="'+f.v+'"'+(String(selValue)===String(f.v)?' selected':'')+'>'+f.l+'</option>';}).join('')
+    +'<option value="manual"'+(selValue==='manual'?' selected':'')+'>Personalizada (elegir cada cuántas semanas)</option>'
+    +'</select>'
+    +'<div id="ea-freq-manual-wrap" style="display:'+(selValue==='manual'?'block':'none')+';margin-top:6px">'
+    +'<input type="number" min="1" step="1" class="form-control" id="ea-freq-manual" placeholder="Cada cuántas semanas (ej. 3)" value="'+(manualVal||'')+'" style="padding:10px">'
+    +'</div></div>'
     +'<div class="form-group"><label class="form-label">Motivo del cambio de frecuencia (si aplica)</label>'
     +'<input type="text" class="form-control" id="ea-motivo" placeholder="Ej: Recomendación fabricante, histórico de fallas..." style="padding:10px"></div>'
     +'<div class="form-group"><label class="form-label">Protocolo</label>'
@@ -29183,10 +29191,18 @@ function guardarEditActividad(id){
   if(!p) return;
   var desc=document.getElementById('ea-desc')?.value.trim();
   var comp=document.getElementById('ea-comp')?.value.trim()||null;
-  var freq=parseInt(document.getElementById('ea-freq')?.value)||p.frecuencia_semanas;
+  var freqSel=document.getElementById('ea-freq')?.value;
   var motivo=document.getElementById('ea-motivo')?.value.trim()||null;
   var protocolo=document.getElementById('ea-protocolo')?.value.trim()||null;
   if(!desc){showAlert('La descripción es obligatoria','error');return;}
+  if(!freqSel){showAlert('Selecciona la frecuencia','error');return;}
+  var freq;
+  if(freqSel==='manual'){
+    freq=parseInt(document.getElementById('ea-freq-manual')?.value);
+    if(!freq||freq<1){showAlert('Indica cada cuántas semanas (número mayor a 0)','error');return;}
+  } else {
+    freq=parseInt(freqSel);
+  }
 
   // Save frequency change to historial if changed
   if(freq!==p.frecuencia_semanas){
@@ -29614,7 +29630,6 @@ function showPlanDetalle(areaId,linea){
   cont.innerHTML=html;
 }
 
-var FREQ_BUCKET_ORDER=['Diaria','Semanal','Quincenal','Mensual','Bimestral','Trimestral','Semestral','Anual','Otra frecuencia','Sin frecuencia definida'];
 function _freqBucketDeActividad(actDef){
   if(!actDef) return 'Sin frecuencia definida';
   var dias=actDef.frecuencia_dias, sem=actDef.frecuencia_semanas;
@@ -29626,7 +29641,22 @@ function _freqBucketDeActividad(actDef){
   if(dias===90||sem===12) return 'Trimestral';
   if(dias===180||sem===24) return 'Semestral';
   if(dias===365||sem===52) return 'Anual';
+  // Frecuencia personalizada (ej. "cada 3 semanas"): mostrar el número real en vez de
+  // agruparla genéricamente como "Otra frecuencia" — mismo formato que ya usan las
+  // pantallas de Editar Actividad / Historial (freqLabel).
+  if(sem) return 'Cada '+sem+' sem';
+  if(dias) return 'Cada '+dias+' día'+(dias===1?'':'s');
   return 'Otra frecuencia';
+}
+// Orden numérico (días aproximados) para ordenar los apartados del Calendario de menor a
+// mayor frecuencia — necesario porque ahora los apartados personalizados ("Cada 3 sem")
+// no tienen una posición fija en una lista predefinida.
+function _freqBucketOrden(actDef){
+  if(!actDef) return 999999;
+  var dias=actDef.frecuencia_dias, sem=actDef.frecuencia_semanas;
+  if(sem) return sem*7;
+  if(dias) return dias;
+  return 999998;
 }
 // Normaliza texto para comparar actividades/componentes sin que un acento, mayúscula
 // o punto final de más los trate como "actividades distintas" (solo para comparar,
@@ -29634,6 +29664,44 @@ function _freqBucketDeActividad(actDef){
 function _normTxtAct(s){
   if(!s) return '';
   return s.toString().normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim().replace(/[.\s]+$/,'');
+}
+
+// PM03 "huérfanas" del Calendario: entradas programadas (típicamente importadas de Excel)
+// que no tienen ninguna actividad formal ligada en plan_actividades (por eso caen en el
+// apartado "Sin frecuencia definida"). Se buscan en TODOS los años, no sólo el que se está
+// viendo, para no borrar por accidente algo con ejecuciones reales en otro año.
+function _pm03OrfanasDeActividad(linea,eq,actLabel){
+  return PM03_PLAN.filter(function(x){
+    if(x.linea!==linea) return false;
+    if(_normTxtAct(x.componente||'General')!==_normTxtAct(eq)) return false;
+    if(_normTxtAct(x.actividad||'')!==_normTxtAct(actLabel)) return false;
+    return true;
+  });
+}
+
+function eliminarActividadOrfanaCalendario(areaId,linea,eq,actLabel){
+  if(!currentUser||(currentUser.rol!=='admin'&&currentUser.rol!=='super')) return;
+  var registros=_pm03OrfanasDeActividad(linea,eq,actLabel);
+  if(!registros.length){ showAlert('No se encontraron PM03 para esta actividad','error'); return; }
+  if(registros.some(function(x){return x.estado==='cerrada';})){
+    showAlert('⚠️ No se puede eliminar: ya tiene al menos una PM03 realizada','error');
+    return;
+  }
+  if(!confirm('¿Eliminar "'+actLabel+'" ('+eq+') del calendario?\n\nSe borrarán '+registros.length+' PM03 programadas (ninguna ejecutada). Esta acción no se puede deshacer.')) return;
+  var ids=registros.map(function(x){return x.id;});
+  PM03_PLAN=PM03_PLAN.filter(function(x){return ids.indexOf(x.id)<0;});
+  saveDB('pm03_plan',PM03_PLAN);
+  var del=loadDB('pm03_eliminadas',[]);
+  ids.forEach(function(id){ if(del.indexOf(id)<0) del.push(id); });
+  saveDB('pm03_eliminadas',del);
+  fetch(SUPA_URL+'/rest/v1/pm03_plan?id=in.('+ids.join(',')+')',{
+    method:'DELETE',
+    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'}
+  }).then(function(r){
+    if(!r.ok) r.text().then(function(t){console.error('Error al eliminar PM03 huérfanas:',t);});
+  }).catch(function(){});
+  showAlert('✅ Actividad eliminada del calendario ('+ids.length+' PM03 borradas)');
+  showPlanCalendario(areaId,linea);
 }
 function showPlanCalendario(areaId,linea){
   var cont=document.getElementById('plan-content');
@@ -29767,7 +29835,7 @@ function showPlanCalendario(areaId,linea){
   // Agrupar equipos/actividades por frecuencia (Diaria/Semanal/.../Anual), solo mostrando
   // los subtítulos que apliquen. Los equipos sin ninguna actividad definida se listan al final.
   var bucketed={};
-  FREQ_BUCKET_ORDER.forEach(function(b){ bucketed[b]={}; });
+  var bucketOrden={};
   var equiposSinActividad=[];
   equipos.forEach(function(eq){
     var acts=eqActMap[eq]||[];
@@ -29775,6 +29843,8 @@ function showPlanCalendario(areaId,linea){
     acts.forEach(function(act){
       var _actDef=PLAN_ACTIVIDADES.find(function(x){return x.area_id===areaId&&x.linea===linea&&_normTxtAct(x.componente||'General')===_normTxtAct(eq)&&_normTxtAct(x.descripcion)===_normTxtAct(act.label);});
       var bucket=_freqBucketDeActividad(_actDef);
+      bucketOrden[bucket]=_freqBucketOrden(_actDef);
+      if(!bucketed[bucket]) bucketed[bucket]={};
       if(!bucketed[bucket][eq]) bucketed[bucket][eq]=[];
       bucketed[bucket][eq].push({act:act,_actDef:_actDef});
     });
@@ -29815,6 +29885,19 @@ function showPlanCalendario(areaId,linea){
     }
     html+='</tr>';
 
+    // Botón para eliminar actividades "huérfanas" (sin actividad formal ligada, apartado
+    // "Sin frecuencia definida") que ya no tienen razón de existir — sólo admin/super, y
+    // sólo si NINGUNA de sus PM03 (en cualquier año) fue realmente ejecutada.
+    if(!_actDef&&!act.sinProgEsteAnio&&currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super')){
+      var _sinEjec=!_pm03OrfanasDeActividad(linea,eq,act.label).some(function(x){return x.estado==='cerrada';});
+      if(_sinEjec){
+        html+='<tr style="background:'+rowBg+'"><td colspan="2" style="position:sticky;left:0;background:'+rowBg+'"></td>'
+          +'<td colspan="'+semanas.length+'" style="padding:2px 6px 6px">'
+          +'<button onclick="eliminarActividadOrfanaCalendario(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\',\''+eq.replace(/'/g,"\\'")+'\',\''+act.label.replace(/'/g,"\\'")+'\')" style="padding:2px 8px;background:#fee2e2;border:1px solid #fca5a5;color:#dc2626;border-radius:6px;font-size:9px;font-weight:700;cursor:pointer">🗑️ Eliminar (sin frecuencia definida, sin ejecuciones)</button>'
+          +'</td></tr>';
+      }
+    }
+
     if(act.sinProgEsteAnio) return;
 
     // Real row
@@ -29837,7 +29920,7 @@ function showPlanCalendario(areaId,linea){
     html+='</tr>';
   }
 
-  FREQ_BUCKET_ORDER.forEach(function(bucket){
+  Object.keys(bucketed).sort(function(a,b){ return (bucketOrden[a]||0)-(bucketOrden[b]||0); }).forEach(function(bucket){
     var eqsEnBucket=Object.keys(bucketed[bucket]).sort();
     if(!eqsEnBucket.length) return;
     html+='<tr style="background:#1a3c5e"><td colspan="54" style="padding:4px 8px;font-weight:800;font-size:10px;color:#fff;position:sticky;left:0;background:#1a3c5e">⏱️ '+bucket+'</td></tr>';
