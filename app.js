@@ -20372,6 +20372,15 @@ function _protoFiltrarLista(){
 // Es DISTINTA del PDF (imprimirProtocoloPM03): el PDF es el formato impreso REG-MTT-002.02 con
 // firmas de autorización (técnico/producción/calidad/jefe mtto); esta vista es la pantalla de
 // trabajo del técnico mientras ejecuta, sin firmas.
+function _verProtoToggleComo(i){
+  var box=document.getElementById('verproto-como-'+i);
+  var lbl=document.getElementById('verproto-como-lbl-'+i);
+  if(!box) return;
+  var abierto=box.style.display!=='none';
+  box.style.display=abierto?'none':'block';
+  if(lbl) lbl.innerHTML=abierto?'📖 Cómo se hace ▾':'📖 Cómo se hace ▴';
+}
+
 function verProtocoloFormato(id){
   var p=(PROTOCOLOS_PM03_SUPA||[]).find(function(s){return s.id===id;});
   if(!p){ showAlert('No se encontró el protocolo','error'); return; }
@@ -20390,6 +20399,13 @@ function verProtocoloFormato(id){
       +'<div style="font-size:.78rem;color:#374151;margin-bottom:8px;line-height:1.4">'
       +'<strong>'+(i+1)+'.</strong> '+esc(a.desc)
       +'<span style="color:#9ca3af;font-size:.7rem;margin-left:4px">['+esc(a.tipo||a.esp||'Inspección')+']</span></div>'
+
+      +(a.comoSeHace?(
+        '<div style="margin:-4px 0 8px">'
+        +'<span onclick="_verProtoToggleComo('+i+')" id="verproto-como-lbl-'+i+'" style="font-size:.72rem;font-weight:700;color:#1d4ed8;cursor:pointer">📖 Cómo se hace ▾</span>'
+        +'<div id="verproto-como-'+i+'" style="display:none;background:#eff6ff;border-radius:8px;padding:8px;margin-top:6px;font-size:.76rem;color:#1e3a8a;white-space:pre-wrap;line-height:1.4">'+esc(a.comoSeHace)+'</div>'
+        +'</div>'
+      ):'')
 
       +'<div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:4px">Estado Inicial</div>'
       +'<div style="display:flex;gap:4px;margin-bottom:8px">'+estadoBtnsDemo()+'</div>'
@@ -29298,7 +29314,7 @@ function _guardarEditActividadFinal(id,desc,comp,freq,motivo,protocolo,fechaDeto
       if(_normTxtAct(x.componente||'General')!==_normTxtAct(compClave)) return false;
       if(_normTxtAct(x.actividad)!==_normTxtAct(p.descripcion)) return false;
       if(!x.semana||!x.año) return false;
-      return _fechaDeSemanaISO(x.año,x.semana)>fechaDeton;
+      return _fechaDeSemanaISO(x.año,x.semana)>=fechaDeton;
     });
     if(aBorrar.length){
       var idsBorrar=aBorrar.map(function(x){return x.id;});
@@ -29317,8 +29333,9 @@ function _guardarEditActividadFinal(id,desc,comp,freq,motivo,protocolo,fechaDeto
     var anioLimite=currentYear()+10;
     var usados={};
     var nuevasPM03=[];
+    // La primera PM03 de la serie regenerada es la de la semana elegida (fechaDeton),
+    // no la de freq semanas después — antes se saltaba esa primera semana.
     var fechaIter=new Date(fechaDeton.getTime());
-    fechaIter.setDate(fechaIter.getDate()+freq*7);
     while(fechaIter.getFullYear()<=anioLimite){
       var pm3Id=_genPM03IdUnico(usados);
       nuevasPM03.push({
