@@ -441,53 +441,18 @@ function renderMenu(){
     }
   }, 200);
   if(r==='operador'||r==='lider'||r==='inspector_calidad'||r==='lider_calidad') setTimeout(renderMenuOperador, 100);
-  if(r==='lider') setTimeout(agregarBotonLiberacionLider, 400);
-  // Lider: agregar botón Liberación Producción
-  if(r==='lider'){
-    setTimeout(function(){
-      if(document.getElementById('btn-lib-prod')) return;
-      var grid=document.querySelector('#menu-operador .menu-grid')||document.querySelector('.menu-grid');
-      if(!grid) return;
-      var btn=document.createElement('div');
-      btn.id='btn-lib-prod';
-      btn.className='menu-btn';
-      btn.style.cssText='border-color:#16a34a;background:linear-gradient(135deg,#fff 60%,#dcfce7)';
-      btn.onclick=showLiberacionProduccion;
-      var pm3ProdPend=PM03_PLAN.filter(function(p){return p.estadoFlujo==='pendiente_produccion'&&!p.liberadoProdPor;}).length;
-      btn.innerHTML='<div class="menu-icon" style="position:relative">🏭'+(pm3ProdPend>0?'<span style="position:absolute;top:-2px;right:-6px;background:#f59e0b;color:#000;border-radius:50%;width:18px;height:18px;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center">'+pm3ProdPend+'</span>':'')+'</div><div class="menu-label">Liberación Producción</div><div class="menu-desc">'+(pm3ProdPend>0?'🟡 '+pm3ProdPend+' por liberar':'Confirmar arranque')+'</div>';
-      grid.appendChild(btn);
-    },200);
-  }
-  // Admin/Super: actualizar badges en botones HTML
-  if(r==='admin'||r==='super'){
-    setTimeout(function(){
-      var pm3Adm=PM03_PLAN.filter(function(p){return p.estadoFlujo==='pendiente_admin'&&!p.liberadoAdminPor;}).length;
-      var dAdm=document.getElementById('desc-aprobacion-admin');
-      var iAdm=document.getElementById('icon-aprobacion-admin');
-      if(dAdm) dAdm.innerHTML=(pm3Adm>0?'🟡 '+pm3Adm+' por aprobar':'Aprobación final');
-      if(iAdm){var b2=pm3Adm>0?'<span style="position:absolute;top:-4px;right:-8px;background:#f59e0b;color:#000;border-radius:50%;width:18px;height:18px;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center">'+pm3Adm+'</span>':'';iAdm.innerHTML='📋'+b2;iAdm.style.position='relative';}
-    },400);
-  }
-  // Admin/Super: agregar botón Aprobación Final dinámico (fallback)
-  if(r==='admin'||r==='super'){
-    setTimeout(function(){
-      if(document.getElementById('btn-lib-admin')) return;
-      var grid=document.querySelector('#menu-admin-extra .menu-grid')||document.querySelector('.menu-grid');
-      if(!grid) return;
-// Botón Aprobación PM03 ya está en index.html
-    },300);
-  }
-  // Actualizar contador PM03 pendientes de liberar
+  // Nota: el flujo de liberación por etapas (producción → mantenimiento → calidad)
+  // quedó desactivado — la autorización de la PM03 ahora se hace con las 4 firmas
+  // de dedo/lápiz al cerrar el protocolo, así que ya no se agregan sus botones,
+  // badges ni contadores al menú.
+  // Actualizar contador PM03 de la semana (avance de ejecución)
   setTimeout(function(){
     var desc = document.getElementById('pm03-menu-desc');
     if(!desc) return;
-    var pendLib = PM03_PLAN.filter(function(p){
-      return p.estado==='cerrada' && !p.liberadoPor && p.estadoCalidad!=='liberada';
-    }).length;
     var sw = currentWeek();
     var totalSem = PM03_PLAN.filter(function(p){ return p.semana===sw&&p.año===currentYear(); }).length;
     var ejec = PM03_PLAN.filter(function(p){ return p.semana===sw&&p.año===currentYear()&&p.estado==='cerrada'; }).length;
-    desc.innerHTML = 'Sem '+sw+': '+ejec+'/'+totalSem+' ejec.'+(pendLib>0?' · <span style="color:#dc2626;font-weight:700">'+pendLib+' x liberar</span>':'');
+    desc.innerHTML = 'Sem '+sw+': '+ejec+'/'+totalSem+' ejec.';
   }, 300);
   // Agregar botón Mejoras al menú operador si no existe
   if(r==='operador'||r==='lider') setTimeout(agregarBotonMejorasOperador, 150);
@@ -504,19 +469,6 @@ function renderMenu(){
   // Super: también mostrar botones de técnico y calidad
   if(r==='super'){
     setTimeout(function(){
-      // Botón Liberación de Mtto
-      if(!document.getElementById('btn-liberacion-admin')){
-        var grid=document.querySelector('#menu-admin-extra .menu-grid')||document.querySelector('.menu-grid');
-        if(grid){
-          var btn=document.createElement('div');
-          btn.id='btn-liberacion-admin';
-          btn.className='menu-btn';
-          btn.style.cssText='border-color:#0891b2;background:linear-gradient(135deg,#fff 60%,#e0f7fa)';
-          btn.onclick=showLiberacionMtto;
-          btn.innerHTML='<div class="menu-icon">🔬</div><div class="menu-label">Liberación de Mtto</div><div class="menu-desc">Validar PM03 ejecutadas</div>';
-          grid.appendChild(btn);
-        }
-      }
       // Botón Generar Anormalidad (operador) para super
       if(!document.getElementById('btn-gen-anom-super')){
         var ga=document.createElement('div');
@@ -1858,15 +1810,10 @@ function renderPM03(){
     return '<option value="'+a+'"'+(año===a?' selected':'')+'>'+a+'</option>';
   }).join('');
 
-  var pLib=PM03_PLAN.filter(function(p){
-    return p.estado==='cerrada'&&!p.liberadoPor&&p.estadoCalidad!=='liberada';
-  }).length;
-
   // Aplicar filtros adicionales
   var pm3Filtrada = misPlan.filter(function(p){
     if(window._pm3FiltroEstado==='abierta' && p.estado!=='abierta') return false;
     if(window._pm3FiltroEstado==='cerrada' && p.estado!=='cerrada') return false;
-    if(window._pm3FiltroEstado==='por_liberar' && !(p.estado==='cerrada'&&!p.liberadoPor&&p.estadoCalidad!=='liberada')) return false;
     if(window._pm3FiltroEstado==='por_asignar' && !(p.estado==='abierta'&&(p.estadoFlujo==='por_asignar'||!p.tecnicoId||!p.semana))) return false;
     if(window._pm3FiltroTec && p.tecnicoId!==window._pm3FiltroTec) return false;
     if(window._pm3FiltroLinea && p.linea!==window._pm3FiltroLinea) return false;
@@ -1906,7 +1853,6 @@ function renderPM03(){
   html+='<div class="kpi-grid">'
     +'<div class="kpi-card" style="border-top:3px solid var(--mo)"><div class="kpi-num" style="color:var(--mo)">'+todas.length+'</div><div class="kpi-label">Total</div></div>'
     +'<div class="kpi-card" style="border-top:3px solid var(--vd)"><div class="kpi-num" style="color:var(--vd)">'+ejec+'</div><div class="kpi-label">Ejecutadas</div></div>'
-    +'<div class="kpi-card" style="border-top:3px solid #dc2626"><div class="kpi-num" style="color:#dc2626">'+pLib+'</div><div class="kpi-label" style="color:#dc2626">Pend. Liberar</div></div>'
     +'</div>';
 
   // Filtros de estado, técnico y línea
@@ -1914,7 +1860,6 @@ function renderPM03(){
     +'<button onclick="window._pm3FiltroEstado=\'todas\';renderPM03()" style="padding:5px 10px;border-radius:20px;border:1.5px solid '+(window._pm3FiltroEstado==='todas'?'#1a3c5e':'#d1d5db')+';background:'+(window._pm3FiltroEstado==='todas'?'#1a3c5e':'#fff')+';color:'+(window._pm3FiltroEstado==='todas'?'#fff':'#374151')+';font-size:.78rem;font-weight:600;cursor:pointer">Todas</button>'
     +'<button onclick="window._pm3FiltroEstado=\'abierta\';renderPM03()" style="padding:5px 10px;border-radius:20px;border:1.5px solid '+(window._pm3FiltroEstado==='abierta'?'#f59e0b':'#d1d5db')+';background:'+(window._pm3FiltroEstado==='abierta'?'#fef3c7':'#fff')+';color:'+(window._pm3FiltroEstado==='abierta'?'#92400e':'#374151')+';font-size:.78rem;font-weight:600;cursor:pointer">Abiertas</button>'
     +'<button onclick="window._pm3FiltroEstado=\'cerrada\';renderPM03()" style="padding:5px 10px;border-radius:20px;border:1.5px solid '+(window._pm3FiltroEstado==='cerrada'?'#16a34a':'#d1d5db')+';background:'+(window._pm3FiltroEstado==='cerrada'?'#dcfce7':'#fff')+';color:'+(window._pm3FiltroEstado==='cerrada'?'#166534':'#374151')+';font-size:.78rem;font-weight:600;cursor:pointer">Cerradas</button>'
-    +'<button onclick="window._pm3FiltroEstado=\'por_liberar\';renderPM03()" style="padding:5px 10px;border-radius:20px;border:1.5px solid '+(window._pm3FiltroEstado==='por_liberar'?'#dc2626':'#d1d5db')+';background:'+(window._pm3FiltroEstado==='por_liberar'?'#fee2e2':'#fff')+';color:'+(window._pm3FiltroEstado==='por_liberar'?'#991b1b':'#374151')+';font-size:.78rem;font-weight:600;cursor:pointer">🔴 x Liberar</button>'
     +'<button onclick="window._pm3FiltroEstado=\'por_asignar\';renderPM03()" style="padding:5px 10px;border-radius:20px;border:1.5px solid '+(window._pm3FiltroEstado==='por_asignar'?'#7c3aed':'#d1d5db')+';background:'+(window._pm3FiltroEstado==='por_asignar'?'#ede9fe':'#fff')+';color:'+(window._pm3FiltroEstado==='por_asignar'?'#5b21b6':'#374151')+';font-size:.78rem;font-weight:600;cursor:pointer">📋 Por Asignar</button>'
     +'</div>'
     +'<div style="display:flex;gap:6px;padding:0 16px 8px;flex-wrap:wrap">'
@@ -1931,14 +1876,12 @@ function renderPM03(){
     html+='<div class="card"><p style="color:var(--txt3);font-size:13px">Sin actividades para este período.</p></div>';
   } else {
     html+='<div class="card">'+listaShow.map(function(p){
-      var pendLib=p.estado==='cerrada'&&!p.liberadoPor&&p.estadoCalidad!=='liberada';
       var liberada=p.estadoCalidad==='liberada';
       return '<div class="ot-card pm03" onclick="showDetallePM03(\''+p.id+'\')">'
         +'<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px">'
         +'<span style="font-size:11px;color:var(--txt3);font-weight:700">'+p.id+'</span>'
         +'<div style="display:flex;gap:4px;flex-wrap:wrap">'
         +'<span class="badge badge-'+(p.estado||'abierta')+'">'+(p.estado||'abierta')+'</span>'
-        +(pendLib?'<span class="badge" style="background:#7f1d1d;color:#fff;font-size:10px;font-weight:700">🔴 x Liberar</span>':'')
         +(liberada?'<span class="badge" style="background:#16a34a;color:#fff;font-size:10px">✅ Liberada</span>':'')
         +'</div></div>'
         +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+'</div>'
@@ -2216,6 +2159,14 @@ function abrirCierrePM03(id){
         +'<div style="font-size:.78rem;color:#374151;margin-bottom:8px;line-height:1.4">'
         +'<strong>'+a.id+'.</strong> '+a.desc
         +'<span style="color:#9ca3af;font-size:.7rem;margin-left:4px">['+(a.tipo||a.esp)+']</span></div>'
+
+        // Cómo se hace (paso a paso, opcional) — colapsado por default, el técnico lo despliega si lo necesita
+        +(a.comoSeHace?(
+          '<div style="margin:-4px 0 8px">'
+          +'<span onclick="pm3ToggleComoSeHace('+a.id+')" id="pm3-como-lbl-'+a.id+'" style="font-size:.75rem;font-weight:700;color:#1d4ed8;cursor:pointer">📖 Cómo se hace ▾</span>'
+          +'<div id="pm3-como-'+a.id+'" style="display:none;background:#eff6ff;border-radius:8px;padding:8px;margin-top:6px;font-size:.78rem;color:#1e3a8a;white-space:pre-wrap;line-height:1.4">'+a.comoSeHace+'</div>'
+          +'</div>'
+        ):'')
 
         // Estado inicial
         +'<div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:4px">Estado Inicial</div>'
@@ -2528,7 +2479,7 @@ function confirmarCierrePM03(id){
   if(faltanEstadoFinal.length){pm3ShowError('Selecciona Estado Final (Bien/Regular/Reprogramar) en actividades: '+faltanEstadoFinal.join(', '));return;}
 
   // Firmas de autorización obligatorias — no se puede cerrar la PM03 sin las 4
-  var _firmasLbl={Operador:'Operador',Lider:'Líder Producción',Calidad:'Inspector Calidad',Admin:'Jefe de Mantenimiento'};
+  var _firmasLbl={Operador:'Técnico Mantenimiento',Lider:'Líder Producción',Calidad:'Inspector Calidad',Admin:'Coordinador de Mantenimiento'};
   var _firmasFaltan=Object.keys(_firmasLbl).filter(function(k){return !p['firmaImg'+k];});
   if(_firmasFaltan.length){
     pm3ShowError('Faltan firmas de autorización: '+_firmasFaltan.map(function(k){return _firmasLbl[k];}).join(', '));
@@ -4561,7 +4512,6 @@ function filtrarOrdenes(){
           ${o.colorOT?`<span class="badge badge-${o.colorOT}">${o.colorOT==='azul'?'🔵':'🔴'}</span>`:''}
           ${o.esResueltaTemporal?'<span class="badge" style="background:#F59E0B;color:#1a1a1a;font-size:10px;font-weight:800">⚡ TEMPORAL</span>':''}
           ${o.pendienteAsignacion?'<span class="badge" style="background:#7c3aed;color:#fff;font-size:10px;font-weight:700">📋 Por asignar</span>':''}
-          ${o._esPM03&&o.estado==='cerrada'&&!o.liberadoPor&&o.estadoCalidad!=='liberada'?'<span class="badge" style="background:#7f1d1d;color:#fff;font-size:10px;font-weight:700">🔴 x Liberar</span>':''}
           ${o._esPM03&&o.estadoCalidad==='liberada'?'<span class="badge" style="background:#16a34a;color:#fff;font-size:10px">✅ Liberada</span>':''}
         ${o.prioridad?`<span class="badge ${pB[o.prioridad]||'badge-pB'}">P${o.prioridad}</span>`:''}
           <span class="badge" style="background:${o.estado==='pre_cierre'?'#7c3aed':''};color:${o.estado==='pre_cierre'?'#fff':''}">${o.estado==='pre_cierre'?'⏳ Pendiente aprobación':o.estado}</span>
@@ -10991,7 +10941,7 @@ var _firmaOtId=null;
 function abrirModalFirma(otId, campo){
   _firmaOtId=otId;
   _firmaCampo=campo;
-  var labels={operador:'Operador',lider:'Líder Producción',calidad:'Inspector Calidad',admin:'Jefe de Mantenimiento'};
+  var labels={operador:'Técnico Mantenimiento',lider:'Líder Producción',calidad:'Inspector Calidad',admin:'Coordinador de Mantenimiento'};
   var modal=document.createElement('div');
   modal.id='modal-firma-canvas';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box';
@@ -11093,10 +11043,10 @@ function firmaGuardar(){
 
 function renderFirmasPhysical(p){
   var campos=[
-    {key:'operador',label:'Operador'},
+    {key:'operador',label:'Técnico Mantenimiento'},
     {key:'lider',label:'Líder Producción'},
     {key:'calidad',label:'Inspector Calidad'},
-    {key:'admin',label:'Jefe de Mantenimiento'}
+    {key:'admin',label:'Coordinador de Mantenimiento'}
   ];
   var html='<div class="card" style="margin-top:8px"><div class="card-title">✍️ Firmas de Autorización</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
@@ -19417,6 +19367,21 @@ function firmaCelda(titulo, nombre, ts, comentario){
     +'</td>';
 }
 
+// Celda de firma para el protocolo impreso: muestra la firma dibujada con el dedo/lápiz
+// (capturada en el cierre de la PM03), no el viejo texto "LIBERADO" del flujo anterior.
+function firmaCeldaImg(titulo, img, nombre, ts){
+  var firmado = !!img;
+  var fecha = ts ? new Date(ts).toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'}) : '';
+  return '<td style="text-align:center;padding:8px;width:25%;background:'+(firmado?'#dcfce7':'#fff')+'">'
+    +'<div style="height:50px;border-bottom:1px solid #000;margin-bottom:4px;display:flex;align-items:center;justify-content:center">'
+    +(firmado?'<img src="'+img+'" style="max-height:48px;max-width:100%;object-fit:contain">':'')
+    +'</div>'
+    +'<div style="font-weight:700;font-size:10px">'+titulo+'</div>'
+    +'<div style="font-size:10px;font-weight:'+(firmado?'800':'400')+';color:'+(firmado?'#16a34a':'#000')+'">'+(nombre||'___________________')+'</div>'
+    +'<div style="font-size:9px;color:#555">'+(fecha||'Firma y Nombre')+'</div>'
+    +'</td>';
+}
+
 function imprimirProtocoloPM03(id){
   var p = PM03_PLAN.find(function(x){return x.id===id;});
   if(!p){showAlert('PM03 no encontrada','error');return;}
@@ -19451,6 +19416,11 @@ function imprimirProtocoloPM03(id){
         +'<td style="text-align:center;width:25px;font-size:10px">'+(hrs||'')+'</td>'
         +'<td style="font-size:9px;padding:3px 4px">'+com+'</td>'
         +'</tr>';
+      if(a.comoSeHace){
+        actRows += '<tr><td colspan="7" style="font-size:8.5px;padding:3px 6px;background:#f8fafc;color:#374151;text-align:left">'
+          +'<strong>📖 Cómo se hace:</strong> '+String(a.comoSeHace).replace(/\n/g,'<br>')
+          +'</td></tr>';
+      }
     });
     for(var i=(proto.actividades.length+1);i<=10;i++){
       actRows+='<tr><td style="text-align:center;font-size:10px">'+i+'</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
@@ -19564,10 +19534,10 @@ function imprimirProtocoloPM03(id){
     // Firmas
     +'<div class="seccion" style="margin-bottom:0">Firmas de Autorización</div>'
      +'<table><tr>'
-     +firmaCelda('TÉCNICO DE MANTENIMIENTO', p.firmaTecnico, p.firmaTecnicoTs, '')
-     +firmaCelda('PRODUCCIÓN / LIDER', p.liberadoProdPor, p.liberadoProdTs, p.comentarioFirmaProd)
-     +firmaCelda('INSPECTOR CALIDAD', liberadoNombre, p.liberadoTs, p.comentarioFirmaCalidad)
-     +firmaCelda('JEFE DE MANTENIMIENTO', p.liberadoAdminPor, p.liberadoAdminTs, p.comentarioFirmaAdmin)
+     +firmaCeldaImg('TÉCNICO MANTENIMIENTO', p.firmaImgOperador, p.firmaNombreOperador, p.firmaTsOperador)
+     +firmaCeldaImg('LÍDER PRODUCCIÓN', p.firmaImgLider, p.firmaNombreLider, p.firmaTsLider)
+     +firmaCeldaImg('INSPECTOR CALIDAD', p.firmaImgCalidad, p.firmaNombreCalidad, p.firmaTsCalidad)
+     +firmaCeldaImg('COORDINADOR DE MANTENIMIENTO', p.firmaImgAdmin, p.firmaNombreAdmin, p.firmaTsAdmin)
      +'</tr></table>'
 
     // Pie
@@ -19607,7 +19577,7 @@ function abrirEditarPM03Admin(id){
     +'<div style="margin-bottom:16px"><label style="font-size:.75rem;font-weight:700;color:#374151;text-transform:uppercase;display:block;margin-bottom:6px">Observaciones</label>'
     +'<textarea id="epm3-obs" class="form-control" rows="2" style="padding:10px">'+(p.observacionesCierre||'')+'</textarea></div>'
     +'<div style="display:flex;gap:10px">'
-    +'<button onclick="var m=document.getElementById(\'modal-edit-pm03-admin\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="window._protoVolverASemana=false;var m=document.getElementById(\'modal-edit-pm03-admin\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
     +'<button onclick="guardarEditarPM03Admin(\''+id+'\') " style="flex:1;padding:13px;background:#7c3aed;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar</button>'
     +'</div></div>';
   document.body.appendChild(modal);
@@ -19648,6 +19618,12 @@ function guardarEditarPM03Admin(id){
   savePM03Supa(p);
   var m=document.getElementById('modal-edit-pm03-admin');if(m)m.remove();
   showAlert('✅ PM03 actualizada');
+  // Si se abrió desde "Protocolos → PM03 por semana", regresar ahí en vez de ir al detalle
+  if(window._protoVolverASemana){
+    window._protoVolverASemana=false;
+    showProtocolosProximaSemana();
+    return;
+  }
   // Actualizar el detalle Y refrescar la lista de fondo
   showDetallePM03(id);
   if(detalleBackScreen==='screen-pm03') setTimeout(function(){renderPM03();},100);
@@ -19852,6 +19828,17 @@ function pm3SetEstadoCampo(pmId, actId, campo, estado){
     var aviso=document.getElementById('pm3-aviso-c-'+actId);
     if(aviso) aviso.style.display=estado==='C'?'block':'none';
   }
+}
+
+// Despliega/oculta el texto "Cómo se hace" de una actividad (paso a paso definido
+// en el protocolo). Colapsado por default para no saturar la pantalla del técnico.
+function pm3ToggleComoSeHace(actId){
+  var box=document.getElementById('pm3-como-'+actId);
+  var lbl=document.getElementById('pm3-como-lbl-'+actId);
+  if(!box) return;
+  var abierto = box.style.display!=='none';
+  box.style.display = abierto?'none':'block';
+  if(lbl) lbl.innerHTML = abierto?'📖 Cómo se hace ▾':'📖 Cómo se hace ▴';
 }
 
 // Calcula el %error de cada punto de medición (referencia vs medido) y marca
@@ -20279,7 +20266,7 @@ function showMenuProtocolosPM03(){
       +'<div style="font-size:28px">📋</div>'
       +'<div><div style="font-weight:800;color:#1a3c5e;font-size:15px">Protocolos existentes</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">Ver y filtrar los formatos ya creados (por área y línea)</div></div>'
       +'</div></div>'
-    +'<div class="card" style="padding:16px;cursor:pointer" onclick="window._protoSemFiltro=null;window._protoAnioFiltro=null;showProtocolosProximaSemana()">'
+    +'<div class="card" style="padding:16px;cursor:pointer" onclick="window._protoSemFiltro=null;window._protoAnioFiltro=null;window._protoSemAreaFiltro=null;showProtocolosProximaSemana()">'
       +'<div style="display:flex;align-items:center;gap:12px">'
       +'<div style="font-size:28px">📅</div>'
       +'<div><div style="font-weight:800;color:#1a3c5e;font-size:15px">PM03 por semana</div><div style="font-size:12px;color:var(--txt2);margin-top:2px">Generar, editar o eliminar el protocolo de cada PM03 — semana actual o futuras</div></div>'
@@ -20509,7 +20496,8 @@ function showProtocolosProximaSemana(){
     window._protoSemFiltro=currentWeek();
     window._protoAnioFiltro=currentYear();
   }
-  var sem=window._protoSemFiltro, anio=window._protoAnioFiltro;
+  if(window._protoSemAreaFiltro==null) window._protoSemAreaFiltro='';
+  var sem=window._protoSemFiltro, anio=window._protoAnioFiltro, areaFiltro=window._protoSemAreaFiltro;
   // Compatibilidad: _protoEliminarDesdeAccion sólo checa que esto exista
   window._protoSemSig=sem; window._protoAnioSig=anio;
 
@@ -20524,7 +20512,12 @@ function showProtocolosProximaSemana(){
     +'<button onclick="_protoCambiarSemana(1)" style="padding:6px 12px;background:#f1f5f9;border:none;border-radius:8px;font-weight:800;cursor:pointer;color:#1a3c5e">▶</button>'
     +(esSemActual?'':'<button onclick="_protoIrSemanaActual()" style="padding:6px 10px;background:#eff6ff;border:none;border-radius:8px;font-weight:700;cursor:pointer;color:#1d4ed8;font-size:11px">Hoy</button>')
     +'</div>'
-    +'<div style="font-size:11px;color:var(--txt3);margin-bottom:4px">Toca una PM03 para generar, editar o eliminar su protocolo</div>';
+    +'<div style="margin-bottom:6px">'
+    +'<select class="form-control" id="proto-sem-filtro-area" onchange="window._protoSemAreaFiltro=this.value;showProtocolosProximaSemana()" style="width:100%;padding:7px;font-size:.82rem">'
+    +'<option value="">Todas las áreas</option>'
+    +PM_AREAS.map(function(ar){return '<option value="'+ar.id+'"'+(areaFiltro===ar.id?' selected':'')+'>'+ar.icon+' '+ar.label+'</option>';}).join('')
+    +'</select></div>'
+    +'<div style="font-size:11px;color:var(--txt3);margin-bottom:4px">Toca una PM03 para generar/editar su protocolo o asignar técnico</div>';
 
   lDiv.innerHTML='<div class="card text-center" style="padding:30px;color:var(--txt3)">Cargando…</div>';
 
@@ -20532,8 +20525,11 @@ function showProtocolosProximaSemana(){
   supaFetch('protocolos_pm03','GET',null,'activo=eq.true&order=linea.asc').then(function(rows){
     if(sem!==window._protoSemFiltro||anio!==window._protoAnioFiltro) return; // el usuario ya cambió de semana mientras cargaba
     PROTOCOLOS_PM03_SUPA=rows||[];
-    var pm3s=PM03_PLAN.filter(function(p){return p.semana===sem&&p.año===anio&&p.estado==='abierta';})
-      .sort(function(a,b){ return (a.linea||'').localeCompare(b.linea||'')||(a.componente||'').localeCompare(b.componente||''); });
+    var pm3s=PM03_PLAN.filter(function(p){
+      if(p.semana!==sem||p.año!==anio||p.estado!=='abierta') return false;
+      if(areaFiltro && proto_areaFromLinea(p.linea)!==areaFiltro) return false;
+      return true;
+    }).sort(function(a,b){ return (a.linea||'').localeCompare(b.linea||'')||(a.componente||'').localeCompare(b.componente||''); });
 
     if(!pm3s.length){
       lDiv.innerHTML='<div class="card text-center" style="padding:40px"><div style="font-size:48px">📅</div><div style="font-weight:700;margin-top:12px">Sin PM03 programadas para esta semana</div></div>';
@@ -20553,6 +20549,7 @@ function showProtocolosProximaSemana(){
         +'</div>'
         +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+' — '+(p.componente||'—')+'</div>'
         +'<div style="font-size:12px;color:var(--txt2)">'+(p.actividad||'—')+'</div>'
+        +'<div style="font-size:11px;color:'+(p.tecnicoNombre?'#6b7280':'#dc2626')+';margin-top:4px;font-weight:'+(p.tecnicoNombre?'400':'700')+'">👨‍🔧 '+(p.tecnicoNombre||'Sin asignar')+'</div>'
         +'</div>';
     }).join('');
   });
@@ -20599,13 +20596,17 @@ function _protoAccionesPM03(pmId){
   var compEsc=String(p.componente||'').replace(/'/g,"\\'");
   var actEsc=String(p.actividad||'').replace(/'/g,"\\'");
 
+  var esAdminOSuper=currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super');
+
   var modal=document.createElement('div');
   modal.id='modal-proto-acciones-pm03';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;overflow-y:auto;padding:12px;box-sizing:border-box';
   modal.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;max-width:440px;margin:auto">'
     +'<div style="font-size:15px;font-weight:800;color:#1a3c5e;margin-bottom:4px">'+(p.linea||'—')+' — '+(p.componente||'—')+'</div>'
-    +'<div style="font-size:13px;color:#6b7280;margin-bottom:16px">'+(p.actividad||'—')+'</div>'
+    +'<div style="font-size:13px;color:#6b7280;margin-bottom:4px">'+(p.actividad||'—')+'</div>'
+    +'<div style="font-size:12px;color:'+(p.tecnicoNombre?'#6b7280':'#dc2626')+';font-weight:'+(p.tecnicoNombre?'400':'700')+';margin-bottom:16px">👨‍🔧 '+(p.tecnicoNombre||'Sin asignar')+'</div>'
     +'<div style="display:flex;flex-direction:column;gap:8px">'
+    +(esAdminOSuper?('<button onclick="window._protoVolverASemana=true;document.getElementById(\'modal-proto-acciones-pm03\').remove();abrirEditarPM03Admin(\''+p.id+'\')" style="padding:12px;background:#ede9fe;border:1px solid #c4b5fd;border-radius:10px;font-weight:700;color:#5b21b6;cursor:pointer;text-align:left">👷 Asignar / Editar técnico</button>'):'')
     +'<button onclick="window._protoVolverASemana=true;document.getElementById(\'modal-proto-acciones-pm03\').remove();abrirEditorProtocolo(null,{linea:\''+lineaEsc+'\',equipo:\''+compEsc+'\',actividad:\''+actEsc+'\'})" style="padding:12px;background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;font-weight:700;color:#1d4ed8;cursor:pointer;text-align:left">🆕 Generar protocolo nuevo</button>'
     +(match?('<button onclick="window._protoVolverASemana=true;document.getElementById(\'modal-proto-acciones-pm03\').remove();abrirEditorProtocolo(\''+match.id+'\')" style="padding:12px;background:#f3f4f6;border:none;border-radius:10px;font-weight:700;color:#374151;cursor:pointer;text-align:left">✏️ Editar protocolo ('+(match.equipo||match.linea)+(match.equipo_secundario?' · '+match.equipo_secundario:'')+')</button>'):'')
     +(match?('<button onclick="_protoEliminarDesdeAccion(\''+match.id+'\')" style="padding:12px;background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;font-weight:700;color:#dc2626;cursor:pointer;text-align:left">🗑️ Eliminar protocolo</button>'):'')
@@ -20662,6 +20663,7 @@ function abrirEditorProtocolo(id, prefill){
         +'<input type="number" id="proto-act-hrs-'+i+'" class="form-control" placeholder="Hrs" value="'+(a.hrs||1)+'" style="width:55px;padding:6px;font-size:.82rem" min="0.5" step="0.5">'
         +'<button onclick="proto_removeAct('+i+')" style="padding:4px 8px;background:#fee2e2;border:none;border-radius:6px;color:#dc2626;cursor:pointer;font-size:.8rem">✕</button>'
         +'</div>'
+        +'<textarea id="proto-act-como-'+i+'" class="form-control" placeholder="📖 Cómo se hace (paso a paso, opcional) — el técnico la verá al ejecutar" rows="2" style="margin:4px 0 4px 26px;width:calc(100% - 26px);padding:6px;font-size:.78rem">'+(a.comoSeHace||'')+'</textarea>'
         +'<label style="display:flex;align-items:center;gap:5px;font-size:.75rem;color:#374151;margin:4px 0 4px 26px;cursor:pointer">'
         +'<input type="checkbox" id="proto-act-medok-'+i+'" onchange="proto_toggleMedicion('+i+')"'+(med?' checked':'')+'> 🔢 Requiere medición (referencia vs medido, 3 puntos)</label>'
         +'<div id="proto-act-medbox-'+i+'" style="display:'+(med?'flex':'none')+';flex-direction:column;gap:6px;margin-left:26px">'
@@ -20736,6 +20738,7 @@ function proto_addAct(){
     +'<input type="number" id="proto-act-hrs-'+i+'" class="form-control" placeholder="Hrs" value="1" style="width:55px;padding:6px;font-size:.82rem" min="0.5" step="0.5">'
     +'<button onclick="proto_removeAct('+i+')" style="padding:4px 8px;background:#fee2e2;border:none;border-radius:6px;color:#dc2626;cursor:pointer;font-size:.8rem">✕</button>'
     +'</div>'
+    +'<textarea id="proto-act-como-'+i+'" class="form-control" placeholder="📖 Cómo se hace (paso a paso, opcional) — el técnico la verá al ejecutar" rows="2" style="margin:4px 0 4px 26px;width:calc(100% - 26px);padding:6px;font-size:.78rem"></textarea>'
     +'<label style="display:flex;align-items:center;gap:5px;font-size:.75rem;color:#374151;margin:4px 0 4px 26px;cursor:pointer">'
     +'<input type="checkbox" id="proto-act-medok-'+i+'" onchange="proto_toggleMedicion('+i+')"> 🔢 Requiere medición (referencia vs medido, 3 puntos)</label>'
     +'<div id="proto-act-medbox-'+i+'" style="display:none;flex-direction:column;gap:6px;margin-left:26px">'
@@ -20863,6 +20866,8 @@ function guardarProtocolo(id){
       var hrs=document.getElementById('proto-act-hrs-'+idx);
       if(desc&&desc.value.trim()){
         var newAct={id:acts.length+1,desc:desc.value.trim(),tipo:esp?esp.value:'Inspección',hrs:parseFloat(hrs?hrs.value:1)||1};
+        var comoEl=document.getElementById('proto-act-como-'+idx);
+        if(comoEl&&comoEl.value.trim()) newAct.comoSeHace=comoEl.value.trim();
         var medOk=document.getElementById('proto-act-medok-'+idx);
         if(medOk&&medOk.checked){
           var medUnidad=document.getElementById('proto-act-medunidad-'+idx);
@@ -26573,8 +26578,19 @@ function showPM02PorValidar(){
   if(tb) tb.innerHTML='<button class="topbar-back" onclick="goBack()">←</button><div><div class="topbar-title">✅ Por Validar</div></div>';
   showScreen('screen-ordenes');
   window._cValidarBusq='';
-  window._cValidarTec='';
+  window._cValidarLev='';
   _renderPM02PorValidar();
+}
+
+function _pm02ValidarBuscarInput(el){
+  window._cValidarBusq=el.value;
+  var pos=el.selectionStart;
+  _renderPM02PorValidar();
+  var nuevo=document.getElementById('pm02-validar-busq');
+  if(nuevo){
+    nuevo.focus();
+    try{ nuevo.setSelectionRange(pos,pos); }catch(e){}
+  }
 }
 
 function _renderPM02PorValidar(){
@@ -26592,12 +26608,13 @@ function _renderPM02PorValidar(){
     return rolesValidos.indexOf(r)>=0||o.pendienteAsignacion===true;
   });
 
-  var tecnicos=[...new Set(base.map(function(o){return o.tecnicoNombre||'';}).filter(Boolean))].sort();
+  var levantaron=[...new Set(base.map(function(o){return o.levantadoPor||o.nombreLevantador||'';}).filter(Boolean))].sort();
   var busq=(window._cValidarBusq||'').toLowerCase();
   var lista=base.filter(function(o){
-    if(window._cValidarTec && o.tecnicoNombre!==window._cValidarTec) return false;
+    var levO=o.levantadoPor||o.nombreLevantador||'';
+    if(window._cValidarLev && levO!==window._cValidarLev) return false;
     if(busq){
-      var h=(o.id+' '+(o.linea||'')+(o.area||'')+(o.componente||'')+(o.detalle||'')+(o.tecnicoNombre||'')).toLowerCase();
+      var h=(o.id+' '+(o.linea||'')+(o.area||'')+(o.componente||'')+(o.detalle||'')+(o.tecnicoNombre||'')+' '+levO).toLowerCase();
       if(h.indexOf(busq)<0) return false;
     }
     return true;
@@ -26608,10 +26625,10 @@ function _renderPM02PorValidar(){
     +'<button onclick="showPM02PorAsignar()" style="padding:6px 12px;background:#7c3aed;color:#fff;border:none;border-radius:8px;font-size:.8rem;font-weight:700;cursor:pointer">← Por Asignar</button>'
     +'</div>'
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">'
-    +'<input type="text" class="form-control" placeholder="🔍 Buscar..." value="'+(window._cValidarBusq||'')+'" oninput="window._cValidarBusq=this.value;_renderPM02PorValidar()" style="flex:2;min-width:140px;padding:8px;font-size:13px">'
-    +'<select class="form-control" onchange="window._cValidarTec=this.value;_renderPM02PorValidar()" style="flex:1;min-width:120px;padding:8px;font-size:13px">'
-    +'<option value="">Todos los técnicos</option>'
-    +tecnicos.map(function(t){return '<option value="'+t+'"'+(window._cValidarTec===t?' selected':'')+'>'+t+'</option>';}).join('')
+    +'<input type="text" id="pm02-validar-busq" class="form-control" placeholder="🔍 Buscar..." value="'+(window._cValidarBusq||'')+'" oninput="_pm02ValidarBuscarInput(this)" style="flex:2;min-width:140px;padding:8px;font-size:13px">'
+    +'<select class="form-control" onchange="window._cValidarLev=this.value;_renderPM02PorValidar()" style="flex:1;min-width:120px;padding:8px;font-size:13px">'
+    +'<option value="">Todos (quién levantó)</option>'
+    +levantaron.map(function(t){return '<option value="'+t+'"'+(window._cValidarLev===t?' selected':'')+'>'+t+'</option>';}).join('')
     +'</select>'
     +'</div>'
     +'<div style="font-size:12px;color:#6b7280;margin-bottom:8px">'+lista.length+' orden(es) pendientes de validación</div>';
