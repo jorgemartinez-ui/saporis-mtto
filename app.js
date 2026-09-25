@@ -29281,8 +29281,14 @@ function _guardarEditActividadFinal(id,desc,comp,freq,motivo,protocolo,fechaDeto
 
   var oldDesc=p.descripcion, oldComp=p.componente;
   p.descripcion=desc;p.componente=comp;p.frecuencia_semanas=freq;p.protocolo=protocolo;
+  // Si la frecuencia cambió, el campo viejo "frecuencia_dias" (de cuando la actividad se
+  // creó, si en su momento se usó un preset por días) queda obsoleto y tiene prioridad sobre
+  // frecuencia_semanas al agrupar el Calendario — por eso una actividad editada a "cada 3
+  // semanas" podía seguir apareciendo como "Diaria" si originalmente tenía frecuencia_dias=1.
+  // Se limpia para que el Calendario se agrupe siempre por el valor nuevo, en semanas.
+  if(cambioFrecuencia) p.frecuencia_dias=null;
   saveDB('plan_actividades',PLAN_ACTIVIDADES);
-  supaFetch('plan_actividades','PATCH',{descripcion:desc,componente:comp,frecuencia_semanas:freq,protocolo:protocolo},'id=eq.'+id).catch(function(){});
+  supaFetch('plan_actividades','PATCH',{descripcion:desc,componente:comp,frecuencia_semanas:freq,frecuencia_dias:(cambioFrecuencia?null:undefined),protocolo:protocolo},'id=eq.'+id).catch(function(){});
 
   // Si cambió el nombre o el componente, actualizar también las PM03 ya generadas (pasadas y futuras)
   // de esta actividad — el Calendario las empareja por línea+componente+texto, y si se quedan con
