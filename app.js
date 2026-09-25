@@ -29047,6 +29047,7 @@ function formalizarActividad(areaId,linea,componente,actividad){
 function freqToSemanas(freqVal,manualVal,manualUnit){
   if(freqVal==='manual'){
     var v=parseInt(manualVal)||1;
+    if(manualUnit==='anios'||manualUnit==='años') return Math.max(1,Math.round(v*365/7));
     if(manualUnit==='meses') return Math.max(1,Math.round(v*30/7));
     if(manualUnit==='semanas') return Math.max(1,v);
     return Math.max(1,Math.round(v/7)); // dias
@@ -29170,11 +29171,18 @@ function editarActividad(id){
     +'<select class="form-control" id="ea-freq" onchange="var w=document.getElementById(\'ea-freq-manual-wrap\');if(w)w.style.display=(this.value===\'manual\'?\'block\':\'none\')" style="padding:10px">'
     +'<option value=""'+(selValue===''?' selected':'')+'>-- Selecciona --</option>'
     +frecuencias.map(function(f){return'<option value="'+f.v+'"'+(String(selValue)===String(f.v)?' selected':'')+'>'+f.l+'</option>';}).join('')
-    +'<option value="manual"'+(selValue==='manual'?' selected':'')+'>Personalizada (elegir cada cuántas semanas)</option>'
+    +'<option value="manual"'+(selValue==='manual'?' selected':'')+'>Personalizada (elegir número y unidad)</option>'
     +'</select>'
     +'<div id="ea-freq-manual-wrap" style="display:'+(selValue==='manual'?'block':'none')+';margin-top:6px">'
-    +'<input type="number" min="1" step="1" class="form-control" id="ea-freq-manual" placeholder="Cada cuántas semanas (ej. 3)" value="'+(manualVal||'')+'" style="padding:10px">'
-    +'</div></div>'
+    +'<div style="display:flex;gap:6px">'
+    +'<input type="number" min="1" step="1" class="form-control" id="ea-freq-manual" placeholder="Ej: 3" value="'+(manualVal||'')+'" style="flex:1;padding:10px">'
+    +'<select class="form-control" id="ea-freq-manual-unit" style="flex:1;padding:10px">'
+    +'<option value="dias">Días</option>'
+    +'<option value="semanas" selected>Semanas</option>'
+    +'<option value="meses">Meses</option>'
+    +'<option value="anios">Años</option>'
+    +'</select>'
+    +'</div></div></div>'
     +'<div class="form-group"><label class="form-label">Motivo del cambio de frecuencia (si aplica)</label>'
     +'<input type="text" class="form-control" id="ea-motivo" placeholder="Ej: Recomendación fabricante, histórico de fallas..." style="padding:10px"></div>'
     +'<div class="form-group"><label class="form-label">Protocolo</label>'
@@ -29198,15 +29206,60 @@ function guardarEditActividad(id){
   if(!freqSel){showAlert('Selecciona la frecuencia','error');return;}
   var freq;
   if(freqSel==='manual'){
-    freq=parseInt(document.getElementById('ea-freq-manual')?.value);
-    if(!freq||freq<1){showAlert('Indica cada cuántas semanas (número mayor a 0)','error');return;}
+    var manualVal=document.getElementById('ea-freq-manual')?.value;
+    var manualUnit=document.getElementById('ea-freq-manual-unit')?.value||'semanas';
+    if(!parseInt(manualVal)||parseInt(manualVal)<1){showAlert('Indica cada cuánto se repite (número mayor a 0)','error');return;}
+    freq=freqToSemanas('manual',manualVal,manualUnit);
   } else {
     freq=parseInt(freqSel);
   }
 
-  // Save frequency change to historial if changed
   if(freq!==p.frecuencia_semanas){
-    var histRow={id:genID('FH'),actividad_id:id,frecuencia_anterior:p.frecuencia_semanas,frecuencia_nueva:freq,fecha_cambio:new Date().toISOString().slice(0,10),motivo:motivo,cambiado_por:currentUser.nombre,creado_ts:Date.now()};
+    // La frecuencia cambió: antes de guardar hay que preguntar a partir de qué semana
+    // detona la nueva frecuencia, porque eso determina qué PM03 futuras se reemplazan.
+    document.getElementById('modal-edit-actividad')?.remove();
+    _abrirFechaNuevaFrecuencia(id,desc,comp,freq,motivo,protocolo);
+    return;
+  }
+  _guardarEditActividadFinal(id,desc,comp,freq,motivo,protocolo,null);
+}
+
+function _abrirFechaNuevaFrecuencia(id,desc,comp,freq,motivo,protocolo){
+  window._pendingEditActividad={id:id,desc:desc,comp:comp,freq:freq,motivo:motivo,protocolo:protocolo};
+  var modal=document.createElement('div');
+  modal.id='modal-fecha-nueva-frecuencia';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
+  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#1a3c5e;margin-bottom:4px">🔄 ¿A partir de cuándo detona la nueva frecuencia?</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:14px">Las PM03 futuras de esta actividad que aún no se hayan ejecutado se reemplazan por una nueva serie a partir de la semana que elijas, con la nueva frecuencia. Las PM03 cerradas o de semanas anteriores no se tocan.</div>'
+    +'<div class="form-group"><label class="form-label">Semana nueva (fecha) *</label>'
+    +'<input type="date" class="form-control" id="fnf-fecha" value="'+todayStr()+'" style="padding:10px"></div>'
+    +'<div style="display:flex;gap:10px;margin-top:8px">'
+    +'<button onclick="window._pendingEditActividad=null;document.getElementById(\'modal-fecha-nueva-frecuencia\').remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="_confirmarFechaNuevaFrecuencia()" style="flex:2;padding:13px;background:#1e3a8a;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">✅ Confirmar y regenerar</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function _confirmarFechaNuevaFrecuencia(){
+  var pend=window._pendingEditActividad;
+  if(!pend) return;
+  var fechaVal=document.getElementById('fnf-fecha')?.value;
+  var fechaDeton=_parseFechaInput(fechaVal);
+  if(!fechaDeton){showAlert('Selecciona la fecha','error');return;}
+  document.getElementById('modal-fecha-nueva-frecuencia')?.remove();
+  window._pendingEditActividad=null;
+  _guardarEditActividadFinal(pend.id,pend.desc,pend.comp,pend.freq,pend.motivo,pend.protocolo,fechaDeton);
+}
+
+function _guardarEditActividadFinal(id,desc,comp,freq,motivo,protocolo,fechaDeton){
+  var p=PLAN_ACTIVIDADES.find(function(x){return x.id===id;});
+  if(!p) return;
+  var freqAnterior=p.frecuencia_semanas;
+  var cambioFrecuencia=freq!==freqAnterior;
+
+  if(cambioFrecuencia){
+    var histRow={id:genID('FH'),actividad_id:id,frecuencia_anterior:freqAnterior,frecuencia_nueva:freq,fecha_cambio:new Date().toISOString().slice(0,10),motivo:motivo,cambiado_por:currentUser.nombre,creado_ts:Date.now()};
     supaFetch('plan_frecuencia_historial','POST',histRow,'').catch(function(){});
   }
 
@@ -29233,8 +29286,66 @@ function guardarEditActividad(id){
     }
   }
 
+  // Si cambió la frecuencia: borrar las PM03 futuras de esta actividad que sigan abiertas
+  // (nunca las cerradas ni las de semanas ya pasadas) y regenerar la serie desde la fecha
+  // elegida, con la nueva frecuencia — mismo mecanismo que ya usa la detonación anticipada.
+  var nBorradas=0,nNuevas=0;
+  if(cambioFrecuencia&&fechaDeton){
+    var compClave=p.componente||'General';
+    var aBorrar=PM03_PLAN.filter(function(x){
+      if(x.estado==='cerrada') return false;
+      if(x.linea!==p.linea) return false;
+      if(_normTxtAct(x.componente||'General')!==_normTxtAct(compClave)) return false;
+      if(_normTxtAct(x.actividad)!==_normTxtAct(p.descripcion)) return false;
+      if(!x.semana||!x.año) return false;
+      return _fechaDeSemanaISO(x.año,x.semana)>fechaDeton;
+    });
+    if(aBorrar.length){
+      var idsBorrar=aBorrar.map(function(x){return x.id;});
+      PM03_PLAN=PM03_PLAN.filter(function(x){return idsBorrar.indexOf(x.id)<0;});
+      saveDB('pm03_plan',PM03_PLAN);
+      var elim=loadDB('pm03_eliminadas',[]);
+      idsBorrar.forEach(function(idb){ if(elim.indexOf(idb)<0) elim.push(idb); });
+      saveDB('pm03_eliminadas',elim);
+      fetch(SUPA_URL+'/rest/v1/pm03_plan?id=in.('+idsBorrar.join(',')+')',{
+        method:'DELETE',
+        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'}
+      }).catch(function(){});
+      nBorradas=idsBorrar.length;
+    }
+
+    var anioLimite=currentYear()+10;
+    var usados={};
+    var nuevasPM03=[];
+    var fechaIter=new Date(fechaDeton.getTime());
+    fechaIter.setDate(fechaIter.getDate()+freq*7);
+    while(fechaIter.getFullYear()<=anioLimite){
+      var pm3Id=_genPM03IdUnico(usados);
+      nuevasPM03.push({
+        id:pm3Id,linea:p.linea,area:p.area_id,componente:p.componente||'—',actividad:p.descripcion,
+        semana:getWeekNumber(fechaIter),año:fechaIter.getFullYear(),
+        tecnicoId:'',tecnicoNombre:'Sin asignar',estado:'abierta',
+        pasoAPaso:p.protocolo||'',generadoPor:'Plan Mtto',actividadPlanId:p.id,
+        ts:Date.now(),horaCreacion:new Date().toISOString()
+      });
+      fechaIter=new Date(fechaIter.getTime());
+      fechaIter.setDate(fechaIter.getDate()+freq*7);
+    }
+    nuevasPM03.forEach(function(pp){ PM03_PLAN.push(pp); });
+    saveDB('pm03_plan',PM03_PLAN);
+    var supaRows=nuevasPM03.map(function(pp){
+      return {id:pp.id,linea:pp.linea,componente:pp.componente||null,actividad:pp.actividad,area:pp.area||null,
+        semana:pp.semana,anio:pp.año,tecnico_id:pp.tecnicoId||null,tecnico_nombre:pp.tecnicoNombre||null,
+        estado:pp.estado||'abierta',generado_por:pp.generadoPor||null,ts:pp.ts||Date.now(),estado_flujo:'ejecucion',fuente_excel:false};
+    });
+    if(supaRows.length) supaUpsert('pm03_plan',supaRows).catch(function(){});
+    nNuevas=nuevasPM03.length;
+  }
+
   document.getElementById('modal-edit-actividad')?.remove();
-  showAlert('✅ Actividad actualizada'+(nCorregidas?' — '+nCorregidas+' PM03 actualizadas':''));
+  var msg='✅ Actividad actualizada'+(nCorregidas?' — '+nCorregidas+' PM03 actualizadas':'');
+  if(cambioFrecuencia&&fechaDeton) msg+=' — calendario resincronizado: '+nBorradas+' PM03 futuras reemplazadas, '+nNuevas+' nuevas generadas';
+  showAlert(msg);
   showPlanCalendario(p.area_id,p.linea);
 }
 
