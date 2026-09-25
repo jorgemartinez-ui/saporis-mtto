@@ -235,7 +235,15 @@ let puntoRojoIdx=-1;
 // ================================================================
 // UTILS
 // ================================================================
-function genID(tipo){const d=new Date();const s=String(d.getFullYear()).slice(2)+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');return tipo+'-'+s+'-'+(Math.floor(Math.random()*9000)+1000);}
+function genID(tipo){const d=new Date();const s=String(d.getFullYear()).slice(2)+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');
+  if(tipo==='PM03'){
+    // Las PM03 se generan por decenas o cientos el mismo día (series de varios años de una
+    // sola actividad), así que necesitan mucho más espacio de números al azar que el resto de
+    // los IDs para no chocar entre sí — con solo 4 dígitos (9,000 combinaciones/día) el choque
+    // era real y causaba que una PM03 nueva sobrescribiera en silencio a otra ya existente.
+    return tipo+'-'+s+'-'+(Math.floor(Math.random()*900000)+100000);
+  }
+  return tipo+'-'+s+'-'+(Math.floor(Math.random()*9000)+1000);}
 function fmtDate(ts){if(!ts)return'—';return new Date(ts).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'});}
 function fmtTime(ts){if(!ts)return'—';return new Date(ts).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'});}
 function fmtDateTime(ts){if(!ts)return'—';return fmtDate(ts)+' '+fmtTime(ts);}
@@ -15081,7 +15089,7 @@ function _crearActividadPlanPreventivo(act,freqSem,fechaDeton){
   saveDB('plan_actividades',PLAN_ACTIVIDADES);
   supaFetch('plan_actividades','POST',planRow,'').catch(function(){});
 
-  var usados={};
+  var usados=_usadosPM03Base();
   var nuevasPM03=[];
   var fechaIter=new Date(fechaDeton.getTime());
   while(fechaIter.getFullYear()<=anioLimite){
@@ -29098,6 +29106,17 @@ function _genPM03IdUnico(usados){
   return id;
 }
 
+// Semilla de IDs "ya usados" para _genPM03IdUnico: incluye TODAS las PM03 que ya existen
+// (de cualquier línea/actividad), no solo las que se van generando en la pasada actual.
+// Antes cada serie nueva sólo se cuidaba de no repetirse a sí misma, así que un ID al azar
+// podía coincidir con el de una PM03 ya existente de otra actividad y sobrescribirla en
+// silencio al guardar. Se usa como punto de partida de "usados" en vez de un objeto vacío.
+function _usadosPM03Base(){
+  var u={};
+  PM03_PLAN.forEach(function(x){ if(x&&x.id) u[x.id]=true; });
+  return u;
+}
+
 function guardarNuevaActividad(areaId){
   var linea=document.getElementById('na-linea')?.value;
   var desc=document.getElementById('na-desc')?.value.trim();
@@ -29123,7 +29142,7 @@ function guardarNuevaActividad(areaId){
   // Generar la serie recurrente de PM03 desde la fecha de detonación, hasta 10 años adelante
   var hoyMedianoche=new Date(); hoyMedianoche.setHours(0,0,0,0);
   var anioLimite=currentYear()+10;
-  var usados={};
+  var usados=_usadosPM03Base();
   var nuevasPM03=[];
   var fechaIter=new Date(fechaDeton.getTime());
   while(fechaIter.getFullYear()<=anioLimite){
@@ -29337,7 +29356,7 @@ function _guardarEditActividadFinal(id,desc,comp,freq,motivo,protocolo,fechaDeto
     }
 
     var anioLimite=currentYear()+10;
-    var usados={};
+    var usados=_usadosPM03Base();
     var nuevasPM03=[];
     // La primera PM03 de la serie regenerada es la de la semana elegida (fechaDeton),
     // no la de freq semanas después — antes se saltaba esa primera semana.
@@ -30161,7 +30180,7 @@ function confirmarDetonarPM03Anticipada(actividadPlanId,semana,anio){
   var p=PLAN_ACTIVIDADES.find(function(x){return x.id===actividadPlanId;});
   var m=document.getElementById('modal-detonar-pm03');if(m)m.remove();
   if(!p){showAlert('No se encontró la actividad del plan','error');return;}
-  var nuevo={id:_genPM03IdUnico({}),linea:p.linea,area:p.area_id,componente:p.componente||'—',actividad:p.descripcion,
+  var nuevo={id:_genPM03IdUnico(_usadosPM03Base()),linea:p.linea,area:p.area_id,componente:p.componente||'—',actividad:p.descripcion,
     semana:semana,año:anio,tecnicoId:'',tecnicoNombre:'Sin asignar',estado:'abierta',
     pasoAPaso:p.protocolo||'',generadoPor:'Plan Mtto',actividadPlanId:p.id,
     ts:Date.now(),horaCreacion:new Date().toISOString()};
@@ -30257,7 +30276,7 @@ function _resincronizarSeriePM03(actividadPlanId,semanaDeton,anioDeton,nuevaFrec
   // Regenerar la serie futura desde la semana detonada + la frecuencia vigente, hasta 10
   // años adelante (mismo criterio que al crear una actividad nueva en guardarNuevaActividad).
   var anioLimite=currentYear()+10;
-  var usados={};
+  var usados=_usadosPM03Base();
   var nuevasPM03=[];
   var fechaIter=new Date(fechaDeton.getTime());
   fechaIter.setDate(fechaIter.getDate()+nuevaFrecuencia*7);
