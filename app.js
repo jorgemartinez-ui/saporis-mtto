@@ -22391,6 +22391,7 @@ function horSetVal(sel){
 
 function horNavegar(sel, e){
   // Navegación con teclado entre celdas del grid
+  if(e.ctrlKey||e.metaKey) return; // dejar pasar Ctrl+V (pegado), Ctrl+C, etc. sin interceptarlas como atajo de una sola tecla
   var emp=sel.getAttribute('data-emp');
   var dia=parseInt(sel.getAttribute('data-dia'));
   var empIds=['emp_2196','emp_2055','emp_1923','emp_2064','emp_1105','emp_1980','emp_804','emp_461'];
