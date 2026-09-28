@@ -22238,8 +22238,8 @@ function _renderHorarios(lDiv){
 
     var diasMes=new Date(_gpAño,_gpMes,0).getDate();
     var diasSem=['D','L','M','X','J','V','S'];
-    var turnoColor={'1':'#16a34a','2':'#d97706','3':'#dc2626','D':'#9ca3af','I':'#7c3aed','V':'#0891b2','P':'#f59e0b'};
-    var turnoBg={'1':'#dcfce7','2':'#fef3c7','3':'#fee2e2','D':'#f3f4f6','I':'#ede9fe','V':'#e0f7fa','P':'#fffbeb'};
+    var turnoColor={'1':'#000','2':'#000','3':'#000','D':'#fff','I':'#000','V':'#000','P':'#fff','F':'#000','R':'#000'};
+    var turnoBg={'1':'#4ade80','2':'#9ca3af','3':'#fb923c','D':'#7c3aed','I':'#f472b6','V':'#38bdf8','P':'#1e3a8a','F':'#ef4444','R':'#facc15'};
 
     // Cabecera días
     var headerDias='<tr><th style="position:sticky;left:0;background:#1a3c5e;z-index:2;padding:4px 8px;font-size:.7rem;color:#fff;white-space:nowrap">Técnico</th>';
@@ -22272,7 +22272,7 @@ function _renderHorarios(lDiv){
         var col=turnoColor[val]||'#d1d5db';
         if(esAdmin){
           fila+='<td style="padding:0;border-bottom:1px solid #e5e7eb;min-width:28px">'
-            +'<select data-emp="'+e.id+'" data-dia="'+d+'" onchange="horSetVal(this)" onkeydown="horNavegar(this,event)" style="display:block;width:100%;height:28px;border:none;background:'+bg+';color:'+col+';font-size:.65rem;font-weight:800;text-align:center;cursor:pointer;padding:0">'
+            +'<select data-emp="'+e.id+'" data-dia="'+d+'" onchange="horSetVal(this)" onkeydown="horNavegar(this,event)" style="display:block;width:100%;height:28px;border:none;background:'+bg+';color:'+col+';font-size:.65rem;font-weight:800;text-align:center;text-align-last:center;cursor:pointer;padding:0;-webkit-appearance:none;-moz-appearance:none;appearance:none">'
             +'<option value="">-</option>'
             +'<option value="1"'+(val==='1'?' selected':'')+'>1</option>'
             +'<option value="2"'+(val==='2'?' selected':'')+'>2</option>'
@@ -22281,6 +22281,8 @@ function _renderHorarios(lDiv){
             +'<option value="I"'+(val==='I'?' selected':'')+'>I</option>'
             +'<option value="V"'+(val==='V'?' selected':'')+'>V</option>'
             +'<option value="P"'+(val==='P'?' selected':'')+'>P</option>'
+            +'<option value="F"'+(val==='F'?' selected':'')+'>F</option>'
+            +'<option value="R"'+(val==='R'?' selected':'')+'>R</option>'
             +'</select></td>';
         } else {
           fila+='<td style="background:'+bg+';text-align:center;font-size:.65rem;font-weight:800;color:'+col+';padding:3px 2px;border-bottom:1px solid #e5e7eb;min-width:28px">'+(val||'')+'</td>';
@@ -22290,13 +22292,15 @@ function _renderHorarios(lDiv){
     }).join('');
 
     var leyenda='<div style="display:flex;gap:6px;flex-wrap:wrap;font-size:.72rem;margin-bottom:8px">'
-      +'<span style="background:#f0fdf4;color:#14532d;padding:2px 8px;border-radius:4px;font-weight:700">1=T1</span>'
-      +'<span style="background:#f9fafb;color:#92400e;padding:2px 8px;border-radius:4px;font-weight:700">2=T2</span>'
-      +'<span style="background:#fef2f2;color:#7f1d1d;padding:2px 8px;border-radius:4px;font-weight:700">3=T3</span>'
-      +'<span style="background:#f3f4f6;color:#9ca3af;padding:2px 8px;border-radius:4px;font-weight:700">D=Desc</span>'
-      +'<span style="background:#f5f3ff;color:#4c1d95;padding:2px 8px;border-radius:4px;font-weight:700">I=Inc</span>'
-      +'<span style="background:#e0f7fa;color:#0891b2;padding:2px 8px;border-radius:4px;font-weight:700">V=Vac</span>'
-      +'<span style="background:#fffbeb;color:#f59e0b;padding:2px 8px;border-radius:4px;font-weight:700">P=Permiso</span>'
+      +'<span style="background:#4ade80;color:#000;padding:2px 8px;border-radius:4px;font-weight:700">1=T1</span>'
+      +'<span style="background:#9ca3af;color:#000;padding:2px 8px;border-radius:4px;font-weight:700">2=T2</span>'
+      +'<span style="background:#fb923c;color:#000;padding:2px 8px;border-radius:4px;font-weight:700">3=T3</span>'
+      +'<span style="background:#7c3aed;color:#fff;padding:2px 8px;border-radius:4px;font-weight:700">D=Desc</span>'
+      +'<span style="background:#f472b6;color:#000;padding:2px 8px;border-radius:4px;font-weight:700">I=Inc</span>'
+      +'<span style="background:#38bdf8;color:#000;padding:2px 8px;border-radius:4px;font-weight:700">V=Vac</span>'
+      +'<span style="background:#1e3a8a;color:#fff;padding:2px 8px;border-radius:4px;font-weight:700">P=Permiso</span>'
+      +'<span style="background:#ef4444;color:#000;padding:2px 8px;border-radius:4px;font-weight:700">F=Falta</span>'
+      +'<span style="background:#facc15;color:#000;padding:2px 8px;border-radius:4px;font-weight:700">R=Retardo</span>'
       +(esAdmin?'<button onclick="horGuardar()" style="margin-left:auto;padding:2px 12px;background:#1a3c5e;color:#fff;border:none;border-radius:6px;font-size:.72rem;font-weight:700;cursor:pointer">💾 Guardar</button>':'')
       +'</div>';
 
@@ -22341,15 +22345,21 @@ function _horPasteHandler(e){
   if(startEmpIdx<0||!startDia) return;
 
   var diasMes=new Date(_gpAño,_gpMes,0).getDate();
-  var permitidos={'1':1,'2':1,'3':1,'D':1,'I':1,'V':1,'P':1};
-  var turnoColor={'1':'#16a34a','2':'#d97706','3':'#dc2626','D':'#9ca3af','I':'#7c3aed','V':'#0891b2','P':'#f59e0b'};
-  var turnoBg={'1':'#dcfce7','2':'#fef3c7','3':'#fee2e2','D':'#f3f4f6','I':'#ede9fe','V':'#e0f7fa','P':'#fffbeb'};
+  var permitidos={'1':1,'2':1,'3':1,'D':1,'I':1,'V':1,'P':1,'F':1,'R':1};
+  var turnoColor={'1':'#000','2':'#000','3':'#000','D':'#fff','I':'#000','V':'#000','P':'#fff','F':'#000','R':'#000'};
+  var turnoBg={'1':'#4ade80','2':'#9ca3af','3':'#fb923c','D':'#7c3aed','I':'#f472b6','V':'#38bdf8','P':'#1e3a8a','F':'#ef4444','R':'#facc15'};
+  var protegidos={'V':'Vacaciones','P':'Permiso','F':'Falta','R':'Retardo','I':'Incapacidad'};
 
   var filas=texto.replace(/\r/g,'').split('\n');
   if(filas.length&&filas[filas.length-1]==='') filas.pop(); // Sheets suele copiar con salto de línea final
 
   if(!window._horData) window._horData={};
-  var aplicadas=0, invalidas=0;
+
+  // Primera pasada (sin aplicar nada todavía): arma la lista de celdas válidas a
+  // pegar y cuenta cuántas de ellas pisarían un día ya registrado desde Vacaciones
+  // o Incidencias (V/P/F/R/I), para pedir una sola confirmación antes de aplicar
+  // todo el bloque en vez de interrumpir el pegado celda por celda.
+  var cambios=[], invalidas=0, protegidasCount=0;
   filas.forEach(function(fila,rOff){
     var empIdx=startEmpIdx+rOff;
     if(empIdx>=empIds.length) return; // no desbordar la lista de técnicos
@@ -22360,33 +22370,52 @@ function _horPasteHandler(e){
       var v=(val||'').toString().trim().toUpperCase();
       if(v==='') return; // celda vacía en el origen: no tocar la que ya había
       if(!permitidos[v]){ invalidas++; return; }
-      if(!window._horData[empId]) window._horData[empId]={};
-      window._horData[empId][dia]=v;
-      aplicadas++;
-      var sel=document.querySelector('select[data-emp="'+empId+'"][data-dia="'+dia+'"]');
-      if(sel){
-        sel.value=v;
-        sel.style.background=turnoBg[v]||'#fff';
-        sel.style.color=turnoColor[v]||'#d1d5db';
-      }
+      var anterior=(window._horData[empId]&&window._horData[empId][dia])||'';
+      if(protegidos[anterior]&&anterior!==v) protegidasCount++;
+      cambios.push({empId:empId,dia:dia,v:v});
     });
   });
 
-  if(!aplicadas&&!invalidas) return;
+  if(!cambios.length&&!invalidas) return;
+
+  if(protegidasCount>0&&!confirm(protegidasCount+' día(s) del bloque pegado ya tienen Vacaciones/Permiso/Falta/Retardo/Incapacidad registrados y se sobrescribirían.\n¿Continuar de todas formas?')){
+    return; // se cancela todo el pegado, no se aplica ningún cambio
+  }
+
+  cambios.forEach(function(c){
+    if(!window._horData[c.empId]) window._horData[c.empId]={};
+    window._horData[c.empId][c.dia]=c.v;
+    var sel=document.querySelector('select[data-emp="'+c.empId+'"][data-dia="'+c.dia+'"]');
+    if(sel){
+      sel.value=c.v;
+      sel.style.background=turnoBg[c.v]||'#fff';
+      sel.style.color=turnoColor[c.v]||'#d1d5db';
+    }
+  });
+
   showAlert(invalidas
-    ? ('✅ '+aplicadas+' celdas pegadas, '+invalidas+' con valor no reconocido (se ignoraron)')
-    : ('✅ '+aplicadas+' celdas pegadas — no olvides 💾 Guardar'));
+    ? ('✅ '+cambios.length+' celdas pegadas, '+invalidas+' con valor no reconocido (se ignoraron)')
+    : ('✅ '+cambios.length+' celdas pegadas — no olvides 💾 Guardar'));
 }
 
 function horSetVal(sel){
   var emp=sel.getAttribute('data-emp');
   var dia=sel.getAttribute('data-dia');
+  var nuevo=sel.value;
+  var protegidos={'V':'Vacaciones','P':'Permiso','F':'Falta','R':'Retardo','I':'Incapacidad'};
+  var anterior=(window._horData[emp]&&window._horData[emp][dia])||'';
+  if(protegidos[anterior]&&anterior!==nuevo){
+    if(!confirm('Este día ya tiene "'+protegidos[anterior]+'" registrado desde Vacaciones/Incidencias.\n¿Deseas cambiarlo de todas formas?')){
+      sel.value=anterior; // revertir el cambio visual, no se guarda nada
+      return;
+    }
+  }
   if(!window._horData[emp]) window._horData[emp]={};
-  window._horData[emp][dia]=sel.value;
-  var turnoColor={'1':'#16a34a','2':'#d97706','3':'#dc2626','D':'#9ca3af','I':'#7c3aed','V':'#0891b2','P':'#f59e0b'};
-  var turnoBg={'1':'#dcfce7','2':'#fef3c7','3':'#fee2e2','D':'#f3f4f6','I':'#ede9fe','V':'#e0f7fa','P':'#fffbeb'};
-  sel.style.background=turnoBg[sel.value]||'#fff';
-  sel.style.color=turnoColor[sel.value]||'#d1d5db';
+  window._horData[emp][dia]=nuevo;
+  var turnoColor={'1':'#000','2':'#000','3':'#000','D':'#fff','I':'#000','V':'#000','P':'#fff','F':'#000','R':'#000'};
+  var turnoBg={'1':'#4ade80','2':'#9ca3af','3':'#fb923c','D':'#7c3aed','I':'#f472b6','V':'#38bdf8','P':'#1e3a8a','F':'#ef4444','R':'#facc15'};
+  sel.style.background=turnoBg[nuevo]||'#fff';
+  sel.style.color=turnoColor[nuevo]||'#d1d5db';
 }
 
 function horNavegar(sel, e){
@@ -22431,6 +22460,12 @@ function horNavegar(sel, e){
   } else if(e.key==='p'||e.key==='P'){
     sel.value='P'; horSetVal(sel); e.preventDefault();
     if(dia<diasMes){ nextDia=dia+1; }
+  } else if(e.key==='f'||e.key==='F'){
+    sel.value='F'; horSetVal(sel); e.preventDefault();
+    if(dia<diasMes){ nextDia=dia+1; }
+  } else if(e.key==='r'||e.key==='R'){
+    sel.value='R'; horSetVal(sel); e.preventDefault();
+    if(dia<diasMes){ nextDia=dia+1; }
   } else { return; }
 
   var next=document.querySelector('[data-emp="'+nextEmp+'"][data-dia="'+nextDia+'"]');
@@ -22471,6 +22506,43 @@ function horGuardar(){
       }
     });
   });
+}
+
+// Alimenta automáticamente el horario (tabla horarios_empleado) al registrar
+// Vacaciones o Incidencias: marca cada día del rango [fechaInicio, fechaFin] con
+// el código correspondiente (V/P/F/R/I). dias_config se guarda un registro por
+// mes, así que si el rango cruza de un mes a otro se agrupa y se actualiza cada
+// mes por separado. Usado por guardarVacaciones() y guardarIncidencia().
+function _aplicarCodigoHorarioRango(empId,fechaInicioStr,fechaFinStr,codigo){
+  if(!empId||!fechaInicioStr||!codigo) return Promise.resolve();
+  var ini=new Date(fechaInicioStr+'T12:00:00');
+  var fin=new Date((fechaFinStr||fechaInicioStr)+'T12:00:00');
+  if(isNaN(ini.getTime())||isNaN(fin.getTime())||fin<ini) return Promise.resolve();
+
+  var porMes={}; // 'año-mes' -> {año,mes,dias:[...]}
+  var cur=new Date(ini.getTime());
+  while(cur<=fin){
+    var a=cur.getFullYear(), m=cur.getMonth()+1, d=cur.getDate();
+    var key=a+'-'+m;
+    if(!porMes[key]) porMes[key]={año:a,mes:m,dias:[]};
+    porMes[key].dias.push(d);
+    cur.setDate(cur.getDate()+1);
+  }
+
+  var grupos=Object.keys(porMes).map(function(k){return porMes[k];});
+  return Promise.all(grupos.map(function(g){
+    return supaFetch('horarios_empleado','GET',null,'empleado_id=eq.'+empId+'&mes=eq.'+g.mes+'&anio=eq.'+g.año+'&limit=1').then(function(rows){
+      var row=rows&&rows[0];
+      var diasConfig={};
+      if(row&&row.dias_config){ try{ diasConfig=JSON.parse(row.dias_config); }catch(e){} }
+      g.dias.forEach(function(d){ diasConfig[d]=codigo; });
+      if(row){
+        return supaFetch('horarios_empleado','PATCH',{dias_config:JSON.stringify(diasConfig)},'empleado_id=eq.'+empId+'&mes=eq.'+g.mes+'&anio=eq.'+g.año);
+      } else {
+        return supaFetch('horarios_empleado','POST',{empleado_id:empId,mes:g.mes,anio:g.año,dias_config:JSON.stringify(diasConfig)},null);
+      }
+    });
+  }));
 }
 
 
@@ -22650,8 +22722,18 @@ function guardarVacaciones(empId,año){
     headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
     body:JSON.stringify({empleado_id:empId,año:año,dias_correspondientes:corr,dias_tomados:tomar,fecha_inicio:inicio||null,fecha_fin:fin||null})
   }).then(function(r){
-    if(r.ok){var m=document.getElementById('modal-vac');if(m)m.remove();showAlert('✅ Vacaciones guardadas');_renderVacaciones(document.getElementById('personal-content'));}
-    else r.text().then(function(t){showAlert('⚠️ '+t.substring(0,80),'error');});
+    if(!r.ok){ r.text().then(function(t){showAlert('⚠️ '+t.substring(0,80),'error');}); return; }
+    var m=document.getElementById('modal-vac');if(m)m.remove();
+    if(inicio){
+      // Alimenta automáticamente el horario: marca esos días como Vacaciones (V)
+      _aplicarCodigoHorarioRango(empId,inicio,fin||inicio,'V').then(function(){
+        showAlert('✅ Vacaciones guardadas y horario actualizado');
+        _renderVacaciones(document.getElementById('personal-content'));
+      });
+    } else {
+      showAlert('✅ Vacaciones guardadas');
+      _renderVacaciones(document.getElementById('personal-content'));
+    }
   });
 }
 
@@ -22750,9 +22832,10 @@ function guardarIncidencia(){
   var tipo=document.getElementById('inc-tipo').value;
   var fecha=document.getElementById('inc-fecha').value;
   if(!empId||!tipo||!fecha){showAlert('Empleado, tipo y fecha son obligatorios','error');return;}
+  var fechaFin=document.getElementById('inc-fecha-fin').value||fecha;
   var payload={
     empleado_id:empId, tipo:tipo, fecha:fecha,
-    fecha_fin:document.getElementById('inc-fecha-fin').value||fecha,
+    fecha_fin:fechaFin,
     dias:parseInt(document.getElementById('inc-dias').value)||1,
     motivo:document.getElementById('inc-motivo').value.trim()||null
   };
@@ -22761,8 +22844,20 @@ function guardarIncidencia(){
     headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
     body:JSON.stringify(payload)
   }).then(function(r){
-    if(r.ok){var m=document.getElementById('modal-incidencia');if(m)m.remove();showAlert('✅ Incidencia registrada');_renderIncidencias(document.getElementById('personal-content'));}
-    else r.text().then(function(t){showAlert('⚠️ '+t.substring(0,80),'error');});
+    if(!r.ok){ r.text().then(function(t){showAlert('⚠️ '+t.substring(0,80),'error');}); return; }
+    var m=document.getElementById('modal-incidencia');if(m)m.remove();
+    // Alimenta automáticamente el horario según el tipo de incidencia
+    var codigoPorTipo={vacaciones:'V',permiso_con_goce:'P',permiso_sin_goce:'P',falta_justificada:'F',falta_injustificada:'F',retardo:'R'};
+    var codigo=codigoPorTipo[tipo];
+    if(codigo){
+      _aplicarCodigoHorarioRango(empId,fecha,fechaFin,codigo).then(function(){
+        showAlert('✅ Incidencia registrada y horario actualizado');
+        _renderIncidencias(document.getElementById('personal-content'));
+      });
+    } else {
+      showAlert('✅ Incidencia registrada');
+      _renderIncidencias(document.getElementById('personal-content'));
+    }
   });
 }
 // ── FIN GESTIÓN DE PERSONAL ──────────────────────────────────────
