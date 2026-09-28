@@ -307,6 +307,11 @@ function goBack(){
     window._pm3BackFn=null;
     window._fromReprogramar=false;
     showPM03PorReprogramar();
+  } else if(backId==='screen-ordenes'&&window._protoBackFn==='showMenuProtocolosPM03'){
+    // Desde "Protocolos existentes" o "PM03 por semana", regresar al submenú de
+    // Protocolos en vez de saltar directo a la pantalla principal de la app.
+    window._protoBackFn=null;
+    showMenuProtocolosPM03();
   } else if(backId==='screen-pm02asignar'){
     var tb=document.querySelector('#screen-ordenes .topbar');
     if(window._conciliarBack){
@@ -5145,7 +5150,19 @@ var SUPA_URL='https://bwjvmtwkgvyewyjfazou.supabase.co';
 var SUPA_KEY='sb_publishable_bMC14dd2RT3n0Ka3Mwb8Yg_JRXlz-OE';
 var SUPER_PWD='Apocalipsis$2016';
 
-function supaFetch(t,m,b,p){var url=SUPA_URL+'/rest/v1/'+t+(p?'?'+p:'');var headers={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Accept':'application/json'};if(m==='POST')headers['Prefer']='resolution=merge-duplicates,return=representation';var o={method:m||'GET',headers:headers};if(b)o.body=JSON.stringify(b);return fetch(url,o).then(function(r){if(!r.ok){return r.text().then(function(txt){console.error('supaFetch error ['+t+']:',txt);return null;});}return r.json();}).catch(function(e){console.error('supaFetch catch:',e);return null;});}
+function supaFetch(t,m,b,p){var url=SUPA_URL+'/rest/v1/'+t+(p?'?'+p:'');var headers={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Accept':'application/json'};if(m==='POST')headers['Prefer']='resolution=merge-duplicates,return=representation';var o={method:m||'GET',headers:headers};if(b)o.body=JSON.stringify(b);return fetch(url,o).then(function(r){
+  if(!r.ok){return r.text().then(function(txt){console.error('supaFetch error ['+t+']:',txt);return null;});}
+  // PATCH/DELETE normalmente responden 204 sin cuerpo — antes se intentaba leer ese
+  // cuerpo vacío como JSON, lo cual truena y caía al catch de abajo, reportando un
+  // guardado exitoso como si hubiera fallado (siempre devolvía null en ambos casos,
+  // sin forma de distinguir éxito real de fallo real). Ahora un 204/cuerpo vacío se
+  // confirma como éxito (true) en vez de forzar el parseo.
+  if(r.status===204) return true;
+  return r.text().then(function(txt){
+    if(!txt) return true;
+    try{ return JSON.parse(txt); }catch(e){ return true; }
+  });
+}).catch(function(e){console.error('supaFetch catch:',e);return null;});}
 function supaUpsert(t,b){
   window._supaUpsert=supaUpsert;
   return fetch(SUPA_URL+'/rest/v1/'+t,{
@@ -11013,40 +11030,51 @@ function firmaGuardar(){
   var now=Date.now();
   var nombre=currentUser.nombre;
 
-  // Store in pmState fields
-  if(campo==='operador'){p.firmaImgOperador=imgData;p.firmaNombreOperador=nombre;p.firmaTsOperador=now;}
-  else if(campo==='lider'){p.firmaImgLider=imgData;p.firmaNombreLider=nombre;p.firmaTsLider=now;}
-  else if(campo==='calidad'){p.firmaImgCalidad=imgData;p.firmaNombreCalidad=nombre;p.firmaTsCalidad=now;}
-  else if(campo==='admin'){p.firmaImgAdmin=imgData;p.firmaNombreAdmin=nombre;p.firmaTsAdmin=now;}
+  // Calcular si con esta firma quedarían las 4 completas, sin aplicar todavía nada
+  // localmente — antes esto (y el guardado local) se hacía ANTES de confirmar que
+  // Supabase realmente la recibió, así que si el guardado fallaba en silencio (mala
+  // señal en planta, por ejemplo) la app igual decía "✅ Firma guardada" y el técnico
+  // no se enteraba — hasta que alguien volvía a entrar y la veía "desaparecida"
+  // porque el servidor nunca la tuvo. Ahora no se toca nada local ni se cierra este
+  // recuadro hasta tener la confirmación real de Supabase.
+  var imgsProyectadas={operador:p.firmaImgOperador,lider:p.firmaImgLider,calidad:p.firmaImgCalidad,admin:p.firmaImgAdmin};
+  imgsProyectadas[campo]=imgData;
+  var todas=(imgsProyectadas.operador&&imgsProyectadas.lider&&imgsProyectadas.calidad&&imgsProyectadas.admin);
 
-  saveDB('pm03_plan',PM03_PLAN);
-
-  // Save to Supabase
   var patch={};
   patch['firma_img_'+campo]=imgData;
   patch['firma_nombre_'+campo]=nombre;
   patch['firma_ts_'+campo]=now;
+  if(todas) patch.estado_flujo='completado';
 
-  // Check if all 4 signed
-  var todas=(p.firmaImgOperador&&p.firmaImgLider&&p.firmaImgCalidad&&p.firmaImgAdmin);
-  if(todas){
-    patch.estado_flujo='completado';
-    p.estadoFlujo='completado';
-  }
+  var btnGuardar=document.querySelector('#modal-firma-canvas button[onclick="firmaGuardar()"]');
+  if(btnGuardar){btnGuardar.disabled=true;btnGuardar.textContent='Guardando…';}
 
-  supaFetch('pm03_plan','PATCH',patch,'id=eq.'+_firmaOtId).catch(function(){});
+  supaFetch('pm03_plan','PATCH',patch,'id=eq.'+_firmaOtId).then(function(ok){
+    if(!ok){
+      showAlert('⚠️ No se pudo guardar la firma — revisa tu conexión e intenta de nuevo','error');
+      if(btnGuardar){btnGuardar.disabled=false;btnGuardar.textContent='💾 Guardar firma';}
+      return;
+    }
+    if(campo==='operador'){p.firmaImgOperador=imgData;p.firmaNombreOperador=nombre;p.firmaTsOperador=now;}
+    else if(campo==='lider'){p.firmaImgLider=imgData;p.firmaNombreLider=nombre;p.firmaTsLider=now;}
+    else if(campo==='calidad'){p.firmaImgCalidad=imgData;p.firmaNombreCalidad=nombre;p.firmaTsCalidad=now;}
+    else if(campo==='admin'){p.firmaImgAdmin=imgData;p.firmaNombreAdmin=nombre;p.firmaTsAdmin=now;}
+    if(todas) p.estadoFlujo='completado';
+    saveDB('pm03_plan',PM03_PLAN);
 
-  document.getElementById('modal-firma-canvas').remove();
-  showAlert('✅ Firma guardada'+(todas?' — Protocolo completo':''));
-  // Si se firmó desde dentro del modal de cierre (antes de guardar la PM03), solo
-  // refrescar la sección de firmas ahí mismo — navegar a showDetallePM03 perdería
-  // de vista todo lo que el técnico ya llenó en el formulario de cierre.
-  var contFirmas=document.getElementById('pm3-firmas-container');
-  if(contFirmas && document.getElementById('modal-cierre-pm03')){
-    contFirmas.innerHTML = renderFirmasPhysical(p);
-  } else {
-    showDetallePM03(_firmaOtId);
-  }
+    var m=document.getElementById('modal-firma-canvas');if(m)m.remove();
+    showAlert('✅ Firma guardada'+(todas?' — Protocolo completo':''));
+    // Si se firmó desde dentro del modal de cierre (antes de guardar la PM03), solo
+    // refrescar la sección de firmas ahí mismo — navegar a showDetallePM03 perdería
+    // de vista todo lo que el técnico ya llenó en el formulario de cierre.
+    var contFirmas=document.getElementById('pm3-firmas-container');
+    if(contFirmas && document.getElementById('modal-cierre-pm03')){
+      contFirmas.innerHTML = renderFirmasPhysical(p);
+    } else {
+      showDetallePM03(_firmaOtId);
+    }
+  });
 }
 
 function renderFirmasPhysical(p){
@@ -18677,6 +18705,7 @@ function agregarBotonLiberacionLider(){
 
 function showAnormalidadesPorAprobar(){
   detalleBackScreen = 'screen-ordenes';
+  window._protoBackFn=null; // no viene de Protocolos, no debe heredar su "regresar a"
   var lista = ORDENES.filter(function(o){
     return o.estado==='pre_cierre' && o.levantadoId===currentUser.id;
   }).sort(function(a,b){return b.preCierreTs-a.preCierreTs;});
@@ -19200,6 +19229,7 @@ function cargarProtocolosSupa(){
 // ================================================================
 function showLiberacionMtto(){
   detalleBackScreen = 'screen-ordenes';
+  window._protoBackFn=null; // no viene de Protocolos, no debe heredar su "regresar a"
   // Buscar PM03 cerradas pendientes de liberación (sin liberadoPor)
   var pm3Cerradas = PM03_PLAN.filter(function(p){
     return p.estado === 'cerrada' && !p.liberadoPor && p.estadoCalidad!=='liberada';
@@ -19332,6 +19362,7 @@ function showLiberacionDetalle(id){
     +'</div>';
   document.getElementById('detalle-content').innerHTML = html;
   detalleBackScreen = 'screen-ordenes';
+  window._protoBackFn=null; // no viene de Protocolos, no debe heredar su "regresar a"
   showScreen('screen-detalle');
 }
 // ── FIN LIBERACIÓN MTTO ──────────────────────────────────────────
@@ -20270,6 +20301,7 @@ function showHistorialMedicion(linea, actId, componente, actividad){
 // protocolos ya creados (con filtros) o trabajar la preparación semanal.
 function showMenuProtocolosPM03(){
   detalleBackScreen = 'screen-menu';
+  window._protoBackFn=null;
   var fDiv=document.getElementById('ordenes-filtros');
   var lDiv=document.getElementById('mis-ordenes-list');
   fDiv.innerHTML='<div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:8px">🗂️ Protocolos PM03</div>';
@@ -20287,7 +20319,8 @@ function showMenuProtocolosPM03(){
 }
 
 function showAdminProtocolos(){
-  detalleBackScreen = 'screen-menu';
+  detalleBackScreen = 'screen-ordenes';
+  window._protoBackFn='showMenuProtocolosPM03';
   window._protoVolverASemana=false;
   var fDiv=document.getElementById('ordenes-filtros');
   var lDiv=document.getElementById('mis-ordenes-list');
@@ -20516,7 +20549,8 @@ function _protoNivelCobertura(linea,equipo,actividad){
 }
 
 function showProtocolosProximaSemana(){
-  detalleBackScreen = 'screen-menu';
+  detalleBackScreen = 'screen-ordenes';
+  window._protoBackFn='showMenuProtocolosPM03';
   var fDiv=document.getElementById('ordenes-filtros');
   var lDiv=document.getElementById('mis-ordenes-list');
 
@@ -22237,8 +22271,8 @@ function _renderHorarios(lDiv){
         var bg=turnoBg[val]||'#fff';
         var col=turnoColor[val]||'#d1d5db';
         if(esAdmin){
-          fila+='<td style="padding:1px;border-bottom:1px solid #e5e7eb;min-width:28px">'
-            +'<select data-emp="'+e.id+'" data-dia="'+d+'" onchange="horSetVal(this)" onkeydown="horNavegar(this,event)" style="width:28px;height:28px;border:none;background:'+bg+';color:'+col+';font-size:.65rem;font-weight:800;text-align:center;cursor:pointer;padding:0">'
+          fila+='<td style="padding:0;border-bottom:1px solid #e5e7eb;min-width:28px">'
+            +'<select data-emp="'+e.id+'" data-dia="'+d+'" onchange="horSetVal(this)" onkeydown="horNavegar(this,event)" style="display:block;width:100%;height:28px;border:none;background:'+bg+';color:'+col+';font-size:.65rem;font-weight:800;text-align:center;cursor:pointer;padding:0">'
             +'<option value="">-</option>'
             +'<option value="1"'+(val==='1'?' selected':'')+'>1</option>'
             +'<option value="2"'+(val==='2'?' selected':'')+'>2</option>'
@@ -22269,7 +22303,8 @@ function _renderHorarios(lDiv){
     var selHTML='<div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap">'
       +'<select class="form-control" style="flex:1;padding:8px" onchange="_gpMes=parseInt(this.value);_renderHorarios(document.getElementById(\'personal-content\'))">'+mesOpts+'</select>'
       +'<select class="form-control" style="flex:1;padding:8px" onchange="_gpAño=parseInt(this.value);_renderHorarios(document.getElementById(\'personal-content\'))">'+añoOpts+'</select>'
-      +'</div>';
+      +'</div>'
+      +(esAdmin?'<div style="font-size:.68rem;color:#6b7280;margin:-6px 0 8px">📋 Tip: da clic en una celda y pega (Ctrl+V) un bloque copiado de tu hoja de cálculo — llena varias celdas de un jalón, empezando ahí.</div>':'');
 
     lDiv.innerHTML=selHTML+leyenda
       +'<div style="overflow-x:auto;-webkit-overflow-scrolling:touch">'
@@ -22280,7 +22315,67 @@ function _renderHorarios(lDiv){
 
     window._horStorageKey=storageKey;
     window._horData=savedData;
+
+    if(esAdmin && !window._horPasteBound){
+      document.addEventListener('paste', _horPasteHandler);
+      window._horPasteBound=true;
+    }
   });
+}
+
+// Pegado tipo Excel/Sheets sobre la tabla de horarios: da clic en una celda y pega
+// (Ctrl+V) un bloque copiado (técnicos en filas, días en columnas, mismos códigos
+// 1/2/3/D/I/V/P) — se distribuye a partir de esa celda, sin desbordar la lista de
+// técnicos ni los días del mes. Delegado a nivel documento porque un <select> no
+// deja pegar texto directamente sobre él.
+function _horPasteHandler(e){
+  var activo=document.activeElement;
+  if(!activo||!activo.matches||!activo.matches('select[data-emp][data-dia]')) return;
+  var texto=(e.clipboardData||window.clipboardData).getData('text');
+  if(!texto) return;
+  e.preventDefault();
+
+  var empIds=['emp_2196','emp_2055','emp_1923','emp_2064','emp_1105','emp_1980','emp_804','emp_461'];
+  var startEmpIdx=empIds.indexOf(activo.getAttribute('data-emp'));
+  var startDia=parseInt(activo.getAttribute('data-dia'));
+  if(startEmpIdx<0||!startDia) return;
+
+  var diasMes=new Date(_gpAño,_gpMes,0).getDate();
+  var permitidos={'1':1,'2':1,'3':1,'D':1,'I':1,'V':1,'P':1};
+  var turnoColor={'1':'#16a34a','2':'#d97706','3':'#dc2626','D':'#9ca3af','I':'#7c3aed','V':'#0891b2','P':'#f59e0b'};
+  var turnoBg={'1':'#dcfce7','2':'#fef3c7','3':'#fee2e2','D':'#f3f4f6','I':'#ede9fe','V':'#e0f7fa','P':'#fffbeb'};
+
+  var filas=texto.replace(/\r/g,'').split('\n');
+  if(filas.length&&filas[filas.length-1]==='') filas.pop(); // Sheets suele copiar con salto de línea final
+
+  if(!window._horData) window._horData={};
+  var aplicadas=0, invalidas=0;
+  filas.forEach(function(fila,rOff){
+    var empIdx=startEmpIdx+rOff;
+    if(empIdx>=empIds.length) return; // no desbordar la lista de técnicos
+    var empId=empIds[empIdx];
+    fila.split('\t').forEach(function(val,cOff){
+      var dia=startDia+cOff;
+      if(dia>diasMes) return; // no desbordar los días del mes
+      var v=(val||'').toString().trim().toUpperCase();
+      if(v==='') return; // celda vacía en el origen: no tocar la que ya había
+      if(!permitidos[v]){ invalidas++; return; }
+      if(!window._horData[empId]) window._horData[empId]={};
+      window._horData[empId][dia]=v;
+      aplicadas++;
+      var sel=document.querySelector('select[data-emp="'+empId+'"][data-dia="'+dia+'"]');
+      if(sel){
+        sel.value=v;
+        sel.style.background=turnoBg[v]||'#fff';
+        sel.style.color=turnoColor[v]||'#d1d5db';
+      }
+    });
+  });
+
+  if(!aplicadas&&!invalidas) return;
+  showAlert(invalidas
+    ? ('✅ '+aplicadas+' celdas pegadas, '+invalidas+' con valor no reconocido (se ignoraron)')
+    : ('✅ '+aplicadas+' celdas pegadas — no olvides 💾 Guardar'));
 }
 
 function horSetVal(sel){
