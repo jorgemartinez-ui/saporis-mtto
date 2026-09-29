@@ -22150,6 +22150,14 @@ function abrirEditorEmpleado(id){
       +'<div style="background:#f0f7ff;border-radius:8px;padding:10px;margin-bottom:16px;font-size:.82rem;color:#0369a1">'
       +'📋 Vacaciones por LFT según antigüedad: <strong id="emp-vac-calc">'+diasVacLFT(e?e.antiguedad_años||0:0)+' días/año</strong>'
       +'</div>'
+      +'<div style="border-top:1px solid #e5e7eb;padding-top:10px;margin-bottom:16px">'
+      +'<label style="display:flex;align-items:center;gap:8px;font-size:.8rem;font-weight:700;color:#374151;margin-bottom:8px"><input type="checkbox" id="emp-en-horarios" style="width:16px;height:16px"'+(e&&e.en_horarios?' checked':'')+'> Aparece en el módulo de Horarios</label>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+      +'<div><label style="font-size:.72rem;color:#6b7280;display:block;margin-bottom:3px">Apodo en Horarios (opcional)</label>'
+      +'<input type="text" id="emp-apodo-horarios" class="form-control" value="'+(e&&e.horario_apodo?e.horario_apodo:'')+'" placeholder="Ej. César" style="padding:8px"></div>'
+      +'<div><label style="font-size:.72rem;color:#6b7280;display:block;margin-bottom:3px">Orden en Horarios (opcional)</label>'
+      +'<input type="number" id="emp-orden-horarios" class="form-control" value="'+(e&&e.horario_orden!=null?e.horario_orden:'')+'" style="padding:8px"></div>'
+      +'</div></div>'
       +'<div style="display:flex;gap:10px">'
       +'<button onclick="var m=document.getElementById(\'modal-editor-emp\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
       +'<button onclick="guardarEmpleado(\''+( id||'')+'\' )" style="flex:2;padding:13px;background:#0891b2;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar</button>'
@@ -22166,6 +22174,7 @@ function abrirEditorEmpleado(id){
 function guardarEmpleado(id){
   var nombre=document.getElementById('emp-nombre').value.trim();
   if(!nombre){showAlert('El nombre es obligatorio','error');return;}
+  var ordenHorariosVal=document.getElementById('emp-orden-horarios').value;
   var payload={
     nombre:nombre,
     numero_empleado:document.getElementById('emp-num').value.trim()||null,
@@ -22173,6 +22182,9 @@ function guardarEmpleado(id){
     antiguedad_años:parseInt(document.getElementById('emp-ant').value)||0,
     turno_actual:parseInt(document.getElementById('emp-turno').value)||1,
     usuario_id:document.getElementById('emp-usuario').value||null,
+    en_horarios:document.getElementById('emp-en-horarios').checked,
+    horario_apodo:document.getElementById('emp-apodo-horarios').value.trim()||null,
+    horario_orden:ordenHorariosVal===''?null:parseInt(ordenHorariosVal),
     activo:true
   };
   var url=SUPA_URL+'/rest/v1/empleados';
@@ -22196,6 +22208,21 @@ function bajaEmpleado(id){
 var _HORARIOS_EXCEL={"emp_2196":{"4":{"1":"1","2":"D","3":"D","4":"D","5":"3","6":"3","7":"3","8":"3","9":"D","10":"2","11":"2","12":"2","13":"2","14":"2","15":"2","16":"D","17":"1","18":"1","19":"1","20":"1","21":"1","22":"1","23":"D","24":"3","25":"3","26":"3","27":"3","28":"3","29":"3","30":"D"},"5":{"1":"2","2":"2","3":"2","4":"2","5":"2","6":"2","7":"D","8":"1","9":"1","10":"1","11":"1","12":"1","13":"1","14":"D","15":"3","16":"3","17":"3","18":"3","19":"3","20":"3","21":"D","22":"2","23":"2","24":"2","25":"2","26":"2","27":"2","28":"D","29":"1","30":"1","31":"1"},"6":{"1":"1","2":"1","3":"1","4":"D","5":"3","6":"3","7":"3","8":"3","9":"3","10":"3","11":"D","12":"2","13":"2","14":"2","15":"2","16":"2","17":"2","18":"D","19":"1","20":"1","21":"1","22":"1","23":"1","24":"1","25":"D","26":"3","27":"3","28":"3","29":"3","30":"3"}},"emp_2055":{"4":{"1":"1","2":"D","3":"D","4":"D","5":"2","6":"2","7":"2","8":"2","9":"2","10":"D","11":"1","12":"1","13":"1","14":"1","15":"1","16":"1","17":"D","18":"3","19":"3","20":"3","21":"3","22":"3","23":"3","24":"D","25":"2","26":"2","27":"2","28":"2","29":"2","30":"2"},"5":{"1":"D","2":"1","3":"1","4":"1","5":"1","6":"1","7":"1","8":"D","9":"3","10":"3","11":"3","12":"3","13":"3","14":"3","15":"D","16":"2","17":"2","18":"2","19":"2","20":"2","21":"2","22":"D","23":"1","24":"1","25":"1","26":"1","27":"1","28":"1","29":"D","30":"3","31":"3"},"6":{"1":"3","2":"3","3":"3","4":"3","5":"D","6":"2","7":"2","8":"2","9":"2","10":"2","11":"2","12":"D","13":"1","14":"1","15":"1","16":"1","17":"1","18":"1","19":"D","20":"3","21":"3","22":"3","23":"3","24":"3","25":"3","26":"D","27":"2","28":"2","29":"2","30":"2"}},"emp_1923":{"4":{"1":"1","2":"D","3":"D","4":"D","5":"1","6":"1","7":"1","8":"1","9":"1","10":"1","11":"D","12":"3","13":"3","14":"3","15":"3","16":"3","17":"3","18":"D","19":"2","20":"2","21":"2","22":"2","23":"2","24":"2","25":"D","26":"1","27":"1","28":"1","29":"1","30":"1"},"5":{"1":"1","2":"D","3":"3","4":"3","5":"3","6":"3","7":"3","8":"3","9":"D","10":"2","11":"2","12":"2","13":"2","14":"2","15":"2","16":"D","17":"1","18":"1","19":"1","20":"1","21":"1","22":"1","23":"D","24":"3","25":"3","26":"3","27":"3","28":"3","29":"3","30":"D","31":"2"},"6":{"1":"2","2":"2","3":"2","4":"2","5":"2","6":"D","7":"1","8":"1","9":"1","10":"1","11":"1","12":"1","13":"D","14":"3","15":"3","16":"3","17":"3","18":"3","19":"3","20":"D","21":"2","22":"2","23":"2","24":"2","25":"2","26":"2","27":"D","28":"1","29":"1","30":"1"}},"emp_2064":{"6":{"1":"I","2":"I","3":"I","4":"I","5":"I","6":"I","7":"I","8":"I","9":"1","10":"1","11":"1","12":"1","13":"1","14":"D","15":"1","16":"1","17":"1","18":"1","19":"1","20":"1","21":"D","22":"2","23":"2","24":"2","25":"2","26":"2","27":"2","28":"D","29":"2","30":"2"}},"emp_1105":{"4":{"1":"1","2":"D","3":"D","4":"D","5":"D","6":"1","7":"1","8":"1","9":"1","10":"1","11":"1","12":"D","13":"1","14":"1","15":"1","16":"1","17":"1","18":"1","19":"D","20":"1","21":"1","22":"1","23":"1","24":"1","25":"1","26":"D","27":"1","28":"1","29":"1","30":"1"},"5":{"1":"1","2":"1","3":"D","4":"1","5":"1","6":"1","7":"1","8":"1","9":"1","10":"D","11":"1","12":"1","13":"1","14":"1","15":"1","16":"1","17":"D","18":"1","19":"1","20":"1","21":"1","22":"1","23":"1","24":"D","25":"1","26":"1","27":"1","28":"1","29":"1","30":"1","31":"D"},"6":{"1":"1","2":"1","3":"1","4":"1","5":"1","6":"1","7":"D","8":"1","9":"1","10":"1","11":"1","12":"1","13":"1","14":"D","15":"1","16":"1","17":"1","18":"1","19":"1","20":"1","21":"D","22":"1","23":"1","24":"1","25":"1","26":"1","27":"1","28":"D","29":"1","30":"1"}},"emp_1980":{"4":{"1":"1","2":"D","3":"D","4":"D","5":"D","6":"1","7":"1","8":"1","9":"3","10":"3","11":"3","12":"D","13":"1","14":"1","15":"1","16":"2","17":"2","18":"2","19":"D","20":"1","21":"1","22":"1","23":"1","24":"1","25":"1","26":"D","27":"1","28":"1","29":"1","30":"3"},"5":{"1":"3","2":"3","3":"D","4":"1","5":"1","6":"1","7":"2","8":"2","9":"2","10":"D","11":"1","12":"1","13":"1","14":"1","15":"1","16":"1","17":"D","18":"1","19":"1","20":"1","21":"3","22":"3","23":"3","24":"D","25":"1","26":"1","27":"1","28":"2","29":"2","30":"2","31":"D"},"6":{"1":"1","2":"1","3":"1","4":"1","5":"1","6":"1","7":"D","8":"1","9":"1","10":"1","11":"3","12":"3","13":"3","14":"D","15":"1","16":"1","17":"1","18":"2","19":"2","20":"2","21":"D","22":"1","23":"1","24":"1","25":"1","26":"1","27":"1","28":"D","29":"1","30":"1"}},"emp_804":{"4":{"1":"1","2":"D","3":"D","4":"D","5":"1","6":"1","7":"1","8":"1","9":"1","10":"1","11":"D","12":"1","13":"1","14":"1","15":"1","16":"1","17":"1","18":"D","19":"1","20":"1","21":"1","22":"1","23":"1","24":"1","25":"D","26":"1","27":"1","28":"1","29":"1","30":"1"},"5":{"1":"1","2":"D","3":"1","4":"1","5":"1","6":"1","7":"1","8":"1","9":"D","10":"1","11":"1","12":"1","13":"1","14":"1","15":"1","16":"D","17":"1","18":"1","19":"1","20":"1","21":"1","22":"1","23":"D","24":"1","25":"1","26":"1","27":"1","28":"1","29":"1","30":"D","31":"1"},"6":{"1":"1","2":"1","3":"1","4":"1","5":"1","6":"D","7":"1","8":"1","9":"1","10":"1","11":"1","12":"1","13":"D","14":"1","15":"1","16":"1","17":"1","18":"1","19":"1","20":"D","21":"1","22":"1","23":"1","24":"1","25":"1","26":"1","27":"D","28":"1","29":"1","30":"1"}},"emp_461":{"4":{"1":"1","2":"1","3":"1","4":"1","5":"D","6":"1","7":"1","8":"1","9":"1","10":"1","11":"D","12":"D","13":"1","14":"1","15":"1","16":"1","17":"1","18":"D","19":"D","20":"1","21":"1","22":"1","23":"1","24":"1","25":"D","26":"D","27":"1","28":"1","29":"1","30":"1"},"5":{"1":"1","2":"D","3":"D","4":"1","5":"1","6":"1","7":"1","8":"1","9":"D","10":"D","11":"1","12":"1","13":"1","14":"1","15":"1","16":"D","17":"D","18":"1","19":"1","20":"1","21":"1","22":"1","23":"D","24":"D","25":"1","26":"1","27":"1","28":"1","29":"1","30":"D","31":"D"},"6":{"1":"1","2":"1","3":"1","4":"1","5":"1","6":"D","7":"D","8":"1","9":"1","10":"1","11":"1","12":"1","13":"D","14":"D","15":"1","16":"1","17":"1","18":"1","19":"1","20":"D","21":"D","22":"1","23":"1","24":"1","25":"1","26":"1","27":"D","28":"D","29":"1","30":"1"}}};
 var _HORARIOS_NOMBRES={"emp_2196":"César","emp_2055":"Marco","emp_1923":"Ángel","emp_2064":"Alan","emp_1105":"Uriel","emp_1980":"Anthon","emp_804":"Lisandro","emp_461":"Eduardo"};
 
+// Mapa de compatibilidad: IDs viejos usados en la captura manual del Excel
+// importado (_HORARIOS_EXCEL, meses abril-junio 2026) → ID real en empleados.
+// Solo se usa como respaldo histórico si un mes no tiene nada capturado ni en
+// Supabase ni en localStorage. Horarios ya no usa estos IDs viejos para nada más.
+var _HORARIOS_ID_LEGACY={
+  '139a1501-fe9f-4fd9-a049-a11e70cf4247':'emp_2196', // César
+  '50fcf87e-7d55-4aa0-9f60-44ae542cc6c8':'emp_2055', // Marco
+  '0b57f5fd-c6d5-4770-9e9e-6056793b5695':'emp_1923', // Ángel
+  'f244eb8a-56eb-4198-aee6-a06ae50879bc':'emp_2064', // Alan
+  '9e7c148f-743e-46a8-8f78-1df3af08f179':'emp_1105', // Uriel
+  '47e43e2b-2e50-429d-840d-654366fd0a0a':'emp_1980', // Anthon
+  '2ae7e14d-2246-498f-a319-e2a1e33d41e2':'emp_804',  // Lisandro
+  'ba2992d6-c520-45b0-a30e-f193fe27a5bf':'emp_461',  // Eduardo
+};
+
 function _renderHorarios(lDiv){
   var esAdmin=currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super');
   var meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -22205,9 +22232,17 @@ function _renderHorarios(lDiv){
 
   lDiv.innerHTML='<div style="text-align:center;padding:20px;color:#9ca3af">Cargando...</div>';
 
-  // Datos guardados en Supabase (tabla horarios_empleado, campo dias_config = {"1":"1","2":"D",...})
-  supaFetch('horarios_empleado','GET',null,'mes=eq.'+mesActual+'&anio=eq.'+añoActual).then(function(rows){
+  // Técnicos que aparecen en Horarios: se leen en vivo de la tabla empleados
+  // (campo en_horarios=true), no de una lista fija en el código — así un
+  // técnico nuevo aparece automáticamente en cuanto se marca esa casilla al
+  // darlo de alta, sin tocar código. El orden es horario_orden y, de empate o
+  // sin valor, alfabético por nombre.
+  Promise.all([
+    supaFetch('horarios_empleado','GET',null,'mes=eq.'+mesActual+'&anio=eq.'+añoActual),
+    supaFetch('empleados','GET',null,'en_horarios=eq.true&activo=eq.true&order=horario_orden.asc.nullslast,nombre.asc')
+  ]).then(function(results){
     if(mesActual!==_gpMes||añoActual!==_gpAño) return; // el usuario ya cambió de mes/año mientras cargaba
+    var rows=results[0], empleadosRows=results[1]||[];
 
     var storageKey='hor_'+_gpMes+'_'+_gpAño;
     var savedData={};
@@ -22220,18 +22255,22 @@ function _renderHorarios(lDiv){
     // Si no hay nada guardado en Supabase para este mes/año, buscar primero un
     // guardado local de este mismo equipo (por si se capturó antes de que Supabase
     // aceptara los datos, ej. por RLS mal configurado) para no perder lo ya
-    // capturado; si tampoco hay nada local, usar el respaldo del Excel embebido.
+    // capturado; si tampoco hay nada local, usar el respaldo del Excel embebido
+    // (traduciendo sus IDs viejos al ID real correspondiente).
     if(!Object.keys(savedData).length){
       var localData=null;
       try{ localData=JSON.parse(localStorage.getItem(storageKey)||'null'); }catch(e){}
       if(localData&&Object.keys(localData).length){
         savedData=localData;
       } else {
-        var empIds0=Object.keys(_HORARIOS_EXCEL);
-        empIds0.forEach(function(eid){
-          var mData=_HORARIOS_EXCEL[eid]||{};
+        Object.keys(_HORARIOS_EXCEL).forEach(function(eidLegacy){
+          var mData=_HORARIOS_EXCEL[eidLegacy]||{};
           var dData=mData[_gpMes]||mData[String(_gpMes)]||{};
-          if(Object.keys(dData).length) savedData[eid]=dData;
+          if(Object.keys(dData).length){
+            var realId=null;
+            for(var rid in _HORARIOS_ID_LEGACY){ if(_HORARIOS_ID_LEGACY[rid]===eidLegacy){ realId=rid; break; } }
+            savedData[realId||eidLegacy]=dData;
+          }
         });
       }
     }
@@ -22251,21 +22290,14 @@ function _renderHorarios(lDiv){
     }
     headerDias+='</tr>';
 
-    // Lista de técnicos = los del Excel + los de empleados en Supabase
-    var EMPLEADOS_LISTA=[
-      {id:'emp_2196',nombre:'César'},
-      {id:'emp_2055',nombre:'Marco'},
-      {id:'emp_1923',nombre:'Ángel'},
-      {id:'emp_2064',nombre:'Alan'},
-      {id:'emp_1105',nombre:'Uriel'},
-      {id:'emp_1980',nombre:'Anthon'},
-      {id:'emp_804', nombre:'Lisandro'},
-      {id:'emp_461', nombre:'Eduardo'},
-    ];
+    // Lista de técnicos: los que tienen "Aparece en Horarios" marcado en su ficha de empleado
+    var EMPLEADOS_LISTA=empleadosRows.map(function(e){
+      return {id:e.id, nombre:(e.horario_apodo||e.nombre||'').toString(), full:(e.nombre||'').toString()};
+    });
 
     var filas=EMPLEADOS_LISTA.map(function(e){
       var diasEmp=savedData[e.id]||{};
-      var fila='<tr><td style="position:sticky;left:0;background:#fff;z-index:1;padding:4px 8px;font-size:.72rem;font-weight:800;white-space:nowrap;border-bottom:1px solid #e5e7eb">'+e.nombre+'</td>';
+      var fila='<tr><td title="'+e.full.replace(/"/g,'&quot;')+'" style="position:sticky;left:0;background:#fff;z-index:1;padding:4px 8px;font-size:.72rem;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px;border-bottom:1px solid #e5e7eb">'+e.nombre+'</td>';
       for(var d=1;d<=diasMes;d++){
         var val=diasEmp[d]||diasEmp[String(d)]||'';
         var bg=turnoBg[val]||'#fff';
@@ -22319,6 +22351,7 @@ function _renderHorarios(lDiv){
 
     window._horStorageKey=storageKey;
     window._horData=savedData;
+    window._horEmpIds=EMPLEADOS_LISTA.map(function(e){return e.id;});
 
     if(esAdmin && !window._horPasteBound){
       document.addEventListener('paste', _horPasteHandler);
@@ -22339,7 +22372,7 @@ function _horPasteHandler(e){
   if(!texto) return;
   e.preventDefault();
 
-  var empIds=['emp_2196','emp_2055','emp_1923','emp_2064','emp_1105','emp_1980','emp_804','emp_461'];
+  var empIds=window._horEmpIds||[]; // técnicos activos en Horarios (dinámico, leído de empleados)
   var startEmpIdx=empIds.indexOf(activo.getAttribute('data-emp'));
   var startDia=parseInt(activo.getAttribute('data-dia'));
   if(startEmpIdx<0||!startDia) return;
@@ -22423,7 +22456,7 @@ function horNavegar(sel, e){
   if(e.ctrlKey||e.metaKey) return; // dejar pasar Ctrl+V (pegado), Ctrl+C, etc. sin interceptarlas como atajo de una sola tecla
   var emp=sel.getAttribute('data-emp');
   var dia=parseInt(sel.getAttribute('data-dia'));
-  var empIds=['emp_2196','emp_2055','emp_1923','emp_2064','emp_1105','emp_1980','emp_804','emp_461'];
+  var empIds=window._horEmpIds||[]; // técnicos activos en Horarios (dinámico, leído de empleados)
   var empIdx=empIds.indexOf(emp);
   var diasMes=new Date(_gpAño,_gpMes,0).getDate();
 
