@@ -412,37 +412,18 @@ function doLogin(){
   const u=document.getElementById('inp-user').value.trim().toLowerCase();
   const p=document.getElementById('inp-pass').value.trim();
   const errEl=document.getElementById('login-error');
-  errEl.classList.add('hidden');
   if(u==='superusuario'&&p===SUPER_PWD){
     currentUser={id:'u_super',username:'superusuario',nombre:'Super Usuario',rol:'super'};
     saveDB('session',{id:'u_super',rol:'super',nombre:'Super Usuario'});
     renderMenu();showScreen('screen-menu');_initScrollListeners();return;
   }
-  if(!u||!p){errEl.textContent='Ingresa usuario y contraseña.';errEl.classList.remove('hidden');return;}
-  // El login ya no compara localmente: se valida contra el servidor (función
-  // verificar_login) para que la contraseña nunca tenga que vivir, ni en
-  // texto plano ni hasheada, guardada en el dispositivo de cada usuario.
-  var btn=document.getElementById('btn-login');
-  if(btn){btn.disabled=true;btn.dataset.origText=btn.textContent;btn.textContent='Ingresando...';}
-  fetch(SUPA_URL+'/rest/v1/rpc/verificar_login',{
-    method:'POST',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
-    body:JSON.stringify({p_username:u,p_password:p})
-  }).then(function(r){
-    return r.text().then(function(t){ var data=null; try{ data=JSON.parse(t); }catch(e){} return {ok:r.ok, data:data}; });
-  }).then(function(res){
-    if(btn){btn.disabled=false;btn.textContent=btn.dataset.origText;}
-    var found=(res.ok&&Array.isArray(res.data)&&res.data.length)?res.data[0]:null;
-    if(!found){errEl.textContent='Usuario o contraseña incorrectos.';errEl.classList.remove('hidden');return;}
-    currentUser=found;saveDB('session',{id:found.id,rol:found.rol});
-    renderMenu();showScreen('screen-menu');
-    setTimeout(syncSupabase,500);
-    _initScrollListeners();
-  }).catch(function(){
-    if(btn){btn.disabled=false;btn.textContent=btn.dataset.origText;}
-    errEl.textContent='No se pudo conectar. Revisa tu internet e intenta de nuevo.';
-    errEl.classList.remove('hidden');
-  });
+  const found=USERS.find(x=>x.username.toLowerCase()===u&&x.password===p&&x.rol!=='super');
+  if(!found){errEl.textContent='Usuario o contraseña incorrectos.';errEl.classList.remove('hidden');return;}
+  errEl.classList.add('hidden');
+  currentUser=found;saveDB('session',{id:found.id,rol:found.rol});
+  renderMenu();showScreen('screen-menu');
+  setTimeout(syncSupabase,500);
+  _initScrollListeners();
 }
 document.getElementById('inp-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 function doLogout(){currentUser=null;saveDB('session',null);document.getElementById('inp-user').value='';document.getElementById('inp-pass').value='';showScreen('screen-login');}
@@ -1661,7 +1642,7 @@ function abrirReasignacion(id){
     showModal('modal-reasignar');
   }
   // Recargar usuarios frescos de Supabase
-  supaFetch('usuarios','GET',null,'select=id,username,nombre,rol,activo&rol=eq.tecnico&activo=eq.true&order=nombre.asc').then(function(rows){
+  supaFetch('usuarios','GET',null,'rol=eq.tecnico&activo=eq.true&order=nombre.asc').then(function(rows){
     if(rows&&rows.length) rows.forEach(function(r){
       if(!USERS.find(function(u){return u.id===r.id;}))
         USERS.push({id:r.id,username:r.username,nombre:r.nombre,rol:r.rol});
@@ -3857,7 +3838,9 @@ function verDetalleUsuario(uid){
     +'<input type="text" id="eu-nombre" class="form-control" value="'+u.nombre+'" style="padding:10px"></div>'
     +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Usuario</label>'
     +'<input type="text" id="eu-user" class="form-control" value="'+u.username+'" style="padding:10px"></div>'
-    +'<div style="grid-column:1/-1"><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Restablecer contraseña</label>'
+    +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Contraseña actual</label>'
+    +'<input type="text" id="eu-pass-actual" class="form-control" value="'+u.password+'" readonly style="padding:10px;background:#f8fafc;font-family:monospace"></div>'
+    +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Nueva contraseña</label>'
     +'<input type="text" id="eu-pass-nueva" class="form-control" placeholder="Dejar vacío para no cambiar" style="padding:10px"></div>'
     +'<div style="grid-column:1/-1"><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Rol</label>'
     +'<select id="eu-rol" class="form-control" style="padding:10px">'
@@ -3885,21 +3868,11 @@ function guardarEdicionUsuario(uid){
   u.username=document.getElementById('eu-user').value.trim().toLowerCase().replace(/\s/g,'')||u.username;
   u.rol=document.getElementById('eu-rol').value;
   var nuevaPass=document.getElementById('eu-pass-nueva').value.trim();
+  if(nuevaPass) u.password=nuevaPass;
   saveDB('users',USERS);
-  // Campos normales por PATCH; la contraseña (si se puso una nueva) va aparte
-  // por la función resetear_password, que la hashea del lado del servidor —
-  // nunca se manda ni se guarda en texto plano.
-  supaFetch('usuarios','PATCH',{username:u.username,nombre:u.nombre,rol:u.rol},'id=eq.'+u.id).catch(function(){});
-  var pendienteReset=nuevaPass?fetch(SUPA_URL+'/rest/v1/rpc/resetear_password',{
-    method:'POST',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
-    body:JSON.stringify({p_user_id:u.id,p_nueva_password:nuevaPass})
-  }).then(function(r){ return r.ok; }).catch(function(){ return false; }):Promise.resolve(true);
+  supaUpsert('usuarios',{id:u.id,username:u.username,nombre:u.nombre,password_hash:u.password,rol:u.rol,activo:true}).catch(function(){});
   var m=document.getElementById('modal-usuario');if(m)m.remove();
-  pendienteReset.then(function(ok){
-    if(nuevaPass&&!ok){ showAlert('⚠️ Usuario actualizado, pero la nueva contraseña no se pudo guardar. Intenta de nuevo.','error'); return; }
-    showAlert('✅ Usuario actualizado'+(nuevaPass?' — nueva contraseña: '+nuevaPass:''));
-  });
+  showAlert('✅ Usuario actualizado');
   renderAdminUs(document.getElementById('admin-content'));
 }
 function agregarUsuario(){
@@ -3910,26 +3883,26 @@ function agregarUsuario(){
   if(!nombre||!username){showAlert('Nombre y usuario requeridos','error');return;}
   if(USERS.find(u=>u.username===username)){showAlert('Ese usuario ya existe','error');return;}
   if(!pass)pass=nombre.split(' ').map(p=>p[0].toUpperCase()).join('')+'2026';
-  // La contraseña se hashea del lado del servidor (función crear_usuario) — nunca
-  // se guarda en texto plano ni se agrega a USERS/localStorage hasta que el
-  // servidor confirma que el usuario quedó creado.
-  fetch(SUPA_URL+'/rest/v1/rpc/crear_usuario',{
-    method:'POST',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
-    body:JSON.stringify({p_username:username,p_nombre:nombre,p_rol:rol,p_password:pass})
-  }).then(function(r){
-    return r.text().then(function(t){ var data=null; try{ data=JSON.parse(t); }catch(e){} return {ok:r.ok, data:data, text:t}; });
-  }).then(function(res){
-    if(!res.ok){ showAlert('⚠️ No se pudo crear el usuario: '+res.text.substring(0,100),'error'); return; }
-    var row=(Array.isArray(res.data)&&res.data[0])?res.data[0]:null;
-    var newUser={id:row?row.id:('u_'+Date.now()),username:username,nombre:nombre,rol:rol};
-    USERS.push(newUser);
-    saveDB('users',USERS);
-    showAlert('✅ Usuario creado. Clave: '+pass);
-    renderAdminUs(document.getElementById('admin-content'));
-  }).catch(function(e){
-    showAlert('⚠️ No se pudo crear el usuario: '+e,'error');
-  });
+  var newUser={id:'u_'+Date.now(),username,nombre,password:pass,rol};
+  USERS.push(newUser);
+  saveDB('users',USERS);
+  // Sync a Supabase con feedback
+  supaUpsert('usuarios',{id:newUser.id,username:newUser.username,nombre:newUser.nombre,password_hash:newUser.password,rol:newUser.rol,activo:true})
+    .then(function(r){
+      if(r!==null){
+        showAlert('✅ Usuario creado y guardado. Clave: '+pass);
+      } else {
+        showAlert('⚠️ Usuario creado localmente pero falló en servidor. Intenta de nuevo.','error');
+        // Retry once
+        setTimeout(function(){
+          supaUpsert('usuarios',{id:newUser.id,username:newUser.username,nombre:newUser.nombre,password_hash:newUser.password,rol:newUser.rol,activo:true}).catch(function(){});
+        }, 2000);
+      }
+    })
+    .catch(function(e){
+      showAlert('⚠️ Usuario creado localmente pero falló en servidor: '+e,'error');
+    });
+  renderAdminUs(document.getElementById('admin-content'));
 }
 function agregarPM03(){
   const linea=document.getElementById('p3-linea')?.value,act=document.getElementById('p3-act')?.value?.trim(),comp=document.getElementById('p3-comp')?.value?.trim();
@@ -13668,23 +13641,11 @@ function syncSupabase(){
       if(document.getElementById('dor-content')) renderDOR();
     }
   }).catch(function(){});
-  supaFetch('usuarios','GET',null,'select=id,username,nombre,rol,activo&activo=eq.true').then(function(rows){
-    if(!rows||!rows.length){
-      // Solo pasa en una instalación nueva sin usuarios todavía: los crea uno
-      // por uno vía crear_usuario para que su contraseña quede hasheada desde
-      // el inicio (nunca en texto plano).
-      Promise.all(DEFAULT_USERS.filter(function(u){return u.rol!=='super';}).map(function(u){
-        return fetch(SUPA_URL+'/rest/v1/rpc/crear_usuario',{
-          method:'POST',
-          headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
-          body:JSON.stringify({p_username:u.username,p_nombre:u.nombre,p_rol:u.rol,p_password:u.password})
-        }).catch(function(){});
-      }));
-      return;
-    }
+  supaFetch('usuarios','GET',null,'activo=eq.true').then(function(rows){
+    if(!rows||!rows.length){supaUpsert('usuarios',DEFAULT_USERS.filter(function(u){return u.rol!=='super';}).map(function(u){return{id:u.id,username:u.username,nombre:u.nombre,password_hash:u.password,rol:u.rol,activo:true};})  ).catch(function(){});return;}
     // Filtrar super de los registros de Supabase para no sobreescribir
     var superLocal=USERS.filter(function(u){return u.rol==='super';});
-    USERS=rows.filter(function(r){return r.rol!=='super';}).map(function(r){return{id:r.id,username:r.username,nombre:r.nombre,rol:r.rol}});
+    USERS=rows.filter(function(r){return r.rol!=='super';}).map(function(r){return{id:r.id,username:r.username,nombre:r.nombre,password:r.password_hash,rol:r.rol}});
     USERS=USERS.concat(superLocal);
     saveDB('users',USERS);
   }).catch(function(){});
