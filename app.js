@@ -1307,6 +1307,13 @@ function showDetalle(id){
 }
 function _renderDetalleOrden(id,o){
   var _activaD=document.querySelector('.screen.active');
+  // Actualizar detalleBackScreen a la pantalla real donde se abrió este detalle
+  // (Mis Pendientes, lista de OT, etc.) — igual que ya hace el detalle de PM03.
+  // Si ya estamos en screen-detalle (refresco en el mismo lugar tras cerrar/
+  // aprobar/rechazar), no lo pisamos para no perder el origen real.
+  var _backCandidateD=_activaD?_activaD.id:'screen-ordenes';
+  _prevDetalleBackScreen=detalleBackScreen;
+  if(_backCandidateD!=='screen-detalle') detalleBackScreen=_backCandidateD;
   otCerrandoId=id;
   document.getElementById('detalle-topbar').textContent=id;
   const r=currentUser.rol;
