@@ -13746,7 +13746,7 @@ function syncSupabase(){
     if(rows&&rows.length){
       DOR_ALERTAS=rows.map(function(r){return{
         id:r.id,checklistId:r.checklist_id,tipoChecklist:r.tipo_checklist,tipoLabel:r.tipo_label,
-        puntoTexto:r.punto_texto,iniciales:r.iniciales||'',hora:r.hora||'',turno:r.turno||'',fecha:r.fecha||'',
+        puntoTexto:r.punto_texto,comentario:r.comentario||'',iniciales:r.iniciales||'',hora:r.hora||'',turno:r.turno||'',fecha:r.fecha||'',
         tecnicoNombre:r.tecnico_nombre||'',estado:r.estado||'abierta',creadoTs:r.creado_ts||0,
         enteradoPor:r.enterado_por||'',enteradoTs:r.enterado_ts||0
       };});
@@ -27217,6 +27217,12 @@ function renderDOR(){
 }
 
 function _renderDORInner(cont,dias,ultimoAcc){
+  // Recordar qué sección (Planes/Prioridades/Alertas/Historial) estaba abierta antes
+  // de reconstruir el tablero — si no, cada refresco en segundo plano (sync cada 5 min)
+  // la cierra de golpe aunque el usuario la siga viendo.
+  var _seccionAbiertaPrev='';
+  var _wrapPrevio=document.getElementById('dor-seccion-wrap');
+  if(_wrapPrevio&&_wrapPrevio.dataset.tipo) _seccionAbiertaPrev=_wrapPrevio.dataset.tipo;
   var colAcc=dias<=7?'#7f1d1d':'#14532d';
   var anom=shoAnomaliasSeg();
   var colAnom=anom===0?'#14532d':'#7f1d1d';
@@ -27330,6 +27336,18 @@ function _renderDORInner(cont,dias,ultimoAcc){
   html+='<div id="dor-seccion-wrap"></div>';
 
   cont.innerHTML=html;
+
+  // Si había una sección abierta antes de reconstruir el tablero, volver a mostrarla
+  // en vez de dejarla colapsada.
+  if(_seccionAbiertaPrev){
+    var _wrapNuevo=document.getElementById('dor-seccion-wrap');
+    if(_wrapNuevo){
+      _wrapNuevo.dataset.tipo=_seccionAbiertaPrev;
+      if(_seccionAbiertaPrev==='historial') dorRenderHistorial(_wrapNuevo);
+      else if(_seccionAbiertaPrev==='alertas') dorRenderAlertas(_wrapNuevo);
+      else dorRenderSeccionInline(_wrapNuevo,_seccionAbiertaPrev);
+    }
+  }
 }
 
 function dorToggleSeccion(tipo){
@@ -27364,6 +27382,7 @@ function dorRenderAlertas(wrap){
       html+='<div style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid #7f1d1d;border-radius:8px;padding:10px;margin-bottom:6px">'
         +'<div style="font-size:11px;font-weight:800;color:#7f1d1d;text-transform:uppercase;margin-bottom:2px">🔴 '+(a.tipoLabel||a.tipoChecklist||'')+'</div>'
         +'<div style="font-size:13px;font-weight:700;color:#111827;margin-bottom:4px">'+(a.puntoTexto||'')+'</div>'
+        +(a.comentario?'<div style="font-size:12px;color:#7f1d1d;background:#fef2f2;border-radius:6px;padding:6px 8px;margin-bottom:6px">📝 '+a.comentario+'</div>':'')
         +'<div style="font-size:11px;color:#6b7280">📅 '+fecha+(a.turno?' · Turno '+a.turno:'')+'</div>'
         +'<div style="font-size:11px;color:#6b7280;margin-bottom:8px">👤 '+(a.tecnicoNombre||'—')+(a.iniciales?' · marcó: '+a.iniciales:'')+'</div>'
         +'<div style="display:flex;gap:6px">'
@@ -27429,6 +27448,7 @@ function crearAlertaChecklist(insp){
       tipoChecklist: insp.tipoId,
       tipoLabel: insp.tipoLabel||insp.tipoId,
       puntoTexto: puntoTxt,
+      comentario: p.comentario||'',
       iniciales: p.iniciales||'',
       hora: p.hora||'',
       turno: insp.turno||'',
@@ -27442,7 +27462,7 @@ function crearAlertaChecklist(insp){
     DOR_ALERTAS.unshift(alerta);
     supaFetch('dor_alertas','POST',{
       id:alerta.id,checklist_id:alerta.checklistId,tipo_checklist:alerta.tipoChecklist,tipo_label:alerta.tipoLabel,
-      punto_texto:alerta.puntoTexto,iniciales:alerta.iniciales,hora:alerta.hora,turno:alerta.turno,fecha:alerta.fecha,
+      punto_texto:alerta.puntoTexto,comentario:alerta.comentario,iniciales:alerta.iniciales,hora:alerta.hora,turno:alerta.turno,fecha:alerta.fecha,
       tecnico_nombre:alerta.tecnicoNombre,estado:alerta.estado,creado_ts:alerta.creadoTs
     },'').catch(function(){});
   });
