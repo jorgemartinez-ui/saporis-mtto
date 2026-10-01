@@ -4735,9 +4735,14 @@ function aplicarFiltrosPendientes(){updatePendChart();
 
   let pm03List=[];
   if(filtrosPend.tipo==='todas'||filtrosPend.tipo==='PM03'){
+    // Sin semana ni mes elegidos (vista por defecto): no mostrar PM03 de semanas
+    // futuras todavía no vigentes — solo la semana actual y anteriores.
+    // Si el admin elige explícitamente una semana o un mes, se respeta tal cual.
+    var soloDefecto=!semsDelMes&&semFiltro===0;
     pm03List=[...PM03_PLAN].filter(p=>{
       if(p.año!==añoFiltro) return false;
       if(p.estado==='reprogramada') return false; // ya tiene su PM03 nueva en otra semana
+      if(soloDefecto&&añoFiltro===currentYear()&&p.semana>currentWeek()) return false;
       if(semsDelMes&&!semsDelMes.includes(p.semana)) return false;
       if(!semsDelMes&&semFiltro>0&&p.semana!==semFiltro) return false;
       if(r==='tecnico'&&p.tecnicoId!==currentUser.id&&p.responsableAreaId!==currentUser.id) return false;
