@@ -1882,7 +1882,7 @@ function showConsultaOT(){
         + Array.from({length:52},function(_,i){return '<option value="'+(i+1)+'"'+(i+1===currentWeek()?' selected':'')+'>Sem '+(i+1)+'</option>';}).join('')
         + '</select></div>'
         + '<div style="flex:1;min-width:70px"><label class="form-label">Año</label><select class="form-control" id="filtro-año-consulta" onchange="filtrarOrdenes()" style="padding:8px">'
-        + [currentYear()-1,currentYear(),currentYear()+1].map(function(a){return '<option value="'+a+'"'+(a===currentYear()?' selected':'')+'>'+a+'</option>';}).join('')
+        + [2025,2026,2027,2028,2029,2030,2031,2032,2033,2034,2035,2036].map(function(a){return '<option value="'+a+'"'+(a===currentYear()?' selected':'')+'>'+a+'</option>';}).join('')
         + '</select></div>'
         + '<div style="flex:1;min-width:55px"><label class="form-label">Día</label><select class="form-control" id="filtro-dia-consulta" onchange="filtrarOrdenes()" style="padding:8px"><option value="">Todos</option>'
         + Array.from({length:31},function(_,i){return '<option value="'+(i+1)+'"'+(i+1===new Date().getDate()?' selected':'')+'>'+( i+1)+'</option>';}).join('')
@@ -4059,7 +4059,7 @@ function agregarPM03(){
 }
 function renderAdminMTBF(cont){
   const lineasAll=(LISTAS.lineas_proceso||[]).concat(LISTAS.lineas_envasado||[]).concat(LISTAS.lineas_servicios||[]);
-  const años=[currentYear()-1,currentYear(),currentYear()+1];
+  const años=[2025,2026,2027,2028,2029,2030,2031,2032,2033,2034,2035,2036];
   cont.innerHTML=`<div class="card"><div class="card-title mb8">📊 Registrar MTBF</div>
     <div class="form-group"><label class="form-label">Línea</label><select class="form-control" id="mtbf-linea">${lineasAll.map(l=>`<option>${l}</option>`).join('')}</select></div>
     <div class="form-group"><label class="form-label">Año</label><select class="form-control" id="mtbf-año">${años.map(a=>`<option value="${a}" ${a===currentYear()?'selected':''}>${a}</option>`).join('')}</select></div>
@@ -4080,7 +4080,7 @@ function guardarMTBF(){
   saveDB('mtbf_data',MTBF_DATA);showAlert('✅ MTBF guardado');renderAdminMTBF(document.getElementById('admin-content'));
 }
 function renderAdminGasto(cont){
-  const años=[currentYear()-1,currentYear(),currentYear()+1];
+  const años=[2025,2026,2027,2028,2029,2030,2031,2032,2033,2034,2035,2036];
   const meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   cont.innerHTML=`<div class="card"><div class="card-title mb8">💰 Semana individual</div>
     <div class="form-group"><label class="form-label">Año</label><select class="form-control" id="gas-año">${años.map(a=>`<option value="${a}" ${a===currentYear()?'selected':''}>${a}</option>`).join('')}</select></div>
@@ -5241,7 +5241,7 @@ function renderMisOrdenes(){
   }
   const isAdmin=r==='admin'||r==='super';
   const tecs=getTecnicos();
-  const años=[currentYear()-1,currentYear(),currentYear()+1];
+  const años=[2025,2026,2027,2028,2029,2030,2031,2032,2033,2034,2035,2036];
   fDiv.innerHTML=`
     <div class="filter-row"><div class="filter-chip" onclick="setFP('estado','todos',this)">Todos</div><div class="filter-chip active" onclick="setFP('estado','abierta',this)">Abiertas</div><div class="filter-chip" onclick="setFP('estado','pre_cierre',this)" style="color:#7c3aed;border-color:#7c3aed">⏳ Pre-cierre</div><div class="filter-chip" onclick="setFP('estado','cerrada',this)">Cerradas</div></div>
     <div class="filter-row"><div class="filter-chip active" onclick="setFP('tipo','todas',this)">Todos tipos</div><div class="filter-chip" onclick="setFP('tipo','PM01',this)">PM01</div><div class="filter-chip" onclick="setFP('tipo','PM02',this)">PM02</div><div class="filter-chip" onclick="setFP('tipo','PM03',this)">PM03</div><div class="filter-chip" onclick="setFP('tipo','PM04',this)">PM04</div><div class="filter-chip" onclick="setFP('tipo','temporal',this)" style="border-color:#F59E0B;color:#B45309">⚡ Temporal</div></div>
@@ -5996,7 +5996,7 @@ function initKPISelectors(){
   var añoSel=document.getElementById('kpi-año-sel');
   var mesSel=document.getElementById('kpi-mes-sel');
   if(!semSel||!añoSel)return;
-  var años=[currentYear()-1,currentYear(),currentYear()+1];
+  var años=[2025,2026,2027,2028,2029,2030,2031,2032,2033,2034,2035,2036];
   añoSel.innerHTML='<option value="0">Todos los años</option>'+años.map(function(a){return '<option value="'+a+'"'+(a===currentYear()?' selected':'')+'>'+a+'</option>';}).join('');
   var semOpts='<option value="0">Todas las semanas</option><option value="">Actual (Sem '+currentWeek()+')</option>';
   for(var i=1;i<=52;i++){
@@ -14353,7 +14353,7 @@ function initKPISelectors(){
   var añoSel=document.getElementById('kpi-año-sel');
   var mesSel=document.getElementById('kpi-mes-sel');
   if(!semSel||!añoSel)return;
-  var años=[currentYear()-1,currentYear(),currentYear()+1];
+  var años=[2025,2026,2027,2028,2029,2030,2031,2032,2033,2034,2035,2036];
   añoSel.innerHTML='<option value="0">Todos los años</option>'+años.map(function(a){return '<option value="'+a+'"'+(a===currentYear()?' selected':'')+'>'+a+'</option>';}).join('');
   var semOpts='<option value="0">Todas las semanas</option><option value="">Actual (Sem '+currentWeek()+')</option>';
   for(var i=1;i<=52;i++){
@@ -30111,7 +30111,9 @@ function renderPlanHistorialContent(areaId,linea,tipo,mes,anio,semana,tecnico){
     items.push({fecha:new Date(o.cerradaTs||o.ts||0),tipo:o.tipo,id:o.id,desc:(o.componente||o.detalle||'—').substring(0,50),tec:o.tecnicoNombre||'—',color:o.colorOT||'azul'});
   });
   pm3.forEach(function(p){
-    var d=p.fechaCierre?new Date(p.fechaCierre):new Date();
+    // p.fechaCierre nunca se guarda al cerrar una PM03 (se usa p.cerradaTs) — usar ese
+    // campo real, si no, cae a p.ts (fecha de programación), igual que hacen las OT.
+    var d=new Date(p.cerradaTs||p.ts||0);
     items.push({fecha:d,tipo:'PM03',id:p.id,desc:(p.actividad||p.componente||'—').substring(0,50),tec:p.tecnicoNombre||'—',sem:p.semana});
   });
   items.sort(function(a,b){return b.fecha-a.fecha;});
@@ -30119,7 +30121,8 @@ function renderPlanHistorialContent(areaId,linea,tipo,mes,anio,semana,tecnico){
   var tipoCol={PM01:'#78350f',PM02:'#7f1d1d',PM03:'#1e3a8a',PM04:'#374151'};
   html+=items.map(function(it){
     var fStr=it.fecha.toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'});
-    return '<div style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid '+(tipoCol[it.tipo]||'#374151')+';border-radius:8px;padding:10px;margin-bottom:6px">'
+    var abrirFn=it.tipo==='PM03'?'showDetallePM03':'showDetalle';
+    return '<div onclick="'+abrirFn+'(\''+it.id+'\')" style="cursor:pointer;background:#fff;border:1px solid #e5e7eb;border-left:4px solid '+(tipoCol[it.tipo]||'#374151')+';border-radius:8px;padding:10px;margin-bottom:6px">'
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
       +'<span style="font-size:11px;font-weight:700;color:'+(tipoCol[it.tipo]||'#374151')+'">'+it.tipo+' · '+it.id+'</span>'
       +'<span style="font-size:11px;color:#6b7280">'+fStr+'</span>'
