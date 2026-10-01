@@ -30021,14 +30021,22 @@ function showPlanHistorial(areaId,linea){
   detalleBackScreen='screen-plan';
   showScreen('screen-plan-historial');
   document.getElementById('plan-hist-sub').textContent=linea;
-  renderPlanHistorialContent(areaId,linea,'todas',null,null,null,'');
+  var _hoy=new Date();
+  // Por default: semana, mes y año de hoy ya pre-seleccionados.
+  renderPlanHistorialContent(areaId,linea,'todas',_hoy.getMonth()+1,currentYear(),currentWeek(),'','');
 }
 
-function renderPlanHistorialContent(areaId,linea,tipo,mes,anio,semana,tecnico){
+function renderPlanHistorialContent(areaId,linea,tipo,mes,anio,semana,tecnico,busqueda){
   var cont=document.getElementById('plan-hist-content');
   if(!cont) return;
+  busqueda=busqueda||'';
 
-  // Get all PMs for this line
+  // Preservar foco/cursor del buscador libre si se sigue escribiendo ahí al re-renderizar.
+  var _inpBusq=document.getElementById('plan-hist-busqueda');
+  var _focoBusq=_inpBusq&&document.activeElement===_inpBusq;
+  var _cursorBusq=_focoBusq?_inpBusq.selectionStart:null;
+
+  // Get all PMs for this line — solo las ya ejecutadas (cerradas)
   var ots=ORDENES.filter(function(o){
     return o.linea===linea&&o.estado==='cerrada';
   });
@@ -30045,13 +30053,15 @@ function renderPlanHistorialContent(areaId,linea,tipo,mes,anio,semana,tecnico){
   }
   if(anio){
     ots=ots.filter(function(o){return new Date(o.cerradaTs||o.ts||0).getFullYear()===anio;});
-    pm3=pm3.filter(function(p){return p.año===anio;});
+    pm3=pm3.filter(function(p){return new Date(p.cerradaTs||p.ts||0).getFullYear()===anio;});
   }
   if(mes){
     ots=ots.filter(function(o){return new Date(o.cerradaTs||o.ts||0).getMonth()+1===mes;});
+    pm3=pm3.filter(function(p){return new Date(p.cerradaTs||p.ts||0).getMonth()+1===mes;});
   }
   if(semana){
-    pm3=pm3.filter(function(p){return p.semana===semana;});
+    ots=ots.filter(function(o){return getWeekNumber(new Date(o.cerradaTs||o.ts||0))===semana;});
+    pm3=pm3.filter(function(p){return getWeekNumber(new Date(p.cerradaTs||p.ts||0))===semana;});
   }
   if(tecnico){
     ots=ots.filter(function(o){return (o.tecnicoNombre||'').toLowerCase().includes(tecnico.toLowerCase());});
@@ -30059,53 +30069,41 @@ function renderPlanHistorialContent(areaId,linea,tipo,mes,anio,semana,tecnico){
   }
 
   var MESES=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
-  var años=[...new Set(ORDENES.filter(function(o){return o.linea===linea;}).map(function(o){return new Date(o.cerradaTs||o.ts||0).getFullYear();}))].sort().reverse();
+  var años=[...new Set(ORDENES.filter(function(o){return o.linea===linea;}).map(function(o){return new Date(o.cerradaTs||o.ts||0).getFullYear();}).concat(PM03_PLAN.filter(function(p){return p.linea===linea;}).map(function(p){return new Date(p.cerradaTs||p.ts||0).getFullYear();})))].sort().reverse();
   var tecs=getTecnicos();
   var selSt='padding:5px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:11px;background:#fff;color:#374151';
+  var busqEsc=busqueda.replace(/'/g,"\\'");
 
   var html='';
   // Filters
+  html+='<div style="margin-bottom:8px"><input type="text" id="plan-hist-busqueda" class="form-control" placeholder="🔍 Buscar por folio, componente, actividad o técnico..." value="'+busqueda.replace(/"/g,'&quot;')+'" style="padding:8px;font-size:12px" oninput="renderPlanHistorialContent(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\',\''+tipo+'\','+mes+','+anio+','+semana+',\''+tecnico+'\',this.value)"></div>'
   html+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;align-items:center">'
-    +'<select onchange="renderPlanHistorialContent(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\',this.value,'+mes+','+anio+','+semana+',\''+tecnico+'\')" style="'+selSt+'">'
+    +'<select onchange="renderPlanHistorialContent(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\',this.value,'+mes+','+anio+','+semana+',\''+tecnico+'\',\''+busqEsc+'\')" style="'+selSt+'">'
     +'<option value="todas"'+(tipo==='todas'?' selected':'')+'>Todos los tipos</option>'
     +'<option value="PM01"'+(tipo==='PM01'?' selected':'')+'>PM01</option>'
     +'<option value="PM02"'+(tipo==='PM02'?' selected':'')+'>PM02</option>'
     +'<option value="PM03"'+(tipo==='PM03'?' selected':'')+'>PM03</option>'
     +'<option value="PM04"'+(tipo==='PM04'?' selected':'')+'>PM04</option>'
     +'</select>'
-    +'<select onchange="renderPlanHistorialContent(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\',\''+tipo+'\','+mes+',+this.value||null,'+semana+',\''+tecnico+'\')" style="'+selSt+'">'
+    +'<select onchange="renderPlanHistorialContent(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\',\''+tipo+'\','+mes+',+this.value||null,'+semana+',\''+tecnico+'\',\''+busqEsc+'\')" style="'+selSt+'">'
     +'<option value="">Todos los años</option>'
     +años.map(function(a){return'<option value="'+a+'"'+(anio===a?' selected':'')+'>'+a+'</option>';}).join('')
     +'</select>'
-    +'<select onchange="renderPlanHistorialContent(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\',\''+tipo+'\',+this.value||null,'+anio+','+semana+',\''+tecnico+'\')" style="'+selSt+'">'
+    +'<select onchange="renderPlanHistorialContent(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\',\''+tipo+'\',+this.value||null,'+anio+','+semana+',\''+tecnico+'\',\''+busqEsc+'\')" style="'+selSt+'">'
     +'<option value="">Todos los meses</option>'
     +MESES.map(function(m,i){return'<option value="'+(i+1)+'"'+(mes===(i+1)?' selected':'')+'>'+m+'</option>';}).join('')
     +'</select>'
-    +'<select onchange="renderPlanHistorialContent(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\',\''+tipo+'\','+mes+','+anio+',+this.value||null,\''+tecnico+'\')" style="'+selSt+'">'
+    +'<select onchange="renderPlanHistorialContent(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\',\''+tipo+'\','+mes+','+anio+',+this.value||null,\''+tecnico+'\',\''+busqEsc+'\')" style="'+selSt+'">'
     +'<option value="">Todas las semanas</option>'
     +Array.from({length:52},function(_,i){return'<option value="'+(i+1)+'"'+(semana===(i+1)?' selected':'')+'>Sem '+(i+1)+'</option>';}).join('')
     +'</select>'
-    +'<select onchange="renderPlanHistorialContent(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\',\''+tipo+'\','+mes+','+anio+','+semana+',this.value)" style="'+selSt+'">'
+    +'<select onchange="renderPlanHistorialContent(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\',\''+tipo+'\','+mes+','+anio+','+semana+',this.value,\''+busqEsc+'\')" style="'+selSt+'">'
     +'<option value="">Todos los técnicos</option>'
     +tecs.map(function(t){return'<option value="'+t.nombre+'"'+(tecnico===t.nombre?' selected':'')+'>'+t.nombre+'</option>';}).join('')
     +'</select>'
     +'</div>';
 
-  // Stats
-  var total=ots.length+pm3.length;
-  html+='<div style="display:flex;gap:8px;margin-bottom:12px">'
-    +'<div style="flex:1;background:#fff;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e7eb"><div style="font-size:20px;font-weight:900;color:#1e3a8a">'+total+'</div><div style="font-size:10px;color:#6b7280">Total PMs</div></div>'
-    +'<div style="flex:1;background:#fff;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e7eb"><div style="font-size:20px;font-weight:900;color:#14532d">'+pm3.length+'</div><div style="font-size:10px;color:#6b7280">PM03</div></div>'
-    +'<div style="flex:1;background:#fff;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e7eb"><div style="font-size:20px;font-weight:900;color:#78350f">'+ots.filter(function(o){return o.tipo==='PM01';}).length+'</div><div style="font-size:10px;color:#6b7280">PM01</div></div>'
-    +'<div style="flex:1;background:#fff;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e7eb"><div style="font-size:20px;font-weight:900;color:#7f1d1d">'+ots.filter(function(o){return o.tipo==='PM02';}).length+'</div><div style="font-size:10px;color:#6b7280">PM02</div></div>'
-    +'</div>';
-
-  if(!total){
-    html+='<div style="text-align:center;color:#9ca3af;padding:30px;background:#fff;border-radius:10px">Sin PMs para los filtros seleccionados</div>';
-    cont.innerHTML=html; return;
-  }
-
-  // Combined list sorted by date
+  // Combined list sorted by date (más reciente arriba), sin importar el tipo
   var items=[];
   ots.forEach(function(o){
     items.push({fecha:new Date(o.cerradaTs||o.ts||0),tipo:o.tipo,id:o.id,desc:(o.componente||o.detalle||'—').substring(0,50),tec:o.tecnicoNombre||'—',color:o.colorOT||'azul'});
@@ -30116,7 +30114,32 @@ function renderPlanHistorialContent(areaId,linea,tipo,mes,anio,semana,tecnico){
     var d=new Date(p.cerradaTs||p.ts||0);
     items.push({fecha:d,tipo:'PM03',id:p.id,desc:(p.actividad||p.componente||'—').substring(0,50),tec:p.tecnicoNombre||'—',sem:p.semana});
   });
+
+  // Búsqueda libre, sin acentos (usa el mismo normalizador de otras búsquedas de la app)
+  if(busqueda.trim()){
+    var qNorm=_cemNorm(busqueda);
+    items=items.filter(function(it){
+      return _cemNorm(it.id+' '+it.desc+' '+it.tec).indexOf(qNorm)>=0;
+    });
+  }
+
   items.sort(function(a,b){return b.fecha-a.fecha;});
+
+  // Stats (reflejan los filtros + búsqueda ya aplicados)
+  var total=items.length;
+  html+='<div style="display:flex;gap:8px;margin-bottom:12px">'
+    +'<div style="flex:1;background:#fff;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e7eb"><div style="font-size:20px;font-weight:900;color:#1e3a8a">'+total+'</div><div style="font-size:10px;color:#6b7280">Total PMs</div></div>'
+    +'<div style="flex:1;background:#fff;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e7eb"><div style="font-size:20px;font-weight:900;color:#14532d">'+items.filter(function(it){return it.tipo==='PM03';}).length+'</div><div style="font-size:10px;color:#6b7280">PM03</div></div>'
+    +'<div style="flex:1;background:#fff;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e7eb"><div style="font-size:20px;font-weight:900;color:#78350f">'+items.filter(function(it){return it.tipo==='PM01';}).length+'</div><div style="font-size:10px;color:#6b7280">PM01</div></div>'
+    +'<div style="flex:1;background:#fff;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e7eb"><div style="font-size:20px;font-weight:900;color:#7f1d1d">'+items.filter(function(it){return it.tipo==='PM02';}).length+'</div><div style="font-size:10px;color:#6b7280">PM02</div></div>'
+    +'</div>';
+
+  if(!total){
+    html+='<div style="text-align:center;color:#9ca3af;padding:30px;background:#fff;border-radius:10px">Sin PMs para los filtros seleccionados</div>';
+    cont.innerHTML=html;
+    if(_focoBusq){var _r=document.getElementById('plan-hist-busqueda');if(_r){_r.focus();if(_cursorBusq!=null)_r.setSelectionRange(_cursorBusq,_cursorBusq);}}
+    return;
+  }
 
   var tipoCol={PM01:'#78350f',PM02:'#7f1d1d',PM03:'#1e3a8a',PM04:'#374151'};
   html+=items.map(function(it){
@@ -30133,6 +30156,7 @@ function renderPlanHistorialContent(areaId,linea,tipo,mes,anio,semana,tecnico){
   }).join('');
 
   cont.innerHTML=html;
+  if(_focoBusq){var _r2=document.getElementById('plan-hist-busqueda');if(_r2){_r2.focus();if(_cursorBusq!=null)_r2.setSelectionRange(_cursorBusq,_cursorBusq);}}
 }
 // ── FIN MÓDULO PLAN ───────────────────────────────────────────────
 
