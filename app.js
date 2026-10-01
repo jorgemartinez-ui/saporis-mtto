@@ -1457,6 +1457,13 @@ function abrirCierre(id){
   const showTime=['PM01','PM03','PM04'].includes(tipo);
   const wrap=document.getElementById('cierre-tiempo-wrap');
   if(wrap)wrap.classList.toggle('hidden',!showTime);
+  // PM02: en vez del campo manual de horas, pedir día(s) de trabajo con hora
+  // inicio/fin (igual que en el pre-cierre) y calcular las horas solas.
+  if(tipo==='PM02'){
+    precierreActivarDias(o);
+  } else {
+    precierreDesactivarDias();
+  }
   // Técnicos adicionales (apoyo) al cerrar — por ahora solo PM01 y PM04, que suelen
   // quedar "abiertas" y cerrarse después por este modal genérico.
   const showTecAdic=['PM01','PM04'].includes(tipo);
@@ -1542,7 +1549,7 @@ function getCierreRefacciones(){
   return refs;
 }
 
-function abrirCierreAzul(id){otCerrandoId=id;document.getElementById('cierre-obs').value='';document.getElementById('cierre-horas').value='0';cierreRefReset();document.getElementById('cierre-ref-wrap').classList.add('hidden');var _cb=document.getElementById('cierre-uso-refacciones');if(_cb)_cb.checked=false;resetLimpiezaCierreUI();showModal('modal-cierre');}
+function abrirCierreAzul(id){otCerrandoId=id;document.getElementById('cierre-obs').value='';document.getElementById('cierre-horas').value='0';precierreDesactivarDias();cierreRefReset();document.getElementById('cierre-ref-wrap').classList.add('hidden');var _cb=document.getElementById('cierre-uso-refacciones');if(_cb)_cb.checked=false;resetLimpiezaCierreUI();showModal('modal-cierre');}
 // Limpia el bloque de limpieza (botones/aviso/firma) al abrir el modal de cierre para una nueva OT,
 // para que no queden restos (texto o firma) de la orden anterior.
 function resetLimpiezaCierreUI(){
@@ -1554,6 +1561,92 @@ function resetLimpiezaCierreUI(){
   if(no){no.style.background='#fff';no.style.borderColor='#e5e7eb';no.style.color='#374151';}
   limpFirmaLimpiar('limpieza-firma-canvas');
 }
+
+// ── DÍA(S) DE TRABAJO al cerrar/pre-cerrar una PM02 (modal-cierre genérico) ──
+// Reemplaza el campo manual de "Horas de trabajo" para PM02: se captura fecha +
+// hora inicio + hora fin de cada día (con opción de agregar más de uno) y las
+// horas se calculan solas, igual que ya hace el cierre de PM03.
+function precierreDiasHTML(){
+  if(!window._precierreDias||!window._precierreDias.length){
+    window._precierreDias=[{fecha:todayStr(),horaInicio:'',horaFin:''}];
+  }
+  return window._precierreDias.map(function(d,idx){
+    return '<div style="display:grid;grid-template-columns:auto 1fr 1fr auto;gap:6px;align-items:center;margin-bottom:6px;background:#fff;border-radius:8px;padding:6px">'
+      +'<span style="font-size:.72rem;font-weight:700;color:#6b7280;white-space:nowrap">Día '+(idx+1)+'</span>'
+      +'<input type="date" class="form-control" value="'+d.fecha+'" onchange="precierreUpdateDia('+idx+',\'fecha\',this.value)" style="padding:6px;font-size:.82rem">'
+      +'<div style="display:flex;gap:4px">'
+      +'<input type="time" class="form-control" value="'+d.horaInicio+'" onchange="precierreUpdateDia('+idx+',\'horaInicio\',this.value)" style="padding:6px;font-size:.82rem;flex:1">'
+      +'<input type="time" class="form-control" value="'+d.horaFin+'" onchange="precierreUpdateDia('+idx+',\'horaFin\',this.value)" style="padding:6px;font-size:.82rem;flex:1">'
+      +'</div>'
+      +(idx>0?'<button type="button" onclick="precierreRemoveDia('+idx+')" style="padding:4px 8px;background:#fee2e2;border:none;border-radius:6px;color:#dc2626;cursor:pointer;font-size:.8rem">✕</button>':'<span></span>')
+      +'</div>';
+  }).join('');
+}
+function precierreRenderDias(){
+  var c=document.getElementById('precierre-dias-container');
+  if(c) c.innerHTML=precierreDiasHTML();
+  precierreCalcTotal();
+}
+function precierreAddDia(){
+  if(!window._precierreDias) window._precierreDias=[];
+  window._precierreDias.push({fecha:todayStr(),horaInicio:'',horaFin:''});
+  precierreRenderDias();
+}
+function precierreRemoveDia(idx){
+  if(!window._precierreDias) return;
+  window._precierreDias.splice(idx,1);
+  precierreRenderDias();
+}
+function precierreUpdateDia(idx,campo,val){
+  if(!window._precierreDias||!window._precierreDias[idx]) return;
+  window._precierreDias[idx][campo]=val;
+  precierreCalcTotal();
+}
+function precierreCalcTotal(){
+  var total=(window._precierreDias||[]).reduce(function(s,d){
+    if(!d.horaInicio||!d.horaFin) return s;
+    var m=diffMin(d.horaInicio,d.horaFin);
+    return s+(m!=null?m/60:0);
+  },0);
+  var el=document.getElementById('precierre-horas-total');
+  if(el) el.textContent=total>0?('Total: '+total.toFixed(2)+' h'):'';
+  return Math.round(total*100)/100;
+}
+// Activa el bloque de día(s) de trabajo (y oculta el campo manual de horas) para
+// una PM02, precargando lo que ya tuviera guardado (ej. al reabrir tras un rechazo).
+function precierreActivarDias(o){
+  var wrapDias=document.getElementById('precierre-dias-wrap');
+  var wrapHoras=document.getElementById('cierre-horas-wrap');
+  if(wrapDias) wrapDias.classList.remove('hidden');
+  if(wrapHoras) wrapHoras.classList.add('hidden');
+  window._precierreDias=(o&&o.trabajoDias&&o.trabajoDias.length)
+    ?JSON.parse(JSON.stringify(o.trabajoDias)).map(function(d){return {fecha:d.fecha||todayStr(),horaInicio:d.horaInicio||'',horaFin:d.horaFin||''};})
+    :[{fecha:todayStr(),horaInicio:'',horaFin:''}];
+  precierreRenderDias();
+}
+// Desactiva el bloque de día(s) (vuelve al campo manual de horas) para otros tipos.
+function precierreDesactivarDias(){
+  var wrapDias=document.getElementById('precierre-dias-wrap');
+  var wrapHoras=document.getElementById('cierre-horas-wrap');
+  if(wrapDias) wrapDias.classList.add('hidden');
+  if(wrapHoras) wrapHoras.classList.remove('hidden');
+}
+// Valida los días capturados y arma trabajoDias+horasCierre listos para guardar
+// en la orden. Devuelve null (y ya mostró el error) si falta algo.
+function precierreValidarYArmarDias(){
+  var dias=window._precierreDias||[];
+  if(!dias.length){showAlert('Registra al menos un día de trabajo','error');return null;}
+  var incompleto=dias.some(function(d){return !d.fecha||!d.horaInicio||!d.horaFin;});
+  if(incompleto){showAlert('Completa fecha, hora inicio y hora fin de todos los días','error');return null;}
+  var trabajoDias=dias.map(function(d){
+    var m=diffMin(d.horaInicio,d.horaFin);
+    return {fecha:d.fecha,horaInicio:d.horaInicio,horaFin:d.horaFin,horas:Math.round(((m!=null?m/60:0))*100)/100};
+  });
+  var total=Math.round(trabajoDias.reduce(function(s,d){return s+d.horas;},0)*100)/100;
+  if(total<=0){showAlert('Las horas de trabajo son obligatorias para cerrar la orden','error');return null;}
+  return {trabajoDias:trabajoDias,total:total};
+}
+
 function confirmarCierre(){
   const o=ORDENES.find(x=>x.id===otCerrandoId);if(!o)return;
   // Validar limpieza obligatoria
@@ -1574,23 +1667,33 @@ function confirmarCierre(){
   }
   const obs=document.getElementById('cierre-obs').value.trim();
   if(!obs){showAlert('Escribe las observaciones','error');return;}
-  // Calcular horas automáticamente de hora inicio/fin
-  var horaIniVal=document.getElementById('cierre-hora-inicio')?.value;
-  var horaFinVal=document.getElementById('cierre-hora-fin')?.value;
   var horas=0;
-  if(horaIniVal&&horaFinVal){
-    var diff=diffMin(horaIniVal,horaFinVal);
-    horas=parseFloat((diff/60).toFixed(2));
+  var _diasPM02=null;
+  if(o.tipo==='PM02'){
+    // PM02: día(s) de trabajo con hora inicio/fin en vez del campo manual de horas.
+    var _armado=precierreValidarYArmarDias();
+    if(!_armado) return;
+    _diasPM02=_armado.trabajoDias;
+    horas=_armado.total;
+  } else {
+    // Calcular horas automáticamente de hora inicio/fin
+    var horaIniVal=document.getElementById('cierre-hora-inicio')?.value;
+    var horaFinVal=document.getElementById('cierre-hora-fin')?.value;
+    if(horaIniVal&&horaFinVal){
+      var diff=diffMin(horaIniVal,horaFinVal);
+      horas=parseFloat((diff/60).toFixed(2));
+    }
+    if(!horas) horas=parseFloat(document.getElementById('cierre-horas').value)||0;
+    // Horas obligatorio en todas las PMs
+    if(!horas||horas<=0){showAlert('Las horas de trabajo son obligatorias para cerrar la orden','error');return;}
   }
-  if(!horas) horas=parseFloat(document.getElementById('cierre-horas').value)||0;
-  // Horas obligatorio en todas las PMs
-  if(!horas||horas<=0){showAlert('Las horas de trabajo son obligatorias para cerrar la orden','error');return;}
   var _cbRef=document.getElementById('cierre-uso-refacciones');
   const refs=(_cbRef&&_cbRef.checked)?getCierreRefacciones():[];
   const refsStr=refs.map(function(r){return r.nombre;}).join(', ');
   const horaIni=document.getElementById('cierre-hora-inicio')?.value||null;
   const horaFin=document.getElementById('cierre-hora-fin')?.value||null;
   o.estado='cerrada';o.observacionesCierre=obs;o.horasCierre=horas;o.refaccionesUsadas=refsStr;
+  if(_diasPM02){o.trabajoDias=_diasPM02;o.esTrabajoVariosDias=_diasPM02.length>1;}
   // Técnicos adicionales (solo PM01/PM04, que es donde se ofrece esta sección aquí —
   // no tocar tecnicosAdicionales de otros tipos que pudo haberse llenado en otro flujo).
   if(['PM01','PM04'].includes(o.tipo)){
@@ -1942,10 +2045,13 @@ function showDetallePM03(id){
 function _renderDetallePM03(id,p){
   var _activaPM3=document.querySelector('.screen.active');
   otCerrandoId=id;document.getElementById('detalle-topbar').textContent=p.id;
-  // Solo actualizar backScreen si la pantalla activa NO es ya el detalle
+  // Solo actualizar backScreen si la pantalla activa NO es ya el detalle (si ya
+  // es el detalle, es un refresco en el mismo lugar —p.ej. tras cerrar/cancelar/
+  // editar— y detalleBackScreen debe seguir apuntando a la pantalla real donde
+  // se abrió originalmente, no reiniciarse a screen-pm03).
   var _backCandidate=_activaPM3?_activaPM3.id:'screen-pm03';
   _prevDetalleBackScreen=detalleBackScreen;
-  detalleBackScreen=(_backCandidate==='screen-detalle')?'screen-pm03':_backCandidate;
+  if(_backCandidate!=='screen-detalle') detalleBackScreen=_backCandidate;
   // Save context so goBack knows exactly where to return
   window._pm3BackFiltroEstado=window._pm3FiltroEstado||'todas';
   window._pm3BackFn=(_backCandidate==='screen-ordenes'&&window._fromReprogramar)?'showPM03PorReprogramar':null;
@@ -18555,6 +18661,7 @@ function pmUpdateExtraHrs(idx,inp){
 // Técnico da Pre-cierre (queda pendiente de aprobación del operador)
 function abrirPreCierre(id){
   otCerrandoId = id;
+  var o = ORDENES.find(function(x){return x.id===id;});
   document.getElementById('cierre-obs').value = '';
   document.getElementById('cierre-horas').value = '';
   cierreRefReset();
@@ -18565,6 +18672,8 @@ function abrirPreCierre(id){
   // Ocultar tiempo calculado
   var tw = document.getElementById('cierre-tiempo-wrap');
   if(tw) tw.classList.add('hidden');
+  // Día(s) de trabajo con hora inicio/fin en vez del campo manual de horas.
+  precierreActivarDias(o);
   // Cambiar botón confirmar para que llame a confirmarPreCierre
   var btnConfirmar = document.querySelector('#modal-cierre .btn-success');
   if(btnConfirmar){
@@ -18579,7 +18688,9 @@ function confirmarPreCierre(){
   if(!o) return;
   var obs = document.getElementById('cierre-obs').value.trim();
   if(!obs){ showAlert('Escribe las observaciones de lo que realizaste','error'); return; }
-  var horas = parseFloat(document.getElementById('cierre-horas').value)||0;
+  var _armado=precierreValidarYArmarDias();
+  if(!_armado) return;
+  var horas=_armado.total;
   var _cbRef2=document.getElementById('cierre-uso-refacciones');
   var _refsArr2=(_cbRef2&&_cbRef2.checked)?getCierreRefacciones():[];
   var refs = _refsArr2.map(function(r){return r.nombre;}).join(', ');
@@ -18587,6 +18698,8 @@ function confirmarPreCierre(){
   o.estado = 'pre_cierre';
   o.observacionesCierre = obs;
   o.horasCierre = horas;
+  o.trabajoDias = _armado.trabajoDias;
+  o.esTrabajoVariosDias = _armado.trabajoDias.length>1;
   o.refaccionesUsadas = refs;
   o.preCierreTs  = Date.now();
   o.preCierrePor = currentUser.nombre;
@@ -18602,6 +18715,8 @@ function confirmarPreCierre(){
     pre_cierre_por: o.preCierrePor,
     observaciones_cierre: o.observacionesCierre,
     horas_cierre: o.horasCierre,
+    trabajo_dias: o.trabajoDias&&o.trabajoDias.length?JSON.stringify(o.trabajoDias):null,
+    es_trabajo_varios_dias: o.esTrabajoVariosDias||false,
     motivo_rechazo: null,
     rechazado_por: null
   });
