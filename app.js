@@ -1312,8 +1312,13 @@ function _renderDetalleOrden(id,o){
   // Si ya estamos en screen-detalle (refresco en el mismo lugar tras cerrar/
   // aprobar/rechazar), no lo pisamos para no perder el origen real.
   var _backCandidateD=_activaD?_activaD.id:'screen-ordenes';
-  _prevDetalleBackScreen=detalleBackScreen;
-  if(_backCandidateD!=='screen-detalle') detalleBackScreen=_backCandidateD;
+  // Solo capturar/actualizar el origen real cuando es una entrada nueva al detalle
+  // (no en un refresco en el mismo lugar), si no, _prevDetalleBackScreen se va
+  // pisando con el propio screen-ordenes/etc. y el segundo "Regresar" se queda sin moverse.
+  if(_backCandidateD!=='screen-detalle'){
+    _prevDetalleBackScreen=detalleBackScreen;
+    detalleBackScreen=_backCandidateD;
+  }
   otCerrandoId=id;
   document.getElementById('detalle-topbar').textContent=id;
   const r=currentUser.rol;
@@ -1459,7 +1464,9 @@ function abrirCierre(id){
   const el_i=document.getElementById('cierre-hora-inicio');
   const el_f=document.getElementById('cierre-hora-fin');
   const el_c=document.getElementById('cierre-tiempo-calc');
+  const el_fec=document.getElementById('cierre-fecha-trabajo');
   if(el_i)el_i.value=''; if(el_f)el_f.value=''; if(el_c)el_c.textContent='';
+  if(el_fec){el_fec.value=(o&&o.fechaTrabajo)?o.fechaTrabajo:todayStr();el_fec.max=todayStr();}
   const tipo=o?.tipo||'PM03';
   const showTime=['PM01','PM03','PM04'].includes(tipo);
   const wrap=document.getElementById('cierre-tiempo-wrap');
@@ -1699,7 +1706,9 @@ function confirmarCierre(){
   const refsStr=refs.map(function(r){return r.nombre;}).join(', ');
   const horaIni=document.getElementById('cierre-hora-inicio')?.value||null;
   const horaFin=document.getElementById('cierre-hora-fin')?.value||null;
+  const fechaTrabajoVal=document.getElementById('cierre-fecha-trabajo')?.value||null;
   o.estado='cerrada';o.observacionesCierre=obs;o.horasCierre=horas;o.refaccionesUsadas=refsStr;
+  if(o.tipo!=='PM02'&&fechaTrabajoVal) o.fechaTrabajo=fechaTrabajoVal;
   if(_diasPM02){o.trabajoDias=_diasPM02;o.esTrabajoVariosDias=_diasPM02.length>1;}
   // Técnicos adicionales (solo PM01/PM04, que es donde se ofrece esta sección aquí —
   // no tocar tecnicosAdicionales de otros tipos que pudo haberse llenado en otro flujo).
@@ -1746,13 +1755,15 @@ function confirmarCierre(){
 function abrirReasignacion(id){
   reasignandoId=id;
   function buildSelect(){
-    var tecs=USERS.filter(function(u){return u.rol==='tecnico'&&u.id!=='u_super';});
-    document.getElementById('reasig-sel').innerHTML='<option value="">Sin asignar</option>'+tecs.map(function(t){return '<option value="'+t.id+'">'+t.nombre+'</option>';}).join('');
+    // Técnicos + administradores como opciones asignables (un admin puede terminar
+    // haciéndose cargo de una OT).
+    var tecs=USERS.filter(function(u){return (u.rol==='tecnico'||u.rol==='admin')&&u.id!=='u_super';});
+    document.getElementById('reasig-sel').innerHTML='<option value="">Sin asignar</option>'+tecs.map(function(t){return '<option value="'+t.id+'">'+t.nombre+(t.rol==='admin'?' (Admin)':'')+'</option>';}).join('');
     document.getElementById('reasig-motivo').value='';
     showModal('modal-reasignar');
   }
   // Recargar usuarios frescos de Supabase
-  supaFetch('usuarios','GET',null,'rol=eq.tecnico&activo=eq.true&order=nombre.asc').then(function(rows){
+  supaFetch('usuarios','GET',null,'rol=in.(tecnico,admin)&activo=eq.true&order=nombre.asc').then(function(rows){
     if(rows&&rows.length) rows.forEach(function(r){
       if(!USERS.find(function(u){return u.id===r.id;}))
         USERS.push({id:r.id,username:r.username,nombre:r.nombre,rol:r.rol});
@@ -2057,8 +2068,13 @@ function _renderDetallePM03(id,p){
   // editar— y detalleBackScreen debe seguir apuntando a la pantalla real donde
   // se abrió originalmente, no reiniciarse a screen-pm03).
   var _backCandidate=_activaPM3?_activaPM3.id:'screen-pm03';
-  _prevDetalleBackScreen=detalleBackScreen;
-  if(_backCandidate!=='screen-detalle') detalleBackScreen=_backCandidate;
+  // Solo capturar/actualizar el origen real cuando es una entrada nueva al detalle
+  // (no en un refresco en el mismo lugar), si no, _prevDetalleBackScreen se va
+  // pisando con el propio screen-pm03/etc. y el segundo "Regresar" se queda sin moverse.
+  if(_backCandidate!=='screen-detalle'){
+    _prevDetalleBackScreen=detalleBackScreen;
+    detalleBackScreen=_backCandidate;
+  }
   // Save context so goBack knows exactly where to return
   window._pm3BackFiltroEstado=window._pm3FiltroEstado||'todas';
   window._pm3BackFn=(_backCandidate==='screen-ordenes'&&window._fromReprogramar)?'showPM03PorReprogramar':null;
@@ -2095,6 +2111,19 @@ function _renderDetallePM03(id,p){
   }
 
   document.getElementById('detalle-content').innerHTML=bannerRepro+`<div class="card"><div class="card-title">${p.esInspeccion?'✅ Inspección de Turno':'📅 '+p.linea}</div>${row('🔩 Componente',p.componente)}${row('🔧 Actividad',p.actividad)}${row('📅 Semana',p.semana?p.semana+' / '+p.año:'Sin programar')}${row('👤 Responsable de ejecutar',p.tecnicoNombre||'Sin asignar')}${row('🧑‍💼 Responsable de área',p.responsableAreaNombre||'Sin asignar')}${row('📋 Estado',p.estado||'abierta')}${p.reprogramadaPor?row('🔁 Reprogramada por',p.reprogramadaPor+(p.reprogramadaTs?' — '+fmtDateTime(p.reprogramadaTs):'')):''}${p.notaReprogramacion?row('📝 Motivo reprogramación',p.notaReprogramacion):''}${p.reprogramadaDe?row('⬅️ Generada al reprogramar',p.reprogramadaDe):''}${p.reprogramadaA?row('➡️ Reprogramada a',p.reprogramadaA):''}${p.horaInicio?row('🕐 Inicio',p.horaInicio):''}${p.horaFin?row('🕐 Fin',p.horaFin):''}${p.horaInicio&&p.horaFin?row('⏱️ Tiempo',diffMin(p.horaInicio,p.horaFin)+' min'):''}</div>
+  ${p.origenPM02?(function(){
+    var o2=ORDENES.find(function(x){return x.id===p.origenPM02;});
+    if(!o2) return '<div class="card"><div class="card-title">🔗 PM02 que generó esta PM03</div>'+row('🆔 Folio',p.origenPM02)+'<div style="font-size:11px;color:#9ca3af;margin-top:4px">No se encontró el detalle de esa OT (pudo haber sido eliminada)</div></div>';
+    return '<div class="card"><div class="card-title">🔗 PM02 que generó esta PM03</div>'
+      +row('🆔 Folio',o2.id)
+      +row('📝 Problema reportado',o2.detalle||'—')
+      +row('👤 Levantada por',(o2.levantadoPor||'—')+(o2.ts?' — '+fmtDate(o2.ts):''))
+      +row('🔧 Asignada a',o2.tecnicoNombre||'Sin asignar')
+      +row('📋 Estado',o2.estado||'—')
+      +(o2.estado==='cerrada'?row('✅ Resuelta por',(o2.cerradaPor||'—')+(o2.cerradaTs?' — '+fmtDateTime(o2.cerradaTs):'')):'')
+      +(o2.observacionesCierre?row('🛠️ Solución aplicada',o2.observacionesCierre):'')
+      +'</div>';
+  })():''}
   ${p.diasTrabajo&&p.diasTrabajo.length?(function(){
     var filas=p.diasTrabajo.map(function(d,i){
       var mins=diffMin(d.horaInicio,d.horaFin);

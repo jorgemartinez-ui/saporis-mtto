@@ -234,7 +234,7 @@ tr:nth-child(even) td{background:#F8FAFC}
 </script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="app.js?v=20261001g" defer></script>
+<script src="app.js?v=20261001h" defer></script>
 
 <style id="lup-css">
 .lup-doc{background:#fff;border:2px solid #1a3c5e;border-radius:10px;overflow:hidden;margin:12px;font-family:Arial,sans-serif}
@@ -682,6 +682,7 @@ tr:nth-child(even) td{background:#F8FAFC}
     <div id="cierre-tiempo-wrap" class="hidden">
       <div style="background:var(--az3);border-radius:10px;padding:12px;margin-bottom:12px">
         <div style="font-size:13px;font-weight:700;color:var(--az4);margin-bottom:8px">⏱️ Tiempo invertido (formato 24h)</div>
+        <div style="margin-bottom:10px"><label class="form-label" style="font-size:11px">Fecha del trabajo</label><input type="date" class="form-control" id="cierre-fecha-trabajo"></div>
         <div style="display:flex;gap:10px">
           <div style="flex:1"><label class="form-label" style="font-size:11px">Hora inicio</label><input type="time" class="form-control" id="cierre-hora-inicio" onchange="calcularTiempoCierre()"></div>
           <div style="flex:1"><label class="form-label" style="font-size:11px">Hora fin</label><input type="time" class="form-control" id="cierre-hora-fin" onchange="calcularTiempoCierre()"></div>
