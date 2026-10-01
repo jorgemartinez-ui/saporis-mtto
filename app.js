@@ -1981,7 +1981,7 @@ function _renderDetallePM03(id,p){
     bannerRepro='<div style="background:#fef3c7;border:2px solid #d97706;border-radius:14px;padding:12px;margin-bottom:12px;font-size:13px;color:#92400e;font-weight:700">⚠️ Esta PM03 está pendiente de programar — espera asignación del administrador</div>';
   }
 
-  document.getElementById('detalle-content').innerHTML=bannerRepro+`<div class="card"><div class="card-title">${p.esInspeccion?'✅ Inspección de Turno':'📅 '+p.linea}</div>${row('🔩 Componente',p.componente)}${row('🔧 Actividad',p.actividad)}${row('📅 Semana',p.semana?p.semana+' / '+p.año:'Sin programar')}${row('👤 Responsable de ejecutar',p.tecnicoNombre||'Sin asignar')}${row('🧑‍💼 Responsable de área',p.responsableAreaNombre||'Sin asignar')}${row('📋 Estado',p.estado||'abierta')}${p.horaInicio?row('🕐 Inicio',p.horaInicio):''}${p.horaFin?row('🕐 Fin',p.horaFin):''}${p.horaInicio&&p.horaFin?row('⏱️ Tiempo',diffMin(p.horaInicio,p.horaFin)+' min'):''}</div>
+  document.getElementById('detalle-content').innerHTML=bannerRepro+`<div class="card"><div class="card-title">${p.esInspeccion?'✅ Inspección de Turno':'📅 '+p.linea}</div>${row('🔩 Componente',p.componente)}${row('🔧 Actividad',p.actividad)}${row('📅 Semana',p.semana?p.semana+' / '+p.año:'Sin programar')}${row('👤 Responsable de ejecutar',p.tecnicoNombre||'Sin asignar')}${row('🧑‍💼 Responsable de área',p.responsableAreaNombre||'Sin asignar')}${row('📋 Estado',p.estado||'abierta')}${p.reprogramadaPor?row('🔁 Reprogramada por',p.reprogramadaPor+(p.reprogramadaTs?' — '+fmtDateTime(p.reprogramadaTs):'')):''}${p.notaReprogramacion?row('📝 Motivo reprogramación',p.notaReprogramacion):''}${p.reprogramadaDe?row('⬅️ Generada al reprogramar',p.reprogramadaDe):''}${p.reprogramadaA?row('➡️ Reprogramada a',p.reprogramadaA):''}${p.horaInicio?row('🕐 Inicio',p.horaInicio):''}${p.horaFin?row('🕐 Fin',p.horaFin):''}${p.horaInicio&&p.horaFin?row('⏱️ Tiempo',diffMin(p.horaInicio,p.horaFin)+' min'):''}</div>
   ${p.diasTrabajo&&p.diasTrabajo.length?(function(){
     var filas=p.diasTrabajo.map(function(d,i){
       var mins=diffMin(d.horaInicio,d.horaFin);
@@ -1990,7 +1990,7 @@ function _renderDetallePM03(id,p){
     var totalHrs=p.diasTrabajo.reduce(function(s,d){var m=diffMin(d.horaInicio,d.horaFin);return s+(m!=null?m/60:0);},0);
     return '<div class="card"><div class="card-title">📅 Días de trabajo</div><div class="table-wrap"><table><thead><tr><th>#</th><th>Fecha</th><th>Horario</th><th>Horas</th></tr></thead><tbody>'+filas+'</tbody></table></div><div style="text-align:right;margin-top:6px;font-size:12px;font-weight:800;color:#1a3c5e">Total: '+totalHrs.toFixed(1)+' h</div></div>';
   })():''}
-  ${p.observacionesCierre?`<div class="card"><div class="card-title">✅ Cierre</div>
+  ${p.observacionesCierre?`<div class="card"><div class="card-title">${p.estadoFlujo==='no_aplica'?'🚫 Cerrada sin ejecutar (No aplica)':'✅ Cierre'}</div>
     <p style="font-size:13px;color:var(--txt2)">${p.observacionesCierre}</p>
     ${row('⏱️ Horas',p.horasCierre+' h')}${row('Por',p.cerradaPor||'—')}
     ${p.firmaTecnico?`<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:8px 12px;margin-top:6px"><span style="color:#16a34a;font-weight:800">✅ Firmado digitalmente:</span> ${p.firmaTecnico} · ${p.firmaTecnicoTs?fmtDateTime(p.firmaTecnicoTs):''}</div>`:''}
@@ -2013,6 +2013,7 @@ function _renderDetallePM03(id,p){
   })():''}
   ${!necesitaAsignacion&&canClose?`<button class="btn btn-success" onclick="abrirCierrePM03('${id}')">✅ Marcar ejecutada</button>`:''}
   ${!necesitaAsignacion&&canClose&&esAdmin?`<button class="btn btn-outline" style="border-color:#f59e0b;color:#92400e;margin-top:8px" onclick="abrirReprogramarPM03('${id}')">📅 Reprogramar</button>`:''}
+  ${!necesitaAsignacion&&canClose&&esAdmin?`<button class="btn btn-outline" style="border-color:#dc2626;color:#dc2626;margin-top:8px" onclick="abrirCerrarSinEjecutarPM03('${id}')">🚫 Cerrar sin ejecutar / No aplica</button>`:''}
   ${p.estado==='cerrada'&&p.estadoFlujo==='pendiente_calidad'&&currentUser.rol==='super'?`<button class="btn btn-success" style="margin-top:8px;background:#0891b2" onclick="liberarPM03('${id}')">🔬 Liberar (Calidad)</button>`:''}
   ${p.estado==='cerrada'&&p.estadoFlujo==='pendiente_produccion'&&currentUser.rol==='super'?`<button class="btn btn-success" style="margin-top:8px;background:#16a34a" onclick="abrirLiberarProduccion('${id}')">🏭 Liberar (Producción)</button>`:''}
   ${p.estado==='cerrada'&&p.estadoFlujo==='pendiente_admin'&&currentUser.rol==='super'?`<button class="btn btn-success" style="margin-top:8px;background:#7c3aed" onclick="confirmarAprobacionAdmin('${id}')">📋 Aprobar Final</button>`:''}
@@ -4736,6 +4737,7 @@ function aplicarFiltrosPendientes(){updatePendChart();
   if(filtrosPend.tipo==='todas'||filtrosPend.tipo==='PM03'){
     pm03List=[...PM03_PLAN].filter(p=>{
       if(p.año!==añoFiltro) return false;
+      if(p.estado==='reprogramada') return false; // ya tiene su PM03 nueva en otra semana
       if(semsDelMes&&!semsDelMes.includes(p.semana)) return false;
       if(!semsDelMes&&semFiltro>0&&p.semana!==semFiltro) return false;
       if(r==='tecnico'&&p.tecnicoId!==currentUser.id&&p.responsableAreaId!==currentUser.id) return false;
@@ -4767,7 +4769,7 @@ function aplicarFiltrosPendientes(){updatePendChart();
       </div>
       ${p.responsableAreaNombre?`<div style="font-size:11px;color:var(--txt3);margin-top:2px">🧑‍💼 Resp. área: ${p.responsableAreaNombre}</div>`:''}
       <div style="font-size:11px;color:var(--txt3);margin-top:2px">Generó: ${p.generadoPor||'Sistema'}</div>
-      ${isAdmin&&p.estado!=='cerrada'?`<button class="btn btn-outline btn-sm mt8" style="font-size:12px;padding:5px 12px" onclick="event.stopPropagation();reprogramarPM03('${p.id}')">📅 Reprogramar</button>`:''}
+      ${isAdmin&&p.estado!=='cerrada'?`<button class="btn btn-outline btn-sm mt8" style="font-size:12px;padding:5px 12px" onclick="event.stopPropagation();window._reprogDesdeMisPendientes=true;abrirReprogramarPM03('${p.id}')">📅 Reprogramar</button>`:''}
     </div>`;
   });
   html+=ots.map(o=>renderOTCard(o)).join('');
@@ -13933,7 +13935,7 @@ function reintentarOrdenesSync(){
 }
 setTimeout(reintentarOrdenesSync, 5000);
 setInterval(reintentarOrdenesSync, 5*60*1000);
-function savePM03Supa(p){supaUpsert('pm03_plan',{id:p.id,linea:p.linea,componente:p.componente||null,actividad:p.actividad,area:p.area||null,semana:p.semana,anio:p.año||2026,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null,responsable_area_id:p.responsableAreaId||null,responsable_area_nombre:p.responsableAreaNombre||null,estado:p.estado||'abierta',prioridad:p.prioridad||null,fuente_excel:p.fuenteExcel||false,horas_cierre:p.horasCierre||0,observaciones_cierre:p.observacionesCierre||null,cerrada_ts:p.cerradaTs||null,cerrada_por:p.cerradaPor||null,generado_por:p.generadoPor||null,origen_ot:p.origenOT||null,ts:p.ts||Date.now(),liberado_por:p.liberadoPor||null,liberado_ts:p.liberadoTs||null,estado_calidad:p.estadoCalidad||null,rechazo_calidad:p.rechazoCalidad||null,actividades_estado:p.actividadesEstado?JSON.stringify(p.actividadesEstado):null,refacciones_usadas:p.refaccionesUsadas||null,herramienta_ingresada:p.herramientaIngresada||null,herramienta_salida:p.herramientaSalida||null,grasa_aceite:p.grasaAceite||null,limpieza_mtto:typeof p.limpiezaMtto==='boolean'?p.limpiezaMtto:null,desinf_produccion:typeof p.desinfProduccion==='boolean'?p.desinfProduccion:null,firma_tecnico:p.firmaTecnico||null,firma_tecnico_ts:p.firmaTecnicoTs||null,comentarios_actividades:p.comentariosActividades?JSON.stringify(p.comentariosActividades):null,mediciones_actividades:p.medicionesActividades?JSON.stringify(p.medicionesActividades):null,liberado_prod_por:p.liberadoProdPor||null,liberado_prod_ts:p.liberadoProdTs||null,liberado_admin_por:p.liberadoAdminPor||null,liberado_admin_ts:p.liberadoAdminTs||null,estado_flujo:p.estadoFlujo||'ejecucion',nota_reprogramacion:p.notaReprogramacion||null,comentario_desinfeccion:p.comentarioDesinfeccion||null,tecnicos_adicionales:p.tecnicosAdicionales&&p.tecnicosAdicionales.length?JSON.stringify(p.tecnicosAdicionales):null,comentario_firma_calidad:p.comentarioFirmaCalidad||null,comentario_firma_prod:p.comentarioFirmaProd||null,comentario_firma_admin:p.comentarioFirmaAdmin||null,
+function savePM03Supa(p){supaUpsert('pm03_plan',{id:p.id,linea:p.linea,componente:p.componente||null,actividad:p.actividad,area:p.area||null,semana:p.semana,anio:p.año||2026,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null,responsable_area_id:p.responsableAreaId||null,responsable_area_nombre:p.responsableAreaNombre||null,estado:p.estado||'abierta',prioridad:p.prioridad||null,fuente_excel:p.fuenteExcel||false,horas_cierre:p.horasCierre||0,observaciones_cierre:p.observacionesCierre||null,cerrada_ts:p.cerradaTs||null,cerrada_por:p.cerradaPor||null,generado_por:p.generadoPor||null,origen_ot:p.origenOT||null,ts:p.ts||Date.now(),liberado_por:p.liberadoPor||null,liberado_ts:p.liberadoTs||null,estado_calidad:p.estadoCalidad||null,rechazo_calidad:p.rechazoCalidad||null,actividades_estado:p.actividadesEstado?JSON.stringify(p.actividadesEstado):null,refacciones_usadas:p.refaccionesUsadas||null,herramienta_ingresada:p.herramientaIngresada||null,herramienta_salida:p.herramientaSalida||null,grasa_aceite:p.grasaAceite||null,limpieza_mtto:typeof p.limpiezaMtto==='boolean'?p.limpiezaMtto:null,desinf_produccion:typeof p.desinfProduccion==='boolean'?p.desinfProduccion:null,firma_tecnico:p.firmaTecnico||null,firma_tecnico_ts:p.firmaTecnicoTs||null,comentarios_actividades:p.comentariosActividades?JSON.stringify(p.comentariosActividades):null,mediciones_actividades:p.medicionesActividades?JSON.stringify(p.medicionesActividades):null,liberado_prod_por:p.liberadoProdPor||null,liberado_prod_ts:p.liberadoProdTs||null,liberado_admin_por:p.liberadoAdminPor||null,liberado_admin_ts:p.liberadoAdminTs||null,estado_flujo:p.estadoFlujo||'ejecucion',nota_reprogramacion:p.notaReprogramacion||null,reprogramada_por:p.reprogramadaPor||null,reprogramada_ts:p.reprogramadaTs||null,comentario_desinfeccion:p.comentarioDesinfeccion||null,tecnicos_adicionales:p.tecnicosAdicionales&&p.tecnicosAdicionales.length?JSON.stringify(p.tecnicosAdicionales):null,comentario_firma_calidad:p.comentarioFirmaCalidad||null,comentario_firma_prod:p.comentarioFirmaProd||null,comentario_firma_admin:p.comentarioFirmaAdmin||null,
   // fotos/firma_img_* ya no se sincronizan en bloque (viajan bajo demanda al abrir
   // el detalle) — si en este dispositivo nunca se cargaron (p.campo===undefined),
   // se omiten del payload para NO borrar en Supabase lo que otro dispositivo sí guardó.
@@ -19603,11 +19605,7 @@ function abrirEditarPM03Admin(id){
   modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box">'
     +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#1a3c5e;margin-bottom:4px">✏️ Editar PM03</div>'
     +'<div style="font-size:12px;color:#6b7280;margin-bottom:16px">'+id+' — '+p.linea+'</div>'
-    +'<div style="margin-bottom:14px"><label style="font-size:.75rem;font-weight:700;color:#374151;text-transform:uppercase;display:block;margin-bottom:6px">Estado</label>'
-    +'<div style="display:flex;gap:8px">'
-    +'<button id="epm3-btn-abierta" onclick="epm3SetEstado(\'abierta\')" style="flex:1;padding:11px;border-radius:9px;border:2px solid '+(p.estado==='abierta'?'#f59e0b':'#d1d5db')+';background:'+(p.estado==='abierta'?'#fef3c7':'#fff')+';font-weight:700;cursor:pointer">📂 Abierta</button>'
-    +'<button id="epm3-btn-cerrada" onclick="epm3SetEstado(\'cerrada\')" style="flex:1;padding:11px;border-radius:9px;border:2px solid '+(p.estado==='cerrada'?'#16a34a':'#d1d5db')+';background:'+(p.estado==='cerrada'?'#dcfce7':'#fff')+';font-weight:700;cursor:pointer">✅ Cerrada</button>'
-    +'</div></div>'
+    +'<div style="background:#f3f4f6;border-radius:9px;padding:10px 12px;margin-bottom:14px;font-size:.82rem;color:#374151">📋 Estado actual: <b>'+(p.estado==='cerrada'?'✅ Cerrada':'📂 Abierta')+'</b><br><span style="color:#6b7280">Aquí solo se corrigen datos. Para cerrar la PM03 usa "✅ Marcar ejecutada" (con protocolo) o "🚫 Cerrar sin ejecutar".</span></div>'
     +'<div style="margin-bottom:14px"><label style="font-size:.75rem;font-weight:700;color:#374151;text-transform:uppercase;display:block;margin-bottom:6px">Responsable de ejecutar</label>'
     +'<select id="epm3-tecnico" class="form-control" style="padding:10px">'
     +getTecnicos().map(function(u){return '<option value="'+u.id+'"'+(p.tecnicoId===u.id?' selected':'')+'>'+u.nombre+'</option>';}).join('')
@@ -19639,12 +19637,12 @@ function epm3SetEstado(est){
 function guardarEditarPM03Admin(id){
   var p=PM03_PLAN.find(function(x){return x.id===id;});
   if(!p) return;
-  var nuevoEst=window._epm3Estado||p.estado;
+  // Este modal ya NO puede cambiar el estado (abierta/cerrada): solo corrige datos.
+  // Cerrar una PM03 debe hacerse por "✅ Marcar ejecutada" (protocolo) o "🚫 Cerrar sin ejecutar".
   var tecSel=document.getElementById('epm3-tecnico');
   var respAreaSel=document.getElementById('epm3-resp-area');
   var obs=document.getElementById('epm3-obs').value.trim();
   var tObj=tecSel?USERS.find(function(u){return u.id===tecSel.value;}):null;
-  p.estado=nuevoEst;
   if(tObj){p.tecnicoId=tObj.id;p.tecnicoNombre=tObj.nombre;}
   if(respAreaSel){
     var raVal=respAreaSel.value;
@@ -19655,7 +19653,6 @@ function guardarEditarPM03Admin(id){
     }
   }
   if(obs) p.observacionesCierre=obs;
-  if(nuevoEst==='cerrada'&&!p.cerradaTs){p.cerradaTs=Date.now();p.cerradaPor=nombreEfectivo();}
   p._editadoTs=Date.now(); // Marca para que sync no sobreescriba
   saveDB('pm03_plan',PM03_PLAN);
   savePM03Supa(p);
@@ -21046,6 +21043,7 @@ function confirmarReprogramar(id){
     estado:'abierta', estadoFlujo:'ejecucion',
     generadoPor:nombreEfectivo(),
     reprogramadaDe:id, notaReprogramacion:nota,
+    reprogramadaPor:nombreEfectivo(), reprogramadaTs:Date.now(),
     ts:Date.now(), horaCreacion:new Date().toISOString(),
     actividadesEstado:{}, actividadesEstadoInicial:{}, actividadesEstadoFinal:{},
     comentariosActividades:{}
@@ -21053,6 +21051,8 @@ function confirmarReprogramar(id){
   // Marcar la original como reprogramada
   p.reprogramadaA=newId;
   p.estado='reprogramada';
+  p.reprogramadaPor=nombreEfectivo();
+  p.reprogramadaTs=Date.now();
   p._editadoTs=Date.now();
   nueva._editadoTs=Date.now();
   if(currentUser.rol==='super') p.reprogramadaPorSuper=true;
@@ -21062,24 +21062,74 @@ function confirmarReprogramar(id){
   fetch(SUPA_URL+'/rest/v1/pm03_plan?id=eq.'+id,{
     method:'PATCH',
     headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
-    body:JSON.stringify({estado:'reprogramada',reprogramada_a:newId,nota_reprogramacion:nota})
+    body:JSON.stringify({estado:'reprogramada',reprogramada_a:newId,nota_reprogramacion:nota,reprogramada_por:p.reprogramadaPor,reprogramada_ts:p.reprogramadaTs})
   }).then(function(){savePM03Supa(nueva);}).catch(function(){savePM03Supa(p);savePM03Supa(nueva);});
   var m=document.getElementById('modal-reprog-pm3');if(m)m.remove();
   showAlert('📅 PM03 reprogramada para semana '+newSem);
-  // Regresar a la pantalla donde se abrió el reprogramar (lista "PM03 por Reprogramar"
-  // si se disparó desde ahí; si no, a la lista general de PM03 como antes)
+  // Regresar a la pantalla donde se abrió el reprogramar: lista "PM03 por Reprogramar"
+  // si vino de ahí, "Mis Pendientes" si vino de esa tarjeta, o la lista general de PM03.
   var volverALista=window._reprogDesdeLista;
+  var volverAPendientes=window._reprogDesdeMisPendientes;
   window._reprogDesdeLista=false;
+  window._reprogDesdeMisPendientes=false;
   setTimeout(function(){
     if(volverALista){
       detalleBackScreen='screen-menu';
       showPM03PorReprogramar();
+    } else if(volverAPendientes){
+      showScreen('screen-ordenes');
+      aplicarFiltrosPendientes();
     } else {
       detalleBackScreen='screen-pm03';
       renderPM03();
       showScreen('screen-pm03');
     }
   },200);
+}
+
+// ================================================================
+// CERRAR SIN EJECUTAR / NO APLICA (solo admin/super)
+// Cierre directo, sin protocolo ni firmas, sin pasar por el flujo de
+// liberación de calidad/producción/admin (obsoleto: ahora se firma en
+// el momento con el operador desde el celular).
+// ================================================================
+function abrirCerrarSinEjecutarPM03(id){
+  var p=PM03_PLAN.find(function(x){return x.id===id;});
+  if(!p) return;
+  var modal=document.createElement('div');
+  modal.id='modal-no-aplica-pm3';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
+  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#dc2626;margin-bottom:4px">🚫 Cerrar sin ejecutar</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:16px">'+id+' — '+p.linea+'</div>'
+    +'<div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;padding:10px;margin-bottom:14px;font-size:.82rem;color:#991b1b">⚠️ Esta PM03 se cerrará de inmediato sin protocolo ni firmas. Úsalo solo cuando la actividad no aplica.</div>'
+    +'<div style="margin-bottom:16px"><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Comentario <span style="color:#dc2626">*obligatorio</span></label>'
+    +'<textarea id="no-aplica-comentario" class="form-control" rows="3" style="padding:10px;resize:none" placeholder="Explica por qué no aplica esta PM03..."></textarea></div>'
+    +'<div style="display:flex;gap:10px">'
+    +'<button onclick="var m=document.getElementById(\'modal-no-aplica-pm3\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="confirmarCerrarSinEjecutarPM03(\''+id+'\')" style="flex:1;padding:13px;background:#dc2626;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">🚫 Cerrar</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function confirmarCerrarSinEjecutarPM03(id){
+  var p=PM03_PLAN.find(function(x){return x.id===id;});
+  if(!p) return;
+  var comentario=document.getElementById('no-aplica-comentario').value.trim();
+  if(!comentario){showAlert('El comentario es obligatorio','error');return;}
+  p.estado='cerrada';
+  p.estadoFlujo='no_aplica';
+  p.observacionesCierre=comentario;
+  p.horasCierre=p.horasCierre||0;
+  p.cerradaTs=Date.now();
+  p.cerradaPor=nombreEfectivo();
+  p._editadoTs=Date.now();
+  saveDB('pm03_plan',PM03_PLAN);
+  savePM03Supa(p);
+  var m=document.getElementById('modal-no-aplica-pm3');if(m)m.remove();
+  showAlert('🚫 PM03 cerrada como "No aplica"');
+  showDetallePM03(id);
+  if(detalleBackScreen==='screen-pm03') setTimeout(function(){renderPM03();},100);
 }
 
 // ================================================================
@@ -28455,10 +28505,14 @@ function abrirCapturaDiariaAgua(fecha){
   // Marca el inicio de captura (si no había una ya en curso) para medir cuánto tarda
   // el técnico en llenar el registro, desde que abre el formulario hasta que lo guarda.
   if(!loadDB('agua_inicio_'+fecha,null)) saveDB('agua_inicio_'+fecha, Date.now());
-  var lectAyer=AGUA_LECTURAS.find(function(l){
-    var ayer=new Date(new Date(fecha).getTime()-86400000).toISOString().slice(0,10);
-    return l.fecha===ayer;
-  });
+  // Última lectura real anterior a esta fecha (no necesariamente ayer — si hubo
+  // un hueco, igual debe mostrarse como referencia; antes solo buscaba "ayer"
+  // exacto y si no había, mostraba 0 aunque sí hubiera una lectura real previa).
+  var anteriores=AGUA_LECTURAS.filter(function(l){return l.fecha&&l.fecha<fecha;})
+    .sort(function(a,b){return a.fecha<b.fecha?1:-1;});
+  var lectAyer=anteriores[0]||null;
+  var ayerStr=new Date(new Date(fecha).getTime()-86400000).toISOString().slice(0,10);
+  var hayHueco=lectAyer&&lectAyer.fecha!==ayerStr;
   var lectHoy=AGUA_LECTURAS.find(function(l){return l.fecha===fecha;})||{};
   var entradas=AGUA_MEDIDORES.filter(function(m){return m.tipo==='entrada'&&m.activo!==false;})
     .sort(function(a,b){return a.orden-b.orden;});
@@ -28472,26 +28526,29 @@ function abrirCapturaDiariaAgua(fecha){
   var draft=_aguaCargarBorrador(fecha)||{};
   var campos_e=entradas.map(function(m,i){
     var key='lectura_e'+(i+1);
-    var prev=lectAyer?lectAyer[key]||0:0;
+    var prev=lectAyer?(lectAyer[key]||0):0;
     var val=draft['e'+(i+1)]||lectHoy[key]||'';
     return '<div class="form-group"><label class="form-label">'+m.nombre+'</label>'
-      +'<div style="font-size:11px;color:#6b7280;margin-bottom:4px">Lectura anterior: '+prev+' m³</div>'
+      +'<div style="font-size:11px;color:#6b7280;margin-bottom:4px">Lectura anterior: '+prev+' m³'+(lectAyer?' (del '+lectAyer.fecha+')':' (sin lecturas previas)')+'</div>'
       +'<input type="number" class="form-control" id="agua-e'+(i+1)+'" step="0.01" min="0" value="'+val+'" placeholder="Lectura actual m³" style="padding:10px" oninput="_aguaGuardarBorradorActual()">'
+      +'<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#92400e;margin-top:4px;cursor:pointer"><input type="checkbox" id="agua-e'+(i+1)+'-reset" style="margin:0"> ⚠️ Medidor reiniciado/reemplazado hoy (permite un valor menor)</label>'
       +'</div>';
   }).join('');
 
   var campos_s=salidas.map(function(m,i){
     var key='lectura_s'+(i+1);
-    var prev=lectAyer?lectAyer[key]||0:0;
+    var prev=lectAyer?(lectAyer[key]||0):0;
     var val=draft['s'+(i+1)]||lectHoy[key]||'';
     return '<div class="form-group"><label class="form-label">'+m.nombre+'</label>'
-      +'<div style="font-size:11px;color:#6b7280;margin-bottom:4px">Lectura anterior: '+prev+' m³</div>'
+      +'<div style="font-size:11px;color:#6b7280;margin-bottom:4px">Lectura anterior: '+prev+' m³'+(lectAyer?' (del '+lectAyer.fecha+')':' (sin lecturas previas)')+'</div>'
       +'<input type="number" class="form-control" id="agua-s'+(i+1)+'" step="0.01" min="0" value="'+val+'" placeholder="Lectura actual m³" style="padding:10px" oninput="_aguaGuardarBorradorActual()">'
+      +'<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#92400e;margin-top:4px;cursor:pointer"><input type="checkbox" id="agua-s'+(i+1)+'-reset" style="margin:0"> ⚠️ Medidor reiniciado/reemplazado hoy (permite un valor menor)</label>'
       +'</div>';
   }).join('');
 
   modal.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;max-width:500px;margin:auto">'
     +'<div style="font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:14px">💧 Lectura de Agua — '+fecha+'</div>'
+    +(hayHueco?'<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:#92400e">⚠️ No hay lectura de ayer ('+ayerStr+') — se compara contra la última real, del '+lectAyer.fecha+'.</div>':'')
     +'<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:10px;background:#f1f5f9;padding:6px 10px;border-radius:6px">📥 ENTRADAS (Lectores de red)</div>'
     +campos_e
     +'<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:10px;background:#f1f5f9;padding:6px 10px;border-radius:6px;margin-top:4px">📤 SALIDAS (Medidores)</div>'
@@ -28553,16 +28610,29 @@ function guardarLecturaAgua(fecha){
 
   // Candado duro: un medidor acumulativo nunca debe bajar respecto a la
   // última lectura real — si baja, casi siempre es un error de captura.
+  // Excepción: si se marcó la casilla "Medidor reiniciado/reemplazado" de ese
+  // campo, se permite el valor menor y se deja anotado en notas para auditoría.
+  var _reiniciados=[];
   if(lectAyer.fecha){
     var _bajos=[];
-    [['E1',e1,lectAyer.lectura_e1],['E2',e2,lectAyer.lectura_e2],['E3',e3,lectAyer.lectura_e3],['E4',e4,lectAyer.lectura_e4],
-     ['S1',s1,lectAyer.lectura_s1],['S2',s2,lectAyer.lectura_s2],['S3',s3,lectAyer.lectura_s3],['S4',s4,lectAyer.lectura_s4]
+    [['E1','e1',e1,lectAyer.lectura_e1],['E2','e2',e2,lectAyer.lectura_e2],['E3','e3',e3,lectAyer.lectura_e3],['E4','e4',e4,lectAyer.lectura_e4],
+     ['S1','s1',s1,lectAyer.lectura_s1],['S2','s2',s2,lectAyer.lectura_s2],['S3','s3',s3,lectAyer.lectura_s3],['S4','s4',s4,lectAyer.lectura_s4]
     ].forEach(function(c){
-      if(c[2]!=null && c[1]<c[2]) _bajos.push(c[0]+' ('+c[1]+' < '+c[2]+' del '+lectAyer.fecha+')');
+      if(c[3]!=null && c[2]<c[3]){
+        var resetChk=document.getElementById('agua-'+c[1]+'-reset');
+        if(resetChk&&resetChk.checked){
+          _reiniciados.push(c[0]+' (de '+c[3]+' a '+c[2]+')');
+        } else {
+          _bajos.push(c[0]+' ('+c[2]+' < '+c[3]+' del '+lectAyer.fecha+')');
+        }
+      }
     });
     if(_bajos.length){
-      showAlert('⚠️ No se guardó — estas lecturas son menores a las del '+lectAyer.fecha+', un medidor no debería bajar: '+_bajos.join(', '),'error');
+      showAlert('⚠️ No se guardó — estas lecturas son menores a las del '+lectAyer.fecha+', un medidor no debería bajar: '+_bajos.join(', ')+'. Si el medidor se averió o se reemplazó, marca su casilla "Medidor reiniciado/reemplazado".','error');
       return;
+    }
+    if(_reiniciados.length){
+      notas=(notas?notas+' | ':'')+'🔧 Medidor(es) reiniciado/reemplazado: '+_reiniciados.join(', ');
     }
   }
 
