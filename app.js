@@ -14463,7 +14463,7 @@ function updatePendChart(){
 // ================================================================
 // HISTORIAL DE MÁQUINAS
 // ================================================================
-var histFiltros = {estado:'todas',tipo:'todas',prio:'todas',color:'todos'};
+var histFiltros = {estado:'cerrada',tipo:'todas',prio:'todas',color:'todos'};
 
 function showHistorial(){
   showScreen('screen-historial');
@@ -14472,15 +14472,44 @@ function showHistorial(){
     for(var i=1;i<=52;i++){
       var o=document.createElement('option');
       o.value=i;o.textContent='Sem '+i;
-      if(i===currentWeek())o.selected=true;
       semSel.appendChild(o);
     }
   }
+  if(semSel) semSel.value=String(currentWeek());
+  var anoSel=document.getElementById('hist-año');
+  if(anoSel&&anoSel.getAttribute('data-ext')!=='1'){
+    anoSel.innerHTML='';
+    for(var y=2025;y<=2036;y++){
+      var oy=document.createElement('option');
+      oy.value=y;oy.textContent=y;
+      anoSel.appendChild(oy);
+    }
+    anoSel.setAttribute('data-ext','1');
+  }
+  if(anoSel) anoSel.value=String(currentYear());
+  var mesSel=document.getElementById('hist-mes');
+  if(mesSel) mesSel.value=String(new Date().getMonth()+1);
   var linSel=document.getElementById('hist-linea');
   if(linSel&&linSel.options.length<=1){
     var todas=(LISTAS.lineas_proceso||[]).concat(LISTAS.lineas_envasado||[]).concat(LISTAS.lineas_servicios||[]).concat(LISTAS.lineas_bodega||[]);
     todas.forEach(function(l){var o=document.createElement('option');o.value=l;o.textContent=l;linSel.appendChild(o);});
   }
+  histFiltros={estado:'cerrada',tipo:'todas',prio:'todas',color:'todos'};
+  ['hist-ft-estado','hist-ft-tipo','hist-ft-prio','hist-ft-color'].forEach(function(rowId){
+    var row=document.getElementById(rowId);
+    if(!row) return;
+    row.querySelectorAll('.filter-chip').forEach(function(c){c.classList.remove('active');});
+  });
+  var chipEstadoCerrada=document.querySelector('#hist-ft-estado .filter-chip[onclick*="\'cerrada\'"]');
+  if(chipEstadoCerrada) chipEstadoCerrada.classList.add('active');
+  ['hist-ft-tipo','hist-ft-prio','hist-ft-color'].forEach(function(rowId){
+    var first=document.querySelector('#'+rowId+' .filter-chip');
+    if(first) first.classList.add('active');
+  });
+  var busqEl=document.getElementById('hist-busqueda');
+  if(busqEl) busqEl.value='';
+  var cont=document.getElementById('hist-results');
+  if(cont) cont.innerHTML='';
 }
 
 function setHistFiltro(tipo,val,btn){
@@ -14488,6 +14517,7 @@ function setHistFiltro(tipo,val,btn){
   var row=btn.closest('.filter-row');
   if(row)row.querySelectorAll('.filter-chip').forEach(function(c){c.classList.remove('active');});
   btn.classList.add('active');
+  if(document.getElementById('hist-linea').value) buscarHistorial();
 }
 
 function buscarHistorial(){
@@ -14496,6 +14526,7 @@ function buscarHistorial(){
   var sem=parseInt(document.getElementById('hist-sem').value)||0;
   var mes=parseInt(document.getElementById('hist-mes').value)||0;
   var ano=parseInt(document.getElementById('hist-año').value)||currentYear();
+  var busqueda=_cemNorm(document.getElementById('hist-busqueda')?document.getElementById('hist-busqueda').value:'');
   var cont=document.getElementById('hist-results');
 
   var ots=ORDENES.filter(function(o){
@@ -14505,18 +14536,25 @@ function buscarHistorial(){
     else if(histFiltros.tipo!=='todas'&&o.tipo!==histFiltros.tipo)return false;
     if(histFiltros.prio!=='todas'&&o.prioridad!==histFiltros.prio)return false;
     if(histFiltros.color!=='todos'&&o.colorOT!==histFiltros.color)return false;
-    if(sem>0&&o.semana!==sem)return false;
-    if(mes>0){var d=new Date(o.ts);if(d.getMonth()+1!==mes||d.getFullYear()!==ano)return false;}
-    else if(o.año&&o.año!==ano)return false;
+    var fechaRef=o.cerradaTs||o.ts;
+    var dRef=new Date(fechaRef);
+    if(mes>0){ if(dRef.getMonth()+1!==mes||dRef.getFullYear()!==ano)return false; }
+    else if(sem>0){ if(getWeekNumber(dRef)!==sem||dRef.getFullYear()!==ano)return false; }
+    else if(ano&&dRef.getFullYear()!==ano)return false;
+    if(busqueda&&!_cemNorm(o.id+' '+(o.componente||'')+' '+(o.detalle||'')+' '+(o.tecnicoNombre||'')).includes(busqueda))return false;
     return true;
-  }).sort(function(a,b){return b.ts-a.ts;});
+  });
 
   var pm03s=PM03_PLAN.filter(function(p){
     if(p.linea!==linea)return false;
     if(histFiltros.tipo!=='todas'&&histFiltros.tipo!=='PM03')return false;
     if(histFiltros.estado!=='todas'&&p.estado!==histFiltros.estado)return false;
-    if(sem>0&&p.semana!==sem)return false;
-    if(p.año&&p.año!==ano)return false;
+    var fechaRef=p.cerradaTs||p.ts||0;
+    var dRef2=new Date(fechaRef);
+    if(mes>0){ if(dRef2.getMonth()+1!==mes||dRef2.getFullYear()!==ano)return false; }
+    else if(sem>0){ if(getWeekNumber(dRef2)!==sem||dRef2.getFullYear()!==ano)return false; }
+    else if(ano&&dRef2.getFullYear()!==ano)return false;
+    if(busqueda&&!_cemNorm((p.id||'')+' '+(p.actividad||'')+' '+(p.componente||'')+' '+(p.tecnicoNombre||'')).includes(busqueda))return false;
     return true;
   });
 
@@ -14536,18 +14574,24 @@ function buscarHistorial(){
     +'<div class="kpi-card" style="border-top:3px solid var(--am2)"><div class="kpi-num" style="color:var(--am2)">'+abiertas+'</div><div class="kpi-label">Abiertas</div></div>'
     +'</div>';
 
-  pm03s.forEach(function(p){
-    html+='<div class="ot-card pm03"><div style="display:flex;justify-content:space-between"><span style="font-weight:700">'+(p.actividad||p.linea||'')+'</span><span class="badge badge-'+(p.estado||'abierta')+'">'+(p.estado||'abierta')+'</span></div><div style="font-size:12px;color:var(--txt2);margin-top:4px">Sem '+p.semana+'/'+p.año+' - '+(p.tecnicoNombre||'Sin asignar')+'</div></div>';
-  });
+  var items=pm03s.map(function(p){return {tipo:'pm03',fecha:(p.cerradaTs||p.ts||0),data:p};})
+    .concat(ots.map(function(o){return {tipo:'ot',fecha:(o.cerradaTs||o.ts||0),data:o};}))
+    .sort(function(a,b){return b.fecha-a.fecha;});
 
-  ots.forEach(function(o){
-    var ic=o.esTrabajoVariosDias?'📅 ':'';
-    html+='<div class="ot-card '+(o.tipo||'').toLowerCase()+' '+(o.colorOT?'color-'+o.colorOT:'')+'">'
-      +'<div style="display:flex;justify-content:space-between"><span style="font-size:11px;color:var(--txt3)">'+ic+o.id+'</span>'
-      +'<div style="display:flex;gap:4px"><span class="badge badge-'+(o.tipo||'').toLowerCase()+'">'+(o.tipo||'')+'</span>'
-      +'<span class="badge badge-'+(o.estado||'')+'">'+(o.estado||'')+'</span></div></div>'
-      +'<div style="font-weight:700;margin-top:4px">'+(o.componente||o.linea||'')+'</div>'
-      +'<div style="font-size:12px;color:var(--txt2)">'+(fmtDate(o.ts)||'')+' - '+(o.tecnicoNombre||'Sin asignar')+'</div></div>';
+  items.forEach(function(it){
+    if(it.tipo==='pm03'){
+      var p=it.data;
+      html+='<div class="ot-card pm03" onclick="showDetallePM03(\''+p.id+'\')" style="cursor:pointer"><div style="display:flex;justify-content:space-between"><span style="font-weight:700">'+(p.actividad||p.linea||'')+'</span><span class="badge badge-'+(p.estado||'abierta')+'">'+(p.estado||'abierta')+'</span></div><div style="font-size:12px;color:var(--txt2);margin-top:4px">'+(it.fecha?fmtDate(it.fecha):('Sem '+p.semana+'/'+p.año))+' - '+(p.tecnicoNombre||'Sin asignar')+'</div></div>';
+    }else{
+      var o=it.data;
+      var ic=o.esTrabajoVariosDias?'📅 ':'';
+      html+='<div class="ot-card '+(o.tipo||'').toLowerCase()+' '+(o.colorOT?'color-'+o.colorOT:'')+'" onclick="showDetalle(\''+o.id+'\')" style="cursor:pointer">'
+        +'<div style="display:flex;justify-content:space-between"><span style="font-size:11px;color:var(--txt3)">'+ic+o.id+'</span>'
+        +'<div style="display:flex;gap:4px"><span class="badge badge-'+(o.tipo||'').toLowerCase()+'">'+(o.tipo||'')+'</span>'
+        +'<span class="badge badge-'+(o.estado||'')+'">'+(o.estado||'')+'</span></div></div>'
+        +'<div style="font-weight:700;margin-top:4px">'+(o.componente||o.linea||'')+'</div>'
+        +'<div style="font-size:12px;color:var(--txt2)">'+(fmtDate(it.fecha)||'')+' - '+(o.tecnicoNombre||'Sin asignar')+'</div></div>';
+    }
   });
 
   cont.innerHTML=html;
