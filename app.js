@@ -30421,6 +30421,44 @@ function eliminarActividadOrfanaCalendario(areaId,linea,eq,actLabel){
   showAlert('✅ Actividad eliminada del calendario ('+ids.length+' PM03 borradas)');
   showPlanCalendario(areaId,linea);
 }
+
+// Detener (sin formalizar) una actividad "huérfana" del Calendario: a diferencia de
+// Eliminar, esto SÍ conserva las PM03 que ya se ejecutaron como historial — sólo
+// cancela las que todavía no se han hecho (de esta semana en adelante). No crea
+// ninguna actividad formal ni pide frecuencia; simplemente deja de haber "siguientes"
+// programadas para esa actividad en ese equipo. Importante: como no queda un
+// interruptor "activo/inactivo" formal, si más adelante se vuelve a importar un Excel
+// para ese mismo equipo, esas semanas podrían volver a aparecer.
+function detenerActividadOrfanaCalendario(areaId,linea,eq,actLabel){
+  if(!currentUser||(currentUser.rol!=='admin'&&currentUser.rol!=='super')) return;
+  var registros=_pm03OrfanasDeActividad(linea,eq,actLabel);
+  if(!registros.length){ showAlert('No se encontraron PM03 para esta actividad','error'); return; }
+  var tieneEjecuciones=registros.some(function(x){return x.estado==='cerrada';});
+  var hoyClave=currentYear()*100+currentWeek();
+  var aCancelar=registros.filter(function(x){
+    if(x.estado==='cerrada') return false;
+    if(tieneEjecuciones) return (((x.año||0)*100)+(x.semana||0))>=hoyClave;
+    return true;
+  });
+  if(!aCancelar.length){ showAlert('No hay PM03 futuras pendientes — no hay nada que detener','error'); return; }
+  var nEjecutadas=registros.filter(function(x){return x.estado==='cerrada';}).length;
+  var nVencidasConservadas=registros.length-aCancelar.length-nEjecutadas;
+  if(!confirm('¿Detener "'+actLabel+'" ('+eq+')?\n\nSe cancelarán '+aCancelar.length+' PM03 que aún no se han hecho.'+(nEjecutadas?' Las '+nEjecutadas+' ya ejecutadas se conservan como historial.':'')+(nVencidasConservadas?' '+nVencidasConservadas+' vencida(s) sin ejecutar de semanas anteriores también se conservan (no se tocan).':'')+'\n\nEsto no crea ninguna actividad formal — si en el futuro se vuelve a importar un Excel para este equipo, podría volver a programarse.')) return;
+  var ids=aCancelar.map(function(x){return x.id;});
+  PM03_PLAN=PM03_PLAN.filter(function(x){return ids.indexOf(x.id)<0;});
+  saveDB('pm03_plan',PM03_PLAN);
+  var del=loadDB('pm03_eliminadas',[]);
+  ids.forEach(function(id){ if(del.indexOf(id)<0) del.push(id); });
+  saveDB('pm03_eliminadas',del);
+  fetch(SUPA_URL+'/rest/v1/pm03_plan?id=in.('+ids.join(',')+')',{
+    method:'DELETE',
+    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'}
+  }).then(function(r){
+    if(!r.ok) r.text().then(function(t){console.error('Error al detener PM03 huérfanas:',t);});
+  }).catch(function(){});
+  showAlert('🛑 Detenida — '+ids.length+' PM03 futuras canceladas'+(nEjecutadas?', '+nEjecutadas+' conservadas como historial':''));
+  showPlanCalendario(areaId,linea);
+}
 function showPlanCalendario(areaId,linea){
   var cont=document.getElementById('plan-content');
   if(!cont) return;
@@ -30605,16 +30643,18 @@ function showPlanCalendario(areaId,linea){
 
     // Botones para actividades "huérfanas" (sin actividad formal ligada, apartado "Sin
     // frecuencia definida" — típicamente importadas de Excel) — sólo admin/super.
-    // "Formalizar" siempre se ofrece (aunque ya tenga ejecuciones): crea la actividad
-    // formal en el plan para que a partir de ahí tenga lápiz de editar y se pueda
-    // detener (desactivar) sin perder su historial de PM03 ya generadas/ejecutadas.
+    // "Detener" cancela sólo las PM03 pendientes (futuras) sin pedir frecuencia ni crear
+    // actividad formal, conservando las ya ejecutadas como historial.
+    // "Formalizar" crea la actividad formal en el plan para que a partir de ahí tenga
+    // lápiz de editar, con control total (incluido un "detener" permanente).
     // "Eliminar" (borra también el historial) sólo se ofrece si NINGUNA PM03 se ha
     // ejecutado todavía.
     if(!_actDef&&!act.sinProgEsteAnio&&currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super')){
       var _sinEjec=!_pm03OrfanasDeActividad(linea,eq,act.label).some(function(x){return x.estado==='cerrada';});
       html+='<tr style="background:'+rowBg+'"><td colspan="2" style="position:sticky;left:0;background:'+rowBg+'"></td>'
         +'<td colspan="'+semanas.length+'" style="padding:2px 6px 6px">'
-        +'<button onclick="formalizarActividad(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\',\''+eq.replace(/'/g,"\\'")+'\',\''+act.label.replace(/'/g,"\\'")+'\')" style="padding:2px 8px;margin-right:6px;background:#dbeafe;border:1px solid #93c5fd;color:#1d4ed8;border-radius:6px;font-size:9px;font-weight:700;cursor:pointer">📋 Formalizar (para editar / detener)</button>'
+        +'<button onclick="detenerActividadOrfanaCalendario(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\',\''+eq.replace(/'/g,"\\'")+'\',\''+act.label.replace(/'/g,"\\'")+'\')" style="padding:2px 8px;margin-right:6px;background:#fef3c7;border:1px solid #fcd34d;color:#92400e;border-radius:6px;font-size:9px;font-weight:700;cursor:pointer">🛑 Detener</button>'
+        +'<button onclick="formalizarActividad(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\',\''+eq.replace(/'/g,"\\'")+'\',\''+act.label.replace(/'/g,"\\'")+'\')" style="padding:2px 8px;margin-right:6px;background:#dbeafe;border:1px solid #93c5fd;color:#1d4ed8;border-radius:6px;font-size:9px;font-weight:700;cursor:pointer">📋 Formalizar</button>'
         +(_sinEjec?'<button onclick="eliminarActividadOrfanaCalendario(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\',\''+eq.replace(/'/g,"\\'")+'\',\''+act.label.replace(/'/g,"\\'")+'\')" style="padding:2px 8px;background:#fee2e2;border:1px solid #fca5a5;color:#dc2626;border-radius:6px;font-size:9px;font-weight:700;cursor:pointer">🗑️ Eliminar (sin ejecuciones)</button>':'')
         +'</td></tr>';
     }
