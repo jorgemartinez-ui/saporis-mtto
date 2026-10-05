@@ -435,7 +435,7 @@ function doLogout(){currentUser=null;saveDB('session',null);document.getElementB
 function renderMenu(){
   setTimeout(actualizarBadgesAdmin, 100);
   if(!currentUser)return;
-  const roles={admin:'Administrador',tecnico:'Técnico',operador:'Operador',lider:'Líder Producción',super:'⚡ Super Usuario'};
+  const roles={admin:'Administrador',tecnico:'Técnico',operador:'Operador',lider:'Líder Área',super:'⚡ Super Usuario'};
   document.getElementById('user-pill').textContent='👤 '+currentUser.nombre+' | '+roles[currentUser.rol];
   const r=currentUser.rol;
   
@@ -2637,7 +2637,7 @@ function confirmarCierrePM03(id){
   if(faltanEstadoFinal.length){pm3ShowError('Selecciona Estado Final (Bien/Regular/Reprogramar) en actividades: '+faltanEstadoFinal.join(', '));return;}
 
   // Firmas de autorización obligatorias — no se puede cerrar la PM03 sin las 4
-  var _firmasLbl={Operador:'Técnico Mantenimiento',Lider:'Líder Producción',Calidad:'Inspector Calidad',Admin:'Coordinador de Mantenimiento'};
+  var _firmasLbl={Operador:'Técnico Mantenimiento',Lider:'Líder Área',Calidad:'Inspector Calidad',Admin:'Coordinador de Mantenimiento'};
   var _firmasFaltan=Object.keys(_firmasLbl).filter(function(k){return !p['firmaImg'+k];});
   if(_firmasFaltan.length){
     pm3ShowError('Faltan firmas de autorización: '+_firmasFaltan.map(function(k){return _firmasLbl[k];}).join(', '));
@@ -3957,7 +3957,7 @@ function renderAdminUs(cont){
       +'<div class="form-group"><label class="form-label">Rol</label>'
         +'<select class="form-control" id="nu-rol">'
           +'<option value="operador">Operador</option>'
-          +'<option value="lider">Líder Producción</option>'
+          +'<option value="lider">Líder Área</option>'
           +'<option value="tecnico">Técnico</option>'
           +'<option value="inspector_calidad">Inspector Calidad</option>'
           +'<option value="lider_calidad">Líder Calidad</option>'
@@ -3972,7 +3972,7 @@ function renderAdminUs(cont){
 function verDetalleUsuario(uid){
   var u=USERS.find(function(x){return x.id===uid;});
   if(!u) return;
-  var roleLabel={operador:'Operador',lider:'Líder Producción',tecnico:'Técnico',admin:'Administrador',lider_calidad:'Líder Calidad',inspector_calidad:'Inspector Calidad',administrativo:'Administrativo',supply:'Supply'};
+  var roleLabel={operador:'Operador',lider:'Líder Área',tecnico:'Técnico',admin:'Administrador',lider_calidad:'Líder Calidad',inspector_calidad:'Inspector Calidad',administrativo:'Administrativo',supply:'Supply'};
   var modal=document.createElement('div');
   modal.id='modal-usuario';
   modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
@@ -3990,7 +3990,7 @@ function verDetalleUsuario(uid){
     +'<div style="grid-column:1/-1"><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Rol</label>'
     +'<select id="eu-rol" class="form-control" style="padding:10px">'
     +'<option value="operador"'+(u.rol==='operador'?' selected':'')+'>Operador</option>'
-    +'<option value="lider"'+(u.rol==='lider'?' selected':'')+'>Líder Producción</option>'
+    +'<option value="lider"'+(u.rol==='lider'?' selected':'')+'>Líder Área</option>'
     +'<option value="tecnico"'+(u.rol==='tecnico'?' selected':'')+'>Técnico</option>'
     +'<option value="inspector_calidad"'+(u.rol==='inspector_calidad'?' selected':'')+'>Inspector Calidad</option>'
     +'<option value="lider_calidad"'+(u.rol==='lider_calidad'?' selected':'')+'>Líder Calidad</option>'
@@ -11117,7 +11117,7 @@ var _firmaOtId=null;
 function abrirModalFirma(otId, campo){
   _firmaOtId=otId;
   _firmaCampo=campo;
-  var labels={operador:'Técnico Mantenimiento',lider:'Líder Producción',calidad:'Inspector Calidad',admin:'Coordinador de Mantenimiento'};
+  var labels={operador:'Técnico Mantenimiento',lider:'Líder Área',calidad:'Inspector Calidad',admin:'Coordinador de Mantenimiento'};
   var modal=document.createElement('div');
   modal.id='modal-firma-canvas';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box';
@@ -11231,7 +11231,7 @@ function firmaGuardar(){
 function renderFirmasPhysical(p){
   var campos=[
     {key:'operador',label:'Técnico Mantenimiento'},
-    {key:'lider',label:'Líder Producción'},
+    {key:'lider',label:'Líder Área'},
     {key:'calidad',label:'Inspector Calidad'},
     {key:'admin',label:'Coordinador de Mantenimiento'}
   ];
@@ -19789,7 +19789,7 @@ function imprimirProtocoloPM03(id){
     +'<div class="seccion" style="margin-bottom:0">Firmas de Autorización</div>'
      +'<table><tr>'
      +firmaCeldaImg('TÉCNICO MANTENIMIENTO', p.firmaImgOperador, p.firmaNombreOperador, p.firmaTsOperador)
-     +firmaCeldaImg('LÍDER PRODUCCIÓN', p.firmaImgLider, p.firmaNombreLider, p.firmaTsLider)
+     +firmaCeldaImg('LÍDER ÁREA', p.firmaImgLider, p.firmaNombreLider, p.firmaTsLider)
      +firmaCeldaImg('INSPECTOR CALIDAD', p.firmaImgCalidad, p.firmaNombreCalidad, p.firmaTsCalidad)
      +firmaCeldaImg('COORDINADOR DE MANTENIMIENTO', p.firmaImgAdmin, p.firmaNombreAdmin, p.firmaTsAdmin)
      +'</tr></table>'
