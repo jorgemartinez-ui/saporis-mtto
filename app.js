@@ -13841,7 +13841,7 @@ function syncSupabase(){
     }));
     saveDB('ordenes',ORDENES);
   }).catch(function(){});
-  supaFetch('pm03_plan','GET',null,'order=semana.asc&limit=999999&select=actividad,actividades_estado,actividades_estado_final,actividades_estado_inicial,anio,area,cerrada_por,cerrada_ts,comentarios_actividades,componente,desinf_produccion,dias_trabajo,draft_ts,es_inspeccion,estado,estado_calidad,estado_flujo,firma_nombre_admin,origen_ot,origen_pm02,firma_nombre_calidad,firma_nombre_lider,firma_nombre_operador,firma_tecnico,firma_tecnico_ts,firma_ts_admin,firma_ts_calidad,firma_ts_lider,firma_ts_operador,fuente_excel,generado_por,grasa_aceite,herramienta_ingresada,herramienta_salida,hora_fin,hora_inicio,horas_actividades,horas_cierre,id,liberado_admin_por,liberado_admin_ts,liberado_por,liberado_prod_por,liberado_prod_ts,liberado_ts,limpieza_mtto,linea,mediciones_actividades,observaciones_cierre,personas_actividades,rechazo_calidad,refacciones_nuevas,refacciones_usadas,reporte_actividades,responsable_area_id,responsable_area_nombre,semana,tecnico_id,tecnico_nombre,ts').then(function(rows){
+  supaFetch('pm03_plan','GET',null,'order=semana.asc&limit=999999&select=actividad,actividades_estado,actividades_estado_final,actividades_estado_inicial,anio,area,cerrada_por,cerrada_ts,comentarios_actividades,componente,desinf_produccion,dias_trabajo,draft_ts,es_inspeccion,estado,estado_calidad,estado_flujo,firma_nombre_admin,origen_ot,firma_nombre_calidad,firma_nombre_lider,firma_nombre_operador,firma_tecnico,firma_tecnico_ts,firma_ts_admin,firma_ts_calidad,firma_ts_lider,firma_ts_operador,fuente_excel,generado_por,grasa_aceite,herramienta_ingresada,herramienta_salida,hora_fin,hora_inicio,horas_actividades,horas_cierre,id,liberado_admin_por,liberado_admin_ts,liberado_por,liberado_prod_por,liberado_prod_ts,liberado_ts,limpieza_mtto,linea,mediciones_actividades,observaciones_cierre,personas_actividades,rechazo_calidad,refacciones_nuevas,refacciones_usadas,reporte_actividades,responsable_area_id,responsable_area_nombre,semana,tecnico_id,tecnico_nombre,ts').then(function(rows){
     if(!rows)return;
     var localPM03=loadDB('pm03_plan',[]);
     PM03_PLAN=rows.map(function(r){
@@ -13883,7 +13883,6 @@ function syncSupabase(){
         cerradaPor:estadoFinal==='cerrada'&&local?local.cerradaPor||r.cerrada_por:r.cerrada_por,
         generadoPor:r.generado_por,ts:r.ts,
         origenOT:r.origen_ot||(local?local.origenOT:null),
-        origenPM02:r.origen_pm02||(local?local.origenPM02:null),
         // Campos protocolo
         refaccionesUsadas:r.refacciones_usadas||(local?local.refaccionesUsadas:null),
         herramientaIngresada:r.herramienta_ingresada||(local?local.herramientaIngresada:null),
@@ -14086,7 +14085,7 @@ function reintentarOrdenesSync(){
 }
 setTimeout(reintentarOrdenesSync, 5000);
 setInterval(reintentarOrdenesSync, 5*60*1000);
-function savePM03Supa(p){supaUpsert('pm03_plan',{id:p.id,linea:p.linea,componente:p.componente||null,actividad:p.actividad,area:p.area||null,semana:p.semana,anio:p.año||2026,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null,responsable_area_id:p.responsableAreaId||null,responsable_area_nombre:p.responsableAreaNombre||null,estado:p.estado||'abierta',prioridad:p.prioridad||null,fuente_excel:p.fuenteExcel||false,horas_cierre:p.horasCierre||0,observaciones_cierre:p.observacionesCierre||null,cerrada_ts:p.cerradaTs||null,cerrada_por:p.cerradaPor||null,generado_por:p.generadoPor||null,origen_ot:p.origenOT||null,origen_pm02:p.origenPM02||null,ts:p.ts||Date.now(),liberado_por:p.liberadoPor||null,liberado_ts:p.liberadoTs||null,estado_calidad:p.estadoCalidad||null,rechazo_calidad:p.rechazoCalidad||null,actividades_estado:p.actividadesEstado?JSON.stringify(p.actividadesEstado):null,refacciones_usadas:p.refaccionesUsadas||null,herramienta_ingresada:p.herramientaIngresada||null,herramienta_salida:p.herramientaSalida||null,grasa_aceite:p.grasaAceite||null,limpieza_mtto:typeof p.limpiezaMtto==='boolean'?p.limpiezaMtto:null,desinf_produccion:typeof p.desinfProduccion==='boolean'?p.desinfProduccion:null,firma_tecnico:p.firmaTecnico||null,firma_tecnico_ts:p.firmaTecnicoTs||null,comentarios_actividades:p.comentariosActividades?JSON.stringify(p.comentariosActividades):null,mediciones_actividades:p.medicionesActividades?JSON.stringify(p.medicionesActividades):null,liberado_prod_por:p.liberadoProdPor||null,liberado_prod_ts:p.liberadoProdTs||null,liberado_admin_por:p.liberadoAdminPor||null,liberado_admin_ts:p.liberadoAdminTs||null,estado_flujo:p.estadoFlujo||'ejecucion',nota_reprogramacion:p.notaReprogramacion||null,reprogramada_por:p.reprogramadaPor||null,reprogramada_ts:p.reprogramadaTs||null,comentario_desinfeccion:p.comentarioDesinfeccion||null,tecnicos_adicionales:p.tecnicosAdicionales&&p.tecnicosAdicionales.length?JSON.stringify(p.tecnicosAdicionales):null,comentario_firma_calidad:p.comentarioFirmaCalidad||null,comentario_firma_prod:p.comentarioFirmaProd||null,comentario_firma_admin:p.comentarioFirmaAdmin||null,
+function savePM03Supa(p){supaUpsert('pm03_plan',{id:p.id,linea:p.linea,componente:p.componente||null,actividad:p.actividad,area:p.area||null,semana:p.semana,anio:p.año||2026,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null,responsable_area_id:p.responsableAreaId||null,responsable_area_nombre:p.responsableAreaNombre||null,estado:p.estado||'abierta',prioridad:p.prioridad||null,fuente_excel:p.fuenteExcel||false,horas_cierre:p.horasCierre||0,observaciones_cierre:p.observacionesCierre||null,cerrada_ts:p.cerradaTs||null,cerrada_por:p.cerradaPor||null,generado_por:p.generadoPor||null,origen_ot:p.origenOT||null,ts:p.ts||Date.now(),liberado_por:p.liberadoPor||null,liberado_ts:p.liberadoTs||null,estado_calidad:p.estadoCalidad||null,rechazo_calidad:p.rechazoCalidad||null,actividades_estado:p.actividadesEstado?JSON.stringify(p.actividadesEstado):null,refacciones_usadas:p.refaccionesUsadas||null,herramienta_ingresada:p.herramientaIngresada||null,herramienta_salida:p.herramientaSalida||null,grasa_aceite:p.grasaAceite||null,limpieza_mtto:typeof p.limpiezaMtto==='boolean'?p.limpiezaMtto:null,desinf_produccion:typeof p.desinfProduccion==='boolean'?p.desinfProduccion:null,firma_tecnico:p.firmaTecnico||null,firma_tecnico_ts:p.firmaTecnicoTs||null,comentarios_actividades:p.comentariosActividades?JSON.stringify(p.comentariosActividades):null,mediciones_actividades:p.medicionesActividades?JSON.stringify(p.medicionesActividades):null,liberado_prod_por:p.liberadoProdPor||null,liberado_prod_ts:p.liberadoProdTs||null,liberado_admin_por:p.liberadoAdminPor||null,liberado_admin_ts:p.liberadoAdminTs||null,estado_flujo:p.estadoFlujo||'ejecucion',nota_reprogramacion:p.notaReprogramacion||null,reprogramada_por:p.reprogramadaPor||null,reprogramada_ts:p.reprogramadaTs||null,comentario_desinfeccion:p.comentarioDesinfeccion||null,tecnicos_adicionales:p.tecnicosAdicionales&&p.tecnicosAdicionales.length?JSON.stringify(p.tecnicosAdicionales):null,comentario_firma_calidad:p.comentarioFirmaCalidad||null,comentario_firma_prod:p.comentarioFirmaProd||null,comentario_firma_admin:p.comentarioFirmaAdmin||null,
   // fotos/firma_img_* ya no se sincronizan en bloque (viajan bajo demanda al abrir
   // el detalle) — si en este dispositivo nunca se cargaron (p.campo===undefined),
   // se omiten del payload para NO borrar en Supabase lo que otro dispositivo sí guardó.
@@ -30603,17 +30602,20 @@ function showPlanCalendario(areaId,linea){
     }
     html+='</tr>';
 
-    // Botón para eliminar actividades "huérfanas" (sin actividad formal ligada, apartado
-    // "Sin frecuencia definida") que ya no tienen razón de existir — sólo admin/super, y
-    // sólo si NINGUNA de sus PM03 (en cualquier año) fue realmente ejecutada.
+    // Botones para actividades "huérfanas" (sin actividad formal ligada, apartado "Sin
+    // frecuencia definida" — típicamente importadas de Excel) — sólo admin/super.
+    // "Formalizar" siempre se ofrece (aunque ya tenga ejecuciones): crea la actividad
+    // formal en el plan para que a partir de ahí tenga lápiz de editar y se pueda
+    // detener (desactivar) sin perder su historial de PM03 ya generadas/ejecutadas.
+    // "Eliminar" (borra también el historial) sólo se ofrece si NINGUNA PM03 se ha
+    // ejecutado todavía.
     if(!_actDef&&!act.sinProgEsteAnio&&currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super')){
       var _sinEjec=!_pm03OrfanasDeActividad(linea,eq,act.label).some(function(x){return x.estado==='cerrada';});
-      if(_sinEjec){
-        html+='<tr style="background:'+rowBg+'"><td colspan="2" style="position:sticky;left:0;background:'+rowBg+'"></td>'
-          +'<td colspan="'+semanas.length+'" style="padding:2px 6px 6px">'
-          +'<button onclick="eliminarActividadOrfanaCalendario(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\',\''+eq.replace(/'/g,"\\'")+'\',\''+act.label.replace(/'/g,"\\'")+'\')" style="padding:2px 8px;background:#fee2e2;border:1px solid #fca5a5;color:#dc2626;border-radius:6px;font-size:9px;font-weight:700;cursor:pointer">🗑️ Eliminar (sin frecuencia definida, sin ejecuciones)</button>'
-          +'</td></tr>';
-      }
+      html+='<tr style="background:'+rowBg+'"><td colspan="2" style="position:sticky;left:0;background:'+rowBg+'"></td>'
+        +'<td colspan="'+semanas.length+'" style="padding:2px 6px 6px">'
+        +'<button onclick="formalizarActividad(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\',\''+eq.replace(/'/g,"\\'")+'\',\''+act.label.replace(/'/g,"\\'")+'\')" style="padding:2px 8px;margin-right:6px;background:#dbeafe;border:1px solid #93c5fd;color:#1d4ed8;border-radius:6px;font-size:9px;font-weight:700;cursor:pointer">📋 Formalizar (para editar / detener)</button>'
+        +(_sinEjec?'<button onclick="eliminarActividadOrfanaCalendario(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\',\''+eq.replace(/'/g,"\\'")+'\',\''+act.label.replace(/'/g,"\\'")+'\')" style="padding:2px 8px;background:#fee2e2;border:1px solid #fca5a5;color:#dc2626;border-radius:6px;font-size:9px;font-weight:700;cursor:pointer">🗑️ Eliminar (sin ejecuciones)</button>':'')
+        +'</td></tr>';
     }
 
     if(act.sinProgEsteAnio) return;
