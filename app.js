@@ -346,27 +346,28 @@ function showScreen(id){
   // de contenido en la misma pantalla "brinque" al usuario a otra posición).
   var prev=document.querySelector('.screen.active');
   if(prev&&prev.id===id) return;
-  // Guardar scroll de pantalla activa antes de cambiar
+  // Guardar scroll de pantalla activa antes de cambiar. Lo que realmente se
+  // desplaza en esta app es la página completa (window) — el div interno
+  // .scroll-content nunca llega a desbordarse con el layout actual — así que
+  // se guarda/restaura el scroll real de la página, no el del div interno.
   if(prev&&prev.id){
-    var sc=prev.querySelector('.scroll-content')||prev;
-    saveDB('scroll_pos_'+prev.id, sc.scrollTop);
+    saveDB('scroll_pos_'+prev.id, document.scrollingElement?document.scrollingElement.scrollTop:window.scrollY);
   }
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   var el=document.getElementById(id);if(el)el.classList.add('active');
-  window.scrollTo(0,0);
-  // Restaurar scroll — retry hasta que el elemento acepte el valor
+  // Restaurar scroll — retry hasta que el valor se mantenga (el navegador puede
+  // ignorar el scrollTo si el contenido todavía no termina de pintarse)
   var pos=loadDB('scroll_pos_'+id,0);
   if(pos>0){
     var tries=0;
     (function tryRestore(){
-      var dest=document.getElementById(id);
-      if(!dest){if(tries++<5)setTimeout(tryRestore,60);return;}
-      var sc=dest.querySelector('.scroll-content')||dest;
-      sc.scrollTop=pos;
+      window.scrollTo(0,pos);
       setTimeout(function(){
-        if(Math.abs(sc.scrollTop-pos)>5&&tries++<6) setTimeout(tryRestore,80);
+        if(Math.abs(window.scrollY-pos)>5&&tries++<6) setTimeout(tryRestore,80);
       },40);
     })();
+  } else {
+    window.scrollTo(0,0);
   }
 }
 
@@ -2013,7 +2014,7 @@ function renderPM03(){
       var liberada=p.estadoCalidad==='liberada';
       return '<div class="ot-card pm03" onclick="showDetallePM03(\''+p.id+'\')">'
         +'<div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px">'
-        +'<span style="font-size:11px;color:var(--txt3);font-weight:700">'+p.id+'</span>'
+        +'<span style="font-size:11px;color:var(--txt3);font-weight:700">'+pm3FolioHTML(p)+'</span>'
         +'<div style="display:flex;gap:4px;flex-wrap:wrap">'
         +'<span class="badge badge-'+(p.estado||'abierta')+'">'+(p.estado||'abierta')+'</span>'
         +(liberada?'<span class="badge" style="background:#16a34a;color:#fff;font-size:10px">✅ Liberada</span>':'')
@@ -2062,7 +2063,7 @@ function showDetallePM03(id){
 }
 function _renderDetallePM03(id,p){
   var _activaPM3=document.querySelector('.screen.active');
-  otCerrandoId=id;document.getElementById('detalle-topbar').textContent=p.id;
+  otCerrandoId=id;document.getElementById('detalle-topbar').innerHTML=pm3FolioHTML(p);
   // Solo actualizar backScreen si la pantalla activa NO es ya el detalle (si ya
   // es el detalle, es un refresco en el mismo lugar —p.ej. tras cerrar/cancelar/
   // editar— y detalleBackScreen debe seguir apuntando a la pantalla real donde
@@ -4902,7 +4903,7 @@ function aplicarFiltrosPendientes(){updatePendChart();
   pm03List.forEach(p=>{
     html+=`<div class="ot-card pm03" style="border-left-color:${p.estado==='cerrada'?'var(--vd2)':'var(--am2)'}" onclick="showDetallePM03('${p.id}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
-        <span style="font-size:11px;color:var(--txt3);font-weight:700">${p.id}</span>
+        <span style="font-size:11px;color:var(--txt3);font-weight:700">${pm3FolioHTML(p)}</span>
         <div style="display:flex;gap:4px;flex-wrap:wrap">
           <span class="badge badge-pm03">PM03</span>
           <span class="badge badge-${p.estado||'abierta'}">${p.estado||'abierta'}</span>
@@ -5118,7 +5119,7 @@ function renderMisOrdenes(){
         var col=p.estadoFlujo==='pendiente_calidad'?'#0891b2':p.estadoFlujo==='pendiente_produccion'?'#16a34a':'#7c3aed';
         return '<div class="ot-card pm03" onclick="showDetallePM03(\''+p.id+'\')" style="border-left:4px solid '+col+'">'
           +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
-          +'<span style="font-size:11px;font-weight:700;color:'+col+'">'+p.id+'</span>'
+          +'<span style="font-size:11px;font-weight:700;color:'+col+'">'+pm3FolioHTML(p)+'</span>'
           +'<span class="badge" style="background:'+col+';color:#fff">'+flujoLabel+'</span></div>'
           +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+'</div>'
           +'<div style="font-size:12px;color:var(--txt2)">Sem '+p.semana+' · '+(p.tecnicoNombre||'—')+'</div>'
@@ -13899,16 +13900,16 @@ function syncSupabase(){
         liberadoProdTs:r.liberado_prod_ts||(local?local.liberadoProdTs:null),
         liberadoAdminPor:r.liberado_admin_por||(local?local.liberadoAdminPor:null),
         liberadoAdminTs:r.liberado_admin_ts||(local?local.liberadoAdminTs:null),
-        firmaImgOperador:local?local.firmaImgOperador:undefined,
+        firmaImgOperador:r.firma_img_operador||(local?local.firmaImgOperador:null),
         firmaNombreOperador:r.firma_nombre_operador||(local?local.firmaNombreOperador:null),
         firmaTsOperador:r.firma_ts_operador||(local?local.firmaTsOperador:null),
-        firmaImgLider:local?local.firmaImgLider:undefined,
+        firmaImgLider:r.firma_img_lider||(local?local.firmaImgLider:null),
         firmaNombreLider:r.firma_nombre_lider||(local?local.firmaNombreLider:null),
         firmaTsLider:r.firma_ts_lider||(local?local.firmaTsLider:null),
-        firmaImgCalidad:local?local.firmaImgCalidad:undefined,
+        firmaImgCalidad:r.firma_img_calidad||(local?local.firmaImgCalidad:null),
         firmaNombreCalidad:r.firma_nombre_calidad||(local?local.firmaNombreCalidad:null),
         firmaTsCalidad:r.firma_ts_calidad||(local?local.firmaTsCalidad:null),
-        firmaImgAdmin:local?local.firmaImgAdmin:undefined,
+        firmaImgAdmin:r.firma_img_admin||(local?local.firmaImgAdmin:null),
         firmaNombreAdmin:r.firma_nombre_admin||(local?local.firmaNombreAdmin:null),
         firmaTsAdmin:r.firma_ts_admin||(local?local.firmaTsAdmin:null),
         estadoFlujo:r.estado_flujo||(local?local.estadoFlujo:'ejecucion'),
@@ -14113,7 +14114,10 @@ function syncChecklistSupa(insp, momentoTurno){
     ts: insp.tsCierre,
     ts_cierre: insp.tsCierre,
     ts_inicio: insp.tsInicio||null,
-    fecha: new Date(insp.tsCierre||Date.now()).toISOString().split('T')[0],
+    // Usar la fecha local ya calculada al abrir el checklist (todayStr()), no recalcularla
+    // aquí con toISOString() — ese método usa UTC, y Morelia va 6h atrás: cualquier cierre
+    // después de las 6pm local caía ya en el día siguiente según UTC.
+    fecha: insp.fecha||todayStr(),
     tecnico_nombre: insp.tecnicoNombre||(currentUser&&currentUser.nombre),
     puntos_detalle: JSON.stringify(insp.puntos||[]),
   }).then(function(data){
@@ -14142,7 +14146,9 @@ function syncInspeccionTurnoSupa(inspeccionActual){
     levantado_por:nombreEfectivo(),
     ts:inspeccionActual.tsCierre||Date.now(),
     ts_cierre:inspeccionActual.tsCierre||Date.now(),
-    fecha:new Date(inspeccionActual.tsCierre||Date.now()).toISOString().split('T')[0],
+    // Misma corrección que en syncChecklistSupa: usar la fecha local ya calculada al
+    // abrir la inspección (todayStr()), no recalcularla en UTC al momento de guardar.
+    fecha: inspeccionActual.fecha||todayStr(),
     puntos_detalle:inspeccionActual.puntos?JSON.stringify(inspeccionActual.puntos):null
   }).then(function(data){
     if(data===null){
@@ -19448,7 +19454,7 @@ function showLiberacionMtto(){
     lDiv.innerHTML = pm3Cerradas.map(function(p){
       return '<div class="ot-card pm03" onclick="showLiberacionDetalle(\''+p.id+'\')" style="border-left:4px solid #0891b2">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
-        +'<span style="font-size:11px;color:#0891b2;font-weight:700">'+p.id+'</span>'
+        +'<span style="font-size:11px;color:#0891b2;font-weight:700">'+pm3FolioHTML(p)+'</span>'
         +'<span class="badge" style="background:#0891b2;color:#fff">⏳ Pendiente liberación</span>'
         +'</div>'
         +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+' — '+(p.componente||p.actividad?.substring(0,40)||'PM03')+'</div>'
@@ -19551,7 +19557,7 @@ function showLiberacionDetalle(id){
       }).join('')
       +'</tbody></table></div></div>';
   }
-  var html = '<div class="card"><div class="card-title">🔬 '+p.id+'</div>'
+  var html = '<div class="card"><div class="card-title">🔬 '+pm3FolioHTML(p)+'</div>'
     +'<div class="info-row"><span>Línea</span><span>'+p.linea+'</span></div>'
     +'<div class="info-row"><span>Técnico</span><span>'+(p.tecnicoNombre||'—')+'</span></div>'
     +'<div class="info-row"><span>Semana</span><span>'+p.semana+' / '+p.año+'</span></div>'
@@ -19932,7 +19938,7 @@ function showLiberacionProduccion(){
     lDiv.innerHTML=pm3Pend.map(function(p){
       return '<div class="ot-card pm03" onclick="showDetallePM03('+p.id+')" style="border-left:4px solid #16a34a">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
-        +'<span style="font-size:11px;color:#16a34a;font-weight:700">'+p.id+'</span>'
+        +'<span style="font-size:11px;color:#16a34a;font-weight:700">'+pm3FolioHTML(p)+'</span>'
         +'<span class="badge" style="background:#16a34a;color:#fff">🏭 Por liberar Prod.</span>'
         +'</div>'
         +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+' — '+(p.componente||'PM03')+'</div>'
@@ -19997,7 +20003,7 @@ function showLiberacionAdmin(){
     lDiv.innerHTML=pm3Pend.map(function(p){
       return '<div class="ot-card pm03" onclick="showDetallePM03('+p.id+')" style="border-left:4px solid #7c3aed">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
-        +'<span style="font-size:11px;color:#7c3aed;font-weight:700">'+p.id+'</span>'
+        +'<span style="font-size:11px;color:#7c3aed;font-weight:700">'+pm3FolioHTML(p)+'</span>'
         +'<span class="badge" style="background:#7c3aed;color:#fff">📋 Por aprobar Admin</span>'
         +'</div>'
         +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+' — '+(p.componente||'PM03')+'</div>'
@@ -20745,6 +20751,18 @@ function _protoNivelCobertura(linea,equipo,actividad){
   return 1;
 }
 
+// Estrella dorada: sólo para folios PM03 con protocolo ESPECÍFICO (generado a
+// detalle desde el botón de Protocolos para esa línea+equipo+actividad exacta,
+// nivel 3) — NO para los que sólo heredan un protocolo genérico de equipo o de
+// línea (niveles 1-2). Usa el mismo cálculo que ya usa "PM03 por semana".
+function pm3TieneProtocoloEspecifico(p){
+  if(!p) return false;
+  try{ return _protoNivelCobertura(p.linea,p.componente,p.actividad)===3; }catch(e){ return false; }
+}
+function pm3FolioHTML(p){
+  return (p&&p.id?p.id:'')+(pm3TieneProtocoloEspecifico(p)?' <span style="color:#d4af37" title="Tiene protocolo específico">⭐</span>':'');
+}
+
 function showProtocolosProximaSemana(){
   detalleBackScreen = 'screen-ordenes';
   window._protoBackFn='showMenuProtocolosPM03';
@@ -20803,7 +20821,7 @@ function showProtocolosProximaSemana(){
                 : {t:'❌ Sin protocolo',bg:'#fee2e2',c:'#dc2626'};
       return '<div class="ot-card pm03" onclick="_protoAccionesPM03(\''+p.id+'\')" style="border-left:4px solid '+badge.c+'">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
-        +'<span style="font-size:11px;color:#6b7280;font-weight:700">'+p.id+'</span>'
+        +'<span style="font-size:11px;color:#6b7280;font-weight:700">'+pm3FolioHTML(p)+'</span>'
         +'<span class="badge" style="background:'+badge.bg+';color:'+badge.c+'">'+badge.t+'</span>'
         +'</div>'
         +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+' — '+(p.componente||'—')+'</div>'
@@ -21210,7 +21228,7 @@ function abrirReprogramarPM03(id){
   }).join('');
   modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box;max-height:85vh;overflow-y:auto">'
     +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#1a3c5e;margin-bottom:4px">📅 Reprogramar PM03</div>'
-    +'<div style="font-size:12px;color:#6b7280;margin-bottom:16px">'+p.id+' — '+p.linea+' (Sem '+pSem+'/'+pAño+')</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:16px">'+pm3FolioHTML(p)+' — '+p.linea+' (Sem '+pSem+'/'+pAño+')</div>'
     +'<div style="margin-bottom:12px"><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Nueva semana</label>'
     +'<select id="reprog-sem" class="form-control" style="padding:10px">'+semOpts+'</select></div>'
     +'<div style="margin-bottom:12px"><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Técnico asignado</label>'
@@ -21381,7 +21399,7 @@ function showPM03PorReprogramar(){
       else if(p.estadoFlujo==='por_reprogramar') razon='📋 Marcada manualmente para reprogramar';
       else if(p.origenPM02) razon='🔗 Originada desde PM02: '+p.origenPM02;
       else razon='⏰ No ejecutada antes del lunes 6:30am (Sem '+p.semana+')';
-      return '<div class="ot-card pm03" style="border-left:4px solid #dc2626">'        +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'        +'<span style="font-size:11px;color:#dc2626;font-weight:700">'+p.id+'</span>'        +'<span class="badge" style="background:#7f1d1d;color:#fff">Sem '+p.semana+'/'+(p.año||2026)+' — Vencida</span>'        +'</div>'        +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+'</div>'        +'<div style="font-size:12px;color:var(--txt2);margin-bottom:4px">'+(p.componente||p.actividad||'—').substring(0,50)+'</div>'        +'<div style="font-size:12px;color:#6b7280;margin-bottom:4px">👨‍🔧 '+(p.tecnicoNombre||'Sin asignar')+'</div>'        +'<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px;color:#92400e;font-weight:600">'        +'💡 Razón: '+razon+'</div>'        +'<div style="margin-top:4px;display:flex;gap:6px">'        +'<button class="btn" onclick="event.stopPropagation();window._reprogDesdeLista=true;abrirReprogramarPM03(\''+p.id+'\')" style="flex:1;background:#f59e0b;color:#fff;border:none;font-size:12px;padding:8px;border-radius:8px">📅 Reprogramar</button>'        +'<button onclick="event.stopPropagation();window._fromReprogramar=true;showDetallePM03(\''+p.id+'\')" style="flex:1;background:#f1f5f9;border:1px solid #d1d5db;font-size:12px;padding:8px;border-radius:8px;cursor:pointer">👁️ Ver detalle</button>'        +(esAdminOSuper?'<div style="margin-top:6px;display:flex;gap:6px">'+'<button onclick="event.stopPropagation();window._cierreDesdeListaReprogramar=true;abrirCierrePM03(\''+p.id+'\')" style="flex:1;background:#1a3c5e;color:#fff;border:none;font-size:11px;padding:7px;border-radius:8px;cursor:pointer">🔒 Cerrar</button>'+'<button onclick="event.stopPropagation();adminEliminarPM03Prompt(\''+p.id+'\')" style="flex:1;background:#fff;color:#dc2626;border:1px solid #dc2626;font-size:11px;padding:7px;border-radius:8px;cursor:pointer">🗑️ Eliminar</button>'+'</div>':'')+'</div></div>';
+      return '<div class="ot-card pm03" style="border-left:4px solid #dc2626">'        +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'        +'<span style="font-size:11px;color:#dc2626;font-weight:700">'+pm3FolioHTML(p)+'</span>'        +'<span class="badge" style="background:#7f1d1d;color:#fff">Sem '+p.semana+'/'+(p.año||2026)+' — Vencida</span>'        +'</div>'        +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+'</div>'        +'<div style="font-size:12px;color:var(--txt2);margin-bottom:4px">'+(p.componente||p.actividad||'—').substring(0,50)+'</div>'        +'<div style="font-size:12px;color:#6b7280;margin-bottom:4px">👨‍🔧 '+(p.tecnicoNombre||'Sin asignar')+'</div>'        +'<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px;margin-bottom:8px;font-size:11px;color:#92400e;font-weight:600">'        +'💡 Razón: '+razon+'</div>'        +'<div style="margin-top:4px;display:flex;gap:6px">'        +'<button class="btn" onclick="event.stopPropagation();window._reprogDesdeLista=true;abrirReprogramarPM03(\''+p.id+'\')" style="flex:1;background:#f59e0b;color:#fff;border:none;font-size:12px;padding:8px;border-radius:8px">📅 Reprogramar</button>'        +'<button onclick="event.stopPropagation();window._fromReprogramar=true;showDetallePM03(\''+p.id+'\')" style="flex:1;background:#f1f5f9;border:1px solid #d1d5db;font-size:12px;padding:8px;border-radius:8px;cursor:pointer">👁️ Ver detalle</button>'        +(esAdminOSuper?'<div style="margin-top:6px;display:flex;gap:6px">'+'<button onclick="event.stopPropagation();window._cierreDesdeListaReprogramar=true;abrirCierrePM03(\''+p.id+'\')" style="flex:1;background:#1a3c5e;color:#fff;border:none;font-size:11px;padding:7px;border-radius:8px;cursor:pointer">🔒 Cerrar</button>'+'<button onclick="event.stopPropagation();adminEliminarPM03Prompt(\''+p.id+'\')" style="flex:1;background:#fff;color:#dc2626;border:1px solid #dc2626;font-size:11px;padding:7px;border-radius:8px;cursor:pointer">🗑️ Eliminar</button>'+'</div>':'')+'</div></div>';
     }).join('');
   }
   showScreen('screen-ordenes');
@@ -21399,7 +21417,7 @@ function adminEliminarPM03Prompt(id){
   modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
   modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box;max-height:85vh;overflow-y:auto">'
     +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#dc2626;margin-bottom:4px">🗑️ Eliminar PM03</div>'
-    +'<div style="font-size:12px;color:#6b7280;margin-bottom:16px">'+p.id+' — '+p.linea+' (Sem '+(p.semana||'')+'/'+(p.año||'')+')</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:16px">'+pm3FolioHTML(p)+' — '+p.linea+' (Sem '+(p.semana||'')+'/'+(p.año||'')+')</div>'
     +'<div style="background:#fee2e2;border:1px solid #fca5a5;border-radius:10px;padding:10px;margin-bottom:14px;font-size:.82rem;color:#991b1b">⚠️ Esta acción elimina permanentemente la PM03. No se puede deshacer.</div>'
     +'<div style="margin-bottom:16px"><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Motivo de la eliminación <span style="color:#dc2626">*obligatorio</span></label>'
     +'<textarea id="admin-eliminar-nota" class="form-control" rows="3" style="padding:10px;resize:none" placeholder="Explica por qué se elimina esta PM03..."></textarea></div>'
@@ -22243,6 +22261,8 @@ function _renderHistorialChecklist(tipo, base) {
     var tieneRojos = rojos > 0;
     var fecha = i.fecha || (i.tsCierre ? new Date(i.tsCierre).toLocaleDateString('es-MX') : '—');
     var hora = i.tsCierre ? new Date(i.tsCierre).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}) : (i.horaFin || '—');
+    var tsInicioVal = i.tsInicio || i.ts_inicio || null; // local usa tsInicio; lo ya sincronizado de Supabase llega como ts_inicio
+    var horaInicio = tsInicioVal ? new Date(tsInicioVal).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit'}) : null;
     var turno = i.turno ? 'T'+i.turno : '—';
 
     var puntosRojosHTML = '';
@@ -22263,7 +22283,7 @@ function _renderHistorialChecklist(tipo, base) {
       + '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
       + '<div>'
       + '<div style="font-family:Nunito,sans-serif;font-size:14px;font-weight:800">'+(i.tecnicoNombre||i.tecnico||'—')+'</div>'
-      + '<div style="font-size:11px;color:#6b7280">📅 '+fecha+' · ⏰ '+hora+' · 🔄 Turno '+turno+'</div>'
+      + '<div style="font-size:11px;color:#6b7280">📅 '+fecha+(horaInicio?' · 🟢 Inicio '+horaInicio:'')+' · ⏰ Cierre '+hora+' · 🔄 Turno '+turno+'</div>'
       + '</div>'
       + '<div style="text-align:right">'
       + (tieneRojos ? '<span class="badge" style="background:#7f1d1d;color:#fff;font-size:11px;font-weight:800">🔴 '+rojos+' fuera</span>' : '<span class="badge" style="background:#16a34a;color:#fff;font-size:11px">✅ OK</span>')
@@ -27515,7 +27535,8 @@ function borrarAlertaDOR(id){
 function crearAlertaChecklist(insp){
   var rojos=(insp.puntos||[]).filter(function(p){return p.tipo!=='seccion'&&p.tipo!=='informativo'&&p.estado==='rojo';});
   if(!rojos.length) return;
-  var fechaHoy = new Date(insp.tsCierre||Date.now()).toISOString().split('T')[0];
+  // Misma corrección: usar la fecha local del checklist (ya correcta), no recalcularla en UTC.
+  var fechaHoy = insp.fecha||todayStr();
   rojos.forEach(function(p){
     var puntoTxt = p.texto||p.nombre||'';
     var yaExiste = DOR_ALERTAS.some(function(a){
