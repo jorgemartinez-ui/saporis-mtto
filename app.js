@@ -2061,6 +2061,16 @@ function showDetallePM03(id){
     _renderDetallePM03(id,p);
   });
 }
+// Respaldo para PM03 viejas, generadas ANTES de que se empezara a guardar origenPM02/
+// origenOT (o creadas durante la ventana en que esa columna aún no existía en Supabase):
+// su texto de actividad sigue el patrón fijo "Solución definitiva — TIPO ID — detalle",
+// así que de ahí se puede recuperar el folio de origen para mostrar igual la tarjeta
+// de "Orden que generó esta PM03", sin tener que tocar los datos ya guardados.
+function _pm3OrigenIdDesdeTexto(actividad){
+  if(!actividad) return null;
+  var m=/^Solución definitiva — \S+\s+(\S+)\s+—/.exec(actividad);
+  return m?m[1]:null;
+}
 function _renderDetallePM03(id,p){
   var _activaPM3=document.querySelector('.screen.active');
   otCerrandoId=id;document.getElementById('detalle-topbar').innerHTML=pm3FolioHTML(p);
@@ -2112,8 +2122,8 @@ function _renderDetallePM03(id,p){
   }
 
   document.getElementById('detalle-content').innerHTML=bannerRepro+`<div class="card"><div class="card-title">${p.esInspeccion?'✅ Inspección de Turno':'📅 '+p.linea}</div>${row('🔩 Componente',p.componente)}${row('🔧 Actividad',p.actividad)}${row('📅 Semana',p.semana?p.semana+' / '+p.año:'Sin programar')}${row('👤 Responsable de ejecutar',p.tecnicoNombre||'Sin asignar')}${row('🧑‍💼 Responsable de área',p.responsableAreaNombre||'Sin asignar')}${row('📋 Estado',p.estado||'abierta')}${p.reprogramadaPor?row('🔁 Reprogramada por',p.reprogramadaPor+(p.reprogramadaTs?' — '+fmtDateTime(p.reprogramadaTs):'')):''}${p.notaReprogramacion?row('📝 Motivo reprogramación',p.notaReprogramacion):''}${p.reprogramadaDe?row('⬅️ Generada al reprogramar',p.reprogramadaDe):''}${p.reprogramadaA?row('➡️ Reprogramada a',p.reprogramadaA):''}${p.horaInicio?row('🕐 Inicio',p.horaInicio):''}${p.horaFin?row('🕐 Fin',p.horaFin):''}${p.horaInicio&&p.horaFin?row('⏱️ Tiempo',diffMin(p.horaInicio,p.horaFin)+' min'):''}</div>
-  ${(p.origenPM02||p.origenOT)?(function(){
-    var origenId=p.origenPM02||p.origenOT;
+  ${(p.origenPM02||p.origenOT||_pm3OrigenIdDesdeTexto(p.actividad))?(function(){
+    var origenId=p.origenPM02||p.origenOT||_pm3OrigenIdDesdeTexto(p.actividad);
     var o2=ORDENES.find(function(x){return x.id===origenId;});
     if(!o2) return '<div class="card"><div class="card-title">🔗 Orden que generó esta PM03</div>'+row('🆔 Folio',origenId)+'<div style="font-size:11px;color:#9ca3af;margin-top:4px">No se encontró el detalle de esa OT (pudo haber sido eliminada)</div></div>';
     return '<div class="card"><div class="card-title">🔗 '+(o2.tipo||'Orden')+' que generó esta PM03</div>'
@@ -2251,8 +2261,11 @@ function confirmarReprogramarDesdeDetalle(id){
   var m=document.querySelector('.modal-sheet');if(m)m.remove();
   var m2=document.getElementById('modal-reprogram');if(m2)m2.remove();
   showAlert('✅ PM03 reprogramada — Sem '+p.semana+' (antes Sem '+semAnterior+')');
-  var _backPM3=detalleBackScreen||'screen-pm03';
-  setTimeout(function(){if(_backPM3==='screen-pm03'){renderPM03();showScreen('screen-pm03');}else{showScreen(_backPM3);}},200);
+  // Usar goBack() en vez de un showScreen genérico: así, si se llegó aquí desde
+  // "PM03 por Reprogramar" (window._pm3BackFn==='showPM03PorReprogramar'), esa lista
+  // se vuelve a renderizar y la tarjeta ya reprogramada desaparece sola — antes solo
+  // se mostraba la pantalla sin refrescar su contenido y había que salir y re-entrar.
+  setTimeout(function(){ goBack(); },200);
 }
 function abrirCierrePM03(id){
   // Super: preguntar quién cierra primero
