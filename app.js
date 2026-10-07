@@ -23121,6 +23121,12 @@ function guardarHorarioEmp(empId,mes,año){
 // vivos a la vez (el del aniversario anterior y el más reciente), porque 18
 // meses nunca alcanza a traslapar un tercero.
 function _fechaISO(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+// fmtDate() está pensado para timestamps completos; un string "solo fecha" tipo
+// "2026-06-18" (como los que guarda Supabase en columnas date) lo interpreta JS
+// como medianoche UTC, y al mostrarlo en una zona horaria con offset negativo
+// (como México) se recorre un día hacia atrás. Forzamos mediodía para que el
+// día mostrado sea siempre el correcto sin importar la zona horaria del navegador.
+function _vacFmtFecha(iso){ return iso?fmtDate(iso+'T12:00:00'):'—'; }
 function _vacAniversarios(fechaIngresoStr,hoy){
   if(!fechaIngresoStr) return [];
   var ingreso=new Date(fechaIngresoStr+'T12:00:00');
@@ -23213,7 +23219,7 @@ function actualizarAlertaVacaciones(){
     });
     if(!alertas.length){ cont.style.display='none'; cont.innerHTML=''; return; }
     var lista=alertas.map(function(a){
-      return '<div style="font-size:12.5px;padding:3px 0">'+(esAdmin?'<b>'+a.nombre+'</b> — ':'')+a.saldo+' día(s) vencen el '+fmtDate(a.vence)+'</div>';
+      return '<div style="font-size:12.5px;padding:3px 0">'+(esAdmin?'<b>'+a.nombre+'</b> — ':'')+a.saldo+' día(s) vencen el '+_vacFmtFecha(a.vence)+'</div>';
     }).join('');
     cont.innerHTML='<div class="card" style="background:#fff7ed;border:1px solid #fed7aa;padding:12px 14px;margin:0 16px 12px">'
       +'<div style="font-weight:800;color:#d97706;font-size:13px;margin-bottom:4px">⏰ Vacaciones por vencer</div>'
@@ -23263,8 +23269,8 @@ function _renderVacaciones(lDiv){
           var label=esElMasNuevo?'Periodo actual':'Periodo anterior';
           return '<div style="background:#f9fafb;border-radius:8px;padding:8px 10px;margin-bottom:6px'+(porVencer?';border:1px solid #fed7aa':'')+'">'
             +'<div style="display:flex;justify-content:space-between;align-items:center;font-size:.72rem;color:#6b7280;margin-bottom:4px">'
-            +'<span><b>'+label+'</b> · desde '+fmtDate(p.fecha_inicio_periodo)+'</span>'
-            +'<span'+(porVencer?' style="color:#d97706;font-weight:700"':'')+'>'+(porVencer?'⏰ ':'')+'Vence '+fmtDate(p.fecha_vencimiento)+'</span>'
+            +'<span><b>'+label+'</b> · desde '+_vacFmtFecha(p.fecha_inicio_periodo)+'</span>'
+            +'<span'+(porVencer?' style="color:#d97706;font-weight:700"':'')+'>'+(porVencer?'⏰ ':'')+'Vence '+_vacFmtFecha(p.fecha_vencimiento)+'</span>'
             +'</div>'
             +'<div style="display:flex;gap:10px;font-size:.78rem">'
             +'<span>Correspondientes: <b>'+(p.dias_correspondientes||0)+'</b></span>'
@@ -23274,7 +23280,7 @@ function _renderVacaciones(lDiv){
         }
         var bloquesVivos=vivos.map(function(p,i){return bloquePeriodo(p,i===0);}).join('');
         var bloquesVencidos=vencidos.map(function(p){
-          return '<div style="font-size:.72rem;color:#9ca3af;padding:4px 2px">⚠️ Venció el '+fmtDate(p.fecha_vencimiento)+' — se perdieron '+p.dias_perdidos+' día(s) del periodo iniciado el '+fmtDate(p.fecha_inicio_periodo)+'</div>';
+          return '<div style="font-size:.72rem;color:#9ca3af;padding:4px 2px">⚠️ Venció el '+_vacFmtFecha(p.fecha_vencimiento)+' — se perdieron '+p.dias_perdidos+' día(s) del periodo iniciado el '+_vacFmtFecha(p.fecha_inicio_periodo)+'</div>';
         }).join('');
         return '<div class="card" style="margin-bottom:10px;padding:14px;border-left:4px solid '+col+'">'
           +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px">'
@@ -23311,7 +23317,7 @@ function abrirAjusteVacaciones(empId,empNombre){
   modal.id='modal-ajuste-vac';
   modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
   var filas=periodos.map(function(p,i){
-    var label=(i===0?'Periodo actual':'Periodo anterior')+' · desde '+fmtDate(p.fecha_inicio_periodo);
+    var label=(i===0?'Periodo actual':'Periodo anterior')+' · desde '+_vacFmtFecha(p.fecha_inicio_periodo);
     return '<div style="margin-bottom:12px">'
       +'<div style="font-size:.78rem;font-weight:700;color:#374151;margin-bottom:6px">'+label+'</div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
