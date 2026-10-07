@@ -23127,6 +23127,25 @@ function _fechaISO(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart
 // (como México) se recorre un día hacia atrás. Forzamos mediodía para que el
 // día mostrado sea siempre el correcto sin importar la zona horaria del navegador.
 function _vacFmtFecha(iso){ return iso?fmtDate(iso+'T12:00:00'):'—'; }
+// Regla Saporis: dentro de cada periodo, los días correspondientes no se dan de
+// golpe desde el aniversario — se van acumulando proporcionalmente mes con mes
+// (ej. alguien con derecho a 22 días/año lleva ~1.83 por cada mes cumplido desde
+// que inició ese periodo), hasta llegar al 100% a los 12 meses. De ahí en
+// adelante el periodo ya está "completo" (y sigue corriendo su reloj de 18
+// meses para vencer, como ya estaba armado).
+function _vacMesesCumplidos(fechaInicioISO,hoy){
+  var inicio=new Date(fechaInicioISO+'T12:00:00');
+  if(isNaN(inicio.getTime())) return 0;
+  var meses=(hoy.getFullYear()-inicio.getFullYear())*12+(hoy.getMonth()-inicio.getMonth());
+  if(hoy.getDate()<inicio.getDate()) meses--;
+  if(meses<0) meses=0;
+  if(meses>12) meses=12;
+  return meses;
+}
+function _vacDiasAcumulados(p,hoy){
+  var meses=_vacMesesCumplidos(p.fecha_inicio_periodo,hoy);
+  return Math.floor((p.dias_correspondientes||0)*meses/12);
+}
 function _vacAniversarios(fechaIngresoStr,hoy){
   if(!fechaIngresoStr) return [];
   var ingreso=new Date(fechaIngresoStr+'T12:00:00');
@@ -23256,15 +23275,18 @@ function _renderVacaciones(lDiv){
         var periodos=(window._vacPeriodosPorEmpleado[e.id]||[]).slice().sort(function(a,b){return a.fecha_inicio_periodo<b.fecha_inicio_periodo?1:-1;}); // más reciente primero
         var vivos=periodos.filter(function(p){return !p.vencida;});
         var vencidos=periodos.filter(function(p){return p.vencida&&(p.dias_perdidos||0)>0;});
+        var hoyAcum=new Date();
         var corrTotal=vivos.reduce(function(s,p){return s+(p.dias_correspondientes||0);},0);
+        var disponibleTotal=vivos.reduce(function(s,p){return s+_vacDiasAcumulados(p,hoyAcum);},0);
         var tomTotal=vivos.reduce(function(s,p){return s+(p.dias_tomados||0);},0);
-        var saldoTotal=corrTotal-tomTotal;
-        var pct=corrTotal>0?Math.round((tomTotal/corrTotal)*100):0;
+        var saldoTotal=disponibleTotal-tomTotal;
+        var pct=disponibleTotal>0?Math.round((tomTotal/disponibleTotal)*100):0;
         var col=saldoTotal<=0?'#dc2626':saldoTotal<=3?'#d97706':'#16a34a';
         var limiteAlerta=new Date(); limiteAlerta.setMonth(limiteAlerta.getMonth()+2);
         var limiteISO=_fechaISO(limiteAlerta);
         function bloquePeriodo(p,esElMasNuevo){
-          var saldo=(p.dias_correspondientes||0)-(p.dias_tomados||0);
+          var acumulado=_vacDiasAcumulados(p,hoyAcum);
+          var saldo=acumulado-(p.dias_tomados||0);
           var porVencer=saldo>0&&p.fecha_vencimiento<=limiteISO;
           var label=esElMasNuevo?'Periodo actual':'Periodo anterior';
           return '<div style="background:#f9fafb;border-radius:8px;padding:8px 10px;margin-bottom:6px'+(porVencer?';border:1px solid #fed7aa':'')+'">'
@@ -23272,8 +23294,9 @@ function _renderVacaciones(lDiv){
             +'<span><b>'+label+'</b> · desde '+_vacFmtFecha(p.fecha_inicio_periodo)+'</span>'
             +'<span'+(porVencer?' style="color:#d97706;font-weight:700"':'')+'>'+(porVencer?'⏰ ':'')+'Vence '+_vacFmtFecha(p.fecha_vencimiento)+'</span>'
             +'</div>'
+            +'<div style="font-size:.72rem;color:#9ca3af;margin-bottom:3px">Corresponden '+(p.dias_correspondientes||0)+' día(s) en el año — se van acumulando mes con mes</div>'
             +'<div style="display:flex;gap:10px;font-size:.78rem">'
-            +'<span>Correspondientes: <b>'+(p.dias_correspondientes||0)+'</b></span>'
+            +'<span>Acumulado hoy: <b>'+acumulado+'</b></span>'
             +'<span>Tomados: <b>'+(p.dias_tomados||0)+'</b></span>'
             +'<span>Saldo: <b style="color:'+(saldo<=0?'#dc2626':'#16a34a')+'">'+saldo+'</b></span>'
             +'</div></div>';
@@ -23294,7 +23317,7 @@ function _renderVacaciones(lDiv){
             +'</div>':'')
           +'</div>'
           +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">'
-          +'<div style="text-align:center"><div style="font-size:1.4rem;font-weight:900;color:#0891b2">'+corrTotal+'</div><div style="font-size:.7rem;color:#6b7280">Correspondientes</div></div>'
+          +'<div style="text-align:center"><div style="font-size:1.4rem;font-weight:900;color:#0891b2">'+disponibleTotal+'</div><div style="font-size:.7rem;color:#6b7280">Acumulado hoy</div></div>'
           +'<div style="text-align:center"><div style="font-size:1.4rem;font-weight:900;color:#d97706">'+tomTotal+'</div><div style="font-size:.7rem;color:#6b7280">Tomados</div></div>'
           +'<div style="text-align:center"><div style="font-size:1.4rem;font-weight:900;color:'+col+'">'+saldoTotal+'</div><div style="font-size:.7rem;color:#6b7280">Saldo total</div></div>'
           +'</div>'
@@ -23316,17 +23339,20 @@ function abrirAjusteVacaciones(empId,empNombre){
   var modal=document.createElement('div');
   modal.id='modal-ajuste-vac';
   modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
+  var _hoyAjuste=new Date();
   var filas=periodos.map(function(p,i){
     var label=(i===0?'Periodo actual':'Periodo anterior')+' · desde '+_vacFmtFecha(p.fecha_inicio_periodo);
+    var acumuladoInicial=_vacDiasAcumulados(p,_hoyAjuste);
     return '<div style="margin-bottom:12px">'
-      +'<div style="font-size:.78rem;font-weight:700;color:#374151;margin-bottom:6px">'+label+'</div>'
+      +'<div style="font-size:.78rem;font-weight:700;color:#374151;margin-bottom:2px">'+label+'</div>'
+      +'<div style="font-size:.68rem;color:#9ca3af;margin-bottom:6px">Acumulado hoy según meses cumplidos: '+acumuladoInicial+' de '+(p.dias_correspondientes||0)+'</div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px">'
-      +'<div><label style="font-size:.7rem;color:#6b7280;display:block;margin-bottom:3px">Correspondientes</label>'
-      +'<input type="number" id="ajvac-corr-'+i+'" class="form-control" min="0" value="'+(p.dias_correspondientes||0)+'" style="padding:10px"></div>'
+      +'<div><label style="font-size:.7rem;color:#6b7280;display:block;margin-bottom:3px">Correspondientes (año completo)</label>'
+      +'<input type="number" id="ajvac-corr-'+i+'" class="form-control" min="0" value="'+(p.dias_correspondientes||0)+'" style="padding:10px" data-meses="'+_vacMesesCumplidos(p.fecha_inicio_periodo,_hoyAjuste)+'"></div>'
       +'<div><label style="font-size:.7rem;color:#6b7280;display:block;margin-bottom:3px">Tomados</label>'
       +'<input type="number" id="ajvac-tom-'+i+'" class="form-control" min="0" value="'+(p.dias_tomados||0)+'" style="padding:10px"></div>'
-      +'<div><label style="font-size:.7rem;color:#6b7280;display:block;margin-bottom:3px">Saldo</label>'
-      +'<input type="number" id="ajvac-saldo-'+i+'" class="form-control" value="'+((p.dias_correspondientes||0)-(p.dias_tomados||0))+'" style="padding:10px;background:#f3f4f6" readonly></div>'
+      +'<div><label style="font-size:.7rem;color:#6b7280;display:block;margin-bottom:3px">Saldo (de lo acumulado)</label>'
+      +'<input type="number" id="ajvac-saldo-'+i+'" class="form-control" value="'+(acumuladoInicial-(p.dias_tomados||0))+'" style="padding:10px;background:#f3f4f6" readonly></div>'
       +'</div></div>';
   }).join('');
   modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box">'
@@ -23341,9 +23367,12 @@ function abrirAjusteVacaciones(empId,empNombre){
   periodos.forEach(function(p,i){
     ['ajvac-corr-'+i,'ajvac-tom-'+i].forEach(function(id){
       document.getElementById(id).addEventListener('input',function(){
-        var c=parseInt(document.getElementById('ajvac-corr-'+i).value)||0;
+        var corrEl=document.getElementById('ajvac-corr-'+i);
+        var c=parseInt(corrEl.value)||0;
         var t=parseInt(document.getElementById('ajvac-tom-'+i).value)||0;
-        document.getElementById('ajvac-saldo-'+i).value=c-t;
+        var meses=parseInt(corrEl.getAttribute('data-meses'))||0;
+        var acum=Math.floor(c*meses/12);
+        document.getElementById('ajvac-saldo-'+i).value=acum-t;
       });
     });
   });
@@ -23371,7 +23400,8 @@ function guardarAjusteVacaciones(empId){
 
 function abrirRegistroVacaciones(empId,empNombre){
   var periodos=((window._vacPeriodosPorEmpleado&&window._vacPeriodosPorEmpleado[empId])||[]).filter(function(p){return !p.vencida;});
-  var saldoTotal=periodos.reduce(function(s,p){return s+Math.max((p.dias_correspondientes||0)-(p.dias_tomados||0),0);},0);
+  var _hoyReg=new Date();
+  var saldoTotal=periodos.reduce(function(s,p){return s+Math.max(_vacDiasAcumulados(p,_hoyReg)-(p.dias_tomados||0),0);},0);
   var modal=document.createElement('div');
   modal.id='modal-vac';
   modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
@@ -23403,11 +23433,12 @@ function guardarVacaciones(empId){
   var periodos=((window._vacPeriodosPorEmpleado&&window._vacPeriodosPorEmpleado[empId])||[])
     .filter(function(p){return !p.vencida;})
     .sort(function(a,b){return a.fecha_inicio_periodo<b.fecha_inicio_periodo?-1:1;}); // más antiguo primero: se descuenta de ahí primero
+  var _hoyGuardar=new Date();
   var restante=tomar;
   var actualizaciones=[];
   periodos.forEach(function(p){
     if(restante<=0) return;
-    var saldo=Math.max((p.dias_correspondientes||0)-(p.dias_tomados||0),0);
+    var saldo=Math.max(_vacDiasAcumulados(p,_hoyGuardar)-(p.dias_tomados||0),0);
     if(saldo<=0) return;
     var usar=Math.min(saldo,restante);
     var nuevoTomados=(p.dias_tomados||0)+usar;
