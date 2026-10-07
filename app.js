@@ -23116,7 +23116,11 @@ function abrirAjusteVacaciones(empId,empNombre,año){
 function guardarAjusteVacaciones(empId,año){
   var corr=parseInt(document.getElementById('ajvac-corr').value)||0;
   var tom=parseInt(document.getElementById('ajvac-tom').value)||0;
-  fetch(SUPA_URL+'/rest/v1/vacaciones',{
+  // on_conflict=empleado_id,año es obligatorio: sin especificar la restricción única,
+  // PostgREST solo resuelve "merge-duplicates" contra la llave primaria (id), que aquí
+  // siempre es nueva — por eso el ajuste chocaba con la restricción única y fallaba
+  // con 23505 en vez de actualizar la fila existente.
+  fetch(SUPA_URL+'/rest/v1/vacaciones?on_conflict=empleado_id,año',{
     method:'POST',
     headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
     body:JSON.stringify({empleado_id:empId,año:año,dias_correspondientes:corr,dias_tomados:tom})
@@ -23155,8 +23159,10 @@ function guardarVacaciones(empId,año){
   var tomar=parseInt(document.getElementById('vac-dias-tomar').value)||0;
   var inicio=document.getElementById('vac-inicio').value;
   var fin=document.getElementById('vac-fin').value;
-  // Upsert vacaciones del año
-  fetch(SUPA_URL+'/rest/v1/vacaciones',{
+  // Upsert vacaciones del año — on_conflict=empleado_id,año obligatorio (ver nota en
+  // guardarAjusteVacaciones): sin esto, PostgREST solo intenta mezclar por la llave
+  // primaria (id, siempre nueva) y la inserción choca con la restricción única.
+  fetch(SUPA_URL+'/rest/v1/vacaciones?on_conflict=empleado_id,año',{
     method:'POST',
     headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
     body:JSON.stringify({empleado_id:empId,año:año,dias_correspondientes:corr,dias_tomados:tomar,fecha_inicio:inicio||null,fecha_fin:fin||null})
