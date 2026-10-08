@@ -3991,6 +3991,7 @@ function renderAdminUs(cont){
       +'<div class="form-group"><label class="form-label">Nombre completo</label><input type="text" class="form-control" id="nu-nombre" placeholder="Ej: Juan García López"></div>'
       +'<div class="form-group"><label class="form-label">Usuario</label><input type="text" class="form-control" id="nu-user" placeholder="juangarcia"></div>'
       +'<div class="form-group"><label class="form-label">Contraseña (vacío = iniciales+2026)</label><input type="text" class="form-control" id="nu-pass" placeholder="Auto-generar"></div>'
+      +'<div class="form-group"><label class="form-label">Correo (opcional)</label><input type="email" class="form-control" id="nu-email" placeholder="correo@ejemplo.com"></div>'
       +'<div class="form-group"><label class="form-label">Rol</label>'
         +'<select class="form-control" id="nu-rol">'
           +'<option value="operador">Operador</option>'
@@ -4024,6 +4025,8 @@ function verDetalleUsuario(uid){
     +'<input type="text" id="eu-pass-actual" class="form-control" value="'+u.password+'" readonly style="padding:10px;background:#f8fafc;font-family:monospace"></div>'
     +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Nueva contraseña</label>'
     +'<input type="text" id="eu-pass-nueva" class="form-control" placeholder="Dejar vacío para no cambiar" style="padding:10px"></div>'
+    +'<div style="grid-column:1/-1"><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Correo</label>'
+    +'<input type="email" id="eu-email" class="form-control" value="'+(u.email||'')+'" placeholder="correo@ejemplo.com" style="padding:10px"></div>'
     +'<div style="grid-column:1/-1"><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Rol</label>'
     +'<select id="eu-rol" class="form-control" style="padding:10px">'
     +'<option value="operador"'+(u.rol==='operador'?' selected':'')+'>Operador</option>'
@@ -4049,10 +4052,11 @@ function guardarEdicionUsuario(uid){
   u.nombre=document.getElementById('eu-nombre').value.trim()||u.nombre;
   u.username=document.getElementById('eu-user').value.trim().toLowerCase().replace(/\s/g,'')||u.username;
   u.rol=document.getElementById('eu-rol').value;
+  u.email=(document.getElementById('eu-email').value||'').trim();
   var nuevaPass=document.getElementById('eu-pass-nueva').value.trim();
   if(nuevaPass) u.password=nuevaPass;
   saveDB('users',USERS);
-  supaUpsert('usuarios',{id:u.id,username:u.username,nombre:u.nombre,password_hash:u.password,rol:u.rol,activo:true}).catch(function(){});
+  supaUpsert('usuarios',{id:u.id,username:u.username,nombre:u.nombre,password_hash:u.password,rol:u.rol,activo:true,email:u.email||null}).catch(function(){});
   var m=document.getElementById('modal-usuario');if(m)m.remove();
   showAlert('✅ Usuario actualizado');
   renderAdminUs(document.getElementById('admin-content'));
@@ -4061,15 +4065,16 @@ function agregarUsuario(){
   const nombre=document.getElementById('nu-nombre')?.value?.trim();
   const username=document.getElementById('nu-user')?.value?.trim().toLowerCase().replace(/\s/g,'');
   const rol=document.getElementById('nu-rol')?.value;
+  const email=document.getElementById('nu-email')?.value?.trim()||'';
   let pass=document.getElementById('nu-pass')?.value?.trim();
   if(!nombre||!username){showAlert('Nombre y usuario requeridos','error');return;}
   if(USERS.find(u=>u.username===username)){showAlert('Ese usuario ya existe','error');return;}
   if(!pass)pass=nombre.split(' ').map(p=>p[0].toUpperCase()).join('')+'2026';
-  var newUser={id:'u_'+Date.now(),username,nombre,password:pass,rol};
+  var newUser={id:'u_'+Date.now(),username,nombre,password:pass,rol,email};
   USERS.push(newUser);
   saveDB('users',USERS);
   // Sync a Supabase con feedback
-  supaUpsert('usuarios',{id:newUser.id,username:newUser.username,nombre:newUser.nombre,password_hash:newUser.password,rol:newUser.rol,activo:true})
+  supaUpsert('usuarios',{id:newUser.id,username:newUser.username,nombre:newUser.nombre,password_hash:newUser.password,rol:newUser.rol,activo:true,email:email||null})
     .then(function(r){
       if(r!==null){
         showAlert('✅ Usuario creado y guardado. Clave: '+pass);
@@ -4077,7 +4082,7 @@ function agregarUsuario(){
         showAlert('⚠️ Usuario creado localmente pero falló en servidor. Intenta de nuevo.','error');
         // Retry once
         setTimeout(function(){
-          supaUpsert('usuarios',{id:newUser.id,username:newUser.username,nombre:newUser.nombre,password_hash:newUser.password,rol:newUser.rol,activo:true}).catch(function(){});
+          supaUpsert('usuarios',{id:newUser.id,username:newUser.username,nombre:newUser.nombre,password_hash:newUser.password,rol:newUser.rol,activo:true,email:email||null}).catch(function(){});
         }, 2000);
       }
     })
@@ -13904,7 +13909,7 @@ function syncSupabase(){
     if(!rows||!rows.length){supaUpsert('usuarios',DEFAULT_USERS.filter(function(u){return u.rol!=='super';}).map(function(u){return{id:u.id,username:u.username,nombre:u.nombre,password_hash:u.password,rol:u.rol,activo:true};})  ).catch(function(){});return;}
     // Filtrar super de los registros de Supabase para no sobreescribir
     var superLocal=USERS.filter(function(u){return u.rol==='super';});
-    USERS=rows.filter(function(r){return r.rol!=='super';}).map(function(r){return{id:r.id,username:r.username,nombre:r.nombre,password:r.password_hash,rol:r.rol}});
+    USERS=rows.filter(function(r){return r.rol!=='super';}).map(function(r){return{id:r.id,username:r.username,nombre:r.nombre,password:r.password_hash,rol:r.rol,email:r.email||''}});
     USERS=USERS.concat(superLocal);
     saveDB('users',USERS);
   }).catch(function(){});
@@ -22547,11 +22552,13 @@ function showGestionPersonal(){
   var cont=document.getElementById('personal-content');
   if(!tabsDiv||!cont) return;
   var esTecnico=currentUser&&currentUser.rol==='tecnico';
-  // Si técnico intenta ver tab restringida, redirigir a empleados
-  if(esTecnico&&(_gpTab==='vacaciones'||_gpTab==='incidencias')) _gpTab='empleados';
+  // Si técnico intenta ver tab restringida, redirigir a empleados (vacaciones
+  // ya es visible para técnico, en modo solo lectura + solicitar)
+  if(esTecnico&&_gpTab==='incidencias') _gpTab='empleados';
   var tabs=esTecnico?[
     {id:'empleados',icon:'👤',label:'Mi Ficha'},
     {id:'horarios',icon:'📅',label:'Horarios'},
+    {id:'vacaciones',icon:'🏖️',label:'Vacaciones'},
     {id:'contrasenas',icon:'🔑',label:'Contraseñas'}
   ]:[
     {id:'empleados',icon:'👤',label:'Empleados'},
@@ -22771,8 +22778,8 @@ function _renderHorarios(lDiv){
 
     var diasMes=new Date(_gpAño,_gpMes,0).getDate();
     var diasSem=['D','L','M','X','J','V','S'];
-    var turnoColor={'1':'#000','2':'#000','3':'#000','D':'#fff','I':'#000','V':'#000','P':'#fff','F':'#000','R':'#000'};
-    var turnoBg={'1':'#4ade80','2':'#9ca3af','3':'#fb923c','D':'#7c3aed','I':'#f472b6','V':'#38bdf8','P':'#1e3a8a','F':'#ef4444','R':'#facc15'};
+    var turnoColor={'1':'#000','2':'#000','3':'#000','M':'#fff','D':'#fff','I':'#000','V':'#000','P':'#fff','F':'#000','R':'#000'};
+    var turnoBg={'1':'#4ade80','2':'#9ca3af','3':'#fb923c','M':'#14b8a6','D':'#7c3aed','I':'#f472b6','V':'#38bdf8','P':'#1e3a8a','F':'#ef4444','R':'#facc15'};
 
     // Cabecera días
     var headerDias='<tr><th style="position:sticky;left:0;background:#1a3c5e;z-index:2;padding:4px 8px;font-size:.7rem;color:#fff;white-space:nowrap">Técnico</th>';
@@ -22803,6 +22810,7 @@ function _renderHorarios(lDiv){
             +'<option value="1"'+(val==='1'?' selected':'')+'>1</option>'
             +'<option value="2"'+(val==='2'?' selected':'')+'>2</option>'
             +'<option value="3"'+(val==='3'?' selected':'')+'>3</option>'
+            +'<option value="M"'+(val==='M'?' selected':'')+'>M</option>'
             +'<option value="D"'+(val==='D'?' selected':'')+'>D</option>'
             +'<option value="I"'+(val==='I'?' selected':'')+'>I</option>'
             +'<option value="V"'+(val==='V'?' selected':'')+'>V</option>'
@@ -22821,6 +22829,7 @@ function _renderHorarios(lDiv){
       +'<span style="background:#4ade80;color:#000;padding:2px 8px;border-radius:4px;font-weight:700">1=T1</span>'
       +'<span style="background:#9ca3af;color:#000;padding:2px 8px;border-radius:4px;font-weight:700">2=T2</span>'
       +'<span style="background:#fb923c;color:#000;padding:2px 8px;border-radius:4px;font-weight:700">3=T3</span>'
+      +'<span style="background:#14b8a6;color:#fff;padding:2px 8px;border-radius:4px;font-weight:700">M=Mixto</span>'
       +'<span style="background:#7c3aed;color:#fff;padding:2px 8px;border-radius:4px;font-weight:700">D=Desc</span>'
       +'<span style="background:#f472b6;color:#000;padding:2px 8px;border-radius:4px;font-weight:700">I=Inc</span>'
       +'<span style="background:#38bdf8;color:#000;padding:2px 8px;border-radius:4px;font-weight:700">V=Vac</span>'
@@ -22872,9 +22881,9 @@ function _horPasteHandler(e){
   if(startEmpIdx<0||!startDia) return;
 
   var diasMes=new Date(_gpAño,_gpMes,0).getDate();
-  var permitidos={'1':1,'2':1,'3':1,'D':1,'I':1,'V':1,'P':1,'F':1,'R':1};
-  var turnoColor={'1':'#000','2':'#000','3':'#000','D':'#fff','I':'#000','V':'#000','P':'#fff','F':'#000','R':'#000'};
-  var turnoBg={'1':'#4ade80','2':'#9ca3af','3':'#fb923c','D':'#7c3aed','I':'#f472b6','V':'#38bdf8','P':'#1e3a8a','F':'#ef4444','R':'#facc15'};
+  var permitidos={'1':1,'2':1,'3':1,'M':1,'D':1,'I':1,'V':1,'P':1,'F':1,'R':1};
+  var turnoColor={'1':'#000','2':'#000','3':'#000','M':'#fff','D':'#fff','I':'#000','V':'#000','P':'#fff','F':'#000','R':'#000'};
+  var turnoBg={'1':'#4ade80','2':'#9ca3af','3':'#fb923c','M':'#14b8a6','D':'#7c3aed','I':'#f472b6','V':'#38bdf8','P':'#1e3a8a','F':'#ef4444','R':'#facc15'};
   var protegidos={'V':'Vacaciones','P':'Permiso','F':'Falta','R':'Retardo','I':'Incapacidad'};
 
   var filas=texto.replace(/\r/g,'').split('\n');
@@ -22939,8 +22948,8 @@ function horSetVal(sel){
   }
   if(!window._horData[emp]) window._horData[emp]={};
   window._horData[emp][dia]=nuevo;
-  var turnoColor={'1':'#000','2':'#000','3':'#000','D':'#fff','I':'#000','V':'#000','P':'#fff','F':'#000','R':'#000'};
-  var turnoBg={'1':'#4ade80','2':'#9ca3af','3':'#fb923c','D':'#7c3aed','I':'#f472b6','V':'#38bdf8','P':'#1e3a8a','F':'#ef4444','R':'#facc15'};
+  var turnoColor={'1':'#000','2':'#000','3':'#000','M':'#fff','D':'#fff','I':'#000','V':'#000','P':'#fff','F':'#000','R':'#000'};
+  var turnoBg={'1':'#4ade80','2':'#9ca3af','3':'#fb923c','M':'#14b8a6','D':'#7c3aed','I':'#f472b6','V':'#38bdf8','P':'#1e3a8a','F':'#ef4444','R':'#facc15'};
   sel.style.background=turnoBg[nuevo]||'#fff';
   sel.style.color=turnoColor[nuevo]||'#d1d5db';
 }
@@ -23035,12 +23044,20 @@ function horGuardar(){
   });
 }
 
+// Códigos de horario que cuentan como día laborado (turnos 1/2/3 y el mixto M).
+// D (descanso) y cualquier otro código ya capturado (V/P/F/R/I) NUNCA cuentan.
+var _VAC_CODIGOS_LABORABLES={'1':1,'2':1,'3':1,'M':1};
+
 // Alimenta automáticamente el horario (tabla horarios_empleado) al registrar
 // Vacaciones o Incidencias: marca cada día del rango [fechaInicio, fechaFin] con
 // el código correspondiente (V/P/F/R/I). dias_config se guarda un registro por
 // mes, así que si el rango cruza de un mes a otro se agrupa y se actualiza cada
 // mes por separado. Usado por guardarVacaciones() y guardarIncidencia().
-function _aplicarCodigoHorarioRango(empId,fechaInicioStr,fechaFinStr,codigo){
+// soloLaborables (opcional, usado por vacaciones): si es true, solo se
+// sobreescriben los días que ya tenían un turno de trabajo (1/2/3/M) — un
+// descanso (D) u otro código ya capturado se deja intacto, para no perder esa
+// información ni descontar de más.
+function _aplicarCodigoHorarioRango(empId,fechaInicioStr,fechaFinStr,codigo,soloLaborables){
   if(!empId||!fechaInicioStr||!codigo) return Promise.resolve();
   var ini=new Date(fechaInicioStr+'T12:00:00');
   var fin=new Date((fechaFinStr||fechaInicioStr)+'T12:00:00');
@@ -23062,7 +23079,13 @@ function _aplicarCodigoHorarioRango(empId,fechaInicioStr,fechaFinStr,codigo){
       var row=rows&&rows[0];
       var diasConfig={};
       if(row&&row.dias_config){ try{ diasConfig=JSON.parse(row.dias_config); }catch(e){} }
-      g.dias.forEach(function(d){ diasConfig[d]=codigo; });
+      g.dias.forEach(function(d){
+        if(soloLaborables){
+          var actual=diasConfig[d]||diasConfig[String(d)]||'';
+          if(!_VAC_CODIGOS_LABORABLES[actual]) return; // descanso u otro código: no se toca
+        }
+        diasConfig[d]=codigo;
+      });
       if(row){
         return supaFetch('horarios_empleado','PATCH',{dias_config:JSON.stringify(diasConfig)},'empleado_id=eq.'+empId+'&mes=eq.'+g.mes+'&anio=eq.'+g.año);
       } else {
@@ -23275,6 +23298,111 @@ function actualizarAlertaVacaciones(){
   }).catch(function(){});
 }
 
+// Cuenta, dentro de [fechaInicio, fechaFin], cuántos días tienen un turno de
+// trabajo real (1/2/3/M) según el horario ya capturado del colaborador. Un
+// descanso (D) o un día sin horario capturado NUNCA cuenta — así nunca se
+// descuenta un día de descanso como si fuera vacación. Devuelve Promise<number>.
+function _diasLaboralesEnRango(empId,fechaInicioStr,fechaFinStr){
+  if(!empId||!fechaInicioStr) return Promise.resolve(0);
+  var ini=new Date(fechaInicioStr+'T12:00:00');
+  var fin=new Date((fechaFinStr||fechaInicioStr)+'T12:00:00');
+  if(isNaN(ini.getTime())||isNaN(fin.getTime())||fin<ini) return Promise.resolve(0);
+  var porMes={};
+  var cur=new Date(ini.getTime());
+  while(cur<=fin){
+    var a=cur.getFullYear(), m=cur.getMonth()+1, d=cur.getDate();
+    var key=a+'-'+m;
+    if(!porMes[key]) porMes[key]={año:a,mes:m,dias:[]};
+    porMes[key].dias.push(d);
+    cur.setDate(cur.getDate()+1);
+  }
+  var grupos=Object.keys(porMes).map(function(k){return porMes[k];});
+  return Promise.all(grupos.map(function(g){
+    return supaFetch('horarios_empleado','GET',null,'empleado_id=eq.'+empId+'&mes=eq.'+g.mes+'&anio=eq.'+g.año+'&limit=1').then(function(rows){
+      var row=rows&&rows[0];
+      var diasConfig={};
+      if(row&&row.dias_config){ try{ diasConfig=JSON.parse(row.dias_config); }catch(e){} }
+      return g.dias.filter(function(d){
+        var c=diasConfig[d]||diasConfig[String(d)]||'';
+        return !!_VAC_CODIGOS_LABORABLES[c];
+      }).length;
+    });
+  })).then(function(porGrupo){
+    return porGrupo.reduce(function(s,n){return s+n;},0);
+  });
+}
+
+// Actualiza un elemento de texto con la previsualización de días laborables
+// calculados a partir de dos inputs de fecha. Usado por el modal de Registrar
+// (admin) y el de Solicitar (colaborador) — mismos cálculos, mismo mensaje.
+function _vacPreviewDias(empId,idInicio,idFin,idDestino){
+  var elInicio=document.getElementById(idInicio);
+  var elFin=document.getElementById(idFin);
+  var dest=document.getElementById(idDestino);
+  if(!elInicio||!dest) return;
+  var inicio=elInicio.value;
+  var fin=elFin?elFin.value:'';
+  if(!inicio){ dest.textContent='Selecciona fecha inicio y fin'; return; }
+  dest.textContent='Calculando...';
+  _diasLaboralesEnRango(empId,inicio,fin||inicio).then(function(dias){
+    dest.textContent=dias>0
+      ? (dias+' día(s) laborable(s) se descontarán')
+      : '0 días laborables en ese rango (verifica el horario, o que no sean puros descansos)';
+  });
+}
+
+// Descuenta "dias" del saldo de vacaciones de un colaborador: resta primero del
+// periodo más antiguo, cae al más nuevo si no alcanza, y si aun así no alcanza
+// pregunta con confirm() si de todas formas se quiere dejar el saldo en
+// negativo. Si se aplica, además marca esos días como 'V' en el horario (solo
+// los que ya eran laborables — nunca pisa un descanso). Devuelve
+// Promise<boolean>: true si el descuento se aplicó. Compartida por
+// guardarVacaciones() (registro directo del admin) y
+// confirmarSolicitudVacaciones() (al aprobar una solicitud del colaborador).
+function _vacAplicarDescuento(empId,dias,fechaInicio,fechaFin){
+  var periodos=((window._vacPeriodosPorEmpleado&&window._vacPeriodosPorEmpleado[empId])||[])
+    .filter(function(p){return !p.vencida;})
+    .sort(function(a,b){return a.fecha_inicio_periodo<b.fecha_inicio_periodo?-1:1;}); // más antiguo primero
+  if(!periodos.length){
+    showAlert('⚠️ Este colaborador no tiene ningún periodo de vacaciones (revisa su fecha de ingreso)','error');
+    return Promise.resolve(false);
+  }
+  var restante=dias;
+  var actualizaciones=[];
+  periodos.forEach(function(p){
+    if(restante<=0) return;
+    var saldo=Math.max((p.dias_correspondientes||0)-(p.dias_tomados||0),0);
+    if(saldo<=0) return;
+    var usar=Math.min(saldo,restante);
+    var nuevoTomados=(p.dias_tomados||0)+usar;
+    restante-=usar;
+    actualizaciones.push({id:p.id,dias_tomados:nuevoTomados});
+  });
+  if(restante>0){
+    var continuar=confirm('El colaborador no tiene suficientes días disponibles ('+(dias-restante)+' de '+dias+'). Esto va a dejar su saldo en negativo. ¿Deseas continuar de todas formas?');
+    if(!continuar) return Promise.resolve(false);
+    var masReciente=periodos[periodos.length-1];
+    var yaAjustado=actualizaciones.find(function(u){return u.id===masReciente.id;});
+    if(yaAjustado){ yaAjustado.dias_tomados+=restante; }
+    else { actualizaciones.push({id:masReciente.id,dias_tomados:(masReciente.dias_tomados||0)+restante}); }
+    restante=0;
+  }
+  return Promise.all(actualizaciones.map(function(u){
+    return fetch(SUPA_URL+'/rest/v1/vacaciones_periodos?id=eq.'+u.id,{
+      method:'PATCH',
+      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify({dias_tomados:u.dias_tomados})
+    });
+  })).then(function(resultados){
+    var ok=resultados.every(function(r){return r.ok;});
+    if(!ok){ showAlert('⚠️ Ocurrió un error al guardar','error'); return false; }
+    if(fechaInicio){
+      return _aplicarCodigoHorarioRango(empId,fechaInicio,fechaFin||fechaInicio,'V',true).then(function(){ return true; });
+    }
+    return true;
+  });
+}
+
 function _renderVacaciones(lDiv){
   lDiv.innerHTML='<div style="text-align:center;padding:20px;color:#9ca3af">Cargando...</div>';
   var esTecnico=currentUser&&currentUser.rol==='tecnico';
@@ -23282,10 +23410,14 @@ function _renderVacaciones(lDiv){
   var empQuery=esTecnico?('activo=eq.true&usuario_id=eq.'+currentUser.id+'&order=nombre.asc'):'activo=eq.true&order=nombre.asc';
   Promise.all([
     supaFetch('empleados','GET',null,empQuery),
-    supaFetch('vacaciones_periodos','GET',null,'order=fecha_inicio_periodo.desc&limit=2000')
+    supaFetch('vacaciones_periodos','GET',null,'order=fecha_inicio_periodo.desc&limit=2000'),
+    esAdmin?supaFetch('vacaciones_solicitudes','GET',null,'estado=eq.pendiente&order=created_at.asc&limit=500'):Promise.resolve([]),
+    esTecnico?supaFetch('vacaciones_solicitudes','GET',null,'estado=eq.pendiente&order=created_at.desc&limit=20'):Promise.resolve([])
   ]).then(function(results){
     var empleados=results[0]||[];
     var todosPeriodos=results[1]||[];
+    var solicitudesPendientesAdmin=results[2]||[];
+    var solicitudesPendientesPropias=results[3]||[];
     if(!empleados.length){
       lDiv.innerHTML='<div class="card text-center" style="padding:30px">Sin empleados registrados.</div>';
       return;
@@ -23301,6 +23433,32 @@ function _renderVacaciones(lDiv){
       window._vacPeriodosPorEmpleado={};
       window._vacEmpleadosPorId={};
       empleados.forEach(function(e,i){ window._vacPeriodosPorEmpleado[e.id]=listasPorEmpleado[i]; window._vacEmpleadosPorId[e.id]=e; });
+      window._vacSolicitudesPendientes={};
+      solicitudesPendientesAdmin.concat(solicitudesPendientesPropias).forEach(function(s){ window._vacSolicitudesPendientes[s.id]=s; });
+
+      var htmlSolicitudesAdmin='';
+      if(esAdmin&&solicitudesPendientesAdmin.length){
+        var tarjetasSolicitudes=solicitudesPendientesAdmin.map(function(s){
+          var emp=window._vacEmpleadosPorId[s.empleado_id];
+          var nombre=emp?emp.nombre:'(colaborador)';
+          return '<div class="card" style="margin-bottom:8px;padding:12px;border-left:4px solid #d97706;background:#fffbeb">'
+            +'<div style="font-weight:800;font-size:13px;margin-bottom:3px">'+nombre+'</div>'
+            +'<div style="font-size:.78rem;color:#6b7280;margin-bottom:8px">'+s.dias+' día(s) · del '+_vacFmtFecha(s.fecha_inicio)+' al '+_vacFmtFecha(s.fecha_fin)+'</div>'
+            +'<div style="display:flex;gap:8px">'
+            +'<button onclick="confirmarSolicitudVacaciones(\''+s.id+'\')" style="flex:1;padding:8px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer">✅ Confirmar</button>'
+            +'<button onclick="abrirRechazarSolicitud(\''+s.id+'\')" style="flex:1;padding:8px;background:#fee2e2;color:#dc2626;border:none;border-radius:8px;font-size:.78rem;font-weight:700;cursor:pointer">✖️ Rechazar</button>'
+            +'</div></div>';
+        }).join('');
+        htmlSolicitudesAdmin='<div style="font-family:Nunito,sans-serif;font-size:14px;font-weight:800;margin:4px 0 8px">📥 Solicitudes pendientes ('+solicitudesPendientesAdmin.length+')</div>'+tarjetasSolicitudes+'<div style="height:6px"></div>';
+      }
+
+      var htmlSolicitudesPropias='';
+      if(esTecnico&&solicitudesPendientesPropias.length){
+        htmlSolicitudesPropias=solicitudesPendientesPropias.map(function(s){
+          return '<div style="font-size:.75rem;color:#92400e;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:8px 10px;margin-bottom:6px">⏳ Solicitud de '+s.dias+' día(s) (del '+_vacFmtFecha(s.fecha_inicio)+' al '+_vacFmtFecha(s.fecha_fin)+') en espera de aprobación</div>';
+        }).join('');
+      }
+
       var html=empleados.map(function(e){
         var periodos=(window._vacPeriodosPorEmpleado[e.id]||[]).slice().sort(function(a,b){return a.fecha_inicio_periodo<b.fecha_inicio_periodo?1:-1;}); // más reciente primero
         var vivos=periodos.filter(function(p){return !p.vencida;});
@@ -23342,7 +23500,7 @@ function _renderVacaciones(lDiv){
           +(esAdmin?'<div style="display:flex;gap:6px">'
             +'<button onclick="abrirAjusteVacaciones(\''+e.id+'\',\''+e.nombre.replace(/'/g,"\\'")+'\')" style="padding:6px 10px;background:#f3f4f6;border:none;border-radius:7px;font-size:.78rem;font-weight:700;cursor:pointer">✏️ Ajustar</button>'
             +'<button onclick="abrirRegistroVacaciones(\''+e.id+'\',\''+e.nombre.replace(/'/g,"\\'")+'\')" style="padding:6px 10px;background:#e0f7fa;border:none;border-radius:7px;font-size:.78rem;font-weight:700;color:#0891b2;cursor:pointer">+ Registrar</button>'
-            +'</div>':'')
+            +'</div>':(esTecnico?('<button onclick="abrirSolicitarVacaciones(\''+e.id+'\',\''+e.nombre.replace(/'/g,"\\'")+'\')" style="padding:6px 10px;background:#e0f7fa;border:none;border-radius:7px;font-size:.78rem;font-weight:700;color:#0891b2;cursor:pointer">📝 Solicitar</button>'):''))
           +'</div>'
           +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px">'
           +'<div style="text-align:center"><div style="font-size:1.4rem;font-weight:900;color:#0891b2">'+corrTotal+'</div><div style="font-size:.7rem;color:#6b7280">Correspondientes</div></div>'
@@ -23352,11 +23510,12 @@ function _renderVacaciones(lDiv){
           +'<div style="background:#f3f4f6;border-radius:6px;height:8px;overflow:hidden;margin-bottom:10px">'
           +'<div style="width:'+Math.min(pct,100)+'%;height:100%;background:'+col+';border-radius:6px"></div>'
           +'</div>'
+          +(esTecnico?htmlSolicitudesPropias:'')
           +(bloquesVivos||'<div style="font-size:.75rem;color:#9ca3af;padding:4px 0">Sin periodo vigente (verifica la fecha de ingreso del colaborador).</div>')
           +bloquesVencidos
           +'</div>';
       }).join('');
-      lDiv.innerHTML=html;
+      lDiv.innerHTML=htmlSolicitudesAdmin+html;
     });
   });
 }
@@ -23431,79 +23590,161 @@ function abrirRegistroVacaciones(empId,empNombre){
   modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box">'
     +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#0891b2;margin-bottom:4px">🏖️ Registrar vacaciones</div>'
     +'<div style="font-size:13px;color:#6b7280;margin-bottom:16px">'+empNombre+' · Saldo disponible: <b>'+saldoTotal+' día(s)</b></div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
-    +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Días a descontar</label>'
-    +'<input type="number" id="vac-dias-tomar" class="form-control" min="0" value="0" style="padding:10px"></div>'
-    +'<div></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'
     +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Fecha inicio</label>'
     +'<input type="date" id="vac-inicio" class="form-control" style="padding:10px"></div>'
     +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Fecha fin</label>'
     +'<input type="date" id="vac-fin" class="form-control" style="padding:10px"></div>'
     +'</div>'
-    +'<div style="font-size:.72rem;color:#9ca3af;margin-bottom:8px">Los días se descuentan primero del periodo más antiguo y, si no alcanza, del periodo nuevo. Si aun así no alcanza, se preguntará si quieres programarlo de todas formas dejando el saldo en negativo.</div>'
+    +'<div id="vac-dias-calc" style="background:#f0f7ff;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:.8rem;color:#0369a1;font-weight:700">Selecciona fecha inicio y fin</div>'
+    +'<div style="font-size:.72rem;color:#9ca3af;margin-bottom:8px">Los días a descontar se calculan automáticamente: solo cuentan los días con turno (1/2/3/M) dentro del rango; los descansos (D) nunca se descuentan. Se restan primero del periodo más antiguo y, si no alcanza, se pregunta si quieres continuar de todas formas dejando el saldo en negativo.</div>'
     +'<div style="display:flex;gap:10px">'
     +'<button onclick="var m=document.getElementById(\'modal-vac\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
     +'<button onclick="guardarVacaciones(\''+empId+'\')" style="flex:2;padding:13px;background:#0891b2;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar</button>'
     +'</div></div>';
   document.body.appendChild(modal);
+  ['vac-inicio','vac-fin'].forEach(function(id){
+    document.getElementById(id).addEventListener('change',function(){ _vacPreviewDias(empId,'vac-inicio','vac-fin','vac-dias-calc'); });
+  });
 }
 
 function guardarVacaciones(empId){
-  var tomar=parseInt(document.getElementById('vac-dias-tomar').value)||0;
   var inicio=document.getElementById('vac-inicio').value;
   var fin=document.getElementById('vac-fin').value;
-  if(tomar<=0){ showAlert('Indica cuántos días se van a descontar','error'); return; }
-  var periodos=((window._vacPeriodosPorEmpleado&&window._vacPeriodosPorEmpleado[empId])||[])
-    .filter(function(p){return !p.vencida;})
-    .sort(function(a,b){return a.fecha_inicio_periodo<b.fecha_inicio_periodo?-1:1;}); // más antiguo primero: se descuenta de ahí primero
-  if(!periodos.length){
-    showAlert('⚠️ Este colaborador no tiene ningún periodo de vacaciones (revisa su fecha de ingreso)','error');
-    return;
-  }
-  var restante=tomar;
-  var actualizaciones=[];
-  periodos.forEach(function(p){
-    if(restante<=0) return;
-    var saldo=Math.max((p.dias_correspondientes||0)-(p.dias_tomados||0),0);
-    if(saldo<=0) return;
-    var usar=Math.min(saldo,restante);
-    var nuevoTomados=(p.dias_tomados||0)+usar;
-    restante-=usar;
-    actualizaciones.push({id:p.id,dias_tomados:nuevoTomados});
+  if(!inicio){ showAlert('Indica la fecha de inicio','error'); return; }
+  _diasLaboralesEnRango(empId,inicio,fin||inicio).then(function(dias){
+    if(dias<=0){
+      showAlert('⚠️ No hay días laborables (1/2/3/M) en ese rango — verifica el horario del colaborador para esas fechas','error');
+      return;
+    }
+    _vacAplicarDescuento(empId,dias,inicio,fin).then(function(aplicado){
+      if(!aplicado) return;
+      var m=document.getElementById('modal-vac');if(m)m.remove();
+      showAlert('✅ Vacaciones registradas ('+dias+' día(s)) y horario actualizado');
+      _renderVacaciones(document.getElementById('personal-content'));
+    });
   });
-  if(restante>0){
-    // No alcanza el saldo — en vez de bloquear, se pregunta si de todas formas se
-    // quiere programar (por ejemplo un colaborador nuevo que aún no tiene días):
-    // el excedente se descuenta del periodo más reciente y puede dejarlo en negativo.
-    var continuar=confirm('El colaborador no tiene suficientes días disponibles ('+(tomar-restante)+' de '+tomar+'). Esto va a dejar su saldo en negativo. ¿Deseas programar los días de todas formas?');
-    if(!continuar) return;
-    var masReciente=periodos[periodos.length-1];
-    var yaAjustado=actualizaciones.find(function(u){return u.id===masReciente.id;});
-    if(yaAjustado){ yaAjustado.dias_tomados+=restante; }
-    else { actualizaciones.push({id:masReciente.id,dias_tomados:(masReciente.dias_tomados||0)+restante}); }
-    restante=0;
-  }
-  Promise.all(actualizaciones.map(function(u){
-    return fetch(SUPA_URL+'/rest/v1/vacaciones_periodos?id=eq.'+u.id,{
+}
+
+function abrirSolicitarVacaciones(empId,empNombre){
+  var periodos=((window._vacPeriodosPorEmpleado&&window._vacPeriodosPorEmpleado[empId])||[]).filter(function(p){return !p.vencida;});
+  var saldoTotal=periodos.reduce(function(s,p){return s+Math.max((p.dias_correspondientes||0)-(p.dias_tomados||0),0);},0);
+  var modal=document.createElement('div');
+  modal.id='modal-solicitar-vac';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
+  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#0891b2;margin-bottom:4px">📝 Solicitar vacaciones</div>'
+    +'<div style="font-size:13px;color:#6b7280;margin-bottom:16px">Saldo disponible: <b>'+saldoTotal+' día(s)</b></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">'
+    +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Fecha inicio</label>'
+    +'<input type="date" id="sol-inicio" class="form-control" style="padding:10px"></div>'
+    +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Fecha fin</label>'
+    +'<input type="date" id="sol-fin" class="form-control" style="padding:10px"></div>'
+    +'</div>'
+    +'<div id="sol-dias-calc" style="background:#f0f7ff;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:.8rem;color:#0369a1;font-weight:700">Selecciona fecha inicio y fin</div>'
+    +'<div style="font-size:.72rem;color:#9ca3af;margin-bottom:8px">Tu solicitud se enviará a un administrador para su aprobación — se avisará por correo y por el buzón de la app. Los días se calculan automáticamente (solo turnos 1/2/3/M); los descansos nunca se descuentan.</div>'
+    +'<div style="display:flex;gap:10px">'
+    +'<button onclick="var m=document.getElementById(\'modal-solicitar-vac\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="enviarSolicitudVacaciones(\''+empId+'\')" style="flex:2;padding:13px;background:#0891b2;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">📤 Enviar solicitud</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+  ['sol-inicio','sol-fin'].forEach(function(id){
+    document.getElementById(id).addEventListener('change',function(){ _vacPreviewDias(empId,'sol-inicio','sol-fin','sol-dias-calc'); });
+  });
+}
+
+function enviarSolicitudVacaciones(empId){
+  var inicio=document.getElementById('sol-inicio').value;
+  var fin=document.getElementById('sol-fin').value;
+  if(!inicio){ showAlert('Indica la fecha de inicio','error'); return; }
+  _diasLaboralesEnRango(empId,inicio,fin||inicio).then(function(dias){
+    if(dias<=0){
+      showAlert('⚠️ No hay días laborables (1/2/3/M) en ese rango — verifica el horario para esas fechas','error');
+      return;
+    }
+    var emp=(window._vacEmpleadosPorId&&window._vacEmpleadosPorId[empId])||{};
+    var body={empleado_id:empId,dias:dias,fecha_inicio:inicio,fecha_fin:fin||inicio,estado:'pendiente'};
+    fetch(SUPA_URL+'/rest/v1/vacaciones_solicitudes',{
+      method:'POST',
+      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+      body:JSON.stringify(body)
+    }).then(function(r){return r.ok?r.json():null;}).then(function(rows){
+      if(!rows||!rows[0]){ showAlert('⚠️ Ocurrió un error al enviar la solicitud','error'); return; }
+      var solicitud=rows[0];
+      var m=document.getElementById('modal-solicitar-vac');if(m)m.remove();
+      crearNotificacion('vacaciones_solicitud','🏖️ Nueva solicitud de vacaciones',(emp.nombre||'Un colaborador')+' solicitó '+dias+' día(s), del '+_vacFmtFecha(inicio)+' al '+_vacFmtFecha(fin||inicio),'admin',null,solicitud.id);
+      _vacNotificarCorreoAdmins('Nueva solicitud de vacaciones — '+(emp.nombre||''),(emp.nombre||'Un colaborador')+' solicitó '+dias+' día(s) de vacaciones, del '+_vacFmtFecha(inicio)+' al '+_vacFmtFecha(fin||inicio)+'. Entra a la app para confirmar o rechazar.');
+      showAlert('✅ Solicitud enviada — un administrador la revisará');
+      _renderVacaciones(document.getElementById('personal-content'));
+    }).catch(function(){ showAlert('⚠️ Ocurrió un error al enviar la solicitud','error'); });
+  });
+}
+
+function confirmarSolicitudVacaciones(solicitudId){
+  var s=(window._vacSolicitudesPendientes&&window._vacSolicitudesPendientes[solicitudId]);
+  if(!s){ showAlert('No se encontró la solicitud (recarga la pantalla)','error'); return; }
+  var emp=(window._vacEmpleadosPorId&&window._vacEmpleadosPorId[s.empleado_id])||{};
+  _vacAplicarDescuento(s.empleado_id,s.dias,s.fecha_inicio,s.fecha_fin).then(function(aplicado){
+    if(!aplicado) return;
+    fetch(SUPA_URL+'/rest/v1/vacaciones_solicitudes?id=eq.'+s.id,{
       method:'PATCH',
       headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
-      body:JSON.stringify({dias_tomados:u.dias_tomados})
-    });
-  })).then(function(resultados){
-    var ok=resultados.every(function(r){return r.ok;});
-    if(!ok){ showAlert('⚠️ Ocurrió un error al guardar','error'); return; }
-    var m=document.getElementById('modal-vac');if(m)m.remove();
-    if(inicio){
-      // Alimenta automáticamente el horario: marca esos días como Vacaciones (V)
-      _aplicarCodigoHorarioRango(empId,inicio,fin||inicio,'V').then(function(){
-        showAlert('✅ Vacaciones registradas y horario actualizado');
-        _renderVacaciones(document.getElementById('personal-content'));
-      });
-    } else {
-      showAlert('✅ Vacaciones registradas');
+      body:JSON.stringify({estado:'confirmada',resuelto_at:new Date().toISOString()})
+    }).then(function(){
+      if(emp.usuario_id) crearNotificacion('vacaciones_resuelta','✅ Vacaciones aprobadas','Tu solicitud de '+s.dias+' día(s) (del '+_vacFmtFecha(s.fecha_inicio)+' al '+_vacFmtFecha(s.fecha_fin)+') fue aprobada.','tecnico',emp.usuario_id,s.id);
+      showAlert('✅ Solicitud confirmada');
       _renderVacaciones(document.getElementById('personal-content'));
-    }
+    });
   });
+}
+
+function abrirRechazarSolicitud(solicitudId){
+  var modal=document.createElement('div');
+  modal.id='modal-rechazar-sol';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
+  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#dc2626;margin-bottom:12px">✖️ Rechazar solicitud</div>'
+    +'<label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Motivo (opcional)</label>'
+    +'<textarea id="rech-motivo" class="form-control" rows="3" style="padding:10px;width:100%;box-sizing:border-box" placeholder="El colaborador lo verá en su buzón"></textarea>'
+    +'<div style="display:flex;gap:10px;margin-top:12px">'
+    +'<button onclick="var m=document.getElementById(\'modal-rechazar-sol\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="guardarRechazoSolicitud(\''+solicitudId+'\')" style="flex:2;padding:13px;background:#dc2626;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">Rechazar</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function guardarRechazoSolicitud(solicitudId){
+  var s=(window._vacSolicitudesPendientes&&window._vacSolicitudesPendientes[solicitudId]);
+  if(!s){ showAlert('No se encontró la solicitud (recarga la pantalla)','error'); return; }
+  var emp=(window._vacEmpleadosPorId&&window._vacEmpleadosPorId[s.empleado_id])||{};
+  var elMotivo=document.getElementById('rech-motivo');
+  var motivo=((elMotivo&&elMotivo.value)||'').trim();
+  fetch(SUPA_URL+'/rest/v1/vacaciones_solicitudes?id=eq.'+s.id,{
+    method:'PATCH',
+    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+    body:JSON.stringify({estado:'rechazada',comentario_rechazo:motivo||null,resuelto_at:new Date().toISOString()})
+  }).then(function(){
+    var m=document.getElementById('modal-rechazar-sol');if(m)m.remove();
+    if(emp.usuario_id) crearNotificacion('vacaciones_resuelta','❌ Solicitud de vacaciones rechazada','Tu solicitud de '+s.dias+' día(s) (del '+_vacFmtFecha(s.fecha_inicio)+' al '+_vacFmtFecha(s.fecha_fin)+') fue rechazada.'+(motivo?(' Motivo: '+motivo):''),'tecnico',emp.usuario_id,s.id);
+    showAlert('Solicitud rechazada');
+    _renderVacaciones(document.getElementById('personal-content'));
+  }).catch(function(){ showAlert('⚠️ Ocurrió un error','error'); });
+}
+
+// Envía un correo real a los administradores con email registrado, a través de
+// una Supabase Edge Function (ver supabase/functions/notificar-vacaciones). Si
+// la función todavía no existe o falla, no interrumpe el flujo — el buzón y el
+// banner dentro de la app ya avisan de cualquier forma.
+function _vacNotificarCorreoAdmins(asunto,texto){
+  supaFetch('usuarios','GET',null,'rol=in.(admin,super)&activo=eq.true').then(function(rows){
+    var destinatarios=(rows||[]).map(function(u){return u.email;}).filter(function(e){return e&&e.indexOf('@')>0;});
+    if(!destinatarios.length) return;
+    return fetch(SUPA_URL+'/functions/v1/notificar-vacaciones',{
+      method:'POST',
+      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+      body:JSON.stringify({to:destinatarios,subject:asunto,text:texto})
+    });
+  }).catch(function(){});
 }
 
 // ── INCIDENCIAS ──────────────────────────────────────────────────
