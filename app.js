@@ -30031,7 +30031,7 @@ function renderElectricidad(){
     +(esAdmin?'<button class="btn btn-gray btn-sm" onclick="abrirConfigElec()">⚙️ Configuración</button>':'')
     +'</div>';
 
-  html+='<div class="chart-wrap"><div class="chart-title">Consumo Pesos</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-elec-pesos"></canvas></div></div>';
+  html+='<div class="chart-wrap"><div class="chart-title">Consumo en Pesos $$$</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-elec-pesos"></canvas></div></div>';
   html+='<div class="chart-wrap" style="margin-top:12px"><div class="chart-title">Consumo kWh</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-elec-kwh"></canvas></div></div>';
 
   cont.innerHTML=html;
@@ -30048,6 +30048,11 @@ function _elecFmtMiles(v){
   var k=Math.round(v/1000);
   return k+' k ('+Math.round(v).toLocaleString('es-MX')+')';
 }
+// Solo para la gráfica de Pesos de Electricidad: el valor completo, sin el prefijo "k".
+function _elecFmtPesos(v){
+  if(v==null) return '';
+  return Math.round(v).toLocaleString('es-MX');
+}
 
 // Color de cada barra (ambas gráficas usan el MISMO veredicto por mes, basado
 // siempre en si el kWh real quedó dentro del kWh esperado por la regla kg/kWh).
@@ -30057,7 +30062,7 @@ function _elecColoresMes(anio){
     var entry=ELEC_DATA.find(function(g){return g.anio===anio&&g.mes===m;});
     var esperado=entry?_elecKwhEsperado(entry,m):null;
     if(!entry||esperado==null||entry.kwh==null){
-      colores.push('rgba(96,125,139,.55)'); // neutro: sin dato o sin regla definida todavía
+      colores.push('rgba(65,105,225,.75)'); // azul rey: sin dato o sin regla definida todavía
     } else if(entry.kwh<=esperado){
       colores.push('rgba(46,125,50,.75)'); // verde: cumple
     } else {
@@ -30105,7 +30110,7 @@ function _renderElectricidadCharts(anio){
   _elecChartPesos=new Chart(elP,{type:'bar',data:{labels:MESES_ELEC,datasets:[
     {label:'Pesos',data:valoresPesos,backgroundColor:colores,borderRadius:4,
      datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
-       formatter:function(v){return v?_elecFmtMiles(v):'';}}},
+       formatter:function(v){return v?_elecFmtPesos(v):'';}}},
     {type:'line',label:'Meta',data:lineaPesos,borderColor:'#000',borderDash:[6,4],borderWidth:2,
      pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
   ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
@@ -30284,7 +30289,7 @@ function renderGas(){
     +(esAdmin?'<button class="btn btn-gray btn-sm" onclick="abrirConfigGas()">⚙️ Configuración</button>':'')
     +'</div>';
 
-  html+='<div class="chart-wrap"><div class="chart-title">Consumo Pesos</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-gas-pesos"></canvas></div></div>';
+  html+='<div class="chart-wrap"><div class="chart-title">Consumo en Pesos $$$</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-gas-pesos"></canvas></div></div>';
   html+='<div class="chart-wrap" style="margin-top:12px"><div class="chart-title">Consumo m³</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-gas-m3"></canvas></div></div>';
 
   cont.innerHTML=html;
@@ -30316,7 +30321,7 @@ function _gasColoresMes(anio){
     var entry=GAS_DATA.find(function(g){return g.anio===anio&&g.mes===m;});
     var esperado=entry?_gasM3Esperado(entry,m):null;
     if(!entry||esperado==null||entry.m3==null){
-      colores.push('rgba(96,125,139,.55)'); // neutro: sin dato o sin regla definida todavía
+      colores.push('rgba(65,105,225,.75)'); // azul rey: sin dato o sin regla definida todavía
     } else if(entry.m3<=esperado){
       colores.push('rgba(46,125,50,.75)'); // verde: cumple
     } else {
@@ -30544,7 +30549,7 @@ function renderAguaMensual(){
     +(esAdmin?'<button class="btn btn-gray btn-sm" onclick="abrirConfigAguam()">⚙️ Configuración</button>':'')
     +'</div>';
 
-  html+='<div class="chart-wrap"><div class="chart-title">Consumo Pesos</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-aguam-pesos"></canvas></div></div>';
+  html+='<div class="chart-wrap"><div class="chart-title">Consumo en Pesos $$$</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-aguam-pesos"></canvas></div></div>';
   html+='<div class="chart-wrap" style="margin-top:12px"><div class="chart-title">Consumo m³</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-aguam-m3"></canvas></div></div>';
 
   cont.innerHTML=html;
@@ -30561,6 +30566,11 @@ function _aguamFmtMiles(v){
   var k=Math.round(v/1000);
   return k+' k ('+Math.round(v).toLocaleString('es-MX')+')';
 }
+// Solo para la gráfica de Pesos de Agua Mensual: el valor completo, sin el prefijo "k".
+function _aguamFmtPesos(v){
+  if(v==null) return '';
+  return Math.round(v).toLocaleString('es-MX');
+}
 
 // Color de cada barra (ambas gráficas usan el MISMO veredicto por mes, basado
 // siempre en si el m³ real quedó dentro del m³ esperado por la regla kg/m³).
@@ -30570,7 +30580,7 @@ function _aguamColoresMes(anio){
     var entry=AGUAM_DATA.find(function(g){return g.anio===anio&&g.mes===m;});
     var esperado=entry?_aguamM3Esperado(entry,m):null;
     if(!entry||esperado==null||entry.m3==null){
-      colores.push('rgba(96,125,139,.55)'); // neutro: sin dato o sin regla definida todavía
+      colores.push('rgba(65,105,225,.75)'); // azul rey: sin dato o sin regla definida todavía
     } else if(entry.m3<=esperado){
       colores.push('rgba(46,125,50,.75)'); // verde: cumple
     } else {
@@ -30618,7 +30628,7 @@ function _renderAguaMensualCharts(anio){
   _aguamChartPesos=new Chart(elP,{type:'bar',data:{labels:MESES_AGUAM,datasets:[
     {label:'Pesos',data:valoresPesos,backgroundColor:colores,borderRadius:4,
      datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
-       formatter:function(v){return v?_aguamFmtMiles(v):'';}}},
+       formatter:function(v){return v?_aguamFmtPesos(v):'';}}},
     {type:'line',label:'Meta',data:lineaPesos,borderColor:'#000',borderDash:[6,4],borderWidth:2,
      pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
   ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
