@@ -30838,6 +30838,14 @@ function renderKPICantidad(){
   });
 }
 
+// Formato compacto solo para las barras de KPI Servicios: nada más los miles + "k"
+// (ej. "11 k", "254 k"), sin el valor completo entre paréntesis — aquí van 3 series
+// por pantalla y el formato largo se amontona.
+function _kpiFmtK(v){
+  if(!v) return '';
+  return Math.round(v/1000)+' k';
+}
+
 var _kpiCharts={};
 function _renderKPIChart(canvasId,modulo,anio,campo,tope){
   var el=document.getElementById(canvasId);
@@ -30854,11 +30862,16 @@ function _renderKPIChart(canvasId,modulo,anio,campo,tope){
      datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
        formatter:function(v,ctx){
          var mes=ctx.dataIndex+1;
-         var txt=v?_gasFmtMiles(v):'';
+         var txt=v?_kpiFmtK(v):'';
          if(_kpiTieneComentario(mKey,anio,mes)) txt=(txt?txt+' ':'')+'💬';
          return txt;
        }}}
-  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
+  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false},
+    tooltip:{callbacks:{afterLabel:function(ctx){
+      var mes=ctx.dataIndex+1;
+      var c=KPI_COMENTARIOS.find(function(x){return x.modulo===mKey&&x.anio===anio&&x.mes===mes;});
+      return (c&&c.comentario)?('💬 '+c.comentario):'';
+    }}}},
     scales:{y:{min:0,max:tope,ticks:{callback:function(v){return (v/1000)+'k';}}}},
     onClick:function(evt,els){if(!els||!els.length)return;abrirKpiComentario(mKey,anio,els[0].index+1);}}});
 }
