@@ -30120,7 +30120,7 @@ function _renderElectricidadCharts(anio){
   _elecChartKwh=new Chart(elK,{type:'bar',data:{labels:MESES_ELEC,datasets:[
     {label:'kWh',data:valoresKwh,backgroundColor:colores,borderRadius:4,
      datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
-       formatter:function(v){return v?_elecFmtMiles(v):'';}}},
+       formatter:function(v){return v?_elecFmtPesos(v):'';}}},
     {type:'line',label:'Meta',data:lineaKwh,borderColor:'#000',borderDash:[6,4],borderWidth:2,
      pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
   ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
@@ -30379,7 +30379,7 @@ function _renderGasCharts(anio){
   _gasChartM3=new Chart(elK,{type:'bar',data:{labels:MESES_GAS,datasets:[
     {label:'m³',data:valoresM3,backgroundColor:colores,borderRadius:4,
      datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
-       formatter:function(v){return v?_gasFmtMiles(v):'';}}},
+       formatter:function(v){return v?_gasFmtPesos(v):'';}}},
     {type:'line',label:'Meta',data:lineaM3,borderColor:'#000',borderDash:[6,4],borderWidth:2,
      pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
   ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
@@ -30638,7 +30638,7 @@ function _renderAguaMensualCharts(anio){
   _aguamChartM3=new Chart(elK,{type:'bar',data:{labels:MESES_AGUAM,datasets:[
     {label:'m³',data:valoresM3,backgroundColor:colores,borderRadius:4,
      datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
-       formatter:function(v){return v?_aguamFmtMiles(v):'';}}},
+       formatter:function(v){return v?_aguamFmtPesos(v):'';}}},
     {type:'line',label:'Meta',data:lineaM3,borderColor:'#000',borderDash:[6,4],borderWidth:2,
      pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
   ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
