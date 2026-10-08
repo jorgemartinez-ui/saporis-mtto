@@ -30002,8 +30002,8 @@ function renderElectricidad(){
     +(esAdmin?'<button class="btn btn-gray btn-sm" onclick="abrirConfigElec()">⚙️ Configuración</button>':'')
     +'</div>';
 
-  html+='<div class="chart-wrap"><div class="chart-title">Consumo Pesos</div><canvas id="chart-elec-pesos" height="200"></canvas></div>';
-  html+='<div class="chart-wrap" style="margin-top:12px"><div class="chart-title">Consumo kWh</div><canvas id="chart-elec-kwh" height="200"></canvas></div>';
+  html+='<div class="chart-wrap"><div class="chart-title">Consumo Pesos</div><div style="position:relative;height:280px;max-width:900px;margin:0 auto"><canvas id="chart-elec-pesos"></canvas></div></div>';
+  html+='<div class="chart-wrap" style="margin-top:12px"><div class="chart-title">Consumo kWh</div><div style="position:relative;height:280px;max-width:900px;margin:0 auto"><canvas id="chart-elec-kwh"></canvas></div></div>';
 
   cont.innerHTML=html;
   _renderElectricidadCharts(anio);
@@ -30079,7 +30079,7 @@ function _renderElectricidadCharts(anio){
        formatter:function(v){return v?_elecFmtMiles(v):'';}}},
     {type:'line',label:'Meta',data:lineaPesos,borderColor:'#000',borderDash:[6,4],borderWidth:2,
      pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
-  ]},options:{plugins:{legend:{display:false}},
+  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
     scales:{y:{min:0,max:(ELEC_CONFIG&&ELEC_CONFIG.tope_pesos)||500000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
     onClick:clickMes}});
 
@@ -30089,7 +30089,7 @@ function _renderElectricidadCharts(anio){
        formatter:function(v){return v?_elecFmtMiles(v):'';}}},
     {type:'line',label:'Meta',data:lineaKwh,borderColor:'#000',borderDash:[6,4],borderWidth:2,
      pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
-  ]},options:{plugins:{legend:{display:false}},
+  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
     scales:{y:{min:0,max:(ELEC_CONFIG&&ELEC_CONFIG.tope_kwh)||120000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
     onClick:clickMes}});
 }
@@ -30255,8 +30255,8 @@ function renderGas(){
     +(esAdmin?'<button class="btn btn-gray btn-sm" onclick="abrirConfigGas()">⚙️ Configuración</button>':'')
     +'</div>';
 
-  html+='<div class="chart-wrap"><div class="chart-title">Consumo Pesos</div><canvas id="chart-gas-pesos" height="200"></canvas></div>';
-  html+='<div class="chart-wrap" style="margin-top:12px"><div class="chart-title">Consumo m³</div><canvas id="chart-gas-m3" height="200"></canvas></div>';
+  html+='<div class="chart-wrap"><div class="chart-title">Consumo Pesos</div><div style="position:relative;height:280px;max-width:900px;margin:0 auto"><canvas id="chart-gas-pesos"></canvas></div></div>';
+  html+='<div class="chart-wrap" style="margin-top:12px"><div class="chart-title">Consumo m³</div><div style="position:relative;height:280px;max-width:900px;margin:0 auto"><canvas id="chart-gas-m3"></canvas></div></div>';
 
   cont.innerHTML=html;
   _renderGasCharts(anio);
@@ -30332,7 +30332,7 @@ function _renderGasCharts(anio){
        formatter:function(v){return v?_gasFmtMiles(v):'';}}},
     {type:'line',label:'Meta',data:lineaPesos,borderColor:'#000',borderDash:[6,4],borderWidth:2,
      pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
-  ]},options:{plugins:{legend:{display:false}},
+  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
     scales:{y:{min:0,max:(GAS_CONFIG&&GAS_CONFIG.tope_pesos)||500000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
     onClick:clickMes}});
 
@@ -30342,7 +30342,7 @@ function _renderGasCharts(anio){
        formatter:function(v){return v?_gasFmtMiles(v):'';}}},
     {type:'line',label:'Meta',data:lineaM3,borderColor:'#000',borderDash:[6,4],borderWidth:2,
      pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
-  ]},options:{plugins:{legend:{display:false}},
+  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
     scales:{y:{min:0,max:(GAS_CONFIG&&GAS_CONFIG.tope_m3)||20000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
     onClick:clickMes}});
 }
