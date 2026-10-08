@@ -15,6 +15,7 @@
 <title>Saporis — Mantenimiento v5</title>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Nunito+Sans:wght@400;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -234,7 +235,7 @@ tr:nth-child(even) td{background:#F8FAFC}
 </script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="app.js?v=20261008a" defer></script>
+<script src="app.js?v=20261008b" defer></script>
 
 <style id="lup-css">
 .lup-doc{background:#fff;border:2px solid #1a3c5e;border-radius:10px;overflow:hidden;margin:12px;font-family:Arial,sans-serif}
@@ -411,7 +412,7 @@ tr:nth-child(even) td{background:#F8FAFC}
         <div class="menu-btn" style="border-color:#546E7A;background:linear-gradient(135deg,#fff 60%,#ECEFF1)" onclick="showHistorial()"><div class="menu-icon">🏭</div><div class="menu-label">Historial Máquinas</div><div class="menu-desc">Historial por línea</div></div>
         <div class="menu-btn" style="border-color:#1565C0;background:linear-gradient(135deg,#fff 60%,#E3F2FD)" onclick="showActivos()"><div class="menu-icon">⚙️</div><div class="menu-label">Activos</div><div class="menu-desc">Inventario de equipos</div></div>
         <div class="menu-btn" style="border-color:#E65100;background:linear-gradient(135deg,#fff 60%,#FFF3E0)" onclick="showManuales()"><div class="menu-icon">📚</div><div class="menu-label">Manuales</div><div class="menu-desc">Documentos y entrenamiento</div></div>
-        <div class="menu-btn" style="border-color:#00695C;background:linear-gradient(135deg,#fff 60%,#E0F2F1)" onclick="showServicios()"><div class="menu-icon">🏭</div><div class="menu-label">Servicios</div><div class="menu-desc">Caldera, Agua, Aire, Elec.</div></div>
+        <div class="menu-btn" style="border-color:#00695C;background:linear-gradient(135deg,#fff 60%,#E0F2F1)" onclick="showServicios()"><div class="menu-icon">🏭</div><div class="menu-label">Servicios</div><div class="menu-desc">Gas, Agua, Elec.</div></div>
         <div class="menu-btn" style="border-color:#0891b2;background:linear-gradient(135deg,#fff 60%,#e0f7fa)" onclick="showGestionPersonal()"><div class="menu-icon">👥</div><div class="menu-label">Gestión de Personal</div><div class="menu-desc">Horarios, vacaciones, incidencias</div></div>
 
 
@@ -427,7 +428,7 @@ tr:nth-child(even) td{background:#F8FAFC}
           <div class="menu-btn" style="border-color:#dc2626;background:linear-gradient(135deg,#fff 60%,#fee2e2);position:relative" onclick="showPM03PorReprogramar()"><div class="menu-icon" id="icon-pm3-reprogram" style="position:relative">📅<span id="badge-pm03-reprog" style="display:none;position:absolute;top:-8px;right:-10px;background:#7c3aed;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:11px;font-weight:800;line-height:18px;text-align:center;padding:0 3px"></span></div><div class="menu-label">PM03 x Reprogramar</div><div class="menu-desc" id="desc-pm3-reprogram">PM03 vencidas</div></div>
         <div class="menu-btn" style="border-color:#374151;background:linear-gradient(135deg,#fff 60%,#f3f4f6)" onclick="showProveedores()"><div class="menu-icon">🏢</div><div class="menu-label">Proveedores</div><div class="menu-desc">Directorio de proveedores</div></div>
           <div class="menu-btn" style="border-color:#14532d;background:linear-gradient(135deg,#fff 60%,#dcfce7)" onclick="showPlanMantenimiento()"><div class="menu-icon">📋</div><div class="menu-label">Plan Mtto</div><div class="menu-desc">Actividades y historial</div></div>
-          <div class="menu-btn" style="border-color:#00695C;background:linear-gradient(135deg,#fff 60%,#E0F2F1)" onclick="showServicios()"><div class="menu-icon">🏭</div><div class="menu-label">Servicios</div><div class="menu-desc">Caldera, Agua, Aire, Elec.</div></div>
+          <div class="menu-btn" style="border-color:#00695C;background:linear-gradient(135deg,#fff 60%,#E0F2F1)" onclick="showServicios()"><div class="menu-icon">🏭</div><div class="menu-label">Servicios</div><div class="menu-desc">Gas, Agua, Elec.</div></div>
         <div class="menu-btn" style="border-color:#0891b2;background:linear-gradient(135deg,#fff 60%,#e0f7fa)" onclick="showGestionPersonal()"><div class="menu-icon">👥</div><div class="menu-label">Gestión de Personal</div><div class="menu-desc">Horarios, vacaciones, incidencias</div></div>
         </div>
       </div>
@@ -1172,20 +1173,14 @@ tr:nth-child(even) td{background:#F8FAFC}
   </div>
   <div class="scroll-content" style="padding:16px">
     <div class="menu-grid">
-      <div class="menu-btn" style="border-color:#F44336;background:linear-gradient(135deg,#fff 60%,#FFEBEE)" onclick="showAlert('Módulo en desarrollo','info')">
-        <div class="menu-icon">🔥</div><div class="menu-label">Caldera</div><div class="menu-desc">En desarrollo</div>
+      <div class="menu-btn" style="border-color:#F44336;background:linear-gradient(135deg,#fff 60%,#FFEBEE)" onclick="showGas()">
+        <div class="menu-icon">🔥</div><div class="menu-label">Gas</div><div class="menu-desc">Consumo mensual</div>
       </div>
       <div class="menu-btn" style="border-color:#1e3a8a;background:linear-gradient(135deg,#fff 60%,#dbeafe)" onclick="showAgua()">
         <div class="menu-icon">💧</div><div class="menu-label">Agua</div><div class="menu-desc">Consumo diario</div>
       </div>
-      <div class="menu-btn" style="border-color:#607D8B;background:linear-gradient(135deg,#fff 60%,#ECEFF1)" onclick="showAlert('Módulo en desarrollo','info')">
-        <div class="menu-icon">💨</div><div class="menu-label">Aire Comprimido</div><div class="menu-desc">En desarrollo</div>
-      </div>
-      <div class="menu-btn" style="border-color:#FFC107;background:linear-gradient(135deg,#fff 60%,#FFFDE7)" onclick="showAlert('Módulo en desarrollo','info')">
-        <div class="menu-icon">⚡</div><div class="menu-label">Electricidad</div><div class="menu-desc">En desarrollo</div>
-      </div>
-      <div class="menu-btn" style="border-color:#795548;background:linear-gradient(135deg,#fff 60%,#EFEBE9)" onclick="showAlert('Módulo en desarrollo','info')">
-        <div class="menu-icon">🔩</div><div class="menu-label">Instalaciones</div><div class="menu-desc">En desarrollo</div>
+      <div class="menu-btn" style="border-color:#FFC107;background:linear-gradient(135deg,#fff 60%,#FFFDE7)" onclick="showElectricidad()">
+        <div class="menu-icon">⚡</div><div class="menu-label">Electricidad</div><div class="menu-desc">Consumo mensual</div>
       </div>
     </div>
   </div>
@@ -1196,6 +1191,20 @@ tr:nth-child(even) td{background:#F8FAFC}
     <div><div class="topbar-title">💧 Agua</div><div class="topbar-sub" id="agua-topbar-sub">Consumo diario</div></div>
   </div>
   <div class="scroll-content" style="padding:14px" id="agua-content"></div>
+</div>
+<div id="screen-gas" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showServicios()">←</button>
+    <div><div class="topbar-title">🔥 Gas</div><div class="topbar-sub">Consumo mensual</div></div>
+  </div>
+  <div class="scroll-content" style="padding:14px" id="gas-content"></div>
+</div>
+<div id="screen-electricidad" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showServicios()">←</button>
+    <div><div class="topbar-title">⚡ Electricidad</div><div class="topbar-sub">Consumo mensual</div></div>
+  </div>
+  <div class="scroll-content" style="padding:14px" id="electricidad-content"></div>
 </div>
 
 <div id="screen-plan" class="screen">

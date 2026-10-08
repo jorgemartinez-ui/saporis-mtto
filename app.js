@@ -101,6 +101,19 @@ let CONSUMO_REF=loadDB('consumo_ref',[]);
 let PM03_PLAN=loadDB('pm03_plan',[]);
 let MTBF_DATA=loadDB('mtbf_data',[]);
 let GASTO_DATA=loadDB('gasto_data',[]);
+let GAS_DATA=loadDB('gas_data',[]); // {id,anio,mes,pesos,m3,toneladas,ts} — módulo Servicios > Gas
+let GAS_CONFIG=loadDB('gas_config',{modo:'anual',ratio_anual:null,ratios_mensuales:null,tope_pesos:500000,tope_m3:20000}); // regla kg fabricados/m³
+let ELEC_DATA=loadDB('elec_data',[]); // {id,anio,mes,pesos,kwh,toneladas,ts} — módulo Servicios > Electricidad
+let ELEC_CONFIG=loadDB('elec_config',{modo:'anual',ratio_anual:null,ratios_mensuales:null,tope_pesos:500000,tope_kwh:120000}); // regla kg fabricados/kWh
+
+// Plugin de etiquetas de valor sobre las barras — SOLO se usa en las gráficas
+// de los módulos Gas y Electricidad (cada dataset de ahí lo activa
+// explícitamente). Se apaga por default a nivel global para no afectar
+// ninguna otra gráfica ya existente (MTBF, Gasto, doughnut de PM02, etc.)
+if(typeof Chart!=='undefined' && typeof ChartDataLabels!=='undefined'){
+  Chart.register(ChartDataLabels);
+  Chart.defaults.set('plugins.datalabels',{display:false});
+}
 
 // Pre-llenar gasto objetivo $100,000/semana hasta fin de año si no existe
 (function(){
@@ -2268,10 +2281,14 @@ function confirmarReprogramarDesdeDetalle(id){
   if(currentUser.rol==='super') p.reprogramadaPorSuper=true;
   saveDB('pm03_plan',PM03_PLAN);
   // PATCH directo para asegurar nueva semana en Supabase
+  // (incluye tecnico_id/tecnico_nombre: antes no se mandaban aquí y la asignación
+  // de técnico hecha desde este banner solo quedaba guardada localmente, nunca
+  // llegaba a Supabase, y por eso se veía "perdida" en otro dispositivo o tras
+  // un refresh sin respaldo local.)
   fetch(SUPA_URL+'/rest/v1/pm03_plan?id=eq.'+id,{
     method:'PATCH',
     headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
-    body:JSON.stringify({semana:p.semana,estado:'abierta',nota_reprogramacion:nota})
+    body:JSON.stringify({semana:p.semana,estado:'abierta',nota_reprogramacion:nota,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null})
   }).catch(function(){savePM03Supa(p);});
   // Cerrar modal y regresar a la lista
   var m=document.querySelector('.modal-sheet');if(m)m.remove();
@@ -5822,6 +5839,26 @@ function syncSupabase(){
   supaFetch('refacciones','GET',null,'order=codigo.asc').then(function(rows){if(rows&&rows.length){REFACCIONES=rows;saveDB('refacciones',REFACCIONES);}}).catch(function(){});
   supaFetch('mtbf_data','GET',null,'order=anio.desc,semana.desc').then(function(rows){if(rows&&rows.length){MTBF_DATA=rows;saveDB('mtbf_data',MTBF_DATA);}}).catch(function(){});
   supaFetch('gasto_data','GET',null,'order=anio.asc,semana.asc').then(function(rows){if(rows&&rows.length){GASTO_DATA=rows;saveDB('gasto_data',GASTO_DATA);}}).catch(function(){});
+  supaFetch('gas_data','GET',null,'order=anio.asc,mes.asc').then(function(rows){if(rows&&rows.length){GAS_DATA=rows;saveDB('gas_data',GAS_DATA);}}).catch(function(){});
+  supaFetch('gas_config','GET',null,'id=eq.default').then(function(rows){
+    if(rows&&rows[0]){
+      var r=rows[0];
+      GAS_CONFIG={modo:r.modo||'anual',ratio_anual:r.ratio_anual!=null?r.ratio_anual:null,
+        ratios_mensuales:(function(){try{return r.ratios_mensuales?(typeof r.ratios_mensuales==='string'?JSON.parse(r.ratios_mensuales):r.ratios_mensuales):null;}catch(e){return null;}})(),
+        tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_m3:r.tope_m3!=null?r.tope_m3:20000};
+      saveDB('gas_config',GAS_CONFIG);
+    }
+  }).catch(function(){});
+  supaFetch('elec_data','GET',null,'order=anio.asc,mes.asc').then(function(rows){if(rows&&rows.length){ELEC_DATA=rows;saveDB('elec_data',ELEC_DATA);}}).catch(function(){});
+  supaFetch('elec_config','GET',null,'id=eq.default').then(function(rows){
+    if(rows&&rows[0]){
+      var r=rows[0];
+      ELEC_CONFIG={modo:r.modo||'anual',ratio_anual:r.ratio_anual!=null?r.ratio_anual:null,
+        ratios_mensuales:(function(){try{return r.ratios_mensuales?(typeof r.ratios_mensuales==='string'?JSON.parse(r.ratios_mensuales):r.ratios_mensuales):null;}catch(e){return null;}})(),
+        tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_kwh:r.tope_kwh!=null?r.tope_kwh:120000};
+      saveDB('elec_config',ELEC_CONFIG);
+    }
+  }).catch(function(){});
   supaFetch('inspecciones','GET',null,'order=created_at.desc&limit=2000').then(function(rows){if(rows&&rows.length){INSPECCIONES=rows;saveDB('inspecciones',INSPECCIONES);}}).catch(function(){});
   // Process offline queue
   setTimeout(processSyncQueue, 2000);
@@ -14078,6 +14115,26 @@ function syncSupabase(){
   supaFetch('refacciones','GET',null,'order=codigo.asc').then(function(rows){if(rows&&rows.length){REFACCIONES=rows;saveDB('refacciones',REFACCIONES);}}).catch(function(){});
   supaFetch('mtbf_data','GET',null,'order=anio.desc,semana.desc').then(function(rows){if(rows&&rows.length){MTBF_DATA=rows;saveDB('mtbf_data',MTBF_DATA);}}).catch(function(){});
   supaFetch('gasto_data','GET',null,'order=anio.asc,semana.asc').then(function(rows){if(rows&&rows.length){GASTO_DATA=rows;saveDB('gasto_data',GASTO_DATA);}}).catch(function(){});
+  supaFetch('gas_data','GET',null,'order=anio.asc,mes.asc').then(function(rows){if(rows&&rows.length){GAS_DATA=rows;saveDB('gas_data',GAS_DATA);}}).catch(function(){});
+  supaFetch('gas_config','GET',null,'id=eq.default').then(function(rows){
+    if(rows&&rows[0]){
+      var r=rows[0];
+      GAS_CONFIG={modo:r.modo||'anual',ratio_anual:r.ratio_anual!=null?r.ratio_anual:null,
+        ratios_mensuales:(function(){try{return r.ratios_mensuales?(typeof r.ratios_mensuales==='string'?JSON.parse(r.ratios_mensuales):r.ratios_mensuales):null;}catch(e){return null;}})(),
+        tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_m3:r.tope_m3!=null?r.tope_m3:20000};
+      saveDB('gas_config',GAS_CONFIG);
+    }
+  }).catch(function(){});
+  supaFetch('elec_data','GET',null,'order=anio.asc,mes.asc').then(function(rows){if(rows&&rows.length){ELEC_DATA=rows;saveDB('elec_data',ELEC_DATA);}}).catch(function(){});
+  supaFetch('elec_config','GET',null,'id=eq.default').then(function(rows){
+    if(rows&&rows[0]){
+      var r=rows[0];
+      ELEC_CONFIG={modo:r.modo||'anual',ratio_anual:r.ratio_anual!=null?r.ratio_anual:null,
+        ratios_mensuales:(function(){try{return r.ratios_mensuales?(typeof r.ratios_mensuales==='string'?JSON.parse(r.ratios_mensuales):r.ratios_mensuales):null;}catch(e){return null;}})(),
+        tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_kwh:r.tope_kwh!=null?r.tope_kwh:120000};
+      saveDB('elec_config',ELEC_CONFIG);
+    }
+  }).catch(function(){});
   supaFetch('inspecciones','GET',null,'order=created_at.desc&limit=2000').then(function(rows){if(rows&&rows.length){INSPECCIONES=rows;saveDB('inspecciones',INSPECCIONES);}}).catch(function(){});
   // Process offline queue
   setTimeout(processSyncQueue, 2000);
@@ -29896,6 +29953,512 @@ function actualizarOrdenMedidorAgua(id,orden){
   supaFetch('agua_medidores','PATCH',{orden:orden},'id=eq.'+id).catch(function(){});
 }
 // ── FIN ADMIN MEDIDORES AGUA ─────────────────────────────────────
+
+// ================================================================
+// MÓDULO ELECTRICIDAD (Servicios → Electricidad) — consumo mensual (pesos/kWh/toneladas)
+// ================================================================
+var MESES_ELEC=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+function showElectricidad(){
+  detalleBackScreen='screen-servicios';
+  if(!window._elecFiltroAnio) window._elecFiltroAnio=currentYear();
+  showScreen('screen-electricidad');
+  renderElectricidad();
+}
+
+// Regla de eficiencia (kg fabricados por cada kWh) vigente para un mes dado,
+// según Configuración: un solo valor para todo el año, o uno distinto por mes.
+// Devuelve null si no se ha definido — en ese caso no se pinta color ni línea.
+function _elecRatioMes(mes){
+  var c=ELEC_CONFIG||{};
+  if(c.modo==='mensual'){
+    var v=(c.ratios_mensuales||[])[mes-1];
+    return (v!=null&&v>0)?v:null;
+  }
+  return (c.ratio_anual!=null&&c.ratio_anual>0)?c.ratio_anual:null;
+}
+
+// kWh esperado para un mes, según la regla kg/kWh y las toneladas capturadas
+// ese mes (toneladas → kg). null si falta la regla o las toneladas.
+function _elecKwhEsperado(entry,mes){
+  var ratio=_elecRatioMes(mes);
+  if(!ratio||!entry||!entry.toneladas) return null;
+  return (entry.toneladas*1000)/ratio;
+}
+
+function renderElectricidad(){
+  var cont=document.getElementById('electricidad-content');
+  if(!cont) return;
+  var anio=window._elecFiltroAnio||currentYear();
+  var esAdmin=currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super');
+  var años=[];for(var a=2026;a<=2036;a++)años.push(a);
+
+  var html='<div class="filter-row" style="margin-bottom:10px">'+años.map(function(y){
+    return '<div class="filter-chip'+(y===anio?' active':'')+'" onclick="filtElecAnio('+y+')">'+y+'</div>';
+  }).join('')+'</div>';
+
+  html+='<div class="btn-row" style="margin-bottom:12px">'
+    +'<button class="btn btn-primary btn-sm" onclick="abrirElecForm()">➕ Agregar</button>'
+    +(esAdmin?'<button class="btn btn-gray btn-sm" onclick="abrirConfigElec()">⚙️ Configuración</button>':'')
+    +'</div>';
+
+  html+='<div class="chart-wrap"><div class="chart-title">Consumo Pesos</div><canvas id="chart-elec-pesos" height="200"></canvas></div>';
+  html+='<div class="chart-wrap" style="margin-top:12px"><div class="chart-title">Consumo kWh</div><canvas id="chart-elec-kwh" height="200"></canvas></div>';
+
+  cont.innerHTML=html;
+  _renderElectricidadCharts(anio);
+}
+
+function filtElecAnio(anio){
+  window._elecFiltroAnio=anio;
+  renderElectricidad();
+}
+
+function _elecFmtMiles(v){
+  if(v==null) return '';
+  var k=Math.round(v/1000);
+  return k+' k ('+Math.round(v).toLocaleString('es-MX')+')';
+}
+
+// Color de cada barra (ambas gráficas usan el MISMO veredicto por mes, basado
+// siempre en si el kWh real quedó dentro del kWh esperado por la regla kg/kWh).
+function _elecColoresMes(anio){
+  var colores=[];
+  for(var m=1;m<=12;m++){
+    var entry=ELEC_DATA.find(function(g){return g.anio===anio&&g.mes===m;});
+    var esperado=entry?_elecKwhEsperado(entry,m):null;
+    if(!entry||esperado==null||entry.kwh==null){
+      colores.push('rgba(96,125,139,.55)'); // neutro: sin dato o sin regla definida todavía
+    } else if(entry.kwh<=esperado){
+      colores.push('rgba(46,125,50,.75)'); // verde: cumple
+    } else {
+      colores.push('rgba(198,40,40,.75)'); // rojo: excede
+    }
+  }
+  return colores;
+}
+
+// Línea punteada de meta: el kWh esperado de cada mes; en Pesos se convierte
+// usando la tarifa $/kWh real de ese mismo mes (pesos capturados ÷ kWh
+// capturados). Si falta la regla, o ese mes no tiene datos para calcularla,
+// el punto queda null (Chart.js no dibuja ahí — "si no lo defino no la pinta").
+function _elecLineaTarget(anio,campo){
+  var pts=[];
+  for(var m=1;m<=12;m++){
+    var entry=ELEC_DATA.find(function(g){return g.anio===anio&&g.mes===m;});
+    var esperado=entry?_elecKwhEsperado(entry,m):null;
+    if(esperado==null){pts.push(null);continue;}
+    if(campo==='kwh'){pts.push(esperado);continue;}
+    if(entry&&entry.kwh){pts.push(esperado*(entry.pesos/entry.kwh));}
+    else{pts.push(null);}
+  }
+  return pts;
+}
+
+var _elecChartPesos=null,_elecChartKwh=null;
+function _renderElectricidadCharts(anio){
+  var elP=document.getElementById('chart-elec-pesos');
+  var elK=document.getElementById('chart-elec-kwh');
+  if(_elecChartPesos){_elecChartPesos.destroy();_elecChartPesos=null;}
+  if(_elecChartKwh){_elecChartKwh.destroy();_elecChartKwh=null;}
+  if(!elP||!elK||typeof Chart==='undefined') return;
+
+  var datos=[];for(var m=1;m<=12;m++){
+    datos.push(ELEC_DATA.find(function(g){return g.anio===anio&&g.mes===m;})||null);
+  }
+  var valoresPesos=datos.map(function(d){return d?d.pesos:0;});
+  var valoresKwh=datos.map(function(d){return d?d.kwh:0;});
+  var colores=_elecColoresMes(anio);
+  var lineaPesos=_elecLineaTarget(anio,'pesos');
+  var lineaKwh=_elecLineaTarget(anio,'kwh');
+  var clickMes=function(evt,els){if(!els||!els.length)return;abrirElecForm(anio,els[0].index+1);};
+
+  _elecChartPesos=new Chart(elP,{type:'bar',data:{labels:MESES_ELEC,datasets:[
+    {label:'Pesos',data:valoresPesos,backgroundColor:colores,borderRadius:4,
+     datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
+       formatter:function(v){return v?_elecFmtMiles(v):'';}}},
+    {type:'line',label:'Meta',data:lineaPesos,borderColor:'#000',borderDash:[6,4],borderWidth:2,
+     pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
+  ]},options:{plugins:{legend:{display:false}},
+    scales:{y:{min:0,max:(ELEC_CONFIG&&ELEC_CONFIG.tope_pesos)||500000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
+    onClick:clickMes}});
+
+  _elecChartKwh=new Chart(elK,{type:'bar',data:{labels:MESES_ELEC,datasets:[
+    {label:'kWh',data:valoresKwh,backgroundColor:colores,borderRadius:4,
+     datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
+       formatter:function(v){return v?_elecFmtMiles(v):'';}}},
+    {type:'line',label:'Meta',data:lineaKwh,borderColor:'#000',borderDash:[6,4],borderWidth:2,
+     pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
+  ]},options:{plugins:{legend:{display:false}},
+    scales:{y:{min:0,max:(ELEC_CONFIG&&ELEC_CONFIG.tope_kwh)||120000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
+    onClick:clickMes}});
+}
+
+function abrirElecForm(anioPre,mesPre){
+  var anio=anioPre||window._elecFiltroAnio||currentYear();
+  var mes=mesPre||null;
+  var existente=mes?ELEC_DATA.find(function(g){return g.anio===anio&&g.mes===mes;}):null;
+  var añoOpts='';for(var a=2026;a<=2036;a++)añoOpts+='<option value="'+a+'"'+(a===anio?' selected':'')+'>'+a+'</option>';
+  var mesOpts=MESES_ELEC.map(function(nm,i){return '<option value="'+(i+1)+'"'+(mes===(i+1)?' selected':'')+'>'+nm+'</option>';}).join('');
+  var modal=document.createElement('div');
+  modal.id='modal-elec-form';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
+  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#F9A825;margin-bottom:16px">⚡ '+(existente?'Editar':'Agregar')+' consumo de Electricidad</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'
+    +'<div><label class="form-label">Año</label><select class="form-control" id="elec-f-anio">'+añoOpts+'</select></div>'
+    +'<div><label class="form-label">Mes</label><select class="form-control" id="elec-f-mes">'+mesOpts+'</select></div>'
+    +'</div>'
+    +'<div class="form-group"><label class="form-label">Consumo en pesos ($)</label><input type="number" class="form-control" id="elec-f-pesos" value="'+(existente?existente.pesos:'')+'" min="0" step="0.01"></div>'
+    +'<div class="form-group"><label class="form-label">Consumo en kWh</label><input type="number" class="form-control" id="elec-f-kwh" value="'+(existente?existente.kwh:'')+'" min="0" step="0.01"></div>'
+    +'<div class="form-group"><label class="form-label">Toneladas fabricadas</label><input type="number" class="form-control" id="elec-f-ton" value="'+(existente?existente.toneladas:'')+'" min="0" step="0.01"></div>'
+    +'<div style="display:flex;gap:10px;margin-top:8px">'
+    +'<button onclick="var m=document.getElementById(\'modal-elec-form\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="guardarElec()" style="flex:2;padding:13px;background:#F9A825;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function guardarElec(){
+  var anio=parseInt(document.getElementById('elec-f-anio').value);
+  var mes=parseInt(document.getElementById('elec-f-mes').value);
+  var pesos=parseFloat(document.getElementById('elec-f-pesos').value)||0;
+  var kwh=parseFloat(document.getElementById('elec-f-kwh').value)||0;
+  var ton=parseFloat(document.getElementById('elec-f-ton').value)||0;
+  var idx=ELEC_DATA.findIndex(function(g){return g.anio===anio&&g.mes===mes;});
+  var entry={id:'ELEC-'+anio+'-'+String(mes).padStart(2,'0'),anio:anio,mes:mes,pesos:pesos,kwh:kwh,toneladas:ton,ts:Date.now()};
+  if(idx>=0)ELEC_DATA[idx]=entry;else ELEC_DATA.push(entry);
+  saveDB('elec_data',ELEC_DATA);
+  supaUpsert('elec_data',entry).catch(function(){});
+  var m=document.getElementById('modal-elec-form');if(m)m.remove();
+  showAlert('✅ Consumo guardado');
+  window._elecFiltroAnio=anio;
+  renderElectricidad();
+}
+
+function abrirConfigElec(){
+  var c=ELEC_CONFIG||{};
+  var modo=c.modo||'anual';
+  var mensualInputs=MESES_ELEC.map(function(nm,i){
+    var v=(c.ratios_mensuales&&c.ratios_mensuales[i]!=null)?c.ratios_mensuales[i]:'';
+    return '<div><label style="font-size:11px;font-weight:700;color:#374151">'+nm+'</label>'
+      +'<input type="number" class="form-control" id="elec-cfg-m-'+i+'" value="'+v+'" min="0" step="0.01"></div>';
+  }).join('');
+  var modal=document.createElement('div');
+  modal.id='modal-elec-config';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
+  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box;max-height:85vh;overflow-y:auto">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#F9A825;margin-bottom:6px">⚙️ Configuración de Electricidad</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:14px">Define cuántos kg se deben fabricar por cada kWh consumido. Con esto, las gráficas de Pesos y kWh se pintan en verde (cumple) o rojo (excede) cada mes, y se traza la línea de meta. Si no lo defines, no se pinta nada.</div>'
+    +'<div class="filter-row" style="margin-bottom:12px">'
+    +'<div class="filter-chip'+(modo==='anual'?' active':'')+'" onclick="_elecCfgSetModo(\'anual\')" id="elec-cfg-chip-anual">Igual todo el año</div>'
+    +'<div class="filter-chip'+(modo==='mensual'?' active':'')+'" onclick="_elecCfgSetModo(\'mensual\')" id="elec-cfg-chip-mensual">Por mes</div>'
+    +'</div>'
+    +'<div id="elec-cfg-anual" style="'+(modo==='anual'?'':'display:none')+'">'
+    +'<div class="form-group"><label class="form-label">kg fabricados por kWh</label><input type="number" class="form-control" id="elec-cfg-anual-val" value="'+(c.ratio_anual!=null?c.ratio_anual:'')+'" min="0" step="0.01"></div>'
+    +'</div>'
+    +'<div id="elec-cfg-mensual" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;'+(modo==='mensual'?'':'display:none')+'">'
+    +mensualInputs
+    +'</div>'
+    +'<div style="border-top:1px solid #e5e7eb;margin:14px 0;padding-top:12px">'
+    +'<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">Escala de las gráficas (tope del eje)</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    +'<div><label class="form-label">Tope Pesos ($)</label><input type="number" class="form-control" id="elec-cfg-tope-pesos" value="'+(c.tope_pesos!=null?c.tope_pesos:500000)+'" min="1" step="1000"></div>'
+    +'<div><label class="form-label">Tope kWh</label><input type="number" class="form-control" id="elec-cfg-tope-kwh" value="'+(c.tope_kwh!=null?c.tope_kwh:120000)+'" min="1" step="1000"></div>'
+    +'</div></div>'
+    +'<div style="display:flex;gap:10px;margin-top:12px">'
+    +'<button onclick="var m=document.getElementById(\'modal-elec-config\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="guardarConfigElec()" style="flex:2;padding:13px;background:#F9A825;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function _elecCfgSetModo(modo){
+  document.getElementById('elec-cfg-chip-anual').classList.toggle('active',modo==='anual');
+  document.getElementById('elec-cfg-chip-mensual').classList.toggle('active',modo==='mensual');
+  document.getElementById('elec-cfg-anual').style.display=modo==='anual'?'':'none';
+  document.getElementById('elec-cfg-mensual').style.display=modo==='mensual'?'grid':'none';
+}
+
+function guardarConfigElec(){
+  var chipMensual=document.getElementById('elec-cfg-chip-mensual');
+  var modo=(chipMensual&&chipMensual.classList.contains('active'))?'mensual':'anual';
+  var config={modo:modo,ts:Date.now()};
+  if(modo==='anual'){
+    config.ratio_anual=parseFloat(document.getElementById('elec-cfg-anual-val').value)||null;
+    config.ratios_mensuales=null;
+  } else {
+    config.ratio_anual=null;
+    config.ratios_mensuales=MESES_ELEC.map(function(nm,i){
+      var v=parseFloat(document.getElementById('elec-cfg-m-'+i).value);
+      return isNaN(v)?null:v;
+    });
+  }
+  config.tope_pesos=parseFloat(document.getElementById('elec-cfg-tope-pesos').value)||500000;
+  config.tope_kwh=parseFloat(document.getElementById('elec-cfg-tope-kwh').value)||120000;
+  ELEC_CONFIG=config;
+  saveDB('elec_config',ELEC_CONFIG);
+  supaUpsert('elec_config',{id:'default',modo:config.modo,ratio_anual:config.ratio_anual,
+    ratios_mensuales:config.ratios_mensuales?JSON.stringify(config.ratios_mensuales):null,
+    tope_pesos:config.tope_pesos,tope_kwh:config.tope_kwh,ts:config.ts}).catch(function(){});
+  var m=document.getElementById('modal-elec-config');if(m)m.remove();
+  showAlert('✅ Configuración guardada');
+  renderElectricidad();
+}
+// ── FIN MÓDULO ELECTRICIDAD ────────────────────────────────────────────────
+
+// ================================================================
+// MÓDULO GAS (Servicios → Gas) — consumo mensual (pesos/m³/toneladas)
+// ================================================================
+var MESES_GAS=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+function showGas(){
+  detalleBackScreen='screen-servicios';
+  if(!window._gasFiltroAnio) window._gasFiltroAnio=currentYear();
+  showScreen('screen-gas');
+  renderGas();
+}
+
+// Regla de eficiencia (kg fabricados por cada m³) vigente para un mes dado,
+// según Configuración: un solo valor para todo el año, o uno distinto por mes.
+// Devuelve null si no se ha definido — en ese caso no se pinta color ni línea.
+function _gasRatioMes(mes){
+  var c=GAS_CONFIG||{};
+  if(c.modo==='mensual'){
+    var v=(c.ratios_mensuales||[])[mes-1];
+    return (v!=null&&v>0)?v:null;
+  }
+  return (c.ratio_anual!=null&&c.ratio_anual>0)?c.ratio_anual:null;
+}
+
+// m³ esperado para un mes, según la regla kg/m³ y las toneladas capturadas
+// ese mes (toneladas → kg). null si falta la regla o las toneladas.
+function _gasM3Esperado(entry,mes){
+  var ratio=_gasRatioMes(mes);
+  if(!ratio||!entry||!entry.toneladas) return null;
+  return (entry.toneladas*1000)/ratio;
+}
+
+function renderGas(){
+  var cont=document.getElementById('gas-content');
+  if(!cont) return;
+  var anio=window._gasFiltroAnio||currentYear();
+  var esAdmin=currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super');
+  var años=[];for(var a=2026;a<=2036;a++)años.push(a);
+
+  var html='<div class="filter-row" style="margin-bottom:10px">'+años.map(function(y){
+    return '<div class="filter-chip'+(y===anio?' active':'')+'" onclick="filtGasAnio('+y+')">'+y+'</div>';
+  }).join('')+'</div>';
+
+  html+='<div class="btn-row" style="margin-bottom:12px">'
+    +'<button class="btn btn-primary btn-sm" onclick="abrirGasForm()">➕ Agregar</button>'
+    +(esAdmin?'<button class="btn btn-gray btn-sm" onclick="abrirConfigGas()">⚙️ Configuración</button>':'')
+    +'</div>';
+
+  html+='<div class="chart-wrap"><div class="chart-title">Consumo Pesos</div><canvas id="chart-gas-pesos" height="200"></canvas></div>';
+  html+='<div class="chart-wrap" style="margin-top:12px"><div class="chart-title">Consumo m³</div><canvas id="chart-gas-m3" height="200"></canvas></div>';
+
+  cont.innerHTML=html;
+  _renderGasCharts(anio);
+}
+
+function filtGasAnio(anio){
+  window._gasFiltroAnio=anio;
+  renderGas();
+}
+
+function _gasFmtMiles(v){
+  if(v==null) return '';
+  var k=Math.round(v/1000);
+  return k+' k ('+Math.round(v).toLocaleString('es-MX')+')';
+}
+
+// Color de cada barra (ambas gráficas usan el MISMO veredicto por mes, basado
+// siempre en si el m³ real quedó dentro del m³ esperado por la regla kg/m³).
+function _gasColoresMes(anio){
+  var colores=[];
+  for(var m=1;m<=12;m++){
+    var entry=GAS_DATA.find(function(g){return g.anio===anio&&g.mes===m;});
+    var esperado=entry?_gasM3Esperado(entry,m):null;
+    if(!entry||esperado==null||entry.m3==null){
+      colores.push('rgba(96,125,139,.55)'); // neutro: sin dato o sin regla definida todavía
+    } else if(entry.m3<=esperado){
+      colores.push('rgba(46,125,50,.75)'); // verde: cumple
+    } else {
+      colores.push('rgba(198,40,40,.75)'); // rojo: excede
+    }
+  }
+  return colores;
+}
+
+// Línea punteada de meta: el m³ esperado de cada mes; en Pesos se convierte
+// usando la tarifa $/m³ real de ese mismo mes (pesos capturados ÷ m³
+// capturados). Si falta la regla, o ese mes no tiene datos para calcularla,
+// el punto queda null (Chart.js no dibuja ahí — "si no lo defino no la pinta").
+function _gasLineaTarget(anio,campo){
+  var pts=[];
+  for(var m=1;m<=12;m++){
+    var entry=GAS_DATA.find(function(g){return g.anio===anio&&g.mes===m;});
+    var esperado=entry?_gasM3Esperado(entry,m):null;
+    if(esperado==null){pts.push(null);continue;}
+    if(campo==='m3'){pts.push(esperado);continue;}
+    if(entry&&entry.m3){pts.push(esperado*(entry.pesos/entry.m3));}
+    else{pts.push(null);}
+  }
+  return pts;
+}
+
+var _gasChartPesos=null,_gasChartM3=null;
+function _renderGasCharts(anio){
+  var elP=document.getElementById('chart-gas-pesos');
+  var elK=document.getElementById('chart-gas-m3');
+  if(_gasChartPesos){_gasChartPesos.destroy();_gasChartPesos=null;}
+  if(_gasChartM3){_gasChartM3.destroy();_gasChartM3=null;}
+  if(!elP||!elK||typeof Chart==='undefined') return;
+
+  var datos=[];for(var m=1;m<=12;m++){
+    datos.push(GAS_DATA.find(function(g){return g.anio===anio&&g.mes===m;})||null);
+  }
+  var valoresPesos=datos.map(function(d){return d?d.pesos:0;});
+  var valoresM3=datos.map(function(d){return d?d.m3:0;});
+  var colores=_gasColoresMes(anio);
+  var lineaPesos=_gasLineaTarget(anio,'pesos');
+  var lineaM3=_gasLineaTarget(anio,'m3');
+  var clickMes=function(evt,els){if(!els||!els.length)return;abrirGasForm(anio,els[0].index+1);};
+
+  _gasChartPesos=new Chart(elP,{type:'bar',data:{labels:MESES_GAS,datasets:[
+    {label:'Pesos',data:valoresPesos,backgroundColor:colores,borderRadius:4,
+     datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
+       formatter:function(v){return v?_gasFmtMiles(v):'';}}},
+    {type:'line',label:'Meta',data:lineaPesos,borderColor:'#000',borderDash:[6,4],borderWidth:2,
+     pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
+  ]},options:{plugins:{legend:{display:false}},
+    scales:{y:{min:0,max:(GAS_CONFIG&&GAS_CONFIG.tope_pesos)||500000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
+    onClick:clickMes}});
+
+  _gasChartM3=new Chart(elK,{type:'bar',data:{labels:MESES_GAS,datasets:[
+    {label:'m³',data:valoresM3,backgroundColor:colores,borderRadius:4,
+     datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
+       formatter:function(v){return v?_gasFmtMiles(v):'';}}},
+    {type:'line',label:'Meta',data:lineaM3,borderColor:'#000',borderDash:[6,4],borderWidth:2,
+     pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
+  ]},options:{plugins:{legend:{display:false}},
+    scales:{y:{min:0,max:(GAS_CONFIG&&GAS_CONFIG.tope_m3)||20000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
+    onClick:clickMes}});
+}
+
+function abrirGasForm(anioPre,mesPre){
+  var anio=anioPre||window._gasFiltroAnio||currentYear();
+  var mes=mesPre||null;
+  var existente=mes?GAS_DATA.find(function(g){return g.anio===anio&&g.mes===mes;}):null;
+  var añoOpts='';for(var a=2026;a<=2036;a++)añoOpts+='<option value="'+a+'"'+(a===anio?' selected':'')+'>'+a+'</option>';
+  var mesOpts=MESES_GAS.map(function(nm,i){return '<option value="'+(i+1)+'"'+(mes===(i+1)?' selected':'')+'>'+nm+'</option>';}).join('');
+  var modal=document.createElement('div');
+  modal.id='modal-gas-form';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
+  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#d97706;margin-bottom:16px">🔥 '+(existente?'Editar':'Agregar')+' consumo de Gas</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'
+    +'<div><label class="form-label">Año</label><select class="form-control" id="gas-f-anio">'+añoOpts+'</select></div>'
+    +'<div><label class="form-label">Mes</label><select class="form-control" id="gas-f-mes">'+mesOpts+'</select></div>'
+    +'</div>'
+    +'<div class="form-group"><label class="form-label">Consumo en pesos ($)</label><input type="number" class="form-control" id="gas-f-pesos" value="'+(existente?existente.pesos:'')+'" min="0" step="0.01"></div>'
+    +'<div class="form-group"><label class="form-label">Consumo en m³</label><input type="number" class="form-control" id="gas-f-m3" value="'+(existente?existente.m3:'')+'" min="0" step="0.01"></div>'
+    +'<div class="form-group"><label class="form-label">Toneladas fabricadas</label><input type="number" class="form-control" id="gas-f-ton" value="'+(existente?existente.toneladas:'')+'" min="0" step="0.01"></div>'
+    +'<div style="display:flex;gap:10px;margin-top:8px">'
+    +'<button onclick="var m=document.getElementById(\'modal-gas-form\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="guardarGas()" style="flex:2;padding:13px;background:#d97706;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function guardarGas(){
+  var anio=parseInt(document.getElementById('gas-f-anio').value);
+  var mes=parseInt(document.getElementById('gas-f-mes').value);
+  var pesos=parseFloat(document.getElementById('gas-f-pesos').value)||0;
+  var m3=parseFloat(document.getElementById('gas-f-m3').value)||0;
+  var ton=parseFloat(document.getElementById('gas-f-ton').value)||0;
+  var idx=GAS_DATA.findIndex(function(g){return g.anio===anio&&g.mes===mes;});
+  var entry={id:'GAS-'+anio+'-'+String(mes).padStart(2,'0'),anio:anio,mes:mes,pesos:pesos,m3:m3,toneladas:ton,ts:Date.now()};
+  if(idx>=0)GAS_DATA[idx]=entry;else GAS_DATA.push(entry);
+  saveDB('gas_data',GAS_DATA);
+  supaUpsert('gas_data',entry).catch(function(){});
+  var m=document.getElementById('modal-gas-form');if(m)m.remove();
+  showAlert('✅ Consumo guardado');
+  window._gasFiltroAnio=anio;
+  renderGas();
+}
+
+function abrirConfigGas(){
+  var c=GAS_CONFIG||{};
+  var modo=c.modo||'anual';
+  var mensualInputs=MESES_GAS.map(function(nm,i){
+    var v=(c.ratios_mensuales&&c.ratios_mensuales[i]!=null)?c.ratios_mensuales[i]:'';
+    return '<div><label style="font-size:11px;font-weight:700;color:#374151">'+nm+'</label>'
+      +'<input type="number" class="form-control" id="gas-cfg-m-'+i+'" value="'+v+'" min="0" step="0.01"></div>';
+  }).join('');
+  var modal=document.createElement('div');
+  modal.id='modal-gas-config';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
+  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box;max-height:85vh;overflow-y:auto">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#d97706;margin-bottom:6px">⚙️ Configuración de Gas</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:14px">Define cuántos kg se deben fabricar por cada m³ consumido. Con esto, las gráficas de Pesos y m³ se pintan en verde (cumple) o rojo (excede) cada mes, y se traza la línea de meta. Si no lo defines, no se pinta nada.</div>'
+    +'<div class="filter-row" style="margin-bottom:12px">'
+    +'<div class="filter-chip'+(modo==='anual'?' active':'')+'" onclick="_gasCfgSetModo(\'anual\')" id="gas-cfg-chip-anual">Igual todo el año</div>'
+    +'<div class="filter-chip'+(modo==='mensual'?' active':'')+'" onclick="_gasCfgSetModo(\'mensual\')" id="gas-cfg-chip-mensual">Por mes</div>'
+    +'</div>'
+    +'<div id="gas-cfg-anual" style="'+(modo==='anual'?'':'display:none')+'">'
+    +'<div class="form-group"><label class="form-label">kg fabricados por m³</label><input type="number" class="form-control" id="gas-cfg-anual-val" value="'+(c.ratio_anual!=null?c.ratio_anual:'')+'" min="0" step="0.01"></div>'
+    +'</div>'
+    +'<div id="gas-cfg-mensual" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;'+(modo==='mensual'?'':'display:none')+'">'
+    +mensualInputs
+    +'</div>'
+    +'<div style="border-top:1px solid #e5e7eb;margin:14px 0;padding-top:12px">'
+    +'<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">Escala de las gráficas (tope del eje)</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    +'<div><label class="form-label">Tope Pesos ($)</label><input type="number" class="form-control" id="gas-cfg-tope-pesos" value="'+(c.tope_pesos!=null?c.tope_pesos:500000)+'" min="1" step="1000"></div>'
+    +'<div><label class="form-label">Tope m³</label><input type="number" class="form-control" id="gas-cfg-tope-m3" value="'+(c.tope_m3!=null?c.tope_m3:20000)+'" min="1" step="100"></div>'
+    +'</div></div>'
+    +'<div style="display:flex;gap:10px;margin-top:12px">'
+    +'<button onclick="var m=document.getElementById(\'modal-gas-config\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="guardarConfigGas()" style="flex:2;padding:13px;background:#d97706;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function _gasCfgSetModo(modo){
+  document.getElementById('gas-cfg-chip-anual').classList.toggle('active',modo==='anual');
+  document.getElementById('gas-cfg-chip-mensual').classList.toggle('active',modo==='mensual');
+  document.getElementById('gas-cfg-anual').style.display=modo==='anual'?'':'none';
+  document.getElementById('gas-cfg-mensual').style.display=modo==='mensual'?'grid':'none';
+}
+
+function guardarConfigGas(){
+  var chipMensual=document.getElementById('gas-cfg-chip-mensual');
+  var modo=(chipMensual&&chipMensual.classList.contains('active'))?'mensual':'anual';
+  var config={modo:modo,ts:Date.now()};
+  if(modo==='anual'){
+    config.ratio_anual=parseFloat(document.getElementById('gas-cfg-anual-val').value)||null;
+    config.ratios_mensuales=null;
+  } else {
+    config.ratio_anual=null;
+    config.ratios_mensuales=MESES_GAS.map(function(nm,i){
+      var v=parseFloat(document.getElementById('gas-cfg-m-'+i).value);
+      return isNaN(v)?null:v;
+    });
+  }
+  config.tope_pesos=parseFloat(document.getElementById('gas-cfg-tope-pesos').value)||500000;
+  config.tope_m3=parseFloat(document.getElementById('gas-cfg-tope-m3').value)||20000;
+  GAS_CONFIG=config;
+  saveDB('gas_config',GAS_CONFIG);
+  supaUpsert('gas_config',{id:'default',modo:config.modo,ratio_anual:config.ratio_anual,
+    ratios_mensuales:config.ratios_mensuales?JSON.stringify(config.ratios_mensuales):null,
+    tope_pesos:config.tope_pesos,tope_m3:config.tope_m3,ts:config.ts}).catch(function(){});
+  var m=document.getElementById('modal-gas-config');if(m)m.remove();
+  showAlert('✅ Configuración guardada');
+  renderGas();
+}
+// ── FIN MÓDULO GAS ────────────────────────────────────────────────
 
 // ================================================================
 // EN ESPERA — PRIO C
