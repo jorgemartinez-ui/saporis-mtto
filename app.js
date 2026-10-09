@@ -102,14 +102,19 @@ let PM03_PLAN=loadDB('pm03_plan',[]);
 let MTBF_DATA=loadDB('mtbf_data',[]);
 let GASTO_DATA=loadDB('gasto_data',[]);
 let GAS_DATA=loadDB('gas_data',[]); // {id,anio,mes,pesos,m3,toneladas,ts} — módulo Servicios > Gas
-let GAS_CONFIG=loadDB('gas_config',{modo:'anual',ratio_anual:null,ratios_mensuales:null,tope_pesos:500000,tope_m3:20000}); // regla kg fabricados/m³
+let GAS_CONFIG=loadDB('gas_config',{modo:'anual',ratio_anual:null,ratios_mensuales:null,tope_pesos:500000,tope_m3:40000}); // regla kg fabricados/m³
 let ELEC_DATA=loadDB('elec_data',[]); // {id,anio,mes,pesos,kwh,toneladas,ts} — módulo Servicios > Electricidad
 let ELEC_CONFIG=loadDB('elec_config',{modo:'anual',ratio_anual:null,ratios_mensuales:null,tope_pesos:500000,tope_kwh:120000}); // regla kg fabricados/kWh
+let AGUAM_DATA=loadDB('aguam_data',[]); // {id,anio,mes,pesos,m3,toneladas,ts} — módulo Servicios > Agua > Consumo mensual
+let AGUAM_CONFIG=loadDB('aguam_config',{modo:'anual',ratio_anual:null,ratios_mensuales:null,tope_pesos:500000,tope_m3:20000}); // regla kg fabricados/m³
+let ROLES_CUSTOM=loadDB('roles_custom',[]); // {id,nombre,ts} — roles personalizados (ej. Gerente)
+let PERMISOS_ROL=loadDB('permisos_rol',[]); // {id,rol_id,feature_key,nivel,ts}
+var ROLES_FIJOS=['operador','lider','tecnico','inspector_calidad','lider_calidad','administrativo','supply','admin','super'];
 
 // Plugin de etiquetas de valor sobre las barras — SOLO se usa en las gráficas
-// de los módulos Gas y Electricidad (cada dataset de ahí lo activa
-// explícitamente). Se apaga por default a nivel global para no afectar
-// ninguna otra gráfica ya existente (MTBF, Gasto, doughnut de PM02, etc.)
+// de los módulos Gas, Electricidad y Agua Mensual (cada dataset de ahí lo
+// activa explícitamente). Se apaga por default a nivel global para no
+// afectar ninguna otra gráfica ya existente (MTBF, Gasto, doughnut de PM02, etc.)
 if(typeof Chart!=='undefined' && typeof ChartDataLabels!=='undefined'){
   Chart.register(ChartDataLabels);
   Chart.defaults.set('plugins.datalabels',{display:false});
@@ -465,7 +470,8 @@ function renderMenu(){
   setTimeout(actualizarAlertaVacaciones, 100);
   if(!currentUser)return;
   const roles={admin:'Administrador',tecnico:'Técnico',operador:'Operador',lider:'Líder Área',super:'⚡ Super Usuario'};
-  document.getElementById('user-pill').textContent='👤 '+currentUser.nombre+' | '+roles[currentUser.rol];
+  var _rolMostrar=rolEsCustom(currentUser.rol)?nombreRolCustom(currentUser.rol):roles[currentUser.rol];
+  document.getElementById('user-pill').textContent='👤 '+currentUser.nombre+' | '+_rolMostrar;
   const r=currentUser.rol;
   
   var esCalidadRol = r==='inspector_calidad'||r==='lider_calidad';
@@ -549,6 +555,7 @@ function renderMenu(){
       // Botones Atención a Línea — el super los usa desde el menú de técnico (no duplicar)
     },300);
   }
+  renderMenuRolCustom();
 }
 
 // ================================================================
@@ -3959,6 +3966,7 @@ function renderAdminTab(tab){
   else if(tab==='gasto')renderAdminGasto(cont);
   else if(tab==='listas')renderAdminListas(cont);
   else if(tab==='importar')renderAdminImportar(cont);
+  else if(tab==='roles')renderAdminRoles(cont);
 }
 function renderAdminUs(cont){
   var busq=(window._usrBusq||'').toLowerCase();
@@ -3966,6 +3974,7 @@ function renderAdminUs(cont){
   var totalUs=USERS.filter(function(u){return u.rol!=='super';}).length;
   var roleLabel={operador:'Operador',lider:'Líder Prod.',tecnico:'Técnico',admin:'Admin',lider_calidad:'Líder Calidad',inspector_calidad:'Insp. Calidad',administrativo:'Administrativo',supply:'Supply'};
   var rolesOpts=['operador','lider','tecnico','inspector_calidad','lider_calidad','administrativo','supply','admin'];
+  ROLES_CUSTOM.forEach(function(rc){roleLabel[rc.id]=rc.nombre;rolesOpts.push(rc.id);});
 
   var usersVisible=USERS.filter(function(u){
     if(u.rol==='super') return false;
@@ -4019,6 +4028,7 @@ function renderAdminUs(cont){
           +'<option value="administrativo">Administrativo</option>'
           +'<option value="supply">Supply</option>'
           +'<option value="admin">Administrador</option>'
+          +_opcionesRolesCustomHtml(null)
         +'</select></div>'
       +'<button type="button" class="btn btn-primary" onclick="agregarUsuario()">➕ Agregar</button>'
     +'</div>';
@@ -4054,6 +4064,7 @@ function verDetalleUsuario(uid){
       +'<option value="administrativo"'+(u.rol==="administrativo"?' selected':'')+'>Administrativo</option>'
       +'<option value="supply"'+(u.rol==="supply"?' selected':'')+'>Supply</option>'
     +'<option value="admin"'+(u.rol==='admin'?' selected':'')+'>Administrador</option>'
+    +_opcionesRolesCustomHtml(u.rol)
     +'</select></div>'
     +'</div>'
     +'<div style="display:flex;gap:10px">'
@@ -5845,7 +5856,7 @@ function syncSupabase(){
       var r=rows[0];
       GAS_CONFIG={modo:r.modo||'anual',ratio_anual:r.ratio_anual!=null?r.ratio_anual:null,
         ratios_mensuales:(function(){try{return r.ratios_mensuales?(typeof r.ratios_mensuales==='string'?JSON.parse(r.ratios_mensuales):r.ratios_mensuales):null;}catch(e){return null;}})(),
-        tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_m3:r.tope_m3!=null?r.tope_m3:20000};
+        tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_m3:r.tope_m3!=null?r.tope_m3:40000};
       saveDB('gas_config',GAS_CONFIG);
     }
   }).catch(function(){});
@@ -5859,6 +5870,19 @@ function syncSupabase(){
       saveDB('elec_config',ELEC_CONFIG);
     }
   }).catch(function(){});
+  supaFetch('aguam_data','GET',null,'order=anio.asc,mes.asc').then(function(rows){if(rows&&rows.length){AGUAM_DATA=rows;saveDB('aguam_data',AGUAM_DATA);}}).catch(function(){});
+  supaFetch('aguam_config','GET',null,'id=eq.default').then(function(rows){
+    if(rows&&rows[0]){
+      var r=rows[0];
+      AGUAM_CONFIG={modo:r.modo||'anual',ratio_anual:r.ratio_anual!=null?r.ratio_anual:null,
+        ratios_mensuales:(function(){try{return r.ratios_mensuales?(typeof r.ratios_mensuales==='string'?JSON.parse(r.ratios_mensuales):r.ratios_mensuales):null;}catch(e){return null;}})(),
+        tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_m3:r.tope_m3!=null?r.tope_m3:20000};
+      saveDB('aguam_config',AGUAM_CONFIG);
+    }
+  }).catch(function(){});
+  supaFetch('kpi_comentarios','GET',null,'order=anio.asc,mes.asc').then(function(rows){if(rows&&rows.length){KPI_COMENTARIOS=rows;saveDB('kpi_comentarios',KPI_COMENTARIOS);}}).catch(function(){});
+  supaFetch('roles_custom','GET',null,'order=nombre.asc').then(function(rows){if(rows&&rows.length){ROLES_CUSTOM=rows;saveDB('roles_custom',ROLES_CUSTOM);}}).catch(function(){});
+  supaFetch('permisos_rol','GET',null,null).then(function(rows){if(rows&&rows.length){PERMISOS_ROL=rows;saveDB('permisos_rol',PERMISOS_ROL);}}).catch(function(){});
   supaFetch('inspecciones','GET',null,'order=created_at.desc&limit=2000').then(function(rows){if(rows&&rows.length){INSPECCIONES=rows;saveDB('inspecciones',INSPECCIONES);}}).catch(function(){});
   // Process offline queue
   setTimeout(processSyncQueue, 2000);
@@ -14121,7 +14145,7 @@ function syncSupabase(){
       var r=rows[0];
       GAS_CONFIG={modo:r.modo||'anual',ratio_anual:r.ratio_anual!=null?r.ratio_anual:null,
         ratios_mensuales:(function(){try{return r.ratios_mensuales?(typeof r.ratios_mensuales==='string'?JSON.parse(r.ratios_mensuales):r.ratios_mensuales):null;}catch(e){return null;}})(),
-        tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_m3:r.tope_m3!=null?r.tope_m3:20000};
+        tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_m3:r.tope_m3!=null?r.tope_m3:40000};
       saveDB('gas_config',GAS_CONFIG);
     }
   }).catch(function(){});
@@ -14135,6 +14159,19 @@ function syncSupabase(){
       saveDB('elec_config',ELEC_CONFIG);
     }
   }).catch(function(){});
+  supaFetch('aguam_data','GET',null,'order=anio.asc,mes.asc').then(function(rows){if(rows&&rows.length){AGUAM_DATA=rows;saveDB('aguam_data',AGUAM_DATA);}}).catch(function(){});
+  supaFetch('aguam_config','GET',null,'id=eq.default').then(function(rows){
+    if(rows&&rows[0]){
+      var r=rows[0];
+      AGUAM_CONFIG={modo:r.modo||'anual',ratio_anual:r.ratio_anual!=null?r.ratio_anual:null,
+        ratios_mensuales:(function(){try{return r.ratios_mensuales?(typeof r.ratios_mensuales==='string'?JSON.parse(r.ratios_mensuales):r.ratios_mensuales):null;}catch(e){return null;}})(),
+        tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_m3:r.tope_m3!=null?r.tope_m3:20000};
+      saveDB('aguam_config',AGUAM_CONFIG);
+    }
+  }).catch(function(){});
+  supaFetch('kpi_comentarios','GET',null,'order=anio.asc,mes.asc').then(function(rows){if(rows&&rows.length){KPI_COMENTARIOS=rows;saveDB('kpi_comentarios',KPI_COMENTARIOS);}}).catch(function(){});
+  supaFetch('roles_custom','GET',null,'order=nombre.asc').then(function(rows){if(rows&&rows.length){ROLES_CUSTOM=rows;saveDB('roles_custom',ROLES_CUSTOM);}}).catch(function(){});
+  supaFetch('permisos_rol','GET',null,null).then(function(rows){if(rows&&rows.length){PERMISOS_ROL=rows;saveDB('permisos_rol',PERMISOS_ROL);}}).catch(function(){});
   supaFetch('inspecciones','GET',null,'order=created_at.desc&limit=2000').then(function(rows){if(rows&&rows.length){INSPECCIONES=rows;saveDB('inspecciones',INSPECCIONES);}}).catch(function(){});
   // Process offline queue
   setTimeout(processSyncQueue, 2000);
@@ -29357,6 +29394,11 @@ var AGUA_LECTURAS=loadDB('agua_lecturas',[]);
 function showAgua(){
   detalleBackScreen='screen-servicios';
   showScreen('screen-agua');
+}
+
+function showAguaDiario(){
+  detalleBackScreen='screen-agua';
+  showScreen('screen-agua-diario');
   renderAgua();
 }
 
@@ -30002,8 +30044,8 @@ function renderElectricidad(){
     +(esAdmin?'<button class="btn btn-gray btn-sm" onclick="abrirConfigElec()">⚙️ Configuración</button>':'')
     +'</div>';
 
-  html+='<div class="chart-wrap"><div class="chart-title">Consumo Pesos</div><canvas id="chart-elec-pesos" height="200"></canvas></div>';
-  html+='<div class="chart-wrap" style="margin-top:12px"><div class="chart-title">Consumo kWh</div><canvas id="chart-elec-kwh" height="200"></canvas></div>';
+  html+='<div class="chart-wrap"><div class="chart-title">Consumo en Pesos $$$</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-elec-pesos"></canvas></div></div>';
+  html+='<div class="chart-wrap" style="margin-top:12px"><div class="chart-title">Consumo kWh</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-elec-kwh"></canvas></div></div>';
 
   cont.innerHTML=html;
   _renderElectricidadCharts(anio);
@@ -30019,6 +30061,11 @@ function _elecFmtMiles(v){
   var k=Math.round(v/1000);
   return k+' k ('+Math.round(v).toLocaleString('es-MX')+')';
 }
+// Solo para la gráfica de Pesos de Electricidad: el valor completo, sin el prefijo "k".
+function _elecFmtPesos(v){
+  if(v==null) return '';
+  return Math.round(v).toLocaleString('es-MX');
+}
 
 // Color de cada barra (ambas gráficas usan el MISMO veredicto por mes, basado
 // siempre en si el kWh real quedó dentro del kWh esperado por la regla kg/kWh).
@@ -30028,7 +30075,7 @@ function _elecColoresMes(anio){
     var entry=ELEC_DATA.find(function(g){return g.anio===anio&&g.mes===m;});
     var esperado=entry?_elecKwhEsperado(entry,m):null;
     if(!entry||esperado==null||entry.kwh==null){
-      colores.push('rgba(96,125,139,.55)'); // neutro: sin dato o sin regla definida todavía
+      colores.push('rgba(65,105,225,.75)'); // azul rey: sin dato o sin regla definida todavía
     } else if(entry.kwh<=esperado){
       colores.push('rgba(46,125,50,.75)'); // verde: cumple
     } else {
@@ -30076,20 +30123,20 @@ function _renderElectricidadCharts(anio){
   _elecChartPesos=new Chart(elP,{type:'bar',data:{labels:MESES_ELEC,datasets:[
     {label:'Pesos',data:valoresPesos,backgroundColor:colores,borderRadius:4,
      datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
-       formatter:function(v){return v?_elecFmtMiles(v):'';}}},
+       formatter:function(v){return v?_elecFmtPesos(v):'';}}},
     {type:'line',label:'Meta',data:lineaPesos,borderColor:'#000',borderDash:[6,4],borderWidth:2,
      pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
-  ]},options:{plugins:{legend:{display:false}},
+  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
     scales:{y:{min:0,max:(ELEC_CONFIG&&ELEC_CONFIG.tope_pesos)||500000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
     onClick:clickMes}});
 
   _elecChartKwh=new Chart(elK,{type:'bar',data:{labels:MESES_ELEC,datasets:[
     {label:'kWh',data:valoresKwh,backgroundColor:colores,borderRadius:4,
      datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
-       formatter:function(v){return v?_elecFmtMiles(v):'';}}},
+       formatter:function(v){return v?_elecFmtPesos(v):'';}}},
     {type:'line',label:'Meta',data:lineaKwh,borderColor:'#000',borderDash:[6,4],borderWidth:2,
      pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
-  ]},options:{plugins:{legend:{display:false}},
+  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
     scales:{y:{min:0,max:(ELEC_CONFIG&&ELEC_CONFIG.tope_kwh)||120000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
     onClick:clickMes}});
 }
@@ -30255,8 +30302,8 @@ function renderGas(){
     +(esAdmin?'<button class="btn btn-gray btn-sm" onclick="abrirConfigGas()">⚙️ Configuración</button>':'')
     +'</div>';
 
-  html+='<div class="chart-wrap"><div class="chart-title">Consumo Pesos</div><canvas id="chart-gas-pesos" height="200"></canvas></div>';
-  html+='<div class="chart-wrap" style="margin-top:12px"><div class="chart-title">Consumo m³</div><canvas id="chart-gas-m3" height="200"></canvas></div>';
+  html+='<div class="chart-wrap"><div class="chart-title">Consumo en Pesos $$$</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-gas-pesos"></canvas></div></div>';
+  html+='<div class="chart-wrap" style="margin-top:12px"><div class="chart-title">Consumo m³</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-gas-m3"></canvas></div></div>';
 
   cont.innerHTML=html;
   _renderGasCharts(anio);
@@ -30272,6 +30319,12 @@ function _gasFmtMiles(v){
   var k=Math.round(v/1000);
   return k+' k ('+Math.round(v).toLocaleString('es-MX')+')';
 }
+// Solo para la gráfica de Pesos de Gas: sin el prefijo "k", nada más el valor completo
+// (ej. "11,209"), porque en Gas el consumo mensual suele andar en miles, no en cientos de miles.
+function _gasFmtPesos(v){
+  if(v==null) return '';
+  return Math.round(v).toLocaleString('es-MX');
+}
 
 // Color de cada barra (ambas gráficas usan el MISMO veredicto por mes, basado
 // siempre en si el m³ real quedó dentro del m³ esperado por la regla kg/m³).
@@ -30281,7 +30334,7 @@ function _gasColoresMes(anio){
     var entry=GAS_DATA.find(function(g){return g.anio===anio&&g.mes===m;});
     var esperado=entry?_gasM3Esperado(entry,m):null;
     if(!entry||esperado==null||entry.m3==null){
-      colores.push('rgba(96,125,139,.55)'); // neutro: sin dato o sin regla definida todavía
+      colores.push('rgba(65,105,225,.75)'); // azul rey: sin dato o sin regla definida todavía
     } else if(entry.m3<=esperado){
       colores.push('rgba(46,125,50,.75)'); // verde: cumple
     } else {
@@ -30329,21 +30382,21 @@ function _renderGasCharts(anio){
   _gasChartPesos=new Chart(elP,{type:'bar',data:{labels:MESES_GAS,datasets:[
     {label:'Pesos',data:valoresPesos,backgroundColor:colores,borderRadius:4,
      datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
-       formatter:function(v){return v?_gasFmtMiles(v):'';}}},
+       formatter:function(v){return v?_gasFmtPesos(v):'';}}},
     {type:'line',label:'Meta',data:lineaPesos,borderColor:'#000',borderDash:[6,4],borderWidth:2,
      pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
-  ]},options:{plugins:{legend:{display:false}},
+  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
     scales:{y:{min:0,max:(GAS_CONFIG&&GAS_CONFIG.tope_pesos)||500000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
     onClick:clickMes}});
 
   _gasChartM3=new Chart(elK,{type:'bar',data:{labels:MESES_GAS,datasets:[
     {label:'m³',data:valoresM3,backgroundColor:colores,borderRadius:4,
      datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
-       formatter:function(v){return v?_gasFmtMiles(v):'';}}},
+       formatter:function(v){return v?_gasFmtPesos(v):'';}}},
     {type:'line',label:'Meta',data:lineaM3,borderColor:'#000',borderDash:[6,4],borderWidth:2,
      pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
-  ]},options:{plugins:{legend:{display:false}},
-    scales:{y:{min:0,max:(GAS_CONFIG&&GAS_CONFIG.tope_m3)||20000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
+  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
+    scales:{y:{min:0,max:(GAS_CONFIG&&GAS_CONFIG.tope_m3)||40000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
     onClick:clickMes}});
 }
 
@@ -30417,7 +30470,7 @@ function abrirConfigGas(){
     +'<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">Escala de las gráficas (tope del eje)</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
     +'<div><label class="form-label">Tope Pesos ($)</label><input type="number" class="form-control" id="gas-cfg-tope-pesos" value="'+(c.tope_pesos!=null?c.tope_pesos:500000)+'" min="1" step="1000"></div>'
-    +'<div><label class="form-label">Tope m³</label><input type="number" class="form-control" id="gas-cfg-tope-m3" value="'+(c.tope_m3!=null?c.tope_m3:20000)+'" min="1" step="100"></div>'
+    +'<div><label class="form-label">Tope m³</label><input type="number" class="form-control" id="gas-cfg-tope-m3" value="'+(c.tope_m3!=null?c.tope_m3:40000)+'" min="1" step="100"></div>'
     +'</div></div>'
     +'<div style="display:flex;gap:10px;margin-top:12px">'
     +'<button onclick="var m=document.getElementById(\'modal-gas-config\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
@@ -30459,6 +30512,579 @@ function guardarConfigGas(){
   renderGas();
 }
 // ── FIN MÓDULO GAS ────────────────────────────────────────────────
+
+
+// ================================================================
+// MÓDULO AGUA MENSUAL (Servicios → Agua → Consumo mensual) — pesos/m³/toneladas
+// ================================================================
+var MESES_AGUAM=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+
+function showAguaMensual(){
+  detalleBackScreen='screen-agua';
+  if(!window._aguamFiltroAnio) window._aguamFiltroAnio=currentYear();
+  showScreen('screen-agua-mensual');
+  renderAguaMensual();
+}
+
+// Regla de eficiencia (kg fabricados por cada m³) vigente para un mes dado,
+// según Configuración: un solo valor para todo el año, o uno distinto por mes.
+// Devuelve null si no se ha definido — en ese caso no se pinta color ni línea.
+function _aguamRatioMes(mes){
+  var c=AGUAM_CONFIG||{};
+  if(c.modo==='mensual'){
+    var v=(c.ratios_mensuales||[])[mes-1];
+    return (v!=null&&v>0)?v:null;
+  }
+  return (c.ratio_anual!=null&&c.ratio_anual>0)?c.ratio_anual:null;
+}
+
+// m³ esperado para un mes, según la regla kg/m³ y las toneladas capturadas
+// ese mes (toneladas → kg). null si falta la regla o las toneladas.
+function _aguamM3Esperado(entry,mes){
+  var ratio=_aguamRatioMes(mes);
+  if(!ratio||!entry||!entry.toneladas) return null;
+  return (entry.toneladas*1000)/ratio;
+}
+
+function renderAguaMensual(){
+  var cont=document.getElementById('agua-mensual-content');
+  if(!cont) return;
+  var anio=window._aguamFiltroAnio||currentYear();
+  var esAdmin=currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super');
+  var años=[];for(var a=2026;a<=2036;a++)años.push(a);
+
+  var html='<div class="filter-row" style="margin-bottom:10px">'+años.map(function(y){
+    return '<div class="filter-chip'+(y===anio?' active':'')+'" onclick="filtAguamAnio('+y+')">'+y+'</div>';
+  }).join('')+'</div>';
+
+  html+='<div class="btn-row" style="margin-bottom:12px">'
+    +'<button class="btn btn-primary btn-sm" onclick="abrirAguamForm()">➕ Agregar</button>'
+    +(esAdmin?'<button class="btn btn-gray btn-sm" onclick="abrirConfigAguam()">⚙️ Configuración</button>':'')
+    +'</div>';
+
+  html+='<div class="chart-wrap"><div class="chart-title">Consumo en Pesos $$$</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-aguam-pesos"></canvas></div></div>';
+  html+='<div class="chart-wrap" style="margin-top:12px"><div class="chart-title">Consumo m³</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-aguam-m3"></canvas></div></div>';
+
+  cont.innerHTML=html;
+  _renderAguaMensualCharts(anio);
+}
+
+function filtAguamAnio(anio){
+  window._aguamFiltroAnio=anio;
+  renderAguaMensual();
+}
+
+function _aguamFmtMiles(v){
+  if(v==null) return '';
+  var k=Math.round(v/1000);
+  return k+' k ('+Math.round(v).toLocaleString('es-MX')+')';
+}
+// Solo para la gráfica de Pesos de Agua Mensual: el valor completo, sin el prefijo "k".
+function _aguamFmtPesos(v){
+  if(v==null) return '';
+  return Math.round(v).toLocaleString('es-MX');
+}
+
+// Color de cada barra (ambas gráficas usan el MISMO veredicto por mes, basado
+// siempre en si el m³ real quedó dentro del m³ esperado por la regla kg/m³).
+function _aguamColoresMes(anio){
+  var colores=[];
+  for(var m=1;m<=12;m++){
+    var entry=AGUAM_DATA.find(function(g){return g.anio===anio&&g.mes===m;});
+    var esperado=entry?_aguamM3Esperado(entry,m):null;
+    if(!entry||esperado==null||entry.m3==null){
+      colores.push('rgba(65,105,225,.75)'); // azul rey: sin dato o sin regla definida todavía
+    } else if(entry.m3<=esperado){
+      colores.push('rgba(46,125,50,.75)'); // verde: cumple
+    } else {
+      colores.push('rgba(198,40,40,.75)'); // rojo: excede
+    }
+  }
+  return colores;
+}
+
+// Línea punteada de meta: el m³ esperado de cada mes; en Pesos se convierte
+// usando la tarifa $/m³ real de ese mismo mes (pesos capturados ÷ m³
+// capturados). Si falta la regla, o ese mes no tiene datos para calcularla,
+// el punto queda null (Chart.js no dibuja ahí — "si no lo defino no la pinta").
+function _aguamLineaTarget(anio,campo){
+  var pts=[];
+  for(var m=1;m<=12;m++){
+    var entry=AGUAM_DATA.find(function(g){return g.anio===anio&&g.mes===m;});
+    var esperado=entry?_aguamM3Esperado(entry,m):null;
+    if(esperado==null){pts.push(null);continue;}
+    if(campo==='m3'){pts.push(esperado);continue;}
+    if(entry&&entry.m3){pts.push(esperado*(entry.pesos/entry.m3));}
+    else{pts.push(null);}
+  }
+  return pts;
+}
+
+var _aguamChartPesos=null,_aguamChartM3=null;
+function _renderAguaMensualCharts(anio){
+  var elP=document.getElementById('chart-aguam-pesos');
+  var elK=document.getElementById('chart-aguam-m3');
+  if(_aguamChartPesos){_aguamChartPesos.destroy();_aguamChartPesos=null;}
+  if(_aguamChartM3){_aguamChartM3.destroy();_aguamChartM3=null;}
+  if(!elP||!elK||typeof Chart==='undefined') return;
+
+  var datos=[];for(var m=1;m<=12;m++){
+    datos.push(AGUAM_DATA.find(function(g){return g.anio===anio&&g.mes===m;})||null);
+  }
+  var valoresPesos=datos.map(function(d){return d?d.pesos:0;});
+  var valoresM3=datos.map(function(d){return d?d.m3:0;});
+  var colores=_aguamColoresMes(anio);
+  var lineaPesos=_aguamLineaTarget(anio,'pesos');
+  var lineaM3=_aguamLineaTarget(anio,'m3');
+  var clickMes=function(evt,els){if(!els||!els.length)return;abrirAguamForm(anio,els[0].index+1);};
+
+  _aguamChartPesos=new Chart(elP,{type:'bar',data:{labels:MESES_AGUAM,datasets:[
+    {label:'Pesos',data:valoresPesos,backgroundColor:colores,borderRadius:4,
+     datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
+       formatter:function(v){return v?_aguamFmtPesos(v):'';}}},
+    {type:'line',label:'Meta',data:lineaPesos,borderColor:'#000',borderDash:[6,4],borderWidth:2,
+     pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
+  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
+    scales:{y:{min:0,max:(AGUAM_CONFIG&&AGUAM_CONFIG.tope_pesos)||500000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
+    onClick:clickMes}});
+
+  _aguamChartM3=new Chart(elK,{type:'bar',data:{labels:MESES_AGUAM,datasets:[
+    {label:'m³',data:valoresM3,backgroundColor:colores,borderRadius:4,
+     datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
+       formatter:function(v){return v?_aguamFmtPesos(v):'';}}},
+    {type:'line',label:'Meta',data:lineaM3,borderColor:'#000',borderDash:[6,4],borderWidth:2,
+     pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
+  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
+    scales:{y:{min:0,max:(AGUAM_CONFIG&&AGUAM_CONFIG.tope_m3)||20000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
+    onClick:clickMes}});
+}
+
+function abrirAguamForm(anioPre,mesPre){
+  var anio=anioPre||window._aguamFiltroAnio||currentYear();
+  var mes=mesPre||null;
+  var existente=mes?AGUAM_DATA.find(function(g){return g.anio===anio&&g.mes===mes;}):null;
+  var añoOpts='';for(var a=2026;a<=2036;a++)añoOpts+='<option value="'+a+'"'+(a===anio?' selected':'')+'>'+a+'</option>';
+  var mesOpts=MESES_AGUAM.map(function(nm,i){return '<option value="'+(i+1)+'"'+(mes===(i+1)?' selected':'')+'>'+nm+'</option>';}).join('');
+  var modal=document.createElement('div');
+  modal.id='modal-aguam-form';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
+  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#1e3a8a;margin-bottom:16px">💧 '+(existente?'Editar':'Agregar')+' consumo de Agua</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">'
+    +'<div><label class="form-label">Año</label><select class="form-control" id="aguam-f-anio">'+añoOpts+'</select></div>'
+    +'<div><label class="form-label">Mes</label><select class="form-control" id="aguam-f-mes">'+mesOpts+'</select></div>'
+    +'</div>'
+    +'<div class="form-group"><label class="form-label">Consumo en pesos ($)</label><input type="number" class="form-control" id="aguam-f-pesos" value="'+(existente?existente.pesos:'')+'" min="0" step="0.01"></div>'
+    +'<div class="form-group"><label class="form-label">Consumo en m³</label><input type="number" class="form-control" id="aguam-f-m3" value="'+(existente?existente.m3:'')+'" min="0" step="0.01"></div>'
+    +'<div class="form-group"><label class="form-label">Toneladas fabricadas</label><input type="number" class="form-control" id="aguam-f-ton" value="'+(existente?existente.toneladas:'')+'" min="0" step="0.01"></div>'
+    +'<div style="display:flex;gap:10px;margin-top:8px">'
+    +'<button onclick="var m=document.getElementById(\'modal-aguam-form\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="guardarAguam()" style="flex:2;padding:13px;background:#1e3a8a;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function guardarAguam(){
+  var anio=parseInt(document.getElementById('aguam-f-anio').value);
+  var mes=parseInt(document.getElementById('aguam-f-mes').value);
+  var pesos=parseFloat(document.getElementById('aguam-f-pesos').value)||0;
+  var m3=parseFloat(document.getElementById('aguam-f-m3').value)||0;
+  var ton=parseFloat(document.getElementById('aguam-f-ton').value)||0;
+  var idx=AGUAM_DATA.findIndex(function(g){return g.anio===anio&&g.mes===mes;});
+  var entry={id:'AGUAM-'+anio+'-'+String(mes).padStart(2,'0'),anio:anio,mes:mes,pesos:pesos,m3:m3,toneladas:ton,ts:Date.now()};
+  if(idx>=0)AGUAM_DATA[idx]=entry;else AGUAM_DATA.push(entry);
+  saveDB('aguam_data',AGUAM_DATA);
+  supaUpsert('aguam_data',entry).catch(function(){});
+  var m=document.getElementById('modal-aguam-form');if(m)m.remove();
+  showAlert('✅ Consumo guardado');
+  window._aguamFiltroAnio=anio;
+  renderAguaMensual();
+}
+
+function abrirConfigAguam(){
+  var c=AGUAM_CONFIG||{};
+  var modo=c.modo||'anual';
+  var mensualInputs=MESES_AGUAM.map(function(nm,i){
+    var v=(c.ratios_mensuales&&c.ratios_mensuales[i]!=null)?c.ratios_mensuales[i]:'';
+    return '<div><label style="font-size:11px;font-weight:700;color:#374151">'+nm+'</label>'
+      +'<input type="number" class="form-control" id="aguam-cfg-m-'+i+'" value="'+v+'" min="0" step="0.01"></div>';
+  }).join('');
+  var modal=document.createElement('div');
+  modal.id='modal-aguam-config';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
+  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box;max-height:85vh;overflow-y:auto">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#1e3a8a;margin-bottom:6px">⚙️ Configuración de Agua</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:14px">Define cuántos kg se deben fabricar por cada m³ consumido. Con esto, las gráficas de Pesos y m³ se pintan en verde (cumple) o rojo (excede) cada mes, y se traza la línea de meta. Si no lo defines, no se pinta nada.</div>'
+    +'<div class="filter-row" style="margin-bottom:12px">'
+    +'<div class="filter-chip'+(modo==='anual'?' active':'')+'" onclick="_aguamCfgSetModo(\'anual\')" id="aguam-cfg-chip-anual">Igual todo el año</div>'
+    +'<div class="filter-chip'+(modo==='mensual'?' active':'')+'" onclick="_aguamCfgSetModo(\'mensual\')" id="aguam-cfg-chip-mensual">Por mes</div>'
+    +'</div>'
+    +'<div id="aguam-cfg-anual" style="'+(modo==='anual'?'':'display:none')+'">'
+    +'<div class="form-group"><label class="form-label">kg fabricados por m³</label><input type="number" class="form-control" id="aguam-cfg-anual-val" value="'+(c.ratio_anual!=null?c.ratio_anual:'')+'" min="0" step="0.01"></div>'
+    +'</div>'
+    +'<div id="aguam-cfg-mensual" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;'+(modo==='mensual'?'':'display:none')+'">'
+    +mensualInputs
+    +'</div>'
+    +'<div style="border-top:1px solid #e5e7eb;margin:14px 0;padding-top:12px">'
+    +'<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:8px">Escala de las gráficas (tope del eje)</div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
+    +'<div><label class="form-label">Tope Pesos ($)</label><input type="number" class="form-control" id="aguam-cfg-tope-pesos" value="'+(c.tope_pesos!=null?c.tope_pesos:500000)+'" min="1" step="1000"></div>'
+    +'<div><label class="form-label">Tope m³</label><input type="number" class="form-control" id="aguam-cfg-tope-m3" value="'+(c.tope_m3!=null?c.tope_m3:20000)+'" min="1" step="100"></div>'
+    +'</div></div>'
+    +'<div style="display:flex;gap:10px;margin-top:12px">'
+    +'<button onclick="var m=document.getElementById(\'modal-aguam-config\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="guardarConfigAguam()" style="flex:2;padding:13px;background:#1e3a8a;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function _aguamCfgSetModo(modo){
+  document.getElementById('aguam-cfg-chip-anual').classList.toggle('active',modo==='anual');
+  document.getElementById('aguam-cfg-chip-mensual').classList.toggle('active',modo==='mensual');
+  document.getElementById('aguam-cfg-anual').style.display=modo==='anual'?'':'none';
+  document.getElementById('aguam-cfg-mensual').style.display=modo==='mensual'?'grid':'none';
+}
+
+function guardarConfigAguam(){
+  var chipMensual=document.getElementById('aguam-cfg-chip-mensual');
+  var modo=(chipMensual&&chipMensual.classList.contains('active'))?'mensual':'anual';
+  var config={modo:modo,ts:Date.now()};
+  if(modo==='anual'){
+    config.ratio_anual=parseFloat(document.getElementById('aguam-cfg-anual-val').value)||null;
+    config.ratios_mensuales=null;
+  } else {
+    config.ratio_anual=null;
+    config.ratios_mensuales=MESES_AGUAM.map(function(nm,i){
+      var v=parseFloat(document.getElementById('aguam-cfg-m-'+i).value);
+      return isNaN(v)?null:v;
+    });
+  }
+  config.tope_pesos=parseFloat(document.getElementById('aguam-cfg-tope-pesos').value)||500000;
+  config.tope_m3=parseFloat(document.getElementById('aguam-cfg-tope-m3').value)||20000;
+  AGUAM_CONFIG=config;
+  saveDB('aguam_config',AGUAM_CONFIG);
+  supaUpsert('aguam_config',{id:'default',modo:config.modo,ratio_anual:config.ratio_anual,
+    ratios_mensuales:config.ratios_mensuales?JSON.stringify(config.ratios_mensuales):null,
+    tope_pesos:config.tope_pesos,tope_m3:config.tope_m3,ts:config.ts}).catch(function(){});
+  var m=document.getElementById('modal-aguam-config');if(m)m.remove();
+  showAlert('✅ Configuración guardada');
+  renderAguaMensual();
+}
+// ── FIN MÓDULO AGUA MENSUAL ────────────────────────────────────────────────
+
+// ================================================================
+// MÓDULO KPI SERVICIOS (Servicios → KPI Servicios) — vista conjunta de
+// Gas + Electricidad + Agua mensual, con comentarios por barra. Es de solo
+// lectura sobre los datos ya capturados en cada módulo (no agrega ni
+// configura nada aquí) — la captura de comentarios es nueva, y por ahora
+// solo vive en esta pantalla.
+// ================================================================
+let KPI_COMENTARIOS=loadDB('kpi_comentarios',[]); // {id,modulo,anio,mes,comentario,ts}
+
+function _kpiModulos(){
+  return [
+    {key:'gas',label:'Gas',data:GAS_DATA,config:GAS_CONFIG||{},cantidadField:'m3',cantidadUnit:'m³',color:'#d97706',coloresMes:_gasColoresMes},
+    {key:'elec',label:'Electricidad',data:ELEC_DATA,config:ELEC_CONFIG||{},cantidadField:'kwh',cantidadUnit:'kWh',color:'#F9A825',coloresMes:_elecColoresMes},
+    {key:'aguam',label:'Agua',data:AGUAM_DATA,config:AGUAM_CONFIG||{},cantidadField:'m3',cantidadUnit:'m³',color:'#1e3a8a',coloresMes:_aguamColoresMes}
+  ];
+}
+
+function showKPIServicios(){
+  detalleBackScreen='screen-servicios';
+  showScreen('screen-kpi-servicios');
+}
+
+function showKPIDinero(){
+  detalleBackScreen='screen-kpi-servicios';
+  if(!window._kpiFiltroAnio) window._kpiFiltroAnio=currentYear();
+  window._kpiVista='dinero';
+  showScreen('screen-kpi-dinero');
+  renderKPIDinero();
+}
+
+function showKPICantidad(){
+  detalleBackScreen='screen-kpi-servicios';
+  if(!window._kpiFiltroAnio) window._kpiFiltroAnio=currentYear();
+  window._kpiVista='cantidad';
+  showScreen('screen-kpi-cantidad');
+  renderKPICantidad();
+}
+
+function filtKpiAnio(anio){
+  window._kpiFiltroAnio=anio;
+  if(window._kpiVista==='cantidad') renderKPICantidad(); else renderKPIDinero();
+}
+
+function _kpiFiltroAniosHtml(anio,onclickFn){
+  var años=[];for(var a=2026;a<=2036;a++)años.push(a);
+  return '<div class="filter-row" style="margin-bottom:10px">'+años.map(function(y){
+    return '<div class="filter-chip'+(y===anio?' active':'')+'" onclick="'+onclickFn+'('+y+')">'+y+'</div>';
+  }).join('')+'</div>';
+}
+
+function renderKPIDinero(){
+  var cont=document.getElementById('kpi-dinero-content');
+  if(!cont) return;
+  var anio=window._kpiFiltroAnio||currentYear();
+  var html=_kpiFiltroAniosHtml(anio,'filtKpiAnio');
+  _kpiModulos().forEach(function(m){
+    html+='<div class="chart-wrap"><div class="chart-title">'+m.label+' ($)</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-kpi-dinero-'+m.key+'"></canvas></div></div>';
+  });
+  cont.innerHTML=html;
+  _kpiModulos().forEach(function(m){
+    _renderKPIChart('chart-kpi-dinero-'+m.key,m,anio,'pesos',m.config.tope_pesos||500000);
+  });
+}
+
+function renderKPICantidad(){
+  var cont=document.getElementById('kpi-cantidad-content');
+  if(!cont) return;
+  var anio=window._kpiFiltroAnio||currentYear();
+  var html=_kpiFiltroAniosHtml(anio,'filtKpiAnio');
+  _kpiModulos().forEach(function(m){
+    html+='<div class="chart-wrap"><div class="chart-title">'+m.label+' ('+m.cantidadUnit+')</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-kpi-cant-'+m.key+'"></canvas></div></div>';
+  });
+  cont.innerHTML=html;
+  _kpiModulos().forEach(function(m){
+    var tope=m.key==='elec'?(m.config.tope_kwh||120000):(m.config.tope_m3||20000);
+    _renderKPIChart('chart-kpi-cant-'+m.key,m,anio,m.cantidadField,tope);
+  });
+}
+
+// Formato compacto solo para las barras de KPI Servicios: nada más los miles + "k"
+// (ej. "11 k", "254 k"), sin el valor completo entre paréntesis — aquí van 3 series
+// por pantalla y el formato largo se amontona.
+function _kpiFmtK(v){
+  if(!v) return '';
+  return Math.round(v/1000)+' k';
+}
+
+var _kpiCharts={};
+function _renderKPIChart(canvasId,modulo,anio,campo,tope){
+  var el=document.getElementById(canvasId);
+  if(_kpiCharts[canvasId]){_kpiCharts[canvasId].destroy();delete _kpiCharts[canvasId];}
+  if(!el||typeof Chart==='undefined') return;
+  var datos=[];for(var m=1;m<=12;m++){
+    datos.push(modulo.data.find(function(g){return g.anio===anio&&g.mes===m;})||null);
+  }
+  var valores=datos.map(function(d){return d?(d[campo]||0):0;});
+  var colores=modulo.coloresMes?modulo.coloresMes(anio):datos.map(function(){return modulo.color;});
+  var mKey=modulo.key;
+  _kpiCharts[canvasId]=new Chart(el,{type:'bar',data:{labels:MESES_GAS,datasets:[
+    {label:modulo.label,data:valores,backgroundColor:colores,borderRadius:4,
+     datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
+       formatter:function(v,ctx){
+         var mes=ctx.dataIndex+1;
+         var txt=v?_kpiFmtK(v):'';
+         if(_kpiTieneComentario(mKey,anio,mes)) txt=(txt?txt+' ':'')+'💬';
+         return txt;
+       }}}
+  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false},
+    tooltip:{callbacks:{afterLabel:function(ctx){
+      var mes=ctx.dataIndex+1;
+      var c=KPI_COMENTARIOS.find(function(x){return x.modulo===mKey&&x.anio===anio&&x.mes===mes;});
+      return (c&&c.comentario)?('💬 '+c.comentario):'';
+    }}}},
+    scales:{y:{min:0,max:tope,ticks:{callback:function(v){return (v/1000)+'k';}}}},
+    onClick:function(evt,els){if(!els||!els.length)return;abrirKpiComentario(mKey,anio,els[0].index+1);}}});
+}
+
+function _kpiTieneComentario(modulo,anio,mes){
+  return KPI_COMENTARIOS.some(function(c){return c.modulo===modulo&&c.anio===anio&&c.mes===mes&&c.comentario;});
+}
+
+function abrirKpiComentario(modulo,anio,mes){
+  var existente=KPI_COMENTARIOS.find(function(c){return c.modulo===modulo&&c.anio===anio&&c.mes===mes;});
+  var modNombre=({gas:'Gas',elec:'Electricidad',aguam:'Agua'})[modulo]||modulo;
+  var modal=document.createElement('div');
+  modal.id='modal-kpi-comentario';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
+  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#6d28d9;margin-bottom:4px">💬 Comentario — '+modNombre+'</div>'
+    +'<div style="font-size:13px;color:#6b7280;margin-bottom:12px">'+MESES_GAS[mes-1]+' '+anio+'</div>'
+    +'<div class="form-group"><textarea class="form-control" id="kpi-coment-txt" rows="4" placeholder="Escribe un comentario para este mes...">'+(existente?existente.comentario:'')+'</textarea></div>'
+    +'<div style="display:flex;gap:10px;margin-top:8px">'
+    +'<button onclick="var m=document.getElementById(\'modal-kpi-comentario\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="guardarKpiComentario(\''+modulo+'\','+anio+','+mes+')" style="flex:2;padding:13px;background:#6d28d9;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function guardarKpiComentario(modulo,anio,mes){
+  var texto=(document.getElementById('kpi-coment-txt').value||'').trim();
+  var id='KPI-'+modulo+'-'+anio+'-'+String(mes).padStart(2,'0');
+  var idx=KPI_COMENTARIOS.findIndex(function(c){return c.modulo===modulo&&c.anio===anio&&c.mes===mes;});
+  var entry={id:id,modulo:modulo,anio:anio,mes:mes,comentario:texto,ts:Date.now()};
+  if(idx>=0)KPI_COMENTARIOS[idx]=entry;else KPI_COMENTARIOS.push(entry);
+  saveDB('kpi_comentarios',KPI_COMENTARIOS);
+  supaUpsert('kpi_comentarios',entry).catch(function(){});
+  var m=document.getElementById('modal-kpi-comentario');if(m)m.remove();
+  showAlert('✅ Comentario guardado');
+  if(window._kpiVista==='cantidad') renderKPICantidad(); else renderKPIDinero();
+}
+// ── FIN MÓDULO KPI SERVICIOS ────────────────────────────────────────────────
+
+// ================================================================
+// MÓDULO ROLES PERSONALIZADOS (ej. "Gerente") — permisos configurables
+// por botón, con niveles Ninguno/Lectura/Escritura. IMPORTANTE: por ahora
+// el nivel solo controla si el botón aparece en el menú de ese rol; el
+// control fino lectura-vs-escritura DENTRO de cada pantalla se agrega
+// pantalla por pantalla más adelante, no todas de un jalón.
+// No modifica ni un solo chequeo de rol existente (admin/tecnico/operador/
+// etc. siguen funcionando exactamente igual) — es 100% aditivo.
+// ================================================================
+// (ROLES_CUSTOM, PERMISOS_ROL y ROLES_FIJOS se declaran al inicio del
+// archivo, junto a USERS/GAS_CONFIG/etc., para evitar un error de
+// "Temporal Dead Zone" ya que renderMenu() los usa durante el init.)
+
+// Catálogo de botones disponibles para asignar a un rol personalizado.
+// Para agregar un botón nuevo a futuro: una línea aquí y ya aparece en el
+// panel de permisos y en el menú del rol, sin tocar nada más.
+var FEATURES_REGISTRY=[
+  {key:'sho',label:'Bitácora / SHO',icon:'🔄',onclick:"showSHO()"},
+  {key:'dorwor',label:'DOR / WOR',icon:'📊',onclick:"showDORWOR()"},
+  {key:'pm01',label:'PM01 (Avería)',icon:'🚨',onclick:"iniciarPM('PM01')"},
+  {key:'pm02',label:'PM02 (Anormalidad)',icon:'📋',onclick:"iniciarPM('PM02')"},
+  {key:'pm03',label:'PM03 (Mtto Planeado)',icon:'📅',onclick:"showPM03()"},
+  {key:'pm04',label:'PM04 (Apoyo Producción)',icon:'🤝',onclick:"iniciarPM('PM04')"},
+  {key:'pendientes',label:'Mis Pendientes',icon:'📌',onclick:"showMisOrdenes()"},
+  {key:'checklist',label:'Check List de Turno',icon:'✅',onclick:"showChecklistMenu()"},
+  {key:'kpis',label:"KPI's",icon:'📊',onclick:"showKPIs()"},
+  {key:'almacen',label:'Almacén',icon:'🔧',onclick:"showAlmacen()"},
+  {key:'consultaot',label:'Consultar OT',icon:'🔍',onclick:"showConsultaOT()"},
+  {key:'historial',label:'Historial Máquinas',icon:'🏭',onclick:"showHistorial()"},
+  {key:'activos',label:'Activos',icon:'⚙️',onclick:"showActivos()"},
+  {key:'manuales',label:'Manuales',icon:'📚',onclick:"showManuales()"},
+  {key:'servicios',label:'Servicios (Gas/Agua/Elec)',icon:'🏭',onclick:"showServicios()"},
+  {key:'gestionpersonal',label:'Gestión de Personal',icon:'👥',onclick:"showGestionPersonal()"},
+  {key:'desempeno',label:'Desempeño',icon:'🏆',onclick:"showDesempeno()"},
+  {key:'protocolospm03',label:'Protocolos PM03',icon:'🗂️',onclick:"showMenuProtocolosPM03()"},
+  {key:'kpianormalidades',label:'KPI Anormalidades',icon:'📊',onclick:"showKPIAnormalidades()"},
+  {key:'pm02porasignar',label:'PM02 por Asignar',icon:'📋',onclick:"showPM02PorAsignar()"},
+  {key:'pm03porreprogramar',label:'PM03 x Reprogramar',icon:'📅',onclick:"showPM03PorReprogramar()"},
+  {key:'proveedores',label:'Proveedores',icon:'🏢',onclick:"showProveedores()"},
+  {key:'planmtto',label:'Plan Mtto',icon:'📋',onclick:"showPlanMantenimiento()"}
+];
+
+function rolEsCustom(rol){return ROLES_CUSTOM.some(function(r){return r.id===rol;});}
+function nombreRolCustom(rol){var r=ROLES_CUSTOM.find(function(x){return x.id===rol;});return r?r.nombre:null;}
+function nivelPermisoRol(rolId,featureKey){
+  var p=PERMISOS_ROL.find(function(x){return x.rol_id===rolId&&x.feature_key===featureKey;});
+  return p?p.nivel:'ninguno';
+}
+
+// Opciones <option> de roles personalizados, para anexar a los <select> de
+// rol fijos que ya existen en Agregar/Editar usuario (no reemplaza nada).
+function _opcionesRolesCustomHtml(rolActual){
+  return ROLES_CUSTOM.map(function(r){
+    return '<option value="'+r.id+'"'+(rolActual===r.id?' selected':'')+'>'+r.nombre+'</option>';
+  }).join('');
+}
+
+// Menú del rol personalizado: se arma leyendo FEATURES_REGISTRY + los
+// permisos guardados para ese rol en PERMISOS_ROL.
+function renderMenuRolCustom(){
+  var cont=document.getElementById('menu-gerente-custom');
+  var grid=document.getElementById('menu-gerente-custom-grid');
+  if(!cont||!grid) return;
+  var rol=currentUser&&currentUser.rol;
+  var esCustom=!!(rol&&rolEsCustom(rol));
+  cont.classList.toggle('hidden',!esCustom);
+  if(!esCustom) return;
+  var visibles=FEATURES_REGISTRY.filter(function(f){return nivelPermisoRol(rol,f.key)!=='ninguno';});
+  grid.innerHTML=visibles.map(function(f){
+    return '<div class="menu-btn" onclick="'+f.onclick+'"><div class="menu-icon">'+f.icon+'</div><div class="menu-label">'+f.label+'</div></div>';
+  }).join('')||'<p style="padding:12px;color:#9ca3af;font-size:13px">Tu administrador aún no te ha habilitado ningún botón.</p>';
+}
+
+function _slugRol(nombre){
+  return (nombre||'').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+}
+
+function renderAdminRoles(cont){
+  var selRol=window._rolesPermisosSel||(ROLES_CUSTOM[0]&&ROLES_CUSTOM[0].id)||'';
+  var chips=ROLES_CUSTOM.map(function(r){
+    return '<div class="filter-chip'+(r.id===selRol?' active':'')+'" onclick="window._rolesPermisosSel=\''+r.id+'\';renderAdminTab(\'roles\')">'+r.nombre+'</div>';
+  }).join('');
+  var rolSeleccionado=ROLES_CUSTOM.find(function(r){return r.id===selRol;});
+  var filas='';
+  if(rolSeleccionado){
+    filas=FEATURES_REGISTRY.map(function(f){
+      var nivel=nivelPermisoRol(selRol,f.key);
+      return '<tr><td style="padding:6px 4px">'+f.icon+' '+f.label+'</td>'
+        +'<td style="padding:6px 4px;text-align:right"><select class="form-control" style="padding:6px;font-size:12px" id="rp-'+f.key+'">'
+          +'<option value="ninguno"'+(nivel==='ninguno'?' selected':'')+'>Ninguno</option>'
+          +'<option value="lectura"'+(nivel==='lectura'?' selected':'')+'>Lectura</option>'
+          +'<option value="escritura"'+(nivel==='escritura'?' selected':'')+'>Escritura</option>'
+        +'</select></td></tr>';
+    }).join('');
+  }
+  cont.innerHTML=''
+    +'<div class="card">'
+      +'<div class="card-title mb8">🔑 Roles personalizados</div>'
+      +'<div style="font-size:12px;color:#6b7280;margin-bottom:10px">Crea un rol (ej. "Gerente") y define, botón por botón, si lo ve en Ninguno / Lectura / Escritura. Por ahora el nivel solo controla si el botón aparece en el menú — el control de lectura-vs-escritura dentro de cada pantalla se agrega poco a poco.</div>'
+      +'<div style="display:flex;gap:8px;margin-bottom:12px">'
+        +'<input type="text" class="form-control" id="nuevo-rol-nombre" placeholder="Nombre del rol nuevo (ej. Gerente)">'
+        +'<button class="btn btn-primary btn-sm" style="width:auto;padding:10px 16px" onclick="crearRolCustom()">➕ Crear</button>'
+      +'</div>'
+      +(ROLES_CUSTOM.length?('<div class="filter-row" style="margin-bottom:12px">'+chips+'</div>'):'<div style="font-size:13px;color:#9ca3af;margin-bottom:12px">Aún no hay roles personalizados.</div>')
+      +(rolSeleccionado?(
+        '<div class="table-wrap"><table><tbody>'+filas+'</tbody></table></div>'
+        +'<div style="display:flex;gap:10px;margin-top:12px">'
+          +'<button class="btn btn-gray btn-sm" style="width:auto;padding:10px 16px" onclick="eliminarRolCustom(\''+selRol+'\')">🗑️ Eliminar rol</button>'
+          +'<button class="btn btn-primary btn-sm" style="flex:1" onclick="guardarPermisosRol(\''+selRol+'\')">💾 Guardar permisos de '+rolSeleccionado.nombre+'</button>'
+        +'</div>'
+      ):'')
+    +'</div>';
+}
+
+function crearRolCustom(){
+  var nombre=(document.getElementById('nuevo-rol-nombre').value||'').trim();
+  if(!nombre){showAlert('Escribe un nombre para el rol','error');return;}
+  var id=_slugRol(nombre);
+  if(!id){showAlert('Nombre inválido','error');return;}
+  if(ROLES_FIJOS.indexOf(id)>=0||ROLES_CUSTOM.some(function(r){return r.id===id;})){
+    showAlert('Ya existe un rol con ese nombre','error');return;
+  }
+  var entry={id:id,nombre:nombre,ts:Date.now()};
+  ROLES_CUSTOM.push(entry);
+  saveDB('roles_custom',ROLES_CUSTOM);
+  supaUpsert('roles_custom',entry).catch(function(){});
+  window._rolesPermisosSel=id;
+  showAlert('✅ Rol creado');
+  renderAdminTab('roles');
+}
+
+function eliminarRolCustom(rolId){
+  if(!confirm('¿Eliminar este rol y todos sus permisos? Los usuarios que ya lo tengan asignado se quedarán con un rol inválido hasta que les asignes otro.')) return;
+  ROLES_CUSTOM=ROLES_CUSTOM.filter(function(r){return r.id!==rolId;});
+  PERMISOS_ROL=PERMISOS_ROL.filter(function(p){return p.rol_id!==rolId;});
+  saveDB('roles_custom',ROLES_CUSTOM);
+  saveDB('permisos_rol',PERMISOS_ROL);
+  fetch(SUPA_URL+'/rest/v1/roles_custom?id=eq.'+rolId,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}}).catch(function(){});
+  fetch(SUPA_URL+'/rest/v1/permisos_rol?rol_id=eq.'+rolId,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}}).catch(function(){});
+  window._rolesPermisosSel=null;
+  showAlert('✅ Rol eliminado');
+  renderAdminTab('roles');
+}
+
+function guardarPermisosRol(rolId){
+  var cambios=FEATURES_REGISTRY.map(function(f){
+    var sel=document.getElementById('rp-'+f.key);
+    var nivel=sel?sel.value:'ninguno';
+    var id=rolId+'__'+f.key;
+    var idx=PERMISOS_ROL.findIndex(function(p){return p.rol_id===rolId&&p.feature_key===f.key;});
+    var entry={id:id,rol_id:rolId,feature_key:f.key,nivel:nivel,ts:Date.now()};
+    if(idx>=0)PERMISOS_ROL[idx]=entry;else PERMISOS_ROL.push(entry);
+    return entry;
+  });
+  saveDB('permisos_rol',PERMISOS_ROL);
+  cambios.forEach(function(entry){supaUpsert('permisos_rol',entry).catch(function(){});});
+  showAlert('✅ Permisos guardados');
+  renderAdminTab('roles');
+}
+// ── FIN MÓDULO ROLES PERSONALIZADOS ─────────────────────────────────────────
+
 
 // ================================================================
 // EN ESPERA — PRIO C

@@ -235,7 +235,7 @@ tr:nth-child(even) td{background:#F8FAFC}
 </script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="app.js?v=20261008b" defer></script>
+<script src="app.js?v=20261008k" defer></script>
 
 <style id="lup-css">
 .lup-doc{background:#fff;border:2px solid #1a3c5e;border-radius:10px;overflow:hidden;margin:12px;font-family:Arial,sans-serif}
@@ -451,6 +451,11 @@ tr:nth-child(even) td{background:#F8FAFC}
           <div class="menu-btn" style="border-color:#546E7A;background:linear-gradient(135deg,#fff 60%,#ECEFF1)" onclick="showConsultaOT()"><div class="menu-icon">🔍</div><div class="menu-label">Consultar OT</div><div class="menu-desc">Ver órdenes</div></div>
         </div>
       </div>
+      <!-- MENU ROL PERSONALIZADO (ej. Gerente) -->
+      <div id="menu-gerente-custom" class="hidden">
+        <p style="padding:16px 16px 4px;font-size:13px;font-weight:700;color:var(--txt2)">¿Qué deseas hacer?</p>
+        <div class="menu-grid" id="menu-gerente-custom-grid"></div>
+      </div>
 
     <div style="text-align:center;padding:16px"><button class="btn btn-gray btn-sm" style="width:auto;padding:8px 24px" onclick="doLogout()">🚪 Cerrar sesión</button></div>
   </div>
@@ -664,6 +669,7 @@ tr:nth-child(even) td{background:#F8FAFC}
     <button class="tab-btn" onclick="setAdminTab('mtbf',this)">MTBF</button>
     <button class="tab-btn" onclick="setAdminTab('gasto',this)">Gasto</button>
     <button class="tab-btn" onclick="setAdminTab('listas',this)">Listas</button>
+    <button class="tab-btn" onclick="setAdminTab('roles',this)">🔑 Roles</button>
     <button class="tab-btn" id="tab-importar-btn" onclick="setAdminTab('importar',this)" style="display:none;border-color:#6d28d9;color:#6d28d9">📒 Importar</button>
   </div>
   <div class="scroll-content" style="padding:16px" id="admin-content"></div>
@@ -1182,15 +1188,63 @@ tr:nth-child(even) td{background:#F8FAFC}
       <div class="menu-btn" style="border-color:#FFC107;background:linear-gradient(135deg,#fff 60%,#FFFDE7)" onclick="showElectricidad()">
         <div class="menu-icon">⚡</div><div class="menu-label">Electricidad</div><div class="menu-desc">Consumo mensual</div>
       </div>
+      <div class="menu-btn" style="border-color:#6d28d9;background:linear-gradient(135deg,#fff 60%,#ede9fe)" onclick="showKPIServicios()">
+        <div class="menu-icon">📊</div><div class="menu-label">KPI Servicios</div><div class="menu-desc">Gas, Electricidad y Agua</div>
+      </div>
     </div>
   </div>
+</div>
+<div id="screen-kpi-servicios" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showServicios()">←</button>
+    <div><div class="topbar-title">📊 KPI Servicios</div></div>
+  </div>
+  <div class="scroll-content" style="padding:16px">
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-primary" style="flex:1;padding:16px" onclick="showKPIDinero()">💰 Consumos dinero</button>
+      <button class="btn btn-gray" style="flex:1;padding:16px" onclick="showKPICantidad()">📦 Consumos cantidad</button>
+    </div>
+  </div>
+</div>
+<div id="screen-kpi-dinero" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showKPIServicios()">←</button>
+    <div><div class="topbar-title">💰 Consumos dinero</div><div class="topbar-sub">Gas, Electricidad y Agua</div></div>
+  </div>
+  <div class="scroll-content" style="padding:14px" id="kpi-dinero-content"></div>
+</div>
+<div id="screen-kpi-cantidad" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showKPIServicios()">←</button>
+    <div><div class="topbar-title">📦 Consumos cantidad</div><div class="topbar-sub">Gas, Electricidad y Agua</div></div>
+  </div>
+  <div class="scroll-content" style="padding:14px" id="kpi-cantidad-content"></div>
 </div>
 <div id="screen-agua" class="screen">
   <div class="topbar">
     <button class="topbar-back" onclick="showServicios()">←</button>
+    <div><div class="topbar-title">💧 Agua</div></div>
+  </div>
+  <div class="scroll-content" style="padding:16px">
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-primary" style="flex:1;padding:16px" onclick="showAguaDiario()">📅 Consumo diario</button>
+      <button class="btn btn-gray" style="flex:1;padding:16px" onclick="showAguaMensual()">📊 Consumo mensual</button>
+    </div>
+  </div>
+</div>
+<div id="screen-agua-diario" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showAgua()">←</button>
     <div><div class="topbar-title">💧 Agua</div><div class="topbar-sub" id="agua-topbar-sub">Consumo diario</div></div>
   </div>
   <div class="scroll-content" style="padding:14px" id="agua-content"></div>
+</div>
+<div id="screen-agua-mensual" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showAgua()">←</button>
+    <div><div class="topbar-title">💧 Agua</div><div class="topbar-sub">Consumo mensual</div></div>
+  </div>
+  <div class="scroll-content" style="padding:14px" id="agua-mensual-content"></div>
 </div>
 <div id="screen-gas" class="screen">
   <div class="topbar">
