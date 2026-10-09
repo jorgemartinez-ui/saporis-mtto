@@ -31942,10 +31942,13 @@ function abrirNuevaActividadParaEquipo(areaId,linea,componente){
   },100);
 }
 
-function eliminarActividadPlan(id){
+// Núcleo de "eliminar actividad del plan" extraído a función aparte (sin confirm() ni
+// alert/navegación) para poder reutilizarlo también desde el comparador de máquinas
+// (botón "Igualar a la que tiene menos"), sin duplicar esta lógica ni tocar su
+// comportamiento para el botón individual de abajo.
+function _eliminarActividadPlanCore(id){
   var p=PLAN_ACTIVIDADES.find(function(x){return x.id===id;});
-  if(!p) return;
-  if(!confirm('¿Eliminar esta actividad del plan? También se cancelarán sus PM03 futuros aún no ejecutados.')) return;
+  if(!p) return null;
 
   PLAN_ACTIVIDADES=PLAN_ACTIVIDADES.filter(function(x){return x.id!==id;});
   saveDB('plan_actividades',PLAN_ACTIVIDADES);
@@ -31972,11 +31975,206 @@ function eliminarActividadPlan(id){
     saveDB('pm03_plan',PM03_PLAN);
     supaFetch('pm03_plan','DELETE',null,'id=in.('+idsCancelar.join(',')+')').catch(function(){});
   }
-
-  document.getElementById('modal-detalle-actividad')?.remove();
-  showAlert('🗑️ Actividad eliminada'+(aCancelar.length?' — '+aCancelar.length+' PM03 futuros cancelados':''));
-  showPlanCalendario(p.area_id,p.linea);
+  return {plan:p,cancelados:aCancelar.length};
 }
+
+function eliminarActividadPlan(id){
+  var p=PLAN_ACTIVIDADES.find(function(x){return x.id===id;});
+  if(!p) return;
+  if(!confirm('¿Eliminar esta actividad del plan? También se cancelarán sus PM03 futuros aún no ejecutados.')) return;
+  var r=_eliminarActividadPlanCore(id);
+  if(!r) return;
+  document.getElementById('modal-detalle-actividad')?.remove();
+  showAlert('🗑️ Actividad eliminada'+(r.cancelados?' — '+r.cancelados+' PM03 futuros cancelados':''));
+  showPlanCalendario(r.plan.area_id,r.plan.linea);
+}
+
+// ================================================================
+// COMPARAR / IGUALAR PLAN DE MANTENIMIENTO ENTRE MÁQUINAS (gemelas)
+// ================================================================
+// Compara TODAS las actividades activas de una línea contra otra (por descripción,
+// sin importar acentos/mayúsculas) y deja agregar a la que tiene menos, o quitar de
+// la que tiene más, sin duplicar lo que ya coincide. 100% aditivo: reutiliza
+// _eliminarActividadPlanCore (arriba) para la dirección "quitar" y una copia propia
+// de la generación de serie PM03 (misma lógica que guardarNuevaActividad) para la
+// dirección "agregar", sin modificar esas dos funciones existentes.
+
+function _planesActivosDeLinea(areaId,linea){
+  return PLAN_ACTIVIDADES.filter(function(p){return p.area_id===areaId&&p.linea===linea&&p.activo!==false;});
+}
+
+function _crearActividadPlanConSerie(areaId,linea,componente,descripcion,tipo,freqSem,freqDias,protocolo,fechaDeton){
+  var id=genID('ACT');
+  var row={id:id,area_id:areaId,linea:linea,componente:componente||null,descripcion:descripcion,tipo:tipo||'Inspección',frecuencia_semanas:freqSem,frecuencia_dias:freqDias||null,protocolo:protocolo||null,activo:true,creado_ts:Date.now(),creado_por:currentUser.nombre};
+  PLAN_ACTIVIDADES.push(row);
+  saveDB('plan_actividades',PLAN_ACTIVIDADES);
+  supaFetch('plan_actividades','POST',row,'').catch(function(){});
+
+  var anioLimite=currentYear()+10;
+  var usados=_usadosPM03Base();
+  var nuevasPM03=[];
+  var fechaIter=new Date(fechaDeton.getTime());
+  while(fechaIter.getFullYear()<=anioLimite){
+    var pm3Id=_genPM03IdUnico(usados);
+    nuevasPM03.push({
+      id:pm3Id,linea:linea,area:areaId,componente:componente||null,actividad:descripcion,
+      semana:getWeekNumber(fechaIter),año:fechaIter.getFullYear(),
+      tecnicoId:'',tecnicoNombre:'Sin asignar',estado:'abierta',
+      pasoAPaso:protocolo||'',generadoPor:'Plan Mtto (comparar máquinas)',actividadPlanId:id,
+      ts:Date.now(),horaCreacion:new Date().toISOString()
+    });
+    fechaIter=new Date(fechaIter.getTime());
+    fechaIter.setDate(fechaIter.getDate()+freqSem*7);
+  }
+  nuevasPM03.forEach(function(p){ PM03_PLAN.push(p); });
+  saveDB('pm03_plan',PM03_PLAN);
+  var supaRows=nuevasPM03.map(function(p){
+    return {id:p.id,linea:p.linea,componente:p.componente||null,actividad:p.actividad,area:p.area||null,
+      semana:p.semana,anio:p.año,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null,
+      estado:p.estado||'abierta',generado_por:p.generadoPor||null,ts:p.ts||Date.now(),estado_flujo:'ejecucion',fuente_excel:false};
+  });
+  if(supaRows.length) supaUpsert('pm03_plan',supaRows).catch(function(){});
+  return {row:row,pm03Count:nuevasPM03.length};
+}
+
+function abrirCompararMaquinas(areaIdA,lineaA){
+  var modal=document.createElement('div');
+  modal.id='modal-comparar-maquinas';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;overflow-y:auto;padding:12px;box-sizing:border-box';
+  modal.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;max-width:560px;margin:auto">'
+    +'<div style="font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:4px">🔁 Comparar con otra máquina/línea</div>'
+    +'<div style="font-size:11px;color:#6b7280;margin-bottom:14px">Comparando: <strong>'+lineaA+'</strong> contra...</div>'
+    +'<div class="form-group"><label class="form-label">Área de la otra línea</label>'
+    +'<select class="form-control" id="cmp-area-b" onchange="cmpUpdateLineasB()" style="padding:10px">'
+    +'<option value="">-- Selecciona --</option>'
+    +PM_AREAS.map(function(a){return'<option value="'+a.id+'">'+a.label+'</option>';}).join('')
+    +'</select></div>'
+    +'<div class="form-group"><label class="form-label">Línea a comparar</label>'
+    +'<select class="form-control" id="cmp-linea-b" style="padding:10px"><option value="">-- Elige primero un área --</option></select></div>'
+    +'<div id="cmp-resultado" style="margin-top:4px"></div>'
+    +'<div style="display:flex;gap:8px;margin-top:14px">'
+    +'<button onclick="document.getElementById(\'modal-comparar-maquinas\').remove()" style="flex:1;padding:12px;background:#f3f4f6;border:none;border-radius:10px;cursor:pointer">Cerrar</button>'
+    +'<button onclick="cmpEjecutarComparacion(\''+areaIdA+'\',\''+lineaA.replace(/'/g,"\\'")+'\')" style="flex:2;padding:12px;background:#1a3c5e;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">🔍 Comparar</button>'
+    +'</div>'
+    +'</div>';
+  document.body.appendChild(modal);
+}
+
+function cmpUpdateLineasB(){
+  var areaSel=document.getElementById('cmp-area-b');
+  var lineaSel=document.getElementById('cmp-linea-b');
+  if(!areaSel||!lineaSel) return;
+  var lineas=areaSel.value?getLineasPorArea(areaSel.value):[];
+  lineaSel.innerHTML='<option value="">-- Selecciona --</option>'+lineas.map(function(l){return'<option value="'+l+'">'+l+'</option>';}).join('');
+  var cont=document.getElementById('cmp-resultado');
+  if(cont) cont.innerHTML='';
+}
+
+function cmpEjecutarComparacion(areaIdA,lineaA){
+  var areaIdB=document.getElementById('cmp-area-b')?.value;
+  var lineaB=document.getElementById('cmp-linea-b')?.value;
+  var cont=document.getElementById('cmp-resultado');
+  if(!cont) return;
+  if(!areaIdB||!lineaB){showAlert('Selecciona área y línea a comparar','error');return;}
+  if(areaIdB===areaIdA&&lineaB===lineaA){showAlert('Elige una línea distinta a la que ya estás viendo','error');return;}
+
+  var listA=_planesActivosDeLinea(areaIdA,lineaA);
+  var listB=_planesActivosDeLinea(areaIdB,lineaB);
+  var descsA={}; listA.forEach(function(p){descsA[_normTxtAct(p.descripcion)]=true;});
+  var descsB={}; listB.forEach(function(p){descsB[_normTxtAct(p.descripcion)]=true;});
+  var soloEnA=listA.filter(function(p){return !descsB[_normTxtAct(p.descripcion)];});
+  var soloEnB=listB.filter(function(p){return !descsA[_normTxtAct(p.descripcion)];});
+
+  var grandeEsA=listA.length>=listB.length;
+  var nombreGrande=grandeEsA?lineaA:lineaB;
+  var nombreChica=grandeEsA?lineaB:lineaA;
+  var areaGrande=grandeEsA?areaIdA:areaIdB;
+  var lineaGrande=grandeEsA?lineaA:lineaB;
+  var areaChica=grandeEsA?areaIdB:areaIdA;
+  var lineaChica=grandeEsA?lineaB:lineaA;
+  var diffPrincipal=grandeEsA?soloEnA:soloEnB; // existen en la grande, faltan en la chica
+  var diffSecundario=grandeEsA?soloEnB:soloEnA; // exclusivas de la chica (no se tocan)
+
+  window._cmpCtx={areaGrande:areaGrande,lineaGrande:lineaGrande,areaChica:areaChica,lineaChica:lineaChica,diffPrincipal:diffPrincipal};
+
+  var freqLabel=function(s){return s===1?'Semanal':s===2?'Quincenal':s===4?'Mensual':s===8?'Bimestral':s===12?'Trimestral':s===24?'Semestral':s===52?'Anual':'Cada '+s+' sem';};
+
+  var html='<div style="display:flex;justify-content:space-between;background:#f1f5f9;border-radius:8px;padding:10px;margin-bottom:10px;font-size:12px">'
+    +'<div><strong>'+lineaA+'</strong>: '+listA.length+' actividad(es)</div>'
+    +'<div><strong>'+lineaB+'</strong>: '+listB.length+' actividad(es)</div>'
+    +'</div>';
+
+  if(!diffPrincipal.length&&!diffSecundario.length){
+    html+='<div style="background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:10px;font-size:12px;color:#14532d">✅ Ambas líneas ya tienen las mismas actividades activas (comparando por descripción).</div>';
+    cont.innerHTML=html;
+    return;
+  }
+
+  if(diffPrincipal.length){
+    html+='<div style="font-size:12px;color:#374151;margin-bottom:8px"><strong>'+nombreGrande+'</strong> tiene más actividades que <strong>'+nombreChica+'</strong> ('+diffPrincipal.length+' de diferencia).</div>'
+      +'<div style="font-size:11px;font-weight:700;color:#1a3c5e;margin-bottom:6px">Actividades de "'+nombreGrande+'" que no están en "'+nombreChica+'":</div>'
+      +'<div id="cmp-lista-principal" style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px">'
+      +diffPrincipal.map(function(p,i){
+        return '<label style="display:flex;gap:8px;align-items:flex-start;background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px;font-size:11px;cursor:pointer">'
+          +'<input type="checkbox" class="cmp-chk" data-idx="'+i+'" checked style="margin-top:2px">'
+          +'<span><strong>'+(p.componente||'General')+'</strong> — '+p.descripcion+' <span style="color:#9ca3af">('+freqLabel(p.frecuencia_semanas)+')</span></span>'
+          +'</label>';
+      }).join('')
+      +'</div>'
+      +'<div class="form-group"><label class="form-label" style="font-size:11px">📅 Fecha de arranque para las que se agreguen</label>'
+      +'<input type="date" class="form-control" id="cmp-fecha-deton" value="'+todayStr()+'" style="padding:8px"></div>'
+      +'<div style="display:flex;gap:8px;margin-top:8px">'
+      +'<button onclick="cmpIgualarAMas()" style="flex:1;padding:11px;background:#14532d;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:12px">➕ Igualar a la que tiene más<br><span style="font-weight:400;font-size:10px">agrega a "'+nombreChica+'"</span></button>'
+      +'<button onclick="cmpIgualarAMenos()" style="flex:1;padding:11px;background:#7f1d1d;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:12px">🗑️ Igualar a la que tiene menos<br><span style="font-weight:400;font-size:10px">quita de "'+nombreGrande+'"</span></button>'
+      +'</div>';
+  }
+
+  if(diffSecundario.length){
+    html+='<div style="background:#eff6ff;border:1px solid #93c5fd;border-radius:8px;padding:8px;margin-top:10px;font-size:11px;color:#1e3a8a">'
+      +'ℹ️ Además, "'+nombreChica+'" tiene '+diffSecundario.length+' actividad(es) que "'+nombreGrande+'" no tiene (exclusivas) — no se tocan con los botones de arriba. Si quieres replicarlas, vuelve a comparar desde la pantalla de "'+nombreChica+'".'
+      +'</div>';
+  }
+
+  cont.innerHTML=html;
+}
+
+function cmpIgualarAMas(){
+  var ctx=window._cmpCtx;
+  if(!ctx) return;
+  var fechaVal=document.getElementById('cmp-fecha-deton')?.value||todayStr();
+  var fechaDeton=_parseFechaInput(fechaVal);
+  if(!fechaDeton){showAlert('Fecha inválida','error');return;}
+  var checks=document.querySelectorAll('#cmp-lista-principal .cmp-chk:checked');
+  if(!checks.length){showAlert('No marcaste ninguna actividad para agregar','error');return;}
+  var seleccion=Array.prototype.map.call(checks,function(c){return ctx.diffPrincipal[parseInt(c.dataset.idx)];}).filter(Boolean);
+  if(!confirm('Se van a agregar '+seleccion.length+' actividad(es) a "'+ctx.lineaChica+'", cada una con su calendario de PM03 generado desde '+fechaVal+' (hasta 10 años). ¿Continuar?')) return;
+  var totalPM03=0;
+  seleccion.forEach(function(p){
+    var r=_crearActividadPlanConSerie(ctx.areaChica,ctx.lineaChica,p.componente,p.descripcion,p.tipo,p.frecuencia_semanas,p.frecuencia_dias,p.protocolo,fechaDeton);
+    totalPM03+=r.pm03Count;
+  });
+  document.getElementById('modal-comparar-maquinas')?.remove();
+  showAlert('✅ '+seleccion.length+' actividad(es) agregada(s) a "'+ctx.lineaChica+'" — '+totalPM03+' PM03 generados');
+  showPlanDetalle(ctx.areaChica,ctx.lineaChica);
+}
+
+function cmpIgualarAMenos(){
+  var ctx=window._cmpCtx;
+  if(!ctx) return;
+  var checks=document.querySelectorAll('#cmp-lista-principal .cmp-chk:checked');
+  if(!checks.length){showAlert('No marcaste ninguna actividad para quitar','error');return;}
+  var seleccion=Array.prototype.map.call(checks,function(c){return ctx.diffPrincipal[parseInt(c.dataset.idx)];}).filter(Boolean);
+  if(!confirm('Se van a eliminar '+seleccion.length+' actividad(es) de "'+ctx.lineaGrande+'". Se cancelarán sus PM03 futuros aún no ejecutados; el historial ya cerrado (las que ya se ejecutaron) se conserva sin cambios. ¿Continuar?')) return;
+  var totalCancelados=0;
+  seleccion.forEach(function(p){
+    var r=_eliminarActividadPlanCore(p.id);
+    if(r) totalCancelados+=r.cancelados;
+  });
+  document.getElementById('modal-comparar-maquinas')?.remove();
+  showAlert('🗑️ '+seleccion.length+' actividad(es) eliminada(s) de "'+ctx.lineaGrande+'" — '+totalCancelados+' PM03 futuros cancelados');
+  showPlanDetalle(ctx.areaGrande,ctx.lineaGrande);
+}
+// ── FIN MÓDULO COMPARAR MÁQUINAS ──────────────────────────────────────────
 
 function showPlanHistorial(areaId,linea){
   detalleBackScreen='screen-plan';
@@ -32236,6 +32434,7 @@ function showPlanDetalle(areaId,linea){
     +'<button onclick="showPlanCalendario(\''+areaId+'\',\''+linea+'\')" style="width:100%;padding:13px;background:#1e3a8a;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">📅 Calendario anual</button>'
     +'<button onclick="showPlanHistorial(\''+areaId+'\',\''+linea+'\')" style="width:100%;padding:13px;background:#4c1d95;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">📊 Historial de PMs</button>'
     +'<button onclick="abrirNuevaActividad(\''+areaId+'\',\''+linea+'\')" style="width:100%;padding:13px;background:#14532d;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">➕ Nueva Actividad</button>'
+    +'<button onclick="abrirCompararMaquinas(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\')" style="width:100%;padding:13px;background:#92400e;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">🔁 Comparar con otra máquina</button>'
     +'</div>';
 
   cont.innerHTML=html;
