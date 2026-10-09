@@ -467,7 +467,8 @@ function renderMenu(){
   setTimeout(actualizarAlertaVacaciones, 100);
   if(!currentUser)return;
   const roles={admin:'Administrador',tecnico:'Técnico',operador:'Operador',lider:'Líder Área',super:'⚡ Super Usuario'};
-  document.getElementById('user-pill').textContent='👤 '+currentUser.nombre+' | '+roles[currentUser.rol];
+  var _rolMostrar=rolEsCustom(currentUser.rol)?nombreRolCustom(currentUser.rol):roles[currentUser.rol];
+  document.getElementById('user-pill').textContent='👤 '+currentUser.nombre+' | '+_rolMostrar;
   const r=currentUser.rol;
   
   var esCalidadRol = r==='inspector_calidad'||r==='lider_calidad';
@@ -551,6 +552,7 @@ function renderMenu(){
       // Botones Atención a Línea — el super los usa desde el menú de técnico (no duplicar)
     },300);
   }
+  renderMenuRolCustom();
 }
 
 // ================================================================
@@ -3961,6 +3963,7 @@ function renderAdminTab(tab){
   else if(tab==='gasto')renderAdminGasto(cont);
   else if(tab==='listas')renderAdminListas(cont);
   else if(tab==='importar')renderAdminImportar(cont);
+  else if(tab==='roles')renderAdminRoles(cont);
 }
 function renderAdminUs(cont){
   var busq=(window._usrBusq||'').toLowerCase();
@@ -3968,6 +3971,7 @@ function renderAdminUs(cont){
   var totalUs=USERS.filter(function(u){return u.rol!=='super';}).length;
   var roleLabel={operador:'Operador',lider:'Líder Prod.',tecnico:'Técnico',admin:'Admin',lider_calidad:'Líder Calidad',inspector_calidad:'Insp. Calidad',administrativo:'Administrativo',supply:'Supply'};
   var rolesOpts=['operador','lider','tecnico','inspector_calidad','lider_calidad','administrativo','supply','admin'];
+  ROLES_CUSTOM.forEach(function(rc){roleLabel[rc.id]=rc.nombre;rolesOpts.push(rc.id);});
 
   var usersVisible=USERS.filter(function(u){
     if(u.rol==='super') return false;
@@ -4021,6 +4025,7 @@ function renderAdminUs(cont){
           +'<option value="administrativo">Administrativo</option>'
           +'<option value="supply">Supply</option>'
           +'<option value="admin">Administrador</option>'
+          +_opcionesRolesCustomHtml(null)
         +'</select></div>'
       +'<button type="button" class="btn btn-primary" onclick="agregarUsuario()">➕ Agregar</button>'
     +'</div>';
@@ -4056,6 +4061,7 @@ function verDetalleUsuario(uid){
       +'<option value="administrativo"'+(u.rol==="administrativo"?' selected':'')+'>Administrativo</option>'
       +'<option value="supply"'+(u.rol==="supply"?' selected':'')+'>Supply</option>'
     +'<option value="admin"'+(u.rol==='admin'?' selected':'')+'>Administrador</option>'
+    +_opcionesRolesCustomHtml(u.rol)
     +'</select></div>'
     +'</div>'
     +'<div style="display:flex;gap:10px">'
@@ -5872,6 +5878,8 @@ function syncSupabase(){
     }
   }).catch(function(){});
   supaFetch('kpi_comentarios','GET',null,'order=anio.asc,mes.asc').then(function(rows){if(rows&&rows.length){KPI_COMENTARIOS=rows;saveDB('kpi_comentarios',KPI_COMENTARIOS);}}).catch(function(){});
+  supaFetch('roles_custom','GET',null,'order=nombre.asc').then(function(rows){if(rows&&rows.length){ROLES_CUSTOM=rows;saveDB('roles_custom',ROLES_CUSTOM);}}).catch(function(){});
+  supaFetch('permisos_rol','GET',null,null).then(function(rows){if(rows&&rows.length){PERMISOS_ROL=rows;saveDB('permisos_rol',PERMISOS_ROL);}}).catch(function(){});
   supaFetch('inspecciones','GET',null,'order=created_at.desc&limit=2000').then(function(rows){if(rows&&rows.length){INSPECCIONES=rows;saveDB('inspecciones',INSPECCIONES);}}).catch(function(){});
   // Process offline queue
   setTimeout(processSyncQueue, 2000);
@@ -14159,6 +14167,8 @@ function syncSupabase(){
     }
   }).catch(function(){});
   supaFetch('kpi_comentarios','GET',null,'order=anio.asc,mes.asc').then(function(rows){if(rows&&rows.length){KPI_COMENTARIOS=rows;saveDB('kpi_comentarios',KPI_COMENTARIOS);}}).catch(function(){});
+  supaFetch('roles_custom','GET',null,'order=nombre.asc').then(function(rows){if(rows&&rows.length){ROLES_CUSTOM=rows;saveDB('roles_custom',ROLES_CUSTOM);}}).catch(function(){});
+  supaFetch('permisos_rol','GET',null,null).then(function(rows){if(rows&&rows.length){PERMISOS_ROL=rows;saveDB('permisos_rol',PERMISOS_ROL);}}).catch(function(){});
   supaFetch('inspecciones','GET',null,'order=created_at.desc&limit=2000').then(function(rows){if(rows&&rows.length){INSPECCIONES=rows;saveDB('inspecciones',INSPECCIONES);}}).catch(function(){});
   // Process offline queue
   setTimeout(processSyncQueue, 2000);
@@ -30910,6 +30920,167 @@ function guardarKpiComentario(modulo,anio,mes){
   if(window._kpiVista==='cantidad') renderKPICantidad(); else renderKPIDinero();
 }
 // ── FIN MÓDULO KPI SERVICIOS ────────────────────────────────────────────────
+
+// ================================================================
+// MÓDULO ROLES PERSONALIZADOS (ej. "Gerente") — permisos configurables
+// por botón, con niveles Ninguno/Lectura/Escritura. IMPORTANTE: por ahora
+// el nivel solo controla si el botón aparece en el menú de ese rol; el
+// control fino lectura-vs-escritura DENTRO de cada pantalla se agrega
+// pantalla por pantalla más adelante, no todas de un jalón.
+// No modifica ni un solo chequeo de rol existente (admin/tecnico/operador/
+// etc. siguen funcionando exactamente igual) — es 100% aditivo.
+// ================================================================
+let ROLES_CUSTOM=loadDB('roles_custom',[]); // {id,nombre,ts}
+let PERMISOS_ROL=loadDB('permisos_rol',[]); // {id,rol_id,feature_key,nivel,ts}
+var ROLES_FIJOS=['operador','lider','tecnico','inspector_calidad','lider_calidad','administrativo','supply','admin','super'];
+
+// Catálogo de botones disponibles para asignar a un rol personalizado.
+// Para agregar un botón nuevo a futuro: una línea aquí y ya aparece en el
+// panel de permisos y en el menú del rol, sin tocar nada más.
+var FEATURES_REGISTRY=[
+  {key:'sho',label:'Bitácora / SHO',icon:'🔄',onclick:"showSHO()"},
+  {key:'dorwor',label:'DOR / WOR',icon:'📊',onclick:"showDORWOR()"},
+  {key:'pm01',label:'PM01 (Avería)',icon:'🚨',onclick:"iniciarPM('PM01')"},
+  {key:'pm02',label:'PM02 (Anormalidad)',icon:'📋',onclick:"iniciarPM('PM02')"},
+  {key:'pm03',label:'PM03 (Mtto Planeado)',icon:'📅',onclick:"showPM03()"},
+  {key:'pm04',label:'PM04 (Apoyo Producción)',icon:'🤝',onclick:"iniciarPM('PM04')"},
+  {key:'pendientes',label:'Mis Pendientes',icon:'📌',onclick:"showMisOrdenes()"},
+  {key:'checklist',label:'Check List de Turno',icon:'✅',onclick:"showChecklistMenu()"},
+  {key:'kpis',label:"KPI's",icon:'📊',onclick:"showKPIs()"},
+  {key:'almacen',label:'Almacén',icon:'🔧',onclick:"showAlmacen()"},
+  {key:'consultaot',label:'Consultar OT',icon:'🔍',onclick:"showConsultaOT()"},
+  {key:'historial',label:'Historial Máquinas',icon:'🏭',onclick:"showHistorial()"},
+  {key:'activos',label:'Activos',icon:'⚙️',onclick:"showActivos()"},
+  {key:'manuales',label:'Manuales',icon:'📚',onclick:"showManuales()"},
+  {key:'servicios',label:'Servicios (Gas/Agua/Elec)',icon:'🏭',onclick:"showServicios()"},
+  {key:'gestionpersonal',label:'Gestión de Personal',icon:'👥',onclick:"showGestionPersonal()"},
+  {key:'desempeno',label:'Desempeño',icon:'🏆',onclick:"showDesempeno()"},
+  {key:'protocolospm03',label:'Protocolos PM03',icon:'🗂️',onclick:"showMenuProtocolosPM03()"},
+  {key:'kpianormalidades',label:'KPI Anormalidades',icon:'📊',onclick:"showKPIAnormalidades()"},
+  {key:'pm02porasignar',label:'PM02 por Asignar',icon:'📋',onclick:"showPM02PorAsignar()"},
+  {key:'pm03porreprogramar',label:'PM03 x Reprogramar',icon:'📅',onclick:"showPM03PorReprogramar()"},
+  {key:'proveedores',label:'Proveedores',icon:'🏢',onclick:"showProveedores()"},
+  {key:'planmtto',label:'Plan Mtto',icon:'📋',onclick:"showPlanMantenimiento()"}
+];
+
+function rolEsCustom(rol){return ROLES_CUSTOM.some(function(r){return r.id===rol;});}
+function nombreRolCustom(rol){var r=ROLES_CUSTOM.find(function(x){return x.id===rol;});return r?r.nombre:null;}
+function nivelPermisoRol(rolId,featureKey){
+  var p=PERMISOS_ROL.find(function(x){return x.rol_id===rolId&&x.feature_key===featureKey;});
+  return p?p.nivel:'ninguno';
+}
+
+// Opciones <option> de roles personalizados, para anexar a los <select> de
+// rol fijos que ya existen en Agregar/Editar usuario (no reemplaza nada).
+function _opcionesRolesCustomHtml(rolActual){
+  return ROLES_CUSTOM.map(function(r){
+    return '<option value="'+r.id+'"'+(rolActual===r.id?' selected':'')+'>'+r.nombre+'</option>';
+  }).join('');
+}
+
+// Menú del rol personalizado: se arma leyendo FEATURES_REGISTRY + los
+// permisos guardados para ese rol en PERMISOS_ROL.
+function renderMenuRolCustom(){
+  var cont=document.getElementById('menu-gerente-custom');
+  var grid=document.getElementById('menu-gerente-custom-grid');
+  if(!cont||!grid) return;
+  var rol=currentUser&&currentUser.rol;
+  var esCustom=!!(rol&&rolEsCustom(rol));
+  cont.classList.toggle('hidden',!esCustom);
+  if(!esCustom) return;
+  var visibles=FEATURES_REGISTRY.filter(function(f){return nivelPermisoRol(rol,f.key)!=='ninguno';});
+  grid.innerHTML=visibles.map(function(f){
+    return '<div class="menu-btn" onclick="'+f.onclick+'"><div class="menu-icon">'+f.icon+'</div><div class="menu-label">'+f.label+'</div></div>';
+  }).join('')||'<p style="padding:12px;color:#9ca3af;font-size:13px">Tu administrador aún no te ha habilitado ningún botón.</p>';
+}
+
+function _slugRol(nombre){
+  return (nombre||'').toString().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+}
+
+function renderAdminRoles(cont){
+  var selRol=window._rolesPermisosSel||(ROLES_CUSTOM[0]&&ROLES_CUSTOM[0].id)||'';
+  var chips=ROLES_CUSTOM.map(function(r){
+    return '<div class="filter-chip'+(r.id===selRol?' active':'')+'" onclick="window._rolesPermisosSel=\''+r.id+'\';renderAdminTab(\'roles\')">'+r.nombre+'</div>';
+  }).join('');
+  var rolSeleccionado=ROLES_CUSTOM.find(function(r){return r.id===selRol;});
+  var filas='';
+  if(rolSeleccionado){
+    filas=FEATURES_REGISTRY.map(function(f){
+      var nivel=nivelPermisoRol(selRol,f.key);
+      return '<tr><td style="padding:6px 4px">'+f.icon+' '+f.label+'</td>'
+        +'<td style="padding:6px 4px;text-align:right"><select class="form-control" style="padding:6px;font-size:12px" id="rp-'+f.key+'">'
+          +'<option value="ninguno"'+(nivel==='ninguno'?' selected':'')+'>Ninguno</option>'
+          +'<option value="lectura"'+(nivel==='lectura'?' selected':'')+'>Lectura</option>'
+          +'<option value="escritura"'+(nivel==='escritura'?' selected':'')+'>Escritura</option>'
+        +'</select></td></tr>';
+    }).join('');
+  }
+  cont.innerHTML=''
+    +'<div class="card">'
+      +'<div class="card-title mb8">🔑 Roles personalizados</div>'
+      +'<div style="font-size:12px;color:#6b7280;margin-bottom:10px">Crea un rol (ej. "Gerente") y define, botón por botón, si lo ve en Ninguno / Lectura / Escritura. Por ahora el nivel solo controla si el botón aparece en el menú — el control de lectura-vs-escritura dentro de cada pantalla se agrega poco a poco.</div>'
+      +'<div style="display:flex;gap:8px;margin-bottom:12px">'
+        +'<input type="text" class="form-control" id="nuevo-rol-nombre" placeholder="Nombre del rol nuevo (ej. Gerente)">'
+        +'<button class="btn btn-primary btn-sm" style="width:auto;padding:10px 16px" onclick="crearRolCustom()">➕ Crear</button>'
+      +'</div>'
+      +(ROLES_CUSTOM.length?('<div class="filter-row" style="margin-bottom:12px">'+chips+'</div>'):'<div style="font-size:13px;color:#9ca3af;margin-bottom:12px">Aún no hay roles personalizados.</div>')
+      +(rolSeleccionado?(
+        '<div class="table-wrap"><table><tbody>'+filas+'</tbody></table></div>'
+        +'<div style="display:flex;gap:10px;margin-top:12px">'
+          +'<button class="btn btn-gray btn-sm" style="width:auto;padding:10px 16px" onclick="eliminarRolCustom(\''+selRol+'\')">🗑️ Eliminar rol</button>'
+          +'<button class="btn btn-primary btn-sm" style="flex:1" onclick="guardarPermisosRol(\''+selRol+'\')">💾 Guardar permisos de '+rolSeleccionado.nombre+'</button>'
+        +'</div>'
+      ):'')
+    +'</div>';
+}
+
+function crearRolCustom(){
+  var nombre=(document.getElementById('nuevo-rol-nombre').value||'').trim();
+  if(!nombre){showAlert('Escribe un nombre para el rol','error');return;}
+  var id=_slugRol(nombre);
+  if(!id){showAlert('Nombre inválido','error');return;}
+  if(ROLES_FIJOS.indexOf(id)>=0||ROLES_CUSTOM.some(function(r){return r.id===id;})){
+    showAlert('Ya existe un rol con ese nombre','error');return;
+  }
+  var entry={id:id,nombre:nombre,ts:Date.now()};
+  ROLES_CUSTOM.push(entry);
+  saveDB('roles_custom',ROLES_CUSTOM);
+  supaUpsert('roles_custom',entry).catch(function(){});
+  window._rolesPermisosSel=id;
+  showAlert('✅ Rol creado');
+  renderAdminTab('roles');
+}
+
+function eliminarRolCustom(rolId){
+  if(!confirm('¿Eliminar este rol y todos sus permisos? Los usuarios que ya lo tengan asignado se quedarán con un rol inválido hasta que les asignes otro.')) return;
+  ROLES_CUSTOM=ROLES_CUSTOM.filter(function(r){return r.id!==rolId;});
+  PERMISOS_ROL=PERMISOS_ROL.filter(function(p){return p.rol_id!==rolId;});
+  saveDB('roles_custom',ROLES_CUSTOM);
+  saveDB('permisos_rol',PERMISOS_ROL);
+  fetch(SUPA_URL+'/rest/v1/roles_custom?id=eq.'+rolId,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}}).catch(function(){});
+  fetch(SUPA_URL+'/rest/v1/permisos_rol?rol_id=eq.'+rolId,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}}).catch(function(){});
+  window._rolesPermisosSel=null;
+  showAlert('✅ Rol eliminado');
+  renderAdminTab('roles');
+}
+
+function guardarPermisosRol(rolId){
+  var cambios=FEATURES_REGISTRY.map(function(f){
+    var sel=document.getElementById('rp-'+f.key);
+    var nivel=sel?sel.value:'ninguno';
+    var id=rolId+'__'+f.key;
+    var idx=PERMISOS_ROL.findIndex(function(p){return p.rol_id===rolId&&p.feature_key===f.key;});
+    var entry={id:id,rol_id:rolId,feature_key:f.key,nivel:nivel,ts:Date.now()};
+    if(idx>=0)PERMISOS_ROL[idx]=entry;else PERMISOS_ROL.push(entry);
+    return entry;
+  });
+  saveDB('permisos_rol',PERMISOS_ROL);
+  cambios.forEach(function(entry){supaUpsert('permisos_rol',entry).catch(function(){});});
+  showAlert('✅ Permisos guardados');
+  renderAdminTab('roles');
+}
+// ── FIN MÓDULO ROLES PERSONALIZADOS ─────────────────────────────────────────
 
 
 // ================================================================
