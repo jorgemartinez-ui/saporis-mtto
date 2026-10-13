@@ -11399,12 +11399,23 @@ function abrirModalFirma(otId, campo){
   _firmaOtId=otId;
   _firmaCampo=campo;
   var labels={operador:'Técnico Mantenimiento',lider:'Líder Área',calidad:'Inspector Calidad',admin:'Coordinador de Mantenimiento'};
+  var p=PM03_PLAN.find(function(x){return x.id===otId;});
+  // Si esta PM03 ya se recorrió al menos una semana sin cerrarse (corte
+  // automático), el Coordinador de Mantenimiento debe explicar el motivo al
+  // firmar — las demás firmas (operador/líder/calidad) no lo piden.
+  var requiereMotivo=campo==='admin'&&p&&p.semanasVencidas&&p.semanasVencidas.length>0;
   var modal=document.createElement('div');
   modal.id='modal-firma-canvas';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:12px;box-sizing:border-box';
   modal.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;width:100%;max-width:420px;box-sizing:border-box">'
     +'<div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:4px">✍️ Firma — '+labels[campo]+'</div>'
     +'<div style="font-size:11px;color:#9ca3af;margin-bottom:12px">Firma con el dedo en el recuadro</div>'
+    +(requiereMotivo
+      ?'<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:10px;padding:10px;margin-bottom:12px">'
+        +'<label style="font-size:11px;font-weight:700;color:#92400e;display:block;margin-bottom:4px">⚠️ Esta PM03 se recorrió de semana sin cerrarse — motivo <span style="color:#dc2626">*obligatorio</span></label>'
+        +'<textarea id="firma-motivo-recorrido" class="form-control" rows="2" style="padding:8px;font-size:.82rem;resize:none" placeholder="¿Por qué no se ejecutó en su semana original?">'+(p.motivoRecorrido||'')+'</textarea>'
+        +'</div>'
+      :'')
     +'<canvas id="firma-canvas" width="360" height="160" style="border:2px solid #e5e7eb;border-radius:10px;width:100%;touch-action:none;background:#f8fafc;display:block"></canvas>'
     +'<div style="display:flex;gap:8px;margin-top:12px">'
     +'<button onclick="firmaLimpiar()" style="flex:1;padding:11px;background:#f3f4f6;border:none;border-radius:10px;font-weight:700;cursor:pointer">🗑️ Limpiar</button>'
@@ -11464,6 +11475,15 @@ function firmaGuardar(){
   var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
   var _firmasReq=pm3FirmasRequeridas(proto);
 
+  // Si esta PM03 ya se recorrió de semana sin cerrarse, el Coordinador de
+  // Mantenimiento no puede firmar sin explicar el motivo (ver abrirModalFirma).
+  var motivoRecorrido=null;
+  if(campo==='admin'&&p.semanasVencidas&&p.semanasVencidas.length){
+    var elMotivo=document.getElementById('firma-motivo-recorrido');
+    motivoRecorrido=elMotivo?elMotivo.value.trim():'';
+    if(!motivoRecorrido){showAlert('Indica el motivo por el que esta PM03 se recorrió de semana','error');return;}
+  }
+
   // Calcular si con esta firma quedarían completas TODAS las que el protocolo requiere
   // (no necesariamente las 4), sin aplicar todavía nada localmente — antes esto (y el
   // guardado local) se hacía ANTES de confirmar que Supabase realmente la recibió, así
@@ -11479,6 +11499,7 @@ function firmaGuardar(){
   patch['firma_img_'+campo]=imgData;
   patch['firma_nombre_'+campo]=nombre;
   patch['firma_ts_'+campo]=now;
+  if(motivoRecorrido!==null) patch.motivo_recorrido=motivoRecorrido;
   if(todas) patch.estado_flujo='completado';
 
   var btnGuardar=document.querySelector('#modal-firma-canvas button[onclick="firmaGuardar()"]');
@@ -11494,6 +11515,7 @@ function firmaGuardar(){
     else if(campo==='lider'){p.firmaImgLider=imgData;p.firmaNombreLider=nombre;p.firmaTsLider=now;}
     else if(campo==='calidad'){p.firmaImgCalidad=imgData;p.firmaNombreCalidad=nombre;p.firmaTsCalidad=now;}
     else if(campo==='admin'){p.firmaImgAdmin=imgData;p.firmaNombreAdmin=nombre;p.firmaTsAdmin=now;}
+    if(motivoRecorrido!==null) p.motivoRecorrido=motivoRecorrido;
     if(todas) p.estadoFlujo='completado';
     saveDB('pm03_plan',PM03_PLAN);
 
@@ -14131,7 +14153,7 @@ function syncSupabase(){
     }));
     saveDB('ordenes',ORDENES);
   }).catch(function(){});
-  supaFetch('pm03_plan','GET',null,'order=semana.asc&limit=999999&select=actividad,actividades_estado,actividades_estado_final,actividades_estado_inicial,anio,area,cerrada_por,cerrada_ts,comentarios_actividades,componente,desinf_produccion,dias_trabajo,draft_ts,es_inspeccion,estado,estado_calidad,estado_flujo,firma_nombre_admin,origen_ot,origen_pm02,firma_nombre_calidad,firma_nombre_lider,firma_nombre_operador,firma_tecnico,firma_tecnico_ts,firma_ts_admin,firma_ts_calidad,firma_ts_lider,firma_ts_operador,fuente_excel,generado_por,grasa_aceite,herramienta_ingresada,herramienta_salida,hora_fin,hora_inicio,horas_actividades,horas_cierre,id,liberado_admin_por,liberado_admin_ts,liberado_por,liberado_prod_por,liberado_prod_ts,liberado_ts,limpieza_mtto,linea,mediciones_actividades,observaciones_cierre,personas_actividades,rechazo_calidad,refacciones_nuevas,refacciones_usadas,reporte_actividades,responsable_area_id,responsable_area_nombre,semana,tecnico_id,tecnico_nombre,ts').then(function(rows){
+  supaFetch('pm03_plan','GET',null,'order=semana.asc&limit=999999&select=actividad,actividades_estado,actividades_estado_final,actividades_estado_inicial,anio,area,cerrada_por,cerrada_ts,comentarios_actividades,componente,desinf_produccion,dias_trabajo,draft_ts,es_inspeccion,estado,estado_calidad,estado_flujo,firma_nombre_admin,origen_ot,origen_pm02,firma_nombre_calidad,firma_nombre_lider,firma_nombre_operador,firma_tecnico,firma_tecnico_ts,firma_ts_admin,firma_ts_calidad,firma_ts_lider,firma_ts_operador,fuente_excel,generado_por,grasa_aceite,herramienta_ingresada,herramienta_salida,hora_fin,hora_inicio,horas_actividades,horas_cierre,id,liberado_admin_por,liberado_admin_ts,liberado_por,liberado_prod_por,liberado_prod_ts,liberado_ts,limpieza_mtto,comentario_desinfeccion,linea,mediciones_actividades,observaciones_cierre,personas_actividades,rechazo_calidad,refacciones_nuevas,refacciones_usadas,reporte_actividades,responsable_area_id,responsable_area_nombre,semana,tecnico_id,tecnico_nombre,ts,semanas_vencidas,motivo_recorrido').then(function(rows){
     if(!rows)return;
     var localPM03=loadDB('pm03_plan',[]);
     PM03_PLAN=rows.map(function(r){
@@ -14240,6 +14262,11 @@ function syncSupabase(){
         reporteActividades:r.reporte_actividades||(local?local.reporteActividades:null),
         refaccionesNuevas:r.refacciones_nuevas||(local?local.refaccionesNuevas:null),
         comentarioDesinfeccion:r.comentario_desinfeccion||(local?local.comentarioDesinfeccion:null),
+        // Corte semanal de PM03 (lunes→martes de la semana siguiente): semanas que esta
+        // PM03 fue dejando atrás sin cerrarse, para que el calendario las pinte de rojo
+        // aunque la fila ya viva en una semana posterior (ver _pm3AplicarCortes).
+        semanasVencidas:(function(){try{return r.semanas_vencidas?JSON.parse(r.semanas_vencidas):(local?local.semanasVencidas:null);}catch(e){return local?local.semanasVencidas:null;}})(),
+        motivoRecorrido:r.motivo_recorrido||(local?local.motivoRecorrido:null),
         tecnicosAdicionales:(function(){
           var sup=r.tecnicos_adicionales; var loc=local?local.tecnicosAdicionales:null;
           var supD=r.draft_ts||0, locD=local&&local._draftTs?local._draftTs:0;
@@ -14251,6 +14278,7 @@ function syncSupabase(){
       };
     });
     saveDB('pm03_plan',PM03_PLAN);
+    _pm3AplicarCortes();
   }).catch(function(){});
   supaFetch('refacciones','GET',null,'order=codigo.asc').then(function(rows){if(rows&&rows.length){REFACCIONES=rows;saveDB('refacciones',REFACCIONES);}}).catch(function(){});
   supaFetch('mtbf_data','GET',null,'order=anio.desc,semana.desc').then(function(rows){if(rows&&rows.length){MTBF_DATA=rows;saveDB('mtbf_data',MTBF_DATA);}}).catch(function(){});
@@ -14410,6 +14438,8 @@ function reintentarOrdenesSync(){
 setTimeout(reintentarOrdenesSync, 5000);
 setInterval(reintentarOrdenesSync, 5*60*1000);
 function savePM03Supa(p){supaUpsert('pm03_plan',{id:p.id,linea:p.linea,componente:p.componente||null,actividad:p.actividad,area:p.area||null,semana:p.semana,anio:p.año||2026,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null,responsable_area_id:p.responsableAreaId||null,responsable_area_nombre:p.responsableAreaNombre||null,estado:p.estado||'abierta',prioridad:p.prioridad||null,fuente_excel:p.fuenteExcel||false,horas_cierre:p.horasCierre||0,observaciones_cierre:p.observacionesCierre||null,cerrada_ts:p.cerradaTs||null,cerrada_por:p.cerradaPor||null,generado_por:p.generadoPor||null,origen_ot:p.origenOT||null,origen_pm02:p.origenPM02||null,ts:p.ts||Date.now(),liberado_por:p.liberadoPor||null,liberado_ts:p.liberadoTs||null,estado_calidad:p.estadoCalidad||null,rechazo_calidad:p.rechazoCalidad||null,actividades_estado:p.actividadesEstado?JSON.stringify(p.actividadesEstado):null,refacciones_usadas:p.refaccionesUsadas||null,herramienta_ingresada:p.herramientaIngresada||null,herramienta_salida:p.herramientaSalida||null,grasa_aceite:p.grasaAceite||null,limpieza_mtto:typeof p.limpiezaMtto==='boolean'?p.limpiezaMtto:null,desinf_produccion:typeof p.desinfProduccion==='boolean'?p.desinfProduccion:null,firma_tecnico:p.firmaTecnico||null,firma_tecnico_ts:p.firmaTecnicoTs||null,comentarios_actividades:p.comentariosActividades?JSON.stringify(p.comentariosActividades):null,mediciones_actividades:p.medicionesActividades?JSON.stringify(p.medicionesActividades):null,liberado_prod_por:p.liberadoProdPor||null,liberado_prod_ts:p.liberadoProdTs||null,liberado_admin_por:p.liberadoAdminPor||null,liberado_admin_ts:p.liberadoAdminTs||null,estado_flujo:p.estadoFlujo||'ejecucion',nota_reprogramacion:p.notaReprogramacion||null,reprogramada_por:p.reprogramadaPor||null,reprogramada_ts:p.reprogramadaTs||null,comentario_desinfeccion:p.comentarioDesinfeccion||null,tecnicos_adicionales:p.tecnicosAdicionales&&p.tecnicosAdicionales.length?JSON.stringify(p.tecnicosAdicionales):null,comentario_firma_calidad:p.comentarioFirmaCalidad||null,comentario_firma_prod:p.comentarioFirmaProd||null,comentario_firma_admin:p.comentarioFirmaAdmin||null,
+  semanas_vencidas:p.semanasVencidas&&p.semanasVencidas.length?JSON.stringify(p.semanasVencidas):undefined,
+  motivo_recorrido:p.motivoRecorrido||undefined,
   // fotos/firma_img_* ya no se sincronizan en bloque (viajan bajo demanda al abrir
   // el detalle) — si en este dispositivo nunca se cargaron (p.campo===undefined),
   // se omiten del payload para NO borrar en Supabase lo que otro dispositivo sí guardó.
@@ -24408,6 +24438,123 @@ function _pm3CadenaResuelta(p){
   });
 }
 
+// ================================================================
+// Historial del KPI #1 (Cumplimiento Mtto preventivo) — calculado al vuelo,
+// sin tabla nueva en Supabase. Una PM03 "pertenece" a la semana en que
+// originalmente le tocaba (aunque el corte automático la haya recorrido a una
+// semana posterior sin cerrarse — ver _pm3AplicarCortes) y cuenta como
+// cumplida si, donde sea que haya terminado, su estado ya es 'cerrada'.
+// ================================================================
+function _pm3KpiSemana(anio,semana){
+  var pertenece=(PM03_PLAN||[]).filter(function(p){
+    if(p.esInspeccion) return false;
+    if(p.semana===semana&&(p.año||p.anio)===anio) return true;
+    return (p.semanasVencidas||[]).some(function(v){return v.semana===semana&&v.anio===anio;});
+  });
+  var total=pertenece.length;
+  var ejecutadas=pertenece.filter(function(p){return p.estado==='cerrada';}).length;
+  return {total:total,ejecutadas:ejecutadas,pct:total>0?Math.round((ejecutadas/total)*100):null};
+}
+
+function _pm3KpiMes(anio,mes){
+  var semanas=getWeeksInMonth(anio,mes);
+  var total=0,ejecutadas=0;
+  semanas.forEach(function(s){
+    var k=_pm3KpiSemana(anio,s);
+    total+=k.total; ejecutadas+=k.ejecutadas;
+  });
+  return {total:total,ejecutadas:ejecutadas,pct:total>0?Math.round((ejecutadas/total)*100):null};
+}
+
+function pm3MostrarHistorialKPI(){
+  window._pm3HistAnio=window._pm3HistAnio||currentYear();
+  var m=document.createElement('div');
+  m.id='modal-hist-kpi';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  document.body.appendChild(m);
+  _pm3RenderHistorialMensual();
+}
+
+function _pm3AniosDisponiblesKPI(){
+  var anios={};
+  anios[currentYear()]=true;
+  (PM03_PLAN||[]).forEach(function(p){
+    if(p.año) anios[p.año]=true;
+    (p.semanasVencidas||[]).forEach(function(v){anios[v.anio]=true;});
+  });
+  return Object.keys(anios).map(Number).sort(function(a,b){return b-a;});
+}
+
+function _pm3HistSelectorAnio(){
+  var anio=window._pm3HistAnio;
+  var opts=_pm3AniosDisponiblesKPI().map(function(a){
+    return '<option value="'+a+'"'+(a===anio?' selected':'')+'>'+a+'</option>';
+  }).join('');
+  return '<select class="form-control" style="padding:6px;max-width:110px;display:inline-block" onchange="window._pm3HistAnio=parseInt(this.value);_pm3RenderHistorialMensual()">'+opts+'</select>';
+}
+
+function _pm3RenderHistorialMensual(){
+  var modal=document.getElementById('modal-hist-kpi');
+  if(!modal) return;
+  var anio=window._pm3HistAnio;
+  var meses=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var barras=meses.map(function(nombreMes,i){
+    var mes=i+1;
+    var k=_pm3KpiMes(anio,mes);
+    var pct=k.pct;
+    var alturaPct=pct===null?0:pct;
+    var color=pct===null?'#e5e7eb':(pct>=95?'#16a34a':'#dc2626');
+    var etiqueta=pct===null?'—':String(pct).padStart(2,'0');
+    return '<div onclick="'+(pct===null?'':'_pm3RenderHistorialSemanal('+mes+')')+'" style="flex:1;display:flex;flex-direction:column;align-items:center;cursor:'+(pct===null?'default':'pointer')+'">'
+      +'<div style="font-size:10px;font-weight:800;color:#374151;margin-bottom:2px">'+etiqueta+'</div>'
+      +'<div style="width:100%;max-width:26px;height:90px;background:#f3f4f6;border-radius:4px;display:flex;align-items:flex-end;overflow:hidden">'
+      +'<div style="width:100%;height:'+alturaPct+'%;background:'+color+';border-radius:4px"></div>'
+      +'</div>'
+      +'<div style="font-size:9px;color:#9ca3af;margin-top:4px">'+nombreMes+'</div>'
+      +'</div>';
+  }).join('');
+  modal.innerHTML='<div style="background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:85vh;display:flex;flex-direction:column;padding:20px;box-sizing:border-box">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+    +'<div style="font-size:16px;font-weight:800;color:#1a3c5e">📊 Historial — Cumplimiento Mtto preventivo</div>'
+    +'<button onclick="document.getElementById(\'modal-hist-kpi\').remove()" style="padding:4px 10px;background:#f3f4f6;border:none;border-radius:8px;cursor:pointer;font-size:13px">✕</button>'
+    +'</div>'
+    +'<div style="margin-bottom:12px;font-size:11px;color:#6b7280">Meta: 95% todo el año · '+_pm3HistSelectorAnio()+'</div>'
+    +'<div style="display:flex;gap:6px;align-items:flex-end">'+barras+'</div>'
+    +'<div style="font-size:10px;color:#9ca3af;margin-top:12px;text-align:center">Click en un mes para ver el detalle por semana</div>'
+    +'</div>';
+}
+
+function _pm3RenderHistorialSemanal(mes){
+  var modal=document.getElementById('modal-hist-kpi');
+  if(!modal) return;
+  var anio=window._pm3HistAnio;
+  var meses=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var semanas=getWeeksInMonth(anio,mes);
+  var barras=semanas.map(function(s){
+    var k=_pm3KpiSemana(anio,s);
+    var pct=k.pct;
+    var alturaPct=pct===null?0:pct;
+    var color=pct===null?'#e5e7eb':(pct>=95?'#16a34a':'#dc2626');
+    var etiqueta=pct===null?'—':String(pct).padStart(2,'0');
+    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center">'
+      +'<div style="font-size:10px;font-weight:800;color:#374151;margin-bottom:2px">'+etiqueta+'</div>'
+      +'<div style="width:100%;max-width:26px;height:90px;background:#f3f4f6;border-radius:4px;display:flex;align-items:flex-end;overflow:hidden">'
+      +'<div style="width:100%;height:'+alturaPct+'%;background:'+color+';border-radius:4px"></div>'
+      +'</div>'
+      +'<div style="font-size:9px;color:#9ca3af;margin-top:4px">S'+s+'</div>'
+      +'</div>';
+  }).join('');
+  modal.innerHTML='<div style="background:#fff;border-radius:16px 16px 0 0;width:100%;max-width:520px;max-height:85vh;display:flex;flex-direction:column;padding:20px;box-sizing:border-box">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+    +'<div style="font-size:16px;font-weight:800;color:#1a3c5e">📊 '+meses[mes-1]+' '+anio+' — por semana</div>'
+    +'<button onclick="document.getElementById(\'modal-hist-kpi\').remove()" style="padding:4px 10px;background:#f3f4f6;border:none;border-radius:8px;cursor:pointer;font-size:13px">✕</button>'
+    +'</div>'
+    +'<div style="margin-bottom:12px;font-size:11px;color:#6b7280">Meta: 95%</div>'
+    +'<div style="display:flex;gap:6px;align-items:flex-end;overflow-x:auto;padding-bottom:4px">'+barras+'</div>'
+    +'<button onclick="_pm3RenderHistorialMensual()" style="margin-top:14px;padding:10px;background:#f3f4f6;border:none;border-radius:10px;font-weight:700;cursor:pointer">← Volver al mes</button>'
+    +'</div>';
+}
+
 // ---- Anormalidades seguridad abiertas ----
 // Nota: mientras una OT está en pre_cierre (esperando revisión final) ya no se
 // muestra ni se cuenta como anormalidad abierta; solo vuelve a contar si se
@@ -24623,6 +24770,7 @@ async function renderSHO(){
     +'<div style="background:'+colKPI+';border-radius:10px;padding:8px 4px;color:#fff;text-align:center;min-width:0;overflow:hidden">'
     +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px;line-height:1.2">Cumplimiento Mtto preventivo</div>'
     +'<div style="font-size:26px;font-weight:900;line-height:1.1">'+kpi1.label+'</div>'
+    +'<button onclick="pm3MostrarHistorialKPI()" style="margin-top:2px;padding:2px 8px;background:rgba(255,255,255,.25);border:none;border-radius:6px;color:#fff;font-size:9px;font-weight:700;cursor:pointer">📊 Historial</button>'
     +'</div>'
     +'</div>';
 
@@ -32779,6 +32927,21 @@ function showPlanCalendario(areaId,linea){
   });
   equipos.sort();
 
+  // Semanas que alguna PM03 de esta línea fue dejando atrás sin cerrar (corte
+  // automático lunes→martes), para pintarlas de rojo en el año que corresponda
+  // aunque la fila ya viva en una semana (o incluso año) posterior — por eso se
+  // recorre TODO PM03_PLAN de la línea, no solo `todos` (que ya filtra por año
+  // actual de cada fila). Ver _pm3AplicarCortes.
+  var vencidasPorKey={};
+  PM03_PLAN.filter(function(p){return p.linea===linea&&p.semanasVencidas&&p.semanasVencidas.length;}).forEach(function(p){
+    var k=(p.componente||'General')+'||'+(p.actividad||'—');
+    p.semanasVencidas.forEach(function(v){
+      if(v.anio!==anio) return;
+      if(!vencidasPorKey[k]) vencidasPorKey[k]={};
+      vencidasPorKey[k][v.semana]=p.id;
+    });
+  });
+
   // Build equipo->activities map for plan
   var eqActMap={};
   equipos.forEach(function(eq){ eqActMap[eq]=[]; });
@@ -32795,7 +32958,8 @@ function showPlanCalendario(areaId,linea){
         realizado[p.semana]={enTiempo:true,id:p.id,tec:p.tecnicoNombre||'—'};
       }
     });
-    eqActMap[eq].push({label:g.act,programado:programado,realizado:realizado});
+    var vencidas=vencidasPorKey[k]||{};
+    eqActMap[eq].push({label:g.act,programado:programado,realizado:realizado,vencidas:vencidas});
   });
   // Actividades activas que no tuvieron ningún PM03 programado en el año seleccionado —
   // se muestran igual (con su fila) para dejar claro que la actividad SÍ existe, solo que
@@ -32876,6 +33040,13 @@ function showPlanCalendario(areaId,linea){
           var isVenc=isPast&&p.estado!=='cerrada';
           var bg=isVenc?'#7f1d1d':'#1e3a8a';
           html+='<td style="background:'+bg+';text-align:center;cursor:pointer" data-pm3id="'+p.id+'" onclick="if(this.dataset.pm3id)showDetallePM03(this.dataset.pm3id)" title="Sem '+s+' — '+act.label+' — '+(p.tecnicoNombre||'Sin asignar')+'"><span style="color:#fff;font-size:9px;pointer-events:none">P</span></td>';
+        } else if(act.vencidas&&act.vencidas[s]){
+          // Esta semana ya no tiene fila propia (la PM03 se recorrió hacia
+          // adelante sin cerrarse), pero sí se dejó pasar sin ejecutarse — se
+          // pinta igual de rojo, y lleva al detalle de la PM03 que la sigue
+          // cargando (ahora en una semana posterior).
+          var _pmIdVenc=act.vencidas[s];
+          html+='<td style="background:#7f1d1d;text-align:center;cursor:pointer" data-pm3id="'+_pmIdVenc+'" onclick="if(this.dataset.pm3id)showDetallePM03(this.dataset.pm3id)" title="Sem '+s+' — '+act.label+' — se recorrió sin cerrarse"><span style="color:#fff;font-size:9px;pointer-events:none">P</span></td>';
         } else {
           // Celda en blanco: admin/super puede detonar aquí una PM03 anticipada (semana actual
           // o futura) para actividades ya definidas en el plan, sin afectar el render normal
@@ -33029,6 +33200,61 @@ function _fechaDeSemanaISO(anio,semana){
 // candado en pie (inofensivo) para cuando esa función se reactive bien.
 function pm3EstaBloqueada(p){
   return !!p && p.estado==='afectada' && !(currentUser&&currentUser.rol==='super');
+}
+
+// ================================================================
+// Corte semanal de PM03 — lunes 06:30 a martes 06:30 de la semana SIGUIENTE
+// ================================================================
+// Rediseño del corte original (el que causó el incidente): aquí nunca se crea
+// una fila nueva ni se duplica nada — la misma PM03 solo recorre su propio
+// campo `semana` (y `año`) un paso hacia adelante, conservando checklist,
+// fotos y firmas tal cual, porque sigue siendo el mismo registro. No se
+// bloquea ni queda una fila "afectada" estorbando — simplemente pasa a ser
+// parte de la semana siguiente. Se guarda en `semanasVencidas` cada semana
+// que fue dejando atrás sin cerrar, solo para que el calendario la pinte de
+// rojo ahí (ver showPlanCalendario), aunque la fila ya viva en otra semana.
+// Es idempotente por diseño: en cuanto se recorre, su propio corte se
+// recalcula sobre la nueva semana, así que no se repite hasta que vuelva a
+// pasar una semana completa — no hace falta ninguna bandera de "ya procesado".
+// Tope de seguridad: si en una sola pasada aparecen más de 100 PM03 por
+// recorrer de golpe (por ejemplo, nadie abrió la app en semanas), se aborta
+// sin tocar nada y se avisa por consola — mejor revisar a mano que repetir
+// el incidente de origen.
+function _pm3CutoffCorte(anio,semana){
+  var s=semana+1, a=anio;
+  if(s>52){s-=52;a+=1;}
+  var martes=_fechaDeSemanaISO(a,s);
+  martes.setDate(martes.getDate()+1);
+  martes.setHours(6,30,0,0);
+  return martes;
+}
+
+function _pm3AplicarCortes(){
+  if(!Array.isArray(PM03_PLAN)||!PM03_PLAN.length) return;
+  var ahora=new Date();
+  var candidatos=PM03_PLAN.filter(function(p){
+    if(!p.semana||p.estado==='cerrada'||p.estado==='reprogramada'||p.estado==='afectada') return false;
+    return ahora>_pm3CutoffCorte(p.año||p.anio||currentYear(),p.semana);
+  });
+  if(!candidatos.length) return;
+  if(candidatos.length>100){
+    console.warn('⚠️ Corte de PM03: '+candidatos.length+' actividades vencidas de golpe — se aborta el proceso automático, hay que revisarlo a mano.');
+    return;
+  }
+  candidatos.forEach(function(p){
+    var vueltas=0;
+    while(vueltas<60 && ahora>_pm3CutoffCorte(p.año||p.anio||currentYear(),p.semana)){
+      if(!p.semanasVencidas) p.semanasVencidas=[];
+      p.semanasVencidas.push({semana:p.semana,anio:p.año||p.anio||currentYear()});
+      var s=p.semana+1, a=p.año||p.anio||currentYear();
+      if(s>52){s-=52;a+=1;}
+      p.semana=s; p.año=a;
+      vueltas++;
+    }
+    p._editadoTs=Date.now();
+    savePM03Supa(p);
+  });
+  saveDB('pm03_plan',PM03_PLAN);
 }
 
 function abrirDetonarPM03Anticipada(actividadPlanId,semana,anio){
