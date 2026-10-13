@@ -33229,12 +33229,27 @@ function _pm3CutoffCorte(anio,semana){
   return martes;
 }
 
+// El corte arranca a partir de esta semana — Jorge pidió explícitamente NO
+// tocar el backlog acumulado desde antes (143 actividades abiertas desde
+// enero 2026 que nunca tuvieron un corte automático, detectadas de golpe la
+// primera vez que corrió este código). Esas se quedan tal cual para siempre;
+// el corte automático solo aplica a una PM03 cuya semana/año sea igual o
+// posterior a esta línea base.
+var PM3_CORTE_DESDE={anio:2026,semana:42};
+function _pm3DesdeCorte(anio,semana){
+  if(anio>PM3_CORTE_DESDE.anio) return true;
+  if(anio<PM3_CORTE_DESDE.anio) return false;
+  return semana>=PM3_CORTE_DESDE.semana;
+}
+
 function _pm3AplicarCortes(){
   if(!Array.isArray(PM03_PLAN)||!PM03_PLAN.length) return;
   var ahora=new Date();
   var candidatos=PM03_PLAN.filter(function(p){
     if(!p.semana||p.estado==='cerrada'||p.estado==='reprogramada'||p.estado==='afectada') return false;
-    return ahora>_pm3CutoffCorte(p.año||p.anio||currentYear(),p.semana);
+    var anio=p.año||p.anio||currentYear();
+    if(!_pm3DesdeCorte(anio,p.semana)) return false;
+    return ahora>_pm3CutoffCorte(anio,p.semana);
   });
   if(!candidatos.length) return;
   if(candidatos.length>100){
