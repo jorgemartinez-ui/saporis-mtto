@@ -28832,15 +28832,24 @@ function dorMostrarPM03Pendientes(){
   var m=document.createElement('div');
   m.id='modal-pm03-pend';
   m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  // Misma barra de avance (color de fondo) y mismo % de progreso que ya se
+  // ve por tarjeta en la pantalla principal de PM03 (pm3ProgresoInfo /
+  // pm3BarraAvanceCSS) — antes aquí todas las filas decían "Pendiente" en
+  // naranja sin importar qué tan avanzada estuviera cada una.
   var rows=pendientes.length===0?'<div style="text-align:center;padding:24px;color:#9ca3af">Sin PM03 pendientes esta semana ✅</div>'
     :pendientes.map(function(p){
-      return '<div style="padding:10px;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center">'
+      var info=pm3ProgresoInfo(p);
+      var bloqueada=p.estado==='afectada';
+      var badge=bloqueada
+        ?'<span style="font-size:10px;background:#7f1d1d;border:1px solid #7f1d1d;border-radius:6px;padding:2px 6px;color:#fff;font-weight:700">🔒 Bloqueada</span>'
+        :'<span style="font-size:10px;background:'+info.color+';border:1px solid '+(info.color==='#ffffff'?'#d1d5db':info.color)+';border-radius:6px;padding:2px 6px;color:#374151;font-weight:700">'+info.pct+'%</span>';
+      return '<div style="padding:10px;border-bottom:1px solid #f3f4f6;display:flex;justify-content:space-between;align-items:center;'+pm3BarraAvanceCSS(p)+'">'
         +'<div>'
         +'<div style="font-size:12px;font-weight:700;color:#1a3c5e">'+(p.linea||p.area||'—')+'</div>'
         +'<div style="font-size:11px;color:#6b7280">'+(p.actividad||p.componente||p.descripcion||'—')+'</div>'
         +'<div style="font-size:10px;color:#9ca3af">👨‍🔧 '+(p.tecnicoNombre||'Sin asignar')+'</div>'
         +'</div>'
-        +'<span style="font-size:10px;background:#fef3c7;border:1px solid #fcd34d;border-radius:6px;padding:2px 6px;color:#92400e;font-weight:700">Pendiente</span>'
+        +badge
         +'</div>';
     }).join('');
 
