@@ -2072,30 +2072,71 @@ function showDetallePM03(id){
   otCerrandoId=id;
   // Fotos y firmas (base64) ya no viajan en la sincronización general (para no
   // bajar imágenes de PM03 que nadie está viendo); se piden puntual al abrir
-  // el detalle, una sola vez por PM03 por sesión.
+  // el detalle, una sola vez por PM03 por sesión — más un reintento silencioso
+  // corto (ver _pm3FetchFirmasPM03) por si ese primer vistazo coincidió con el
+  // instante en que Supabase todavía no terminaba de registrar una firma recién
+  // guardada (lag de replicación), que antes se interpretaba como "confirmado:
+  // no hay firma" y la borraba localmente aunque sí existiera.
   if(_pm3ImgsFetched[id]){
     _renderDetallePM03(id,p);
     return;
   }
+  _pm3FetchFirmasPM03(id,function(){
+    if(otCerrandoId!==id) return; // el usuario ya salió de este detalle
+    _renderDetallePM03(id,p);
+    setTimeout(function(){
+      _pm3FetchFirmasPM03(id,function(huboCambio){
+        if(huboCambio && otCerrandoId===id) _renderDetallePM03(id,p);
+      });
+    },2500);
+  });
+}
+
+// Trae fotos/firmas de una PM03 puntual y las fusiona con lo que ya hay en
+// memoria/local. Nunca borra una firma o foto que este dispositivo ya tenía
+// solo porque Supabase, en ese instante, respondió vacío — un vacío del
+// servidor solo se acepta como "confirmado sin firma" si localmente tampoco
+// había nada todavía (p[campo]===undefined, nunca visto). Llama a cb(huboCambio)
+// al terminar, para que quien la invoque decida si hace falta refrescar la vista.
+function _pm3FetchFirmasPM03(id,cb){
+  var p=PM03_PLAN.find(function(x){return x.id===id;});
+  if(!p){if(cb)cb(false);return;}
   supaFetch('pm03_plan','GET',null,'id=eq.'+id+'&select=id,fotos,firma_img_operador,firma_img_lider,firma_img_calidad,firma_img_admin').then(function(rows){
+    var huboCambio=false;
     if(rows){
       _pm3ImgsFetched[id]=true;
       if(rows[0]){
         var r=rows[0];
-        // Asignar SIEMPRE un valor definitivo (array vacío / null = confirmado
-        // sin foto o firma), para que quede registrado como "ya se sabe" y no
-        // como "desconocido" — así un guardado posterior no borra por error
-        // lo que ya existe en Supabase.
-        try{ p.fotos = r.fotos?JSON.parse(r.fotos):[]; }catch(e){ p.fotos = p.fotos||[]; }
-        p.firmaImgOperador = r.firma_img_operador||null;
-        p.firmaImgLider = r.firma_img_lider||null;
-        p.firmaImgCalidad = r.firma_img_calidad||null;
-        p.firmaImgAdmin = r.firma_img_admin||null;
-        saveDB('pm03_plan',PM03_PLAN);
+        var fotosNuevas=null;
+        try{ fotosNuevas = r.fotos?JSON.parse(r.fotos):null; }catch(e){ fotosNuevas=null; }
+        if(fotosNuevas && fotosNuevas.length){
+          if(JSON.stringify(p.fotos||[])!==JSON.stringify(fotosNuevas)){ p.fotos=fotosNuevas; huboCambio=true; }
+        } else if(p.fotos===undefined){ p.fotos=[]; }
+        [['firmaImgOperador','firma_img_operador'],['firmaImgLider','firma_img_lider'],['firmaImgCalidad','firma_img_calidad'],['firmaImgAdmin','firma_img_admin']].forEach(function(par){
+          var campo=par[0],col=par[1];
+          if(r[col]){
+            if(p[campo]!==r[col]){ p[campo]=r[col]; huboCambio=true; }
+          } else if(p[campo]===undefined){
+            p[campo]=null; // confirmado sin firma — nunca se había visto nada aquí
+          }
+          // Si r[col] viene vacío pero p[campo] ya tenía una firma, se deja igual.
+        });
+        if(huboCambio) saveDB('pm03_plan',PM03_PLAN);
       }
     }
-    if(otCerrandoId!==id) return; // el usuario ya salió de este detalle
-    _renderDetallePM03(id,p);
+    if(cb) cb(huboCambio);
+  });
+}
+
+// Botón de refresco exclusivo de firmas: fuerza una consulta nueva (ignora el
+// "ya se revisó esta sesión") para cuando el técnico quiere confirmar al toque
+// que una firma ya quedó, sin esperar a que la app se recargue sola.
+function pm3ActualizarFirmas(id){
+  showAlert('🔄 Revisando firmas...');
+  _pm3FetchFirmasPM03(id,function(huboCambio){
+    showAlert(huboCambio?'✅ Firmas actualizadas':'✅ Ya estaban al día');
+    var p=PM03_PLAN.find(function(x){return x.id===id;});
+    if(p&&otCerrandoId===id) _renderDetallePM03(id,p);
   });
 }
 // Respaldo para PM03 viejas, generadas ANTES de que se empezara a guardar origenPM02/
@@ -4005,7 +4046,7 @@ function showAdmin(){if(currentUser.rol!=='admin'&&currentUser.rol!=='super'){sh
   if(tabImp) tabImp.style.display=currentUser.rol==='super'?'':'none';
   renderAdminTab('usuarios');showScreen('screen-admin');
 }
-function setAdminTab(tab,btn){if(btn){document.querySelectorAll('#admin-tabs .tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}renderAdminTab(tab);}
+function setAdminTab(tab,btn){if(btn){document.querySelectorAll('#admin-tabs .tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}if(tab==='pm03carga')window._pm3BulkSemFiltro=String(currentWeek());renderAdminTab(tab);}
 function renderAdminTab(tab){
   const cont=document.getElementById('admin-content');
   if(tab==='usuarios')renderAdminUs(cont);
@@ -5150,9 +5191,10 @@ function asignarMasivoPM03(){
   if(!tecSel?.value){showAlert('Selecciona un técnico','error');return;}
   const tecId=tecSel.value,tecNom=tecSel.options[tecSel.selectedIndex].text;
   const semFiltro=window._pm3BulkSemFiltro||'';
+  const matchSemAnio=p=>!semFiltro||(String(p.semana)===String(semFiltro)&&(p.año||2026)===currentYear());
   let count=0;
-  PM03_PLAN.forEach(p=>{if(p.linea===linea&&!p.tecnicoId&&(!semFiltro||String(p.semana)===String(semFiltro))){p.tecnicoId=tecId;p.tecnicoNombre=tecNom;count++;}});
-  saveDB('pm03_plan',PM03_PLAN);PM03_PLAN.filter(function(p){return p.linea===linea&&p.tecnicoId===tecId&&(!semFiltro||String(p.semana)===String(semFiltro));}).forEach(savePM03Supa);showAlert('Asignadas: '+count+' de '+linea+' a '+tecNom);renderAdminTab('pm03carga');
+  PM03_PLAN.forEach(p=>{if(p.linea===linea&&!p.tecnicoId&&p.estado!=='reprogramada'&&matchSemAnio(p)){p.tecnicoId=tecId;p.tecnicoNombre=tecNom;count++;}});
+  saveDB('pm03_plan',PM03_PLAN);PM03_PLAN.filter(function(p){return p.linea===linea&&p.tecnicoId===tecId&&matchSemAnio(p);}).forEach(savePM03Supa);showAlert('Asignadas: '+count+' de '+linea+' a '+tecNom);renderAdminTab('pm03carga');
 }
 
 function asignarMultiLineas(){
@@ -5162,9 +5204,10 @@ function asignarMultiLineas(){
   const checked=[...document.querySelectorAll('.bulk-line-check:checked')].map(cb=>cb.value);
   if(!checked.length){showAlert('Selecciona al menos una línea','error');return;}
   const semFiltro=window._pm3BulkSemFiltro||'';
+  const matchSemAnio=p=>!semFiltro||(String(p.semana)===String(semFiltro)&&(p.año||2026)===currentYear());
   let count=0;
-  PM03_PLAN.forEach(p=>{if(checked.includes(p.linea)&&!p.tecnicoId&&(!semFiltro||String(p.semana)===String(semFiltro))){p.tecnicoId=tecId;p.tecnicoNombre=tecNom;count++;}});
-  saveDB('pm03_plan',PM03_PLAN);PM03_PLAN.filter(function(p){return checked.includes(p.linea)&&p.tecnicoId===tecId&&(!semFiltro||String(p.semana)===String(semFiltro));}).forEach(savePM03Supa);showAlert('Asignadas: '+count+' a '+tecNom);renderAdminTab('pm03carga');
+  PM03_PLAN.forEach(p=>{if(checked.includes(p.linea)&&!p.tecnicoId&&p.estado!=='reprogramada'&&matchSemAnio(p)){p.tecnicoId=tecId;p.tecnicoNombre=tecNom;count++;}});
+  saveDB('pm03_plan',PM03_PLAN);PM03_PLAN.filter(function(p){return checked.includes(p.linea)&&p.tecnicoId===tecId&&matchSemAnio(p);}).forEach(savePM03Supa);showAlert('Asignadas: '+count+' a '+tecNom);renderAdminTab('pm03carga');
 }
 
 function reasignarPM03Item(id){
@@ -5202,8 +5245,12 @@ function renderAdminPM03(cont){
   const sems=Array.from({length:52},(_,i)=>i+1);
   const tecs=getTecnicos();
   const semFiltro=window._pm3BulkSemFiltro||'';
-  const sinAsigTodas=PM03_PLAN.filter(p=>!p.tecnicoId&&p.estado!=='cerrada');
-  const sinAsig=semFiltro?sinAsigTodas.filter(p=>String(p.semana)===String(semFiltro)):sinAsigTodas;
+  // Igual que la pantalla principal de PM03: 'reprogramada' no cuenta como pendiente
+  // (ya tiene su nueva fila en otra semana) y, al filtrar por semana específica, se
+  // empareja con el año actual (las recurrentes se generan varios años por adelantado,
+  // así que una semana suelta sin año mezclaría 2026 con 2027, 2030, etc.).
+  const sinAsigTodas=PM03_PLAN.filter(p=>!p.tecnicoId&&p.estado!=='cerrada'&&p.estado!=='reprogramada');
+  const sinAsig=semFiltro?sinAsigTodas.filter(p=>String(p.semana)===String(semFiltro)&&(p.año||2026)===currentYear()):sinAsigTodas;
   const lineasSinAsig=[...new Set(sinAsig.map(p=>p.linea))].sort();
   cont.innerHTML=`
   <div class="card" style="border:2px solid var(--vd);background:linear-gradient(135deg,var(--vd3),var(--az3));margin-bottom:12px">
@@ -11475,7 +11522,9 @@ function renderFirmasPhysical(p,proto){
   if(!campos.length){
     return '<div class="card" style="margin-top:8px"><div class="card-title">✍️ Firmas de Autorización</div><div style="font-size:12px;color:#6b7280">Este protocolo no requiere firmas de autorización</div></div>';
   }
-  var html='<div class="card" style="margin-top:8px"><div class="card-title">✍️ Firmas de Autorización</div>'
+  var html='<div class="card" style="margin-top:8px"><div class="card-title" style="display:flex;justify-content:space-between;align-items:center">✍️ Firmas de Autorización'
+    +'<button onclick="pm3ActualizarFirmas(\''+p.id+'\')" style="font-size:11px;padding:4px 8px;background:#f3f4f6;border:none;border-radius:6px;cursor:pointer;color:#374151">🔄 Actualizar</button>'
+    +'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">';
   campos.forEach(function(c){
     var img=p['firmaImg'+c.key.charAt(0).toUpperCase()+c.key.slice(1)];
@@ -28265,8 +28314,10 @@ function _renderDORInner(cont,dias,ultimoAcc){
     +'<div style="font-size:9px;opacity:.85;margin-top:2px">Prioridad A abiertas</div>'
     +'</div>';
 
-  // Rojo o verde nada más: verde si vamos al día o mejor contra la meta de hoy, rojo si vamos atrasados
-  var kpiCol=kpi1.ejecutadas>=kpi1.metaHoy?'#14532d':'#7f1d1d';
+  // Mismo semáforo de 3 niveles que ya se usa en la tarjeta "Cumplimiento Mtto
+  // preventivo" de Cumplimiento (verde ≥90%, naranja ≥50%, rojo debajo) — antes
+  // aquí se usaba una comparación distinta (ritmo del día), quedando inconsistente.
+  var kpiCol=kpi1.color;
   html+='<div onclick="dorMostrarPM03Pendientes()" style="background:'+kpiCol+';border-radius:12px;padding:12px;color:#fff;text-align:center;cursor:pointer">'
     +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Avance PM Sem '+currentWeek()+'</div>'
     +'<div style="font-size:28px;font-weight:900;line-height:1.1">'+kpi1.label+'</div>'
