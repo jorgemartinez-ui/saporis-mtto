@@ -28470,6 +28470,7 @@ function _renderDORInner(cont,dias,ultimoAcc){
     +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Avance PM Sem '+currentWeek()+'</div>'
     +'<div style="font-size:28px;font-weight:900;line-height:1.1">'+kpi1.label+'</div>'
     +'<div style="font-size:9px;opacity:.7;margin-top:2px">Mtto preventivo</div>'
+    +'<button onclick="event.stopPropagation();pm3MostrarHistorialKPI()" style="margin-top:2px;padding:2px 8px;background:rgba(255,255,255,.25);border:none;border-radius:6px;color:#fff;font-size:9px;font-weight:700;cursor:pointer">📊 Historial</button>'
     +'</div>';
   html+='</div>';
 
