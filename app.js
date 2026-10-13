@@ -20951,7 +20951,8 @@ function _protoFiltrarLista(){
     lDiv.innerHTML='<div class="card text-center" style="padding:40px"><div style="font-size:48px">📋</div><div style="font-weight:700;margin-top:12px">Sin protocolos'+((areaVal||lineaVal||textoVal)?' con este filtro':' registrados')+'</div>'+((areaVal||lineaVal||textoVal)?'':'<div style="font-size:13px;color:var(--txt3);margin-top:8px">Crea el primer protocolo para comenzar</div>')+'</div>';
     return;
   }
-  lDiv.innerHTML=filtradas.map(function(p){
+
+  function _protoCardHTML(p){
     return '<div class="card" style="margin-bottom:10px">'
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start">'
       +'<div>'
@@ -20973,7 +20974,36 @@ function _protoFiltrarLista(){
           +'</div>'
         : '')
       +'</div>';
-  }).join('');
+  }
+
+  // Separar activos de inactivos: los inactivos (protocolos desactivados, p.ej. al fusionar
+  // varias actividades en una sola) se guardan como histórico — nunca se borran — pero no
+  // deben estorbar mezclados con los que sí están en uso. Quedan colapsados al final con un
+  // botón para desplegarlos/ocultarlos cuando se quieran consultar.
+  var activas=filtradas.filter(function(p){return p.activo!==false;});
+  var inactivas=filtradas.filter(function(p){return p.activo===false;});
+
+  var html=activas.length?activas.map(_protoCardHTML).join(''):'<div class="card text-center" style="padding:30px;color:var(--txt3)">Sin protocolos activos'+((areaVal||lineaVal||textoVal)?' con este filtro':'')+'</div>';
+
+  if(inactivas.length){
+    html+='<div style="margin-top:14px">'
+      +'<button onclick="_protoToggleHistorico()" id="proto-historico-btn" style="width:100%;padding:10px;background:#f3f4f6;border:1px dashed #d1d5db;border-radius:10px;font-size:.82rem;font-weight:700;color:#374151;cursor:pointer">📜 Ver protocolos inactivos / histórico ('+inactivas.length+')</button>'
+      +'<div id="proto-historico-lista" style="display:none;margin-top:8px">'
+      +inactivas.map(_protoCardHTML).join('')
+      +'</div>'
+      +'</div>';
+  }
+
+  lDiv.innerHTML=html;
+}
+
+function _protoToggleHistorico(){
+  var div=document.getElementById('proto-historico-lista');
+  var btn=document.getElementById('proto-historico-btn');
+  if(!div) return;
+  var abierto=div.style.display!=='none';
+  div.style.display=abierto?'none':'block';
+  if(btn) btn.textContent=(abierto?'📜 Ver':'🔼 Ocultar')+' protocolos inactivos / histórico ('+div.querySelectorAll('.card').length+')';
 }
 
 // Vista de sólo consulta del formato de un protocolo (desde "Protocolos existentes" → 👁️ Ver).
