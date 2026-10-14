@@ -24852,7 +24852,7 @@ async function renderSHO(){
     +'</div>'
     +'</div>';
 
-  cont.innerHTML=htmlKPIs+htmlActs+htmlObs;
+  cont.innerHTML=htmlKPIs+htmlObs+htmlActs;
 }
 
 // ---- Historial ----
