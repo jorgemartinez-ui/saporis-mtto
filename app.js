@@ -5117,15 +5117,14 @@ function aplicarFiltrosPendientes(){updatePendChart();
       if(filtrosPend.estado==='abierta'&&p.estado==='cerrada') return false;
       if(tecFiltro&&p.tecnicoId!==tecFiltro) return false;
       return true;
-    }).sort((a,b)=>a.semana-b.semana);
+    }).sort((a,b)=>b.semana-a.semana);
   }
 
   const total=ots.length+pm03List.length;
   if(!total){lDiv.innerHTML='<div class="card text-center" style="padding:32px"><div style="font-size:40px">📭</div><div style="font-weight:700;margin-top:8px">Sin resultados</div></div>';return;}
 
-  let html=`<div style="font-size:13px;font-weight:700;color:var(--txt2);margin-bottom:8px">${total} orden(es) — ${ots.length} OT + ${pm03List.length} PM03</div>`;
-  pm03List.forEach(p=>{
-    html+=`<div class="ot-card pm03" style="border-left-color:${p.estado==='cerrada'?'var(--vd2)':'var(--am2)'};${pm3BarraAvanceCSS(p)}" onclick="showDetallePM03('${p.id}')">
+  function _pm03PendCardHTML(p){
+    return `<div class="ot-card pm03" style="border-left-color:${p.estado==='cerrada'?'var(--vd2)':'var(--am2)'};${pm3BarraAvanceCSS(p)}" onclick="showDetallePM03('${p.id}')">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">
         <span style="font-size:11px;color:var(--txt3);font-weight:700">${pm3FolioHTML(p)}</span>
         <div style="display:flex;gap:4px;flex-wrap:wrap">
@@ -5144,8 +5143,28 @@ function aplicarFiltrosPendientes(){updatePendChart();
       <div style="font-size:11px;color:var(--txt3);margin-top:2px">Generó: ${p.generadoPor||'Sistema'}</div>
       ${isAdmin&&p.estado!=='cerrada'&&p.estado!=='afectada'?`<button class="btn btn-outline btn-sm mt8" style="font-size:12px;padding:5px 12px" onclick="event.stopPropagation();window._reprogDesdeMisPendientes=true;abrirReprogramarPM03('${p.id}')">📅 Reprogramar</button>`:''}
     </div>`;
-  });
-  html+=ots.map(o=>renderOTCard(o)).join('');
+  }
+
+  // Orden fijo pedido por Jorge: PM03 Abiertas, PM03 Cerradas, PM02 Abiertas, PM02
+  // Cerradas, PM01 Abiertas, PM01 Cerradas, PM04 Abiertas, PM04 Cerradas — siempre
+  // de la más reciente a la más vieja dentro de cada bloque. `ots` ya viene
+  // ordenado por ts desc (línea de arriba) y `pm03List` ya viene ordenado por
+  // semana desc, así que filtrar por tipo/estado preserva ese orden dentro de
+  // cada bloque sin necesidad de volver a ordenar.
+  const porTipoEstado=(tipo,cerrada)=>ots.filter(o=>o.tipo===tipo&&(cerrada?o.estado==='cerrada':o.estado!=='cerrada'));
+  const bloques=[
+    {items:pm03List.filter(p=>p.estado!=='cerrada'),render:_pm03PendCardHTML},
+    {items:pm03List.filter(p=>p.estado==='cerrada'),render:_pm03PendCardHTML},
+    {items:porTipoEstado('PM02',false),render:renderOTCard},
+    {items:porTipoEstado('PM02',true),render:renderOTCard},
+    {items:porTipoEstado('PM01',false),render:renderOTCard},
+    {items:porTipoEstado('PM01',true),render:renderOTCard},
+    {items:porTipoEstado('PM04',false),render:renderOTCard},
+    {items:porTipoEstado('PM04',true),render:renderOTCard}
+  ];
+
+  let html=`<div style="font-size:13px;font-weight:700;color:var(--txt2);margin-bottom:8px">${total} orden(es) — ${ots.length} OT + ${pm03List.length} PM03</div>`;
+  bloques.forEach(b=>{ html+=b.items.map(b.render).join(''); });
   // Guardar scroll antes de redibujar
   var _scrollOrdenes = lDiv.scrollTop;
   lDiv.innerHTML=html;
@@ -14152,6 +14171,11 @@ function syncSupabase(){
       return l;
     }));
     saveDB('ordenes',ORDENES);
+    // Si la pantalla "Mis Pendientes" (vista con filtros fp-semana/fp-mes/etc.)
+    // está abierta en este momento, refrescar la lista con los datos recién
+    // sincronizados — sin esto, quien entró antes de que terminara la sync veía
+    // una lista incompleta hasta que tocaba un filtro manualmente.
+    if(document.getElementById('screen-ordenes')&&document.getElementById('screen-ordenes').classList.contains('active')&&document.getElementById('fp-semana')) aplicarFiltrosPendientes();
   }).catch(function(){});
   supaFetch('pm03_plan','GET',null,'order=semana.asc&limit=999999&select=actividad,actividades_estado,actividades_estado_final,actividades_estado_inicial,anio,area,cerrada_por,cerrada_ts,comentarios_actividades,componente,desinf_produccion,dias_trabajo,draft_ts,es_inspeccion,estado,estado_calidad,estado_flujo,firma_nombre_admin,origen_ot,origen_pm02,firma_nombre_calidad,firma_nombre_lider,firma_nombre_operador,firma_tecnico,firma_tecnico_ts,firma_ts_admin,firma_ts_calidad,firma_ts_lider,firma_ts_operador,fuente_excel,generado_por,grasa_aceite,herramienta_ingresada,herramienta_salida,hora_fin,hora_inicio,horas_actividades,horas_cierre,id,liberado_admin_por,liberado_admin_ts,liberado_por,liberado_prod_por,liberado_prod_ts,liberado_ts,limpieza_mtto,comentario_desinfeccion,linea,mediciones_actividades,observaciones_cierre,personas_actividades,rechazo_calidad,refacciones_nuevas,refacciones_usadas,reporte_actividades,responsable_area_id,responsable_area_nombre,semana,tecnico_id,tecnico_nombre,ts,semanas_vencidas,motivo_recorrido').then(function(rows){
     if(!rows)return;
@@ -14279,6 +14303,10 @@ function syncSupabase(){
     });
     saveDB('pm03_plan',PM03_PLAN);
     _pm3AplicarCortes();
+    // Igual que en el sync de 'ordenes': si "Mis Pendientes" está abierta ahora
+    // mismo, refrescar para que las PM03 recién sincronizadas (incluido el botón
+    // de filtro PM03) se vean sin que el usuario tenga que tocar un filtro.
+    if(document.getElementById('screen-ordenes')&&document.getElementById('screen-ordenes').classList.contains('active')&&document.getElementById('fp-semana')) aplicarFiltrosPendientes();
   }).catch(function(){});
   supaFetch('refacciones','GET',null,'order=codigo.asc').then(function(rows){if(rows&&rows.length){REFACCIONES=rows;saveDB('refacciones',REFACCIONES);}}).catch(function(){});
   supaFetch('mtbf_data','GET',null,'order=anio.desc,semana.desc').then(function(rows){if(rows&&rows.length){MTBF_DATA=rows;saveDB('mtbf_data',MTBF_DATA);}}).catch(function(){});
