@@ -30419,6 +30419,14 @@ function _fmtCostoTonNum(v){
   return r.toLocaleString('es-MX',{maximumFractionDigits:2});
 }
 
+// Igual que _fmtCostoTonNum pero SIEMPRE con 2 decimales (aunque sean .00) —
+// solo para los tooltips de costo/consumo por tonelada al pasar el cursor,
+// según lo pidió Jorge (antes mostraban enteros redondeados).
+function _fmtCostoTon2Dec(v){
+  if(v==null||!isFinite(v)) return '';
+  return v.toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2});
+}
+
 // ================================================================
 // MÓDULO ELECTRICIDAD (Servicios → Electricidad) — consumo mensual (pesos/kWh/toneladas)
 // ================================================================
@@ -30624,12 +30632,12 @@ function _renderElectricidadCharts(anio){
   var tooltipCostoTonPesos=function(items){
     var d=datos[items[0].dataIndex];
     if(!d||!d.toneladas||!d.pesos) return '';
-    return 'Costo por tonelada este mes: $'+Math.round(d.pesos/d.toneladas).toLocaleString('es-MX');
+    return 'Costo por tonelada este mes: $'+_fmtCostoTon2Dec(d.pesos/d.toneladas);
   };
   var tooltipCostoTonKwh=function(items){
     var d=datos[items[0].dataIndex];
     if(!d||!d.toneladas||!d.kwh) return '';
-    return 'Consumo por tonelada este mes: '+_fmtCostoTonNum(d.kwh/d.toneladas)+' kWh';
+    return 'Consumo por tonelada este mes: '+_fmtCostoTon2Dec(d.kwh/d.toneladas)+' kWh';
   };
 
   _elecChartPesos=new Chart(elP,{type:'bar',data:{labels:MESES_ELEC,datasets:[
@@ -30985,12 +30993,12 @@ function _renderGasCharts(anio){
   var tooltipCostoTonPesos=function(items){
     var d=datos[items[0].dataIndex];
     if(!d||!d.toneladas||!d.pesos) return '';
-    return 'Costo por tonelada este mes: $'+Math.round(d.pesos/d.toneladas).toLocaleString('es-MX');
+    return 'Costo por tonelada este mes: $'+_fmtCostoTon2Dec(d.pesos/d.toneladas);
   };
   var tooltipCostoTonM3=function(items){
     var d=datos[items[0].dataIndex];
     if(!d||!d.toneladas||!d.m3) return '';
-    return 'Consumo por tonelada este mes: '+_fmtCostoTonNum(d.m3/d.toneladas)+' m³';
+    return 'Consumo por tonelada este mes: '+_fmtCostoTon2Dec(d.m3/d.toneladas)+' m³';
   };
 
   _gasChartPesos=new Chart(elP,{type:'bar',data:{labels:MESES_GAS,datasets:[
@@ -31346,12 +31354,12 @@ function _renderAguaMensualCharts(anio){
   var tooltipCostoTonPesos=function(items){
     var d=datos[items[0].dataIndex];
     if(!d||!d.toneladas||!d.pesos) return '';
-    return 'Costo por tonelada este mes: $'+Math.round(d.pesos/d.toneladas).toLocaleString('es-MX');
+    return 'Costo por tonelada este mes: $'+_fmtCostoTon2Dec(d.pesos/d.toneladas);
   };
   var tooltipCostoTonM3=function(items){
     var d=datos[items[0].dataIndex];
     if(!d||!d.toneladas||!d.m3) return '';
-    return 'Consumo por tonelada este mes: '+_fmtCostoTonNum(d.m3/d.toneladas)+' m³';
+    return 'Consumo por tonelada este mes: '+_fmtCostoTon2Dec(d.m3/d.toneladas)+' m³';
   };
 
   _aguamChartPesos=new Chart(elP,{type:'bar',data:{labels:MESES_AGUAM,datasets:[
