@@ -102,11 +102,28 @@ let PM03_PLAN=loadDB('pm03_plan',[]);
 let MTBF_DATA=loadDB('mtbf_data',[]);
 let GASTO_DATA=loadDB('gasto_data',[]);
 let GAS_DATA=loadDB('gas_data',[]); // {id,anio,mes,pesos,m3,toneladas,ts} — módulo Servicios > Gas
-let GAS_CONFIG=loadDB('gas_config',{modo:'anual',ratio_anual:null,ratios_mensuales:null,tope_pesos:500000,tope_m3:40000}); // regla kg fabricados/m³
+// El objetivo (kg fabricados por m³/kWh) ahora queda amarrado a cada año, para
+// que cambiarlo a futuro (ej. en 2027) nunca repinte ni recalcule los años ya
+// capturados. Las 3 config quedan como un mapa {anio: {modo,ratio_anual,
+// ratios_mensuales,tope_pesos,tope_unidad}}. _migrarConfigPorAnio convierte,
+// una sola vez, la forma vieja (un solo objeto plano) en el objetivo vigente
+// del año base (2026) — los usuarios que ya tenían configurado algo no pierden
+// nada, y de ahí en adelante el formato guardado ya es el mapa por año.
+function _migrarConfigPorAnio(raw,anioBase){
+  if(!raw||typeof raw!=='object'||Array.isArray(raw)) return {};
+  if(('modo' in raw)||('ratio_anual' in raw)){
+    var copia={};copia[anioBase]=raw;return copia;
+  }
+  return raw;
+}
+let GAS_CONFIG_POR_ANIO=_migrarConfigPorAnio(loadDB('gas_config',{}),2026); // regla kg fabricados/m³, por año
+saveDB('gas_config',GAS_CONFIG_POR_ANIO);
 let ELEC_DATA=loadDB('elec_data',[]); // {id,anio,mes,pesos,kwh,toneladas,ts} — módulo Servicios > Electricidad
-let ELEC_CONFIG=loadDB('elec_config',{modo:'anual',ratio_anual:null,ratios_mensuales:null,tope_pesos:500000,tope_kwh:120000}); // regla kg fabricados/kWh
+let ELEC_CONFIG_POR_ANIO=_migrarConfigPorAnio(loadDB('elec_config',{}),2026); // regla kg fabricados/kWh, por año
+saveDB('elec_config',ELEC_CONFIG_POR_ANIO);
 let AGUAM_DATA=loadDB('aguam_data',[]); // {id,anio,mes,pesos,m3,toneladas,ts} — módulo Servicios > Agua > Consumo mensual
-let AGUAM_CONFIG=loadDB('aguam_config',{modo:'anual',ratio_anual:null,ratios_mensuales:null,tope_pesos:500000,tope_m3:20000}); // regla kg fabricados/m³
+let AGUAM_CONFIG_POR_ANIO=_migrarConfigPorAnio(loadDB('aguam_config',{}),2026); // regla kg fabricados/m³, por año
+saveDB('aguam_config',AGUAM_CONFIG_POR_ANIO);
 let ROLES_CUSTOM=loadDB('roles_custom',[]); // {id,nombre,ts} — roles personalizados (ej. Gerente)
 let PERMISOS_ROL=loadDB('permisos_rol',[]); // {id,rol_id,feature_key,nivel,ts}
 var ROLES_FIJOS=['operador','lider','tecnico','inspector_calidad','lider_calidad','administrativo','supply','admin','super'];
@@ -5974,33 +5991,50 @@ function syncSupabase(){
   supaFetch('mtbf_data','GET',null,'order=anio.desc,semana.desc').then(function(rows){if(rows&&rows.length){MTBF_DATA=rows;saveDB('mtbf_data',MTBF_DATA);}}).catch(function(){});
   supaFetch('gasto_data','GET',null,'order=anio.asc,semana.asc').then(function(rows){if(rows&&rows.length){GASTO_DATA=rows;saveDB('gasto_data',GASTO_DATA);}}).catch(function(){});
   supaFetch('gas_data','GET',null,'order=anio.asc,mes.asc').then(function(rows){if(rows&&rows.length){GAS_DATA=rows;saveDB('gas_data',GAS_DATA);}}).catch(function(){});
-  supaFetch('gas_config','GET',null,'id=eq.default').then(function(rows){
-    if(rows&&rows[0]){
-      var r=rows[0];
-      GAS_CONFIG={modo:r.modo||'anual',ratio_anual:r.ratio_anual!=null?r.ratio_anual:null,
-        ratios_mensuales:(function(){try{return r.ratios_mensuales?(typeof r.ratios_mensuales==='string'?JSON.parse(r.ratios_mensuales):r.ratios_mensuales):null;}catch(e){return null;}})(),
-        tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_m3:r.tope_m3!=null?r.tope_m3:40000};
-      saveDB('gas_config',GAS_CONFIG);
+  // Trae TODAS las filas (una por año) en vez de solo 'default', y arma el
+  // mapa {anio: config}. Si Supabase todavía no tiene la columna "anio" (no
+  // has corrido el SQL de migración), este fetch simplemente falla en
+  // silencio (.catch) y la app sigue con lo que ya tenía en local — no se
+  // rompe nada, solo no se actualiza desde la nube hasta que la agregues.
+  supaFetch('gas_config','GET',null,'order=anio.asc').then(function(rows){
+    if(rows&&rows.length){
+      var mapa={};
+      rows.forEach(function(r){
+        var anioFila=r.anio!=null?r.anio:2026;
+        mapa[anioFila]={modo:r.modo||'anual',ratio_anual:r.ratio_anual!=null?r.ratio_anual:null,
+          ratios_mensuales:(function(){try{return r.ratios_mensuales?(typeof r.ratios_mensuales==='string'?JSON.parse(r.ratios_mensuales):r.ratios_mensuales):null;}catch(e){return null;}})(),
+          tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_m3:r.tope_m3!=null?r.tope_m3:40000};
+      });
+      GAS_CONFIG_POR_ANIO=mapa;
+      saveDB('gas_config',GAS_CONFIG_POR_ANIO);
     }
   }).catch(function(){});
   supaFetch('elec_data','GET',null,'order=anio.asc,mes.asc').then(function(rows){if(rows&&rows.length){ELEC_DATA=rows;saveDB('elec_data',ELEC_DATA);}}).catch(function(){});
-  supaFetch('elec_config','GET',null,'id=eq.default').then(function(rows){
-    if(rows&&rows[0]){
-      var r=rows[0];
-      ELEC_CONFIG={modo:r.modo||'anual',ratio_anual:r.ratio_anual!=null?r.ratio_anual:null,
-        ratios_mensuales:(function(){try{return r.ratios_mensuales?(typeof r.ratios_mensuales==='string'?JSON.parse(r.ratios_mensuales):r.ratios_mensuales):null;}catch(e){return null;}})(),
-        tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_kwh:r.tope_kwh!=null?r.tope_kwh:120000};
-      saveDB('elec_config',ELEC_CONFIG);
+  supaFetch('elec_config','GET',null,'order=anio.asc').then(function(rows){
+    if(rows&&rows.length){
+      var mapa={};
+      rows.forEach(function(r){
+        var anioFila=r.anio!=null?r.anio:2026;
+        mapa[anioFila]={modo:r.modo||'anual',ratio_anual:r.ratio_anual!=null?r.ratio_anual:null,
+          ratios_mensuales:(function(){try{return r.ratios_mensuales?(typeof r.ratios_mensuales==='string'?JSON.parse(r.ratios_mensuales):r.ratios_mensuales):null;}catch(e){return null;}})(),
+          tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_kwh:r.tope_kwh!=null?r.tope_kwh:120000};
+      });
+      ELEC_CONFIG_POR_ANIO=mapa;
+      saveDB('elec_config',ELEC_CONFIG_POR_ANIO);
     }
   }).catch(function(){});
   supaFetch('aguam_data','GET',null,'order=anio.asc,mes.asc').then(function(rows){if(rows&&rows.length){AGUAM_DATA=rows;saveDB('aguam_data',AGUAM_DATA);}}).catch(function(){});
-  supaFetch('aguam_config','GET',null,'id=eq.default').then(function(rows){
-    if(rows&&rows[0]){
-      var r=rows[0];
-      AGUAM_CONFIG={modo:r.modo||'anual',ratio_anual:r.ratio_anual!=null?r.ratio_anual:null,
-        ratios_mensuales:(function(){try{return r.ratios_mensuales?(typeof r.ratios_mensuales==='string'?JSON.parse(r.ratios_mensuales):r.ratios_mensuales):null;}catch(e){return null;}})(),
-        tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_m3:r.tope_m3!=null?r.tope_m3:20000};
-      saveDB('aguam_config',AGUAM_CONFIG);
+  supaFetch('aguam_config','GET',null,'order=anio.asc').then(function(rows){
+    if(rows&&rows.length){
+      var mapa={};
+      rows.forEach(function(r){
+        var anioFila=r.anio!=null?r.anio:2026;
+        mapa[anioFila]={modo:r.modo||'anual',ratio_anual:r.ratio_anual!=null?r.ratio_anual:null,
+          ratios_mensuales:(function(){try{return r.ratios_mensuales?(typeof r.ratios_mensuales==='string'?JSON.parse(r.ratios_mensuales):r.ratios_mensuales):null;}catch(e){return null;}})(),
+          tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_m3:r.tope_m3!=null?r.tope_m3:20000};
+      });
+      AGUAM_CONFIG_POR_ANIO=mapa;
+      saveDB('aguam_config',AGUAM_CONFIG_POR_ANIO);
     }
   }).catch(function(){});
   supaFetch('kpi_comentarios','GET',null,'order=anio.asc,mes.asc').then(function(rows){if(rows&&rows.length){KPI_COMENTARIOS=rows;saveDB('kpi_comentarios',KPI_COMENTARIOS);}}).catch(function(){});
@@ -14310,33 +14344,50 @@ function syncSupabase(){
   supaFetch('mtbf_data','GET',null,'order=anio.desc,semana.desc').then(function(rows){if(rows&&rows.length){MTBF_DATA=rows;saveDB('mtbf_data',MTBF_DATA);}}).catch(function(){});
   supaFetch('gasto_data','GET',null,'order=anio.asc,semana.asc').then(function(rows){if(rows&&rows.length){GASTO_DATA=rows;saveDB('gasto_data',GASTO_DATA);}}).catch(function(){});
   supaFetch('gas_data','GET',null,'order=anio.asc,mes.asc').then(function(rows){if(rows&&rows.length){GAS_DATA=rows;saveDB('gas_data',GAS_DATA);}}).catch(function(){});
-  supaFetch('gas_config','GET',null,'id=eq.default').then(function(rows){
-    if(rows&&rows[0]){
-      var r=rows[0];
-      GAS_CONFIG={modo:r.modo||'anual',ratio_anual:r.ratio_anual!=null?r.ratio_anual:null,
-        ratios_mensuales:(function(){try{return r.ratios_mensuales?(typeof r.ratios_mensuales==='string'?JSON.parse(r.ratios_mensuales):r.ratios_mensuales):null;}catch(e){return null;}})(),
-        tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_m3:r.tope_m3!=null?r.tope_m3:40000};
-      saveDB('gas_config',GAS_CONFIG);
+  // Trae TODAS las filas (una por año) en vez de solo 'default', y arma el
+  // mapa {anio: config}. Si Supabase todavía no tiene la columna "anio" (no
+  // has corrido el SQL de migración), este fetch simplemente falla en
+  // silencio (.catch) y la app sigue con lo que ya tenía en local — no se
+  // rompe nada, solo no se actualiza desde la nube hasta que la agregues.
+  supaFetch('gas_config','GET',null,'order=anio.asc').then(function(rows){
+    if(rows&&rows.length){
+      var mapa={};
+      rows.forEach(function(r){
+        var anioFila=r.anio!=null?r.anio:2026;
+        mapa[anioFila]={modo:r.modo||'anual',ratio_anual:r.ratio_anual!=null?r.ratio_anual:null,
+          ratios_mensuales:(function(){try{return r.ratios_mensuales?(typeof r.ratios_mensuales==='string'?JSON.parse(r.ratios_mensuales):r.ratios_mensuales):null;}catch(e){return null;}})(),
+          tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_m3:r.tope_m3!=null?r.tope_m3:40000};
+      });
+      GAS_CONFIG_POR_ANIO=mapa;
+      saveDB('gas_config',GAS_CONFIG_POR_ANIO);
     }
   }).catch(function(){});
   supaFetch('elec_data','GET',null,'order=anio.asc,mes.asc').then(function(rows){if(rows&&rows.length){ELEC_DATA=rows;saveDB('elec_data',ELEC_DATA);}}).catch(function(){});
-  supaFetch('elec_config','GET',null,'id=eq.default').then(function(rows){
-    if(rows&&rows[0]){
-      var r=rows[0];
-      ELEC_CONFIG={modo:r.modo||'anual',ratio_anual:r.ratio_anual!=null?r.ratio_anual:null,
-        ratios_mensuales:(function(){try{return r.ratios_mensuales?(typeof r.ratios_mensuales==='string'?JSON.parse(r.ratios_mensuales):r.ratios_mensuales):null;}catch(e){return null;}})(),
-        tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_kwh:r.tope_kwh!=null?r.tope_kwh:120000};
-      saveDB('elec_config',ELEC_CONFIG);
+  supaFetch('elec_config','GET',null,'order=anio.asc').then(function(rows){
+    if(rows&&rows.length){
+      var mapa={};
+      rows.forEach(function(r){
+        var anioFila=r.anio!=null?r.anio:2026;
+        mapa[anioFila]={modo:r.modo||'anual',ratio_anual:r.ratio_anual!=null?r.ratio_anual:null,
+          ratios_mensuales:(function(){try{return r.ratios_mensuales?(typeof r.ratios_mensuales==='string'?JSON.parse(r.ratios_mensuales):r.ratios_mensuales):null;}catch(e){return null;}})(),
+          tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_kwh:r.tope_kwh!=null?r.tope_kwh:120000};
+      });
+      ELEC_CONFIG_POR_ANIO=mapa;
+      saveDB('elec_config',ELEC_CONFIG_POR_ANIO);
     }
   }).catch(function(){});
   supaFetch('aguam_data','GET',null,'order=anio.asc,mes.asc').then(function(rows){if(rows&&rows.length){AGUAM_DATA=rows;saveDB('aguam_data',AGUAM_DATA);}}).catch(function(){});
-  supaFetch('aguam_config','GET',null,'id=eq.default').then(function(rows){
-    if(rows&&rows[0]){
-      var r=rows[0];
-      AGUAM_CONFIG={modo:r.modo||'anual',ratio_anual:r.ratio_anual!=null?r.ratio_anual:null,
-        ratios_mensuales:(function(){try{return r.ratios_mensuales?(typeof r.ratios_mensuales==='string'?JSON.parse(r.ratios_mensuales):r.ratios_mensuales):null;}catch(e){return null;}})(),
-        tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_m3:r.tope_m3!=null?r.tope_m3:20000};
-      saveDB('aguam_config',AGUAM_CONFIG);
+  supaFetch('aguam_config','GET',null,'order=anio.asc').then(function(rows){
+    if(rows&&rows.length){
+      var mapa={};
+      rows.forEach(function(r){
+        var anioFila=r.anio!=null?r.anio:2026;
+        mapa[anioFila]={modo:r.modo||'anual',ratio_anual:r.ratio_anual!=null?r.ratio_anual:null,
+          ratios_mensuales:(function(){try{return r.ratios_mensuales?(typeof r.ratios_mensuales==='string'?JSON.parse(r.ratios_mensuales):r.ratios_mensuales):null;}catch(e){return null;}})(),
+          tope_pesos:r.tope_pesos!=null?r.tope_pesos:500000,tope_m3:r.tope_m3!=null?r.tope_m3:20000};
+      });
+      AGUAM_CONFIG_POR_ANIO=mapa;
+      saveDB('aguam_config',AGUAM_CONFIG_POR_ANIO);
     }
   }).catch(function(){});
   supaFetch('kpi_comentarios','GET',null,'order=anio.asc,mes.asc').then(function(rows){if(rows&&rows.length){KPI_COMENTARIOS=rows;saveDB('kpi_comentarios',KPI_COMENTARIOS);}}).catch(function(){});
@@ -30383,8 +30434,22 @@ function showElectricidad(){
 // Regla de eficiencia (kg fabricados por cada kWh) vigente para un mes dado,
 // según Configuración: un solo valor para todo el año, o uno distinto por mes.
 // Devuelve null si no se ha definido — en ese caso no se pinta color ni línea.
-function _elecRatioMes(mes){
-  var c=ELEC_CONFIG||{};
+// Objetivo configurado (kg fabricados por kWh) vigente para un año: si ese
+// año no tiene uno propio capturado, se usa el del año anterior más reciente
+// que sí lo tenga (carry-forward) — así no hay que redefinirlo cada año.
+function _elecConfigAnio(anio){
+  var mapa=ELEC_CONFIG_POR_ANIO||{};
+  if(mapa[anio]) return mapa[anio];
+  var mejor=null,mejorAnio=-Infinity;
+  Object.keys(mapa).forEach(function(k){
+    var a=parseInt(k,10);
+    if(a<=anio&&a>mejorAnio){mejorAnio=a;mejor=mapa[k];}
+  });
+  return mejor||{modo:'anual',ratio_anual:null,ratios_mensuales:null,tope_pesos:500000,tope_kwh:120000};
+}
+
+function _elecRatioMes(anio,mes){
+  var c=_elecConfigAnio(anio);
   if(c.modo==='mensual'){
     var v=(c.ratios_mensuales||[])[mes-1];
     return (v!=null&&v>0)?v:null;
@@ -30392,11 +30457,13 @@ function _elecRatioMes(mes){
   return (c.ratio_anual!=null&&c.ratio_anual>0)?c.ratio_anual:null;
 }
 
-// kWh esperado para un mes, según la regla kg/kWh y las toneladas capturadas
-// ese mes (toneladas → kg). null si falta la regla o las toneladas.
+// kWh esperado para un mes, según la regla kg/kWh vigente ESE año y las
+// toneladas capturadas ese mes (toneladas → kg). null si falta la regla o
+// las toneladas.
 function _elecKwhEsperado(entry,mes){
-  var ratio=_elecRatioMes(mes);
-  if(!ratio||!entry||!entry.toneladas) return null;
+  if(!entry) return null;
+  var ratio=_elecRatioMes(entry.anio,mes);
+  if(!ratio||!entry.toneladas) return null;
   return (entry.toneladas*1000)/ratio;
 }
 
@@ -30444,7 +30511,7 @@ function _elecPrecioRealUnidad(anio){
 // en modo "Por mes" el costo varía mes a mes y no hay un solo valor fijo
 // que mostrar aquí.
 function _elecCostoPorTonelada(anio){
-  var c=ELEC_CONFIG||{};
+  var c=_elecConfigAnio(anio);
   if(c.modo==='mensual') return null;
   var ratio=c.ratio_anual;
   if(!ratio||ratio<=0) return null;
@@ -30454,14 +30521,32 @@ function _elecCostoPorTonelada(anio){
   return {unidadPorTon:kwhPorTon,pesosPorTon:kwhPorTon*precioUnitario};
 }
 
+// Promedio REAL logrado (no usa el objetivo configurado): toneladas
+// capturadas vs pesos/kWh capturados cada mes, promediado — para que Jorge
+// tenga una referencia de lo que de verdad está pasando y decida qué objetivo
+// capturar. Solo lectura, se muestra en Configuración.
+function _elecPromedioRealLogrado(anio){
+  var sumaPesos=0,sumaKwh=0,n=0;
+  for(var m=1;m<=12;m++){
+    var e=ELEC_DATA.find(function(g){return g.anio===anio&&g.mes===m;});
+    if(e&&e.toneladas&&e.pesos!=null&&e.kwh!=null){
+      sumaPesos+=e.pesos/e.toneladas;
+      sumaKwh+=e.kwh/e.toneladas;
+      n++;
+    }
+  }
+  if(!n) return null;
+  return {pesosPorTon:sumaPesos/n,unidadPorTon:sumaKwh/n};
+}
+
 function _elecPintarCostoTon(anio){
   var spanP=document.getElementById('elec-costo-ton-pesos');
   var spanK=document.getElementById('elec-costo-ton-kwh');
   if(!spanP||!spanK) return;
   var r=_elecCostoPorTonelada(anio);
   if(!r){spanP.textContent='';spanK.textContent='';return;}
-  spanP.textContent='Objetivo: $'+Math.round(r.pesosPorTon).toLocaleString('es-MX')+' por tonelada';
-  spanK.textContent='Objetivo: '+_fmtCostoTonNum(r.unidadPorTon)+' kWh por tonelada';
+  spanP.textContent='Objetivo por tonelada: $'+Math.round(r.pesosPorTon).toLocaleString('es-MX')+' por tonelada';
+  spanK.textContent='Objetivo por tonelada: '+_fmtCostoTonNum(r.unidadPorTon)+' kWh por tonelada';
 }
 
 function filtElecAnio(anio){
@@ -30548,35 +30633,35 @@ function _renderElectricidadCharts(anio){
   };
 
   _elecChartPesos=new Chart(elP,{type:'bar',data:{labels:MESES_ELEC,datasets:[
-    {label:'Pesos',data:valoresPesos,backgroundColor:colores,borderRadius:4,yAxisID:'y',
-     datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
-       formatter:function(v){return v?_elecFmtPesos(v):'';}}},
     {label:'Toneladas',data:valoresTon,backgroundColor:'rgba(156,163,175,.6)',borderRadius:4,yAxisID:'y1',
      datalabels:{display:true,anchor:'end',align:'end',color:'#6b7280',font:{weight:'700',size:9},
        formatter:function(v){return v?_fmtCostoTonNum(v):'';}}},
+    {label:'Pesos',data:valoresPesos,backgroundColor:colores,borderRadius:4,yAxisID:'y',
+     datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
+       formatter:function(v){return v?_elecFmtPesos(v):'';}}},
     {type:'line',label:'Meta',data:lineaPesos,borderColor:'#000',borderDash:[6,4],borderWidth:2,
      pointRadius:0,fill:false,spanGaps:false,yAxisID:'y',datalabels:{display:false}}
   ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false},
     tooltip:{callbacks:{afterBody:tooltipCostoTonPesos}}},
     scales:{
-      y:{min:0,max:(ELEC_CONFIG&&ELEC_CONFIG.tope_pesos)||500000,ticks:{callback:function(v){return (v/1000)+'k';}}},
+      y:{min:0,max:_elecConfigAnio(anio).tope_pesos||500000,ticks:{callback:function(v){return (v/1000)+'k';}}},
       y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false}}
     },
     onClick:clickMes}});
 
   _elecChartKwh=new Chart(elK,{type:'bar',data:{labels:MESES_ELEC,datasets:[
-    {label:'kWh',data:valoresKwh,backgroundColor:colores,borderRadius:4,yAxisID:'y',
-     datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
-       formatter:function(v){return v?_elecFmtPesos(v):'';}}},
     {label:'Toneladas',data:valoresTon,backgroundColor:'rgba(156,163,175,.6)',borderRadius:4,yAxisID:'y1',
      datalabels:{display:true,anchor:'end',align:'end',color:'#6b7280',font:{weight:'700',size:9},
        formatter:function(v){return v?_fmtCostoTonNum(v):'';}}},
+    {label:'kWh',data:valoresKwh,backgroundColor:colores,borderRadius:4,yAxisID:'y',
+     datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
+       formatter:function(v){return v?_elecFmtPesos(v):'';}}},
     {type:'line',label:'Meta',data:lineaKwh,borderColor:'#000',borderDash:[6,4],borderWidth:2,
      pointRadius:0,fill:false,spanGaps:false,yAxisID:'y',datalabels:{display:false}}
   ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false},
     tooltip:{callbacks:{afterBody:tooltipCostoTonKwh}}},
     scales:{
-      y:{min:0,max:(ELEC_CONFIG&&ELEC_CONFIG.tope_kwh)||120000,ticks:{callback:function(v){return (v/1000)+'k';}}},
+      y:{min:0,max:_elecConfigAnio(anio).tope_kwh||120000,ticks:{callback:function(v){return (v/1000)+'k';}}},
       y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false}}
     },
     onClick:clickMes}});
@@ -30625,8 +30710,16 @@ function guardarElec(){
 }
 
 function abrirConfigElec(){
-  var c=ELEC_CONFIG||{};
+  var anio=window._elecFiltroAnio||currentYear();
+  var c=_elecConfigAnio(anio);
   var modo=c.modo||'anual';
+  var real=_elecPromedioRealLogrado(anio);
+  var realHtml=real?
+    ('<div style="background:#f3f4f6;border-radius:10px;padding:10px 12px;margin-bottom:14px">'
+      +'<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:2px">📊 Promedio real logrado en '+anio+' (no editable)</div>'
+      +'<div style="font-size:12px;color:#374151">$'+Math.round(real.pesosPorTon).toLocaleString('es-MX')+' por tonelada · '+_fmtCostoTonNum(real.unidadPorTon)+' kWh por tonelada</div>'
+      +'</div>')
+    :('<div style="background:#f3f4f6;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#6b7280">📊 Promedio real logrado en '+anio+': todavía no hay datos capturados este año.</div>');
   var mensualInputs=MESES_ELEC.map(function(nm,i){
     var v=(c.ratios_mensuales&&c.ratios_mensuales[i]!=null)?c.ratios_mensuales[i]:'';
     return '<div><label style="font-size:11px;font-weight:700;color:#374151">'+nm+'</label>'
@@ -30636,14 +30729,15 @@ function abrirConfigElec(){
   modal.id='modal-elec-config';
   modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
   modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box;max-height:85vh;overflow-y:auto">'
-    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#F9A825;margin-bottom:6px">⚙️ Configuración de Electricidad</div>'
-    +'<div style="font-size:12px;color:#6b7280;margin-bottom:14px">Define cuántos kg se deben fabricar por cada kWh consumido. Con esto, las gráficas de Pesos y kWh se pintan en verde (cumple) o rojo (excede) cada mes, y se traza la línea de meta. Si no lo defines, no se pinta nada.</div>'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#F9A825;margin-bottom:6px">⚙️ Configuración de Electricidad — Año '+anio+'</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:14px">Define cuántos kg se deben fabricar por cada kWh consumido. Con esto, las gráficas de Pesos y kWh se pintan en verde (cumple) o rojo (excede) cada mes, y se traza la línea de meta. Si no lo defines, no se pinta nada. Este objetivo queda guardado solo para el año '+anio+' — no afecta otros años.</div>'
+    +realHtml
     +'<div class="filter-row" style="margin-bottom:12px">'
     +'<div class="filter-chip'+(modo==='anual'?' active':'')+'" onclick="_elecCfgSetModo(\'anual\')" id="elec-cfg-chip-anual">Igual todo el año</div>'
     +'<div class="filter-chip'+(modo==='mensual'?' active':'')+'" onclick="_elecCfgSetModo(\'mensual\')" id="elec-cfg-chip-mensual">Por mes</div>'
     +'</div>'
     +'<div id="elec-cfg-anual" style="'+(modo==='anual'?'':'display:none')+'">'
-    +'<div class="form-group"><label class="form-label">kg fabricados por kWh</label><input type="number" class="form-control" id="elec-cfg-anual-val" value="'+(c.ratio_anual!=null?c.ratio_anual:'')+'" min="0" step="0.01"></div>'
+    +'<div class="form-group"><label class="form-label">Objetivo Kg vs kWh</label><input type="number" class="form-control" id="elec-cfg-anual-val" value="'+(c.ratio_anual!=null?c.ratio_anual:'')+'" min="0" step="0.01"></div>'
     +'</div>'
     +'<div id="elec-cfg-mensual" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;'+(modo==='mensual'?'':'display:none')+'">'
     +mensualInputs
@@ -30656,7 +30750,7 @@ function abrirConfigElec(){
     +'</div></div>'
     +'<div style="display:flex;gap:10px;margin-top:12px">'
     +'<button onclick="var m=document.getElementById(\'modal-elec-config\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
-    +'<button onclick="guardarConfigElec()" style="flex:2;padding:13px;background:#F9A825;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar</button>'
+    +'<button onclick="guardarConfigElec('+anio+')" style="flex:2;padding:13px;background:#F9A825;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar</button>'
     +'</div></div>';
   document.body.appendChild(modal);
 }
@@ -30668,10 +30762,11 @@ function _elecCfgSetModo(modo){
   document.getElementById('elec-cfg-mensual').style.display=modo==='mensual'?'grid':'none';
 }
 
-function guardarConfigElec(){
+function guardarConfigElec(anio){
+  anio=anio||window._elecFiltroAnio||currentYear();
   var chipMensual=document.getElementById('elec-cfg-chip-mensual');
   var modo=(chipMensual&&chipMensual.classList.contains('active'))?'mensual':'anual';
-  var config={modo:modo,ts:Date.now()};
+  var config={modo:modo,anio:anio,ts:Date.now()};
   if(modo==='anual'){
     config.ratio_anual=parseFloat(document.getElementById('elec-cfg-anual-val').value)||null;
     config.ratios_mensuales=null;
@@ -30684,9 +30779,9 @@ function guardarConfigElec(){
   }
   config.tope_pesos=parseFloat(document.getElementById('elec-cfg-tope-pesos').value)||500000;
   config.tope_kwh=parseFloat(document.getElementById('elec-cfg-tope-kwh').value)||120000;
-  ELEC_CONFIG=config;
-  saveDB('elec_config',ELEC_CONFIG);
-  supaUpsert('elec_config',{id:'default',modo:config.modo,ratio_anual:config.ratio_anual,
+  ELEC_CONFIG_POR_ANIO[anio]=config;
+  saveDB('elec_config',ELEC_CONFIG_POR_ANIO);
+  supaUpsert('elec_config',{id:'y'+anio,anio:anio,modo:config.modo,ratio_anual:config.ratio_anual,
     ratios_mensuales:config.ratios_mensuales?JSON.stringify(config.ratios_mensuales):null,
     tope_pesos:config.tope_pesos,tope_kwh:config.tope_kwh,ts:config.ts}).catch(function(){});
   var m=document.getElementById('modal-elec-config');if(m)m.remove();
@@ -30710,8 +30805,20 @@ function showGas(){
 // Regla de eficiencia (kg fabricados por cada m³) vigente para un mes dado,
 // según Configuración: un solo valor para todo el año, o uno distinto por mes.
 // Devuelve null si no se ha definido — en ese caso no se pinta color ni línea.
-function _gasRatioMes(mes){
-  var c=GAS_CONFIG||{};
+// Ver comentario de _elecConfigAnio — mismo mecanismo de carry-forward.
+function _gasConfigAnio(anio){
+  var mapa=GAS_CONFIG_POR_ANIO||{};
+  if(mapa[anio]) return mapa[anio];
+  var mejor=null,mejorAnio=-Infinity;
+  Object.keys(mapa).forEach(function(k){
+    var a=parseInt(k,10);
+    if(a<=anio&&a>mejorAnio){mejorAnio=a;mejor=mapa[k];}
+  });
+  return mejor||{modo:'anual',ratio_anual:null,ratios_mensuales:null,tope_pesos:500000,tope_m3:40000};
+}
+
+function _gasRatioMes(anio,mes){
+  var c=_gasConfigAnio(anio);
   if(c.modo==='mensual'){
     var v=(c.ratios_mensuales||[])[mes-1];
     return (v!=null&&v>0)?v:null;
@@ -30719,11 +30826,13 @@ function _gasRatioMes(mes){
   return (c.ratio_anual!=null&&c.ratio_anual>0)?c.ratio_anual:null;
 }
 
-// m³ esperado para un mes, según la regla kg/m³ y las toneladas capturadas
-// ese mes (toneladas → kg). null si falta la regla o las toneladas.
+// m³ esperado para un mes, según la regla kg/m³ vigente ESE año y las
+// toneladas capturadas ese mes (toneladas → kg). null si falta la regla o
+// las toneladas.
 function _gasM3Esperado(entry,mes){
-  var ratio=_gasRatioMes(mes);
-  if(!ratio||!entry||!entry.toneladas) return null;
+  if(!entry) return null;
+  var ratio=_gasRatioMes(entry.anio,mes);
+  if(!ratio||!entry.toneladas) return null;
   return (entry.toneladas*1000)/ratio;
 }
 
@@ -30766,7 +30875,7 @@ function _gasPrecioRealUnidad(anio){
 
 // Ver comentario de _elecCostoPorTonelada — mismo cálculo, con m³ en vez de kWh.
 function _gasCostoPorTonelada(anio){
-  var c=GAS_CONFIG||{};
+  var c=_gasConfigAnio(anio);
   if(c.modo==='mensual') return null;
   var ratio=c.ratio_anual;
   if(!ratio||ratio<=0) return null;
@@ -30776,14 +30885,29 @@ function _gasCostoPorTonelada(anio){
   return {unidadPorTon:m3PorTon,pesosPorTon:m3PorTon*precioUnitario};
 }
 
+// Ver comentario de _elecPromedioRealLogrado — mismo cálculo, con m³.
+function _gasPromedioRealLogrado(anio){
+  var sumaPesos=0,sumaM3=0,n=0;
+  for(var m=1;m<=12;m++){
+    var e=GAS_DATA.find(function(g){return g.anio===anio&&g.mes===m;});
+    if(e&&e.toneladas&&e.pesos!=null&&e.m3!=null){
+      sumaPesos+=e.pesos/e.toneladas;
+      sumaM3+=e.m3/e.toneladas;
+      n++;
+    }
+  }
+  if(!n) return null;
+  return {pesosPorTon:sumaPesos/n,unidadPorTon:sumaM3/n};
+}
+
 function _gasPintarCostoTon(anio){
   var spanP=document.getElementById('gas-costo-ton-pesos');
   var spanM=document.getElementById('gas-costo-ton-m3');
   if(!spanP||!spanM) return;
   var r=_gasCostoPorTonelada(anio);
   if(!r){spanP.textContent='';spanM.textContent='';return;}
-  spanP.textContent='Objetivo: $'+Math.round(r.pesosPorTon).toLocaleString('es-MX')+' por tonelada';
-  spanM.textContent='Objetivo: '+_fmtCostoTonNum(r.unidadPorTon)+' m³ por tonelada';
+  spanP.textContent='Objetivo por tonelada: $'+Math.round(r.pesosPorTon).toLocaleString('es-MX')+' por tonelada';
+  spanM.textContent='Objetivo por tonelada: '+_fmtCostoTonNum(r.unidadPorTon)+' m³ por tonelada';
 }
 
 function filtGasAnio(anio){
@@ -30870,35 +30994,35 @@ function _renderGasCharts(anio){
   };
 
   _gasChartPesos=new Chart(elP,{type:'bar',data:{labels:MESES_GAS,datasets:[
-    {label:'Pesos',data:valoresPesos,backgroundColor:colores,borderRadius:4,yAxisID:'y',
-     datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
-       formatter:function(v){return v?_gasFmtPesos(v):'';}}},
     {label:'Toneladas',data:valoresTon,backgroundColor:'rgba(156,163,175,.6)',borderRadius:4,yAxisID:'y1',
      datalabels:{display:true,anchor:'end',align:'end',color:'#6b7280',font:{weight:'700',size:9},
        formatter:function(v){return v?_fmtCostoTonNum(v):'';}}},
+    {label:'Pesos',data:valoresPesos,backgroundColor:colores,borderRadius:4,yAxisID:'y',
+     datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
+       formatter:function(v){return v?_gasFmtPesos(v):'';}}},
     {type:'line',label:'Meta',data:lineaPesos,borderColor:'#000',borderDash:[6,4],borderWidth:2,
      pointRadius:0,fill:false,spanGaps:false,yAxisID:'y',datalabels:{display:false}}
   ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false},
     tooltip:{callbacks:{afterBody:tooltipCostoTonPesos}}},
     scales:{
-      y:{min:0,max:(GAS_CONFIG&&GAS_CONFIG.tope_pesos)||500000,ticks:{callback:function(v){return (v/1000)+'k';}}},
+      y:{min:0,max:_gasConfigAnio(anio).tope_pesos||500000,ticks:{callback:function(v){return (v/1000)+'k';}}},
       y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false}}
     },
     onClick:clickMes}});
 
   _gasChartM3=new Chart(elK,{type:'bar',data:{labels:MESES_GAS,datasets:[
-    {label:'m³',data:valoresM3,backgroundColor:colores,borderRadius:4,yAxisID:'y',
-     datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
-       formatter:function(v){return v?_gasFmtPesos(v):'';}}},
     {label:'Toneladas',data:valoresTon,backgroundColor:'rgba(156,163,175,.6)',borderRadius:4,yAxisID:'y1',
      datalabels:{display:true,anchor:'end',align:'end',color:'#6b7280',font:{weight:'700',size:9},
        formatter:function(v){return v?_fmtCostoTonNum(v):'';}}},
+    {label:'m³',data:valoresM3,backgroundColor:colores,borderRadius:4,yAxisID:'y',
+     datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
+       formatter:function(v){return v?_gasFmtPesos(v):'';}}},
     {type:'line',label:'Meta',data:lineaM3,borderColor:'#000',borderDash:[6,4],borderWidth:2,
      pointRadius:0,fill:false,spanGaps:false,yAxisID:'y',datalabels:{display:false}}
   ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false},
     tooltip:{callbacks:{afterBody:tooltipCostoTonM3}}},
     scales:{
-      y:{min:0,max:(GAS_CONFIG&&GAS_CONFIG.tope_m3)||40000,ticks:{callback:function(v){return (v/1000)+'k';}}},
+      y:{min:0,max:_gasConfigAnio(anio).tope_m3||40000,ticks:{callback:function(v){return (v/1000)+'k';}}},
       y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false}}
     },
     onClick:clickMes}});
@@ -30947,8 +31071,16 @@ function guardarGas(){
 }
 
 function abrirConfigGas(){
-  var c=GAS_CONFIG||{};
+  var anio=window._gasFiltroAnio||currentYear();
+  var c=_gasConfigAnio(anio);
   var modo=c.modo||'anual';
+  var real=_gasPromedioRealLogrado(anio);
+  var realHtml=real?
+    ('<div style="background:#f3f4f6;border-radius:10px;padding:10px 12px;margin-bottom:14px">'
+      +'<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:2px">📊 Promedio real logrado en '+anio+' (no editable)</div>'
+      +'<div style="font-size:12px;color:#374151">$'+Math.round(real.pesosPorTon).toLocaleString('es-MX')+' por tonelada · '+_fmtCostoTonNum(real.unidadPorTon)+' m³ por tonelada</div>'
+      +'</div>')
+    :('<div style="background:#f3f4f6;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#6b7280">📊 Promedio real logrado en '+anio+': todavía no hay datos capturados este año.</div>');
   var mensualInputs=MESES_GAS.map(function(nm,i){
     var v=(c.ratios_mensuales&&c.ratios_mensuales[i]!=null)?c.ratios_mensuales[i]:'';
     return '<div><label style="font-size:11px;font-weight:700;color:#374151">'+nm+'</label>'
@@ -30958,14 +31090,15 @@ function abrirConfigGas(){
   modal.id='modal-gas-config';
   modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
   modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box;max-height:85vh;overflow-y:auto">'
-    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#d97706;margin-bottom:6px">⚙️ Configuración de Gas</div>'
-    +'<div style="font-size:12px;color:#6b7280;margin-bottom:14px">Define cuántos kg se deben fabricar por cada m³ consumido. Con esto, las gráficas de Pesos y m³ se pintan en verde (cumple) o rojo (excede) cada mes, y se traza la línea de meta. Si no lo defines, no se pinta nada.</div>'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#d97706;margin-bottom:6px">⚙️ Configuración de Gas — Año '+anio+'</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:14px">Define cuántos kg se deben fabricar por cada m³ consumido. Con esto, las gráficas de Pesos y m³ se pintan en verde (cumple) o rojo (excede) cada mes, y se traza la línea de meta. Si no lo defines, no se pinta nada. Este objetivo queda guardado solo para el año '+anio+' — no afecta otros años.</div>'
+    +realHtml
     +'<div class="filter-row" style="margin-bottom:12px">'
     +'<div class="filter-chip'+(modo==='anual'?' active':'')+'" onclick="_gasCfgSetModo(\'anual\')" id="gas-cfg-chip-anual">Igual todo el año</div>'
     +'<div class="filter-chip'+(modo==='mensual'?' active':'')+'" onclick="_gasCfgSetModo(\'mensual\')" id="gas-cfg-chip-mensual">Por mes</div>'
     +'</div>'
     +'<div id="gas-cfg-anual" style="'+(modo==='anual'?'':'display:none')+'">'
-    +'<div class="form-group"><label class="form-label">kg fabricados por m³</label><input type="number" class="form-control" id="gas-cfg-anual-val" value="'+(c.ratio_anual!=null?c.ratio_anual:'')+'" min="0" step="0.01"></div>'
+    +'<div class="form-group"><label class="form-label">Objetivo Kg vs m³</label><input type="number" class="form-control" id="gas-cfg-anual-val" value="'+(c.ratio_anual!=null?c.ratio_anual:'')+'" min="0" step="0.01"></div>'
     +'</div>'
     +'<div id="gas-cfg-mensual" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;'+(modo==='mensual'?'':'display:none')+'">'
     +mensualInputs
@@ -30978,7 +31111,7 @@ function abrirConfigGas(){
     +'</div></div>'
     +'<div style="display:flex;gap:10px;margin-top:12px">'
     +'<button onclick="var m=document.getElementById(\'modal-gas-config\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
-    +'<button onclick="guardarConfigGas()" style="flex:2;padding:13px;background:#d97706;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar</button>'
+    +'<button onclick="guardarConfigGas('+anio+')" style="flex:2;padding:13px;background:#d97706;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar</button>'
     +'</div></div>';
   document.body.appendChild(modal);
 }
@@ -30990,10 +31123,11 @@ function _gasCfgSetModo(modo){
   document.getElementById('gas-cfg-mensual').style.display=modo==='mensual'?'grid':'none';
 }
 
-function guardarConfigGas(){
+function guardarConfigGas(anio){
+  anio=anio||window._gasFiltroAnio||currentYear();
   var chipMensual=document.getElementById('gas-cfg-chip-mensual');
   var modo=(chipMensual&&chipMensual.classList.contains('active'))?'mensual':'anual';
-  var config={modo:modo,ts:Date.now()};
+  var config={modo:modo,anio:anio,ts:Date.now()};
   if(modo==='anual'){
     config.ratio_anual=parseFloat(document.getElementById('gas-cfg-anual-val').value)||null;
     config.ratios_mensuales=null;
@@ -31006,9 +31140,9 @@ function guardarConfigGas(){
   }
   config.tope_pesos=parseFloat(document.getElementById('gas-cfg-tope-pesos').value)||500000;
   config.tope_m3=parseFloat(document.getElementById('gas-cfg-tope-m3').value)||20000;
-  GAS_CONFIG=config;
-  saveDB('gas_config',GAS_CONFIG);
-  supaUpsert('gas_config',{id:'default',modo:config.modo,ratio_anual:config.ratio_anual,
+  GAS_CONFIG_POR_ANIO[anio]=config;
+  saveDB('gas_config',GAS_CONFIG_POR_ANIO);
+  supaUpsert('gas_config',{id:'y'+anio,anio:anio,modo:config.modo,ratio_anual:config.ratio_anual,
     ratios_mensuales:config.ratios_mensuales?JSON.stringify(config.ratios_mensuales):null,
     tope_pesos:config.tope_pesos,tope_m3:config.tope_m3,ts:config.ts}).catch(function(){});
   var m=document.getElementById('modal-gas-config');if(m)m.remove();
@@ -31033,8 +31167,20 @@ function showAguaMensual(){
 // Regla de eficiencia (kg fabricados por cada m³) vigente para un mes dado,
 // según Configuración: un solo valor para todo el año, o uno distinto por mes.
 // Devuelve null si no se ha definido — en ese caso no se pinta color ni línea.
-function _aguamRatioMes(mes){
-  var c=AGUAM_CONFIG||{};
+// Ver comentario de _elecConfigAnio — mismo mecanismo de carry-forward.
+function _aguamConfigAnio(anio){
+  var mapa=AGUAM_CONFIG_POR_ANIO||{};
+  if(mapa[anio]) return mapa[anio];
+  var mejor=null,mejorAnio=-Infinity;
+  Object.keys(mapa).forEach(function(k){
+    var a=parseInt(k,10);
+    if(a<=anio&&a>mejorAnio){mejorAnio=a;mejor=mapa[k];}
+  });
+  return mejor||{modo:'anual',ratio_anual:null,ratios_mensuales:null,tope_pesos:500000,tope_m3:20000};
+}
+
+function _aguamRatioMes(anio,mes){
+  var c=_aguamConfigAnio(anio);
   if(c.modo==='mensual'){
     var v=(c.ratios_mensuales||[])[mes-1];
     return (v!=null&&v>0)?v:null;
@@ -31042,11 +31188,13 @@ function _aguamRatioMes(mes){
   return (c.ratio_anual!=null&&c.ratio_anual>0)?c.ratio_anual:null;
 }
 
-// m³ esperado para un mes, según la regla kg/m³ y las toneladas capturadas
-// ese mes (toneladas → kg). null si falta la regla o las toneladas.
+// m³ esperado para un mes, según la regla kg/m³ vigente ESE año y las
+// toneladas capturadas ese mes (toneladas → kg). null si falta la regla o
+// las toneladas.
 function _aguamM3Esperado(entry,mes){
-  var ratio=_aguamRatioMes(mes);
-  if(!ratio||!entry||!entry.toneladas) return null;
+  if(!entry) return null;
+  var ratio=_aguamRatioMes(entry.anio,mes);
+  if(!ratio||!entry.toneladas) return null;
   return (entry.toneladas*1000)/ratio;
 }
 
@@ -31089,7 +31237,7 @@ function _aguamPrecioRealUnidad(anio){
 
 // Ver comentario de _elecCostoPorTonelada — mismo cálculo, con m³ en vez de kWh.
 function _aguamCostoPorTonelada(anio){
-  var c=AGUAM_CONFIG||{};
+  var c=_aguamConfigAnio(anio);
   if(c.modo==='mensual') return null;
   var ratio=c.ratio_anual;
   if(!ratio||ratio<=0) return null;
@@ -31099,14 +31247,29 @@ function _aguamCostoPorTonelada(anio){
   return {unidadPorTon:m3PorTon,pesosPorTon:m3PorTon*precioUnitario};
 }
 
+// Ver comentario de _elecPromedioRealLogrado — mismo cálculo, con m³.
+function _aguamPromedioRealLogrado(anio){
+  var sumaPesos=0,sumaM3=0,n=0;
+  for(var m=1;m<=12;m++){
+    var e=AGUAM_DATA.find(function(g){return g.anio===anio&&g.mes===m;});
+    if(e&&e.toneladas&&e.pesos!=null&&e.m3!=null){
+      sumaPesos+=e.pesos/e.toneladas;
+      sumaM3+=e.m3/e.toneladas;
+      n++;
+    }
+  }
+  if(!n) return null;
+  return {pesosPorTon:sumaPesos/n,unidadPorTon:sumaM3/n};
+}
+
 function _aguamPintarCostoTon(anio){
   var spanP=document.getElementById('aguam-costo-ton-pesos');
   var spanM=document.getElementById('aguam-costo-ton-m3');
   if(!spanP||!spanM) return;
   var r=_aguamCostoPorTonelada(anio);
   if(!r){spanP.textContent='';spanM.textContent='';return;}
-  spanP.textContent='Objetivo: $'+Math.round(r.pesosPorTon).toLocaleString('es-MX')+' por tonelada';
-  spanM.textContent='Objetivo: '+_fmtCostoTonNum(r.unidadPorTon)+' m³ por tonelada';
+  spanP.textContent='Objetivo por tonelada: $'+Math.round(r.pesosPorTon).toLocaleString('es-MX')+' por tonelada';
+  spanM.textContent='Objetivo por tonelada: '+_fmtCostoTonNum(r.unidadPorTon)+' m³ por tonelada';
 }
 
 function filtAguamAnio(anio){
@@ -31192,35 +31355,35 @@ function _renderAguaMensualCharts(anio){
   };
 
   _aguamChartPesos=new Chart(elP,{type:'bar',data:{labels:MESES_AGUAM,datasets:[
-    {label:'Pesos',data:valoresPesos,backgroundColor:colores,borderRadius:4,yAxisID:'y',
-     datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
-       formatter:function(v){return v?_aguamFmtPesos(v):'';}}},
     {label:'Toneladas',data:valoresTon,backgroundColor:'rgba(156,163,175,.6)',borderRadius:4,yAxisID:'y1',
      datalabels:{display:true,anchor:'end',align:'end',color:'#6b7280',font:{weight:'700',size:9},
        formatter:function(v){return v?_fmtCostoTonNum(v):'';}}},
+    {label:'Pesos',data:valoresPesos,backgroundColor:colores,borderRadius:4,yAxisID:'y',
+     datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
+       formatter:function(v){return v?_aguamFmtPesos(v):'';}}},
     {type:'line',label:'Meta',data:lineaPesos,borderColor:'#000',borderDash:[6,4],borderWidth:2,
      pointRadius:0,fill:false,spanGaps:false,yAxisID:'y',datalabels:{display:false}}
   ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false},
     tooltip:{callbacks:{afterBody:tooltipCostoTonPesos}}},
     scales:{
-      y:{min:0,max:(AGUAM_CONFIG&&AGUAM_CONFIG.tope_pesos)||500000,ticks:{callback:function(v){return (v/1000)+'k';}}},
+      y:{min:0,max:_aguamConfigAnio(anio).tope_pesos||500000,ticks:{callback:function(v){return (v/1000)+'k';}}},
       y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false}}
     },
     onClick:clickMes}});
 
   _aguamChartM3=new Chart(elK,{type:'bar',data:{labels:MESES_AGUAM,datasets:[
-    {label:'m³',data:valoresM3,backgroundColor:colores,borderRadius:4,yAxisID:'y',
-     datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
-       formatter:function(v){return v?_aguamFmtPesos(v):'';}}},
     {label:'Toneladas',data:valoresTon,backgroundColor:'rgba(156,163,175,.6)',borderRadius:4,yAxisID:'y1',
      datalabels:{display:true,anchor:'end',align:'end',color:'#6b7280',font:{weight:'700',size:9},
        formatter:function(v){return v?_fmtCostoTonNum(v):'';}}},
+    {label:'m³',data:valoresM3,backgroundColor:colores,borderRadius:4,yAxisID:'y',
+     datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
+       formatter:function(v){return v?_aguamFmtPesos(v):'';}}},
     {type:'line',label:'Meta',data:lineaM3,borderColor:'#000',borderDash:[6,4],borderWidth:2,
      pointRadius:0,fill:false,spanGaps:false,yAxisID:'y',datalabels:{display:false}}
   ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false},
     tooltip:{callbacks:{afterBody:tooltipCostoTonM3}}},
     scales:{
-      y:{min:0,max:(AGUAM_CONFIG&&AGUAM_CONFIG.tope_m3)||20000,ticks:{callback:function(v){return (v/1000)+'k';}}},
+      y:{min:0,max:_aguamConfigAnio(anio).tope_m3||20000,ticks:{callback:function(v){return (v/1000)+'k';}}},
       y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false}}
     },
     onClick:clickMes}});
@@ -31269,8 +31432,16 @@ function guardarAguam(){
 }
 
 function abrirConfigAguam(){
-  var c=AGUAM_CONFIG||{};
+  var anio=window._aguamFiltroAnio||currentYear();
+  var c=_aguamConfigAnio(anio);
   var modo=c.modo||'anual';
+  var real=_aguamPromedioRealLogrado(anio);
+  var realHtml=real?
+    ('<div style="background:#f3f4f6;border-radius:10px;padding:10px 12px;margin-bottom:14px">'
+      +'<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:2px">📊 Promedio real logrado en '+anio+' (no editable)</div>'
+      +'<div style="font-size:12px;color:#374151">$'+Math.round(real.pesosPorTon).toLocaleString('es-MX')+' por tonelada · '+_fmtCostoTonNum(real.unidadPorTon)+' m³ por tonelada</div>'
+      +'</div>')
+    :('<div style="background:#f3f4f6;border-radius:10px;padding:10px 12px;margin-bottom:14px;font-size:12px;color:#6b7280">📊 Promedio real logrado en '+anio+': todavía no hay datos capturados este año.</div>');
   var mensualInputs=MESES_AGUAM.map(function(nm,i){
     var v=(c.ratios_mensuales&&c.ratios_mensuales[i]!=null)?c.ratios_mensuales[i]:'';
     return '<div><label style="font-size:11px;font-weight:700;color:#374151">'+nm+'</label>'
@@ -31280,14 +31451,15 @@ function abrirConfigAguam(){
   modal.id='modal-aguam-config';
   modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
   modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box;max-height:85vh;overflow-y:auto">'
-    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#1e3a8a;margin-bottom:6px">⚙️ Configuración de Agua</div>'
-    +'<div style="font-size:12px;color:#6b7280;margin-bottom:14px">Define cuántos kg se deben fabricar por cada m³ consumido. Con esto, las gráficas de Pesos y m³ se pintan en verde (cumple) o rojo (excede) cada mes, y se traza la línea de meta. Si no lo defines, no se pinta nada.</div>'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#1e3a8a;margin-bottom:6px">⚙️ Configuración de Agua — Año '+anio+'</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:14px">Define cuántos kg se deben fabricar por cada m³ consumido. Con esto, las gráficas de Pesos y m³ se pintan en verde (cumple) o rojo (excede) cada mes, y se traza la línea de meta. Si no lo defines, no se pinta nada. Este objetivo queda guardado solo para el año '+anio+' — no afecta otros años.</div>'
+    +realHtml
     +'<div class="filter-row" style="margin-bottom:12px">'
     +'<div class="filter-chip'+(modo==='anual'?' active':'')+'" onclick="_aguamCfgSetModo(\'anual\')" id="aguam-cfg-chip-anual">Igual todo el año</div>'
     +'<div class="filter-chip'+(modo==='mensual'?' active':'')+'" onclick="_aguamCfgSetModo(\'mensual\')" id="aguam-cfg-chip-mensual">Por mes</div>'
     +'</div>'
     +'<div id="aguam-cfg-anual" style="'+(modo==='anual'?'':'display:none')+'">'
-    +'<div class="form-group"><label class="form-label">kg fabricados por m³</label><input type="number" class="form-control" id="aguam-cfg-anual-val" value="'+(c.ratio_anual!=null?c.ratio_anual:'')+'" min="0" step="0.01"></div>'
+    +'<div class="form-group"><label class="form-label">Objetivo Kg vs m³</label><input type="number" class="form-control" id="aguam-cfg-anual-val" value="'+(c.ratio_anual!=null?c.ratio_anual:'')+'" min="0" step="0.01"></div>'
     +'</div>'
     +'<div id="aguam-cfg-mensual" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px;'+(modo==='mensual'?'':'display:none')+'">'
     +mensualInputs
@@ -31300,7 +31472,7 @@ function abrirConfigAguam(){
     +'</div></div>'
     +'<div style="display:flex;gap:10px;margin-top:12px">'
     +'<button onclick="var m=document.getElementById(\'modal-aguam-config\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
-    +'<button onclick="guardarConfigAguam()" style="flex:2;padding:13px;background:#1e3a8a;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar</button>'
+    +'<button onclick="guardarConfigAguam('+anio+')" style="flex:2;padding:13px;background:#1e3a8a;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar</button>'
     +'</div></div>';
   document.body.appendChild(modal);
 }
@@ -31312,10 +31484,11 @@ function _aguamCfgSetModo(modo){
   document.getElementById('aguam-cfg-mensual').style.display=modo==='mensual'?'grid':'none';
 }
 
-function guardarConfigAguam(){
+function guardarConfigAguam(anio){
+  anio=anio||window._aguamFiltroAnio||currentYear();
   var chipMensual=document.getElementById('aguam-cfg-chip-mensual');
   var modo=(chipMensual&&chipMensual.classList.contains('active'))?'mensual':'anual';
-  var config={modo:modo,ts:Date.now()};
+  var config={modo:modo,anio:anio,ts:Date.now()};
   if(modo==='anual'){
     config.ratio_anual=parseFloat(document.getElementById('aguam-cfg-anual-val').value)||null;
     config.ratios_mensuales=null;
@@ -31328,9 +31501,9 @@ function guardarConfigAguam(){
   }
   config.tope_pesos=parseFloat(document.getElementById('aguam-cfg-tope-pesos').value)||500000;
   config.tope_m3=parseFloat(document.getElementById('aguam-cfg-tope-m3').value)||20000;
-  AGUAM_CONFIG=config;
-  saveDB('aguam_config',AGUAM_CONFIG);
-  supaUpsert('aguam_config',{id:'default',modo:config.modo,ratio_anual:config.ratio_anual,
+  AGUAM_CONFIG_POR_ANIO[anio]=config;
+  saveDB('aguam_config',AGUAM_CONFIG_POR_ANIO);
+  supaUpsert('aguam_config',{id:'y'+anio,anio:anio,modo:config.modo,ratio_anual:config.ratio_anual,
     ratios_mensuales:config.ratios_mensuales?JSON.stringify(config.ratios_mensuales):null,
     tope_pesos:config.tope_pesos,tope_m3:config.tope_m3,ts:config.ts}).catch(function(){});
   var m=document.getElementById('modal-aguam-config');if(m)m.remove();
@@ -31348,11 +31521,11 @@ function guardarConfigAguam(){
 // ================================================================
 let KPI_COMENTARIOS=loadDB('kpi_comentarios',[]); // {id,modulo,anio,mes,comentario,ts}
 
-function _kpiModulos(){
+function _kpiModulos(anio){
   return [
-    {key:'gas',label:'Gas',data:GAS_DATA,config:GAS_CONFIG||{},cantidadField:'m3',cantidadUnit:'m³',color:'#d97706',coloresMes:_gasColoresMes},
-    {key:'elec',label:'Electricidad',data:ELEC_DATA,config:ELEC_CONFIG||{},cantidadField:'kwh',cantidadUnit:'kWh',color:'#F9A825',coloresMes:_elecColoresMes},
-    {key:'aguam',label:'Agua',data:AGUAM_DATA,config:AGUAM_CONFIG||{},cantidadField:'m3',cantidadUnit:'m³',color:'#1e3a8a',coloresMes:_aguamColoresMes}
+    {key:'gas',label:'Gas',data:GAS_DATA,config:_gasConfigAnio(anio),cantidadField:'m3',cantidadUnit:'m³',color:'#d97706',coloresMes:_gasColoresMes},
+    {key:'elec',label:'Electricidad',data:ELEC_DATA,config:_elecConfigAnio(anio),cantidadField:'kwh',cantidadUnit:'kWh',color:'#F9A825',coloresMes:_elecColoresMes},
+    {key:'aguam',label:'Agua',data:AGUAM_DATA,config:_aguamConfigAnio(anio),cantidadField:'m3',cantidadUnit:'m³',color:'#1e3a8a',coloresMes:_aguamColoresMes}
   ];
 }
 
@@ -31394,11 +31567,11 @@ function renderKPIDinero(){
   if(!cont) return;
   var anio=window._kpiFiltroAnio||currentYear();
   var html=_kpiFiltroAniosHtml(anio,'filtKpiAnio');
-  _kpiModulos().forEach(function(m){
+  _kpiModulos(anio).forEach(function(m){
     html+='<div class="chart-wrap"><div class="chart-title">'+m.label+' ($)</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-kpi-dinero-'+m.key+'"></canvas></div></div>';
   });
   cont.innerHTML=html;
-  _kpiModulos().forEach(function(m){
+  _kpiModulos(anio).forEach(function(m){
     _renderKPIChart('chart-kpi-dinero-'+m.key,m,anio,'pesos',m.config.tope_pesos||500000);
   });
 }
@@ -31408,11 +31581,11 @@ function renderKPICantidad(){
   if(!cont) return;
   var anio=window._kpiFiltroAnio||currentYear();
   var html=_kpiFiltroAniosHtml(anio,'filtKpiAnio');
-  _kpiModulos().forEach(function(m){
+  _kpiModulos(anio).forEach(function(m){
     html+='<div class="chart-wrap"><div class="chart-title">'+m.label+' ('+m.cantidadUnit+')</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-kpi-cant-'+m.key+'"></canvas></div></div>';
   });
   cont.innerHTML=html;
-  _kpiModulos().forEach(function(m){
+  _kpiModulos(anio).forEach(function(m){
     var tope=m.key==='elec'?(m.config.tope_kwh||120000):(m.config.tope_m3||20000);
     _renderKPIChart('chart-kpi-cant-'+m.key,m,anio,m.cantidadField,tope);
   });
