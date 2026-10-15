@@ -4137,8 +4137,6 @@ function verDetalleUsuario(uid){
     +'<input type="text" id="eu-nombre" class="form-control" value="'+u.nombre+'" style="padding:10px"></div>'
     +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Usuario</label>'
     +'<input type="text" id="eu-user" class="form-control" value="'+u.username+'" style="padding:10px"></div>'
-    +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Contraseña actual</label>'
-    +'<input type="text" id="eu-pass-actual" class="form-control" value="'+u.password+'" readonly style="padding:10px;background:#f8fafc;font-family:monospace"></div>'
     +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Nueva contraseña</label>'
     +'<input type="text" id="eu-pass-nueva" class="form-control" placeholder="Dejar vacío para no cambiar" style="padding:10px"></div>'
     +'<div style="grid-column:1/-1"><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Correo</label>'
@@ -30361,6 +30359,15 @@ function actualizarOrdenMedidorAgua(id,orden){
 }
 // ── FIN ADMIN MEDIDORES AGUA ─────────────────────────────────────
 
+// Formatea un número decimal (ej. 3.33) para mostrar en los letreros de
+// "costo por tonelada" de Electricidad/Gas/Agua mensual — hasta 2 decimales,
+// sin ceros de más. Usado por los 3 módulos de Servicios.
+function _fmtCostoTonNum(v){
+  if(v==null||!isFinite(v)) return '';
+  var r=Math.round(v*100)/100;
+  return r.toLocaleString('es-MX',{maximumFractionDigits:2});
+}
+
 // ================================================================
 // MÓDULO ELECTRICIDAD (Servicios → Electricidad) — consumo mensual (pesos/kWh/toneladas)
 // ================================================================
@@ -30409,11 +30416,40 @@ function renderElectricidad(){
     +(esAdmin?'<button class="btn btn-gray btn-sm" onclick="abrirConfigElec()">⚙️ Configuración</button>':'')
     +'</div>';
 
-  html+='<div class="chart-wrap"><div class="chart-title">Consumo en Pesos $$$</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-elec-pesos"></canvas></div></div>';
-  html+='<div class="chart-wrap" style="margin-top:12px"><div class="chart-title">Consumo kWh</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-elec-kwh"></canvas></div></div>';
+  html+='<div class="chart-wrap"><div class="chart-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><span>Consumo en Pesos $$$</span><span id="elec-costo-ton-pesos" style="font-size:11px;font-weight:700;color:#374151;background:#f3f4f6;padding:4px 10px;border-radius:20px"></span></div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-elec-pesos"></canvas></div></div>';
+  html+='<div class="chart-wrap" style="margin-top:12px"><div class="chart-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><span>Consumo kWh</span><span id="elec-costo-ton-kwh" style="font-size:11px;font-weight:700;color:#374151;background:#f3f4f6;padding:4px 10px;border-radius:20px"></span></div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-elec-kwh"></canvas></div></div>';
 
   cont.innerHTML=html;
   _renderElectricidadCharts(anio);
+  _elecPintarCostoTon();
+}
+
+// Costo/consumo por tonelada fabricada, derivado de lo ya definido en
+// Configuración (sin pedir ningún dato nuevo): la regla de eficiencia
+// (kg fabricados por kWh) da el kWh por tonelada, y la relación entre los
+// 2 "Tope" configurados (Tope Pesos ÷ Tope kWh) da el precio implícito por
+// kWh. Solo aplica en modo "Igual todo el año" — en modo "Por mes" el
+// costo varía mes a mes y no hay un solo valor fijo que mostrar aquí.
+function _elecCostoPorTonelada(){
+  var c=ELEC_CONFIG||{};
+  if(c.modo==='mensual') return null;
+  var ratio=c.ratio_anual;
+  if(!ratio||ratio<=0) return null;
+  var topePesos=c.tope_pesos,topeKwh=c.tope_kwh;
+  if(!topePesos||!topeKwh||topeKwh<=0) return null;
+  var kwhPorTon=1000/ratio;
+  var precioUnitario=topePesos/topeKwh;
+  return {unidadPorTon:kwhPorTon,pesosPorTon:kwhPorTon*precioUnitario};
+}
+
+function _elecPintarCostoTon(){
+  var spanP=document.getElementById('elec-costo-ton-pesos');
+  var spanK=document.getElementById('elec-costo-ton-kwh');
+  if(!spanP||!spanK) return;
+  var r=_elecCostoPorTonelada();
+  if(!r){spanP.textContent='';spanK.textContent='';return;}
+  spanP.textContent='Costo por tonelada: $'+Math.round(r.pesosPorTon).toLocaleString('es-MX')+' por tonelada';
+  spanK.textContent='Costo por tonelada: '+_fmtCostoTonNum(r.unidadPorTon)+' kWh por tonelada';
 }
 
 function filtElecAnio(anio){
@@ -30667,11 +30703,35 @@ function renderGas(){
     +(esAdmin?'<button class="btn btn-gray btn-sm" onclick="abrirConfigGas()">⚙️ Configuración</button>':'')
     +'</div>';
 
-  html+='<div class="chart-wrap"><div class="chart-title">Consumo en Pesos $$$</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-gas-pesos"></canvas></div></div>';
-  html+='<div class="chart-wrap" style="margin-top:12px"><div class="chart-title">Consumo m³</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-gas-m3"></canvas></div></div>';
+  html+='<div class="chart-wrap"><div class="chart-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><span>Consumo en Pesos $$$</span><span id="gas-costo-ton-pesos" style="font-size:11px;font-weight:700;color:#374151;background:#f3f4f6;padding:4px 10px;border-radius:20px"></span></div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-gas-pesos"></canvas></div></div>';
+  html+='<div class="chart-wrap" style="margin-top:12px"><div class="chart-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><span>Consumo m³</span><span id="gas-costo-ton-m3" style="font-size:11px;font-weight:700;color:#374151;background:#f3f4f6;padding:4px 10px;border-radius:20px"></span></div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-gas-m3"></canvas></div></div>';
 
   cont.innerHTML=html;
   _renderGasCharts(anio);
+  _gasPintarCostoTon();
+}
+
+// Ver comentario de _elecCostoPorTonelada — mismo cálculo, con m³ en vez de kWh.
+function _gasCostoPorTonelada(){
+  var c=GAS_CONFIG||{};
+  if(c.modo==='mensual') return null;
+  var ratio=c.ratio_anual;
+  if(!ratio||ratio<=0) return null;
+  var topePesos=c.tope_pesos,topeM3=c.tope_m3;
+  if(!topePesos||!topeM3||topeM3<=0) return null;
+  var m3PorTon=1000/ratio;
+  var precioUnitario=topePesos/topeM3;
+  return {unidadPorTon:m3PorTon,pesosPorTon:m3PorTon*precioUnitario};
+}
+
+function _gasPintarCostoTon(){
+  var spanP=document.getElementById('gas-costo-ton-pesos');
+  var spanM=document.getElementById('gas-costo-ton-m3');
+  if(!spanP||!spanM) return;
+  var r=_gasCostoPorTonelada();
+  if(!r){spanP.textContent='';spanM.textContent='';return;}
+  spanP.textContent='Costo por tonelada: $'+Math.round(r.pesosPorTon).toLocaleString('es-MX')+' por tonelada';
+  spanM.textContent='Costo por tonelada: '+_fmtCostoTonNum(r.unidadPorTon)+' m³ por tonelada';
 }
 
 function filtGasAnio(anio){
@@ -30927,11 +30987,35 @@ function renderAguaMensual(){
     +(esAdmin?'<button class="btn btn-gray btn-sm" onclick="abrirConfigAguam()">⚙️ Configuración</button>':'')
     +'</div>';
 
-  html+='<div class="chart-wrap"><div class="chart-title">Consumo en Pesos $$$</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-aguam-pesos"></canvas></div></div>';
-  html+='<div class="chart-wrap" style="margin-top:12px"><div class="chart-title">Consumo m³</div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-aguam-m3"></canvas></div></div>';
+  html+='<div class="chart-wrap"><div class="chart-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><span>Consumo en Pesos $$$</span><span id="aguam-costo-ton-pesos" style="font-size:11px;font-weight:700;color:#374151;background:#f3f4f6;padding:4px 10px;border-radius:20px"></span></div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-aguam-pesos"></canvas></div></div>';
+  html+='<div class="chart-wrap" style="margin-top:12px"><div class="chart-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px"><span>Consumo m³</span><span id="aguam-costo-ton-m3" style="font-size:11px;font-weight:700;color:#374151;background:#f3f4f6;padding:4px 10px;border-radius:20px"></span></div><div style="position:relative;height:280px;max-width:900px"><canvas id="chart-aguam-m3"></canvas></div></div>';
 
   cont.innerHTML=html;
   _renderAguaMensualCharts(anio);
+  _aguamPintarCostoTon();
+}
+
+// Ver comentario de _elecCostoPorTonelada — mismo cálculo, con m³ en vez de kWh.
+function _aguamCostoPorTonelada(){
+  var c=AGUAM_CONFIG||{};
+  if(c.modo==='mensual') return null;
+  var ratio=c.ratio_anual;
+  if(!ratio||ratio<=0) return null;
+  var topePesos=c.tope_pesos,topeM3=c.tope_m3;
+  if(!topePesos||!topeM3||topeM3<=0) return null;
+  var m3PorTon=1000/ratio;
+  var precioUnitario=topePesos/topeM3;
+  return {unidadPorTon:m3PorTon,pesosPorTon:m3PorTon*precioUnitario};
+}
+
+function _aguamPintarCostoTon(){
+  var spanP=document.getElementById('aguam-costo-ton-pesos');
+  var spanM=document.getElementById('aguam-costo-ton-m3');
+  if(!spanP||!spanM) return;
+  var r=_aguamCostoPorTonelada();
+  if(!r){spanP.textContent='';spanM.textContent='';return;}
+  spanP.textContent='Costo por tonelada: $'+Math.round(r.pesosPorTon).toLocaleString('es-MX')+' por tonelada';
+  spanM.textContent='Costo por tonelada: '+_fmtCostoTonNum(r.unidadPorTon)+' m³ por tonelada';
 }
 
 function filtAguamAnio(anio){
