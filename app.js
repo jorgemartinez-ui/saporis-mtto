@@ -30421,35 +30421,47 @@ function renderElectricidad(){
 
   cont.innerHTML=html;
   _renderElectricidadCharts(anio);
-  _elecPintarCostoTon();
+  _elecPintarCostoTon(anio);
 }
 
-// Costo/consumo por tonelada fabricada, derivado de lo ya definido en
-// Configuración (sin pedir ningún dato nuevo): la regla de eficiencia
-// (kg fabricados por kWh) da el kWh por tonelada, y la relación entre los
-// 2 "Tope" configurados (Tope Pesos ÷ Tope kWh) da el precio implícito por
-// kWh. Solo aplica en modo "Igual todo el año" — en modo "Por mes" el
-// costo varía mes a mes y no hay un solo valor fijo que mostrar aquí.
-function _elecCostoPorTonelada(){
+// Tarifa real $/kWh de un año: promedio de "pesos capturados ÷ kWh
+// capturados" de cada mes que sí tiene ambos datos (mismo cálculo que ya usa
+// la línea de meta en la gráfica de Pesos) — null si ningún mes del año
+// tiene datos todavía.
+function _elecPrecioRealUnidad(anio){
+  var suma=0,n=0;
+  for(var m=1;m<=12;m++){
+    var e=ELEC_DATA.find(function(g){return g.anio===anio&&g.mes===m;});
+    if(e&&e.pesos&&e.kwh){suma+=e.pesos/e.kwh;n++;}
+  }
+  return n>0?suma/n:null;
+}
+
+// Costo/consumo por tonelada fabricada: la regla de eficiencia de
+// Configuración (kg fabricados por kWh) da el kWh por tonelada, y la tarifa
+// real $/kWh (de las tablas de consumo capturadas, no de los Topes de
+// escala) da el costo en pesos. Solo aplica en modo "Igual todo el año" —
+// en modo "Por mes" el costo varía mes a mes y no hay un solo valor fijo
+// que mostrar aquí.
+function _elecCostoPorTonelada(anio){
   var c=ELEC_CONFIG||{};
   if(c.modo==='mensual') return null;
   var ratio=c.ratio_anual;
   if(!ratio||ratio<=0) return null;
-  var topePesos=c.tope_pesos,topeKwh=c.tope_kwh;
-  if(!topePesos||!topeKwh||topeKwh<=0) return null;
   var kwhPorTon=1000/ratio;
-  var precioUnitario=topePesos/topeKwh;
+  var precioUnitario=_elecPrecioRealUnidad(anio);
+  if(precioUnitario==null) return null;
   return {unidadPorTon:kwhPorTon,pesosPorTon:kwhPorTon*precioUnitario};
 }
 
-function _elecPintarCostoTon(){
+function _elecPintarCostoTon(anio){
   var spanP=document.getElementById('elec-costo-ton-pesos');
   var spanK=document.getElementById('elec-costo-ton-kwh');
   if(!spanP||!spanK) return;
-  var r=_elecCostoPorTonelada();
+  var r=_elecCostoPorTonelada(anio);
   if(!r){spanP.textContent='';spanK.textContent='';return;}
-  spanP.textContent='Costo por tonelada: $'+Math.round(r.pesosPorTon).toLocaleString('es-MX')+' por tonelada';
-  spanK.textContent='Costo por tonelada: '+_fmtCostoTonNum(r.unidadPorTon)+' kWh por tonelada';
+  spanP.textContent='Objetivo: $'+Math.round(r.pesosPorTon).toLocaleString('es-MX')+' por tonelada';
+  spanK.textContent='Objetivo: '+_fmtCostoTonNum(r.unidadPorTon)+' kWh por tonelada';
 }
 
 function filtElecAnio(anio){
@@ -30516,29 +30528,57 @@ function _renderElectricidadCharts(anio){
   }
   var valoresPesos=datos.map(function(d){return d?d.pesos:0;});
   var valoresKwh=datos.map(function(d){return d?d.kwh:0;});
+  var valoresTon=datos.map(function(d){return d?d.toneladas:0;});
   var colores=_elecColoresMes(anio);
   var lineaPesos=_elecLineaTarget(anio,'pesos');
   var lineaKwh=_elecLineaTarget(anio,'kwh');
   var clickMes=function(evt,els){if(!els||!els.length)return;abrirElecForm(anio,els[0].index+1);};
+  // Costo/consumo real de ESE mes por tonelada (pesos o kWh capturados ese
+  // mes ÷ toneladas capturadas ese mismo mes) — dato real puntual, distinto
+  // del "Objetivo" (promedio del año) que ya se muestra arriba de la gráfica.
+  var tooltipCostoTonPesos=function(items){
+    var d=datos[items[0].dataIndex];
+    if(!d||!d.toneladas||!d.pesos) return '';
+    return 'Costo por tonelada este mes: $'+Math.round(d.pesos/d.toneladas).toLocaleString('es-MX');
+  };
+  var tooltipCostoTonKwh=function(items){
+    var d=datos[items[0].dataIndex];
+    if(!d||!d.toneladas||!d.kwh) return '';
+    return 'Consumo por tonelada este mes: '+_fmtCostoTonNum(d.kwh/d.toneladas)+' kWh';
+  };
 
   _elecChartPesos=new Chart(elP,{type:'bar',data:{labels:MESES_ELEC,datasets:[
-    {label:'Pesos',data:valoresPesos,backgroundColor:colores,borderRadius:4,
+    {label:'Pesos',data:valoresPesos,backgroundColor:colores,borderRadius:4,yAxisID:'y',
      datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
        formatter:function(v){return v?_elecFmtPesos(v):'';}}},
+    {label:'Toneladas',data:valoresTon,backgroundColor:'rgba(156,163,175,.6)',borderRadius:4,yAxisID:'y1',
+     datalabels:{display:true,anchor:'end',align:'end',color:'#6b7280',font:{weight:'700',size:9},
+       formatter:function(v){return v?_fmtCostoTonNum(v):'';}}},
     {type:'line',label:'Meta',data:lineaPesos,borderColor:'#000',borderDash:[6,4],borderWidth:2,
-     pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
-  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
-    scales:{y:{min:0,max:(ELEC_CONFIG&&ELEC_CONFIG.tope_pesos)||500000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
+     pointRadius:0,fill:false,spanGaps:false,yAxisID:'y',datalabels:{display:false}}
+  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false},
+    tooltip:{callbacks:{afterBody:tooltipCostoTonPesos}}},
+    scales:{
+      y:{min:0,max:(ELEC_CONFIG&&ELEC_CONFIG.tope_pesos)||500000,ticks:{callback:function(v){return (v/1000)+'k';}}},
+      y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false}}
+    },
     onClick:clickMes}});
 
   _elecChartKwh=new Chart(elK,{type:'bar',data:{labels:MESES_ELEC,datasets:[
-    {label:'kWh',data:valoresKwh,backgroundColor:colores,borderRadius:4,
+    {label:'kWh',data:valoresKwh,backgroundColor:colores,borderRadius:4,yAxisID:'y',
      datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
        formatter:function(v){return v?_elecFmtPesos(v):'';}}},
+    {label:'Toneladas',data:valoresTon,backgroundColor:'rgba(156,163,175,.6)',borderRadius:4,yAxisID:'y1',
+     datalabels:{display:true,anchor:'end',align:'end',color:'#6b7280',font:{weight:'700',size:9},
+       formatter:function(v){return v?_fmtCostoTonNum(v):'';}}},
     {type:'line',label:'Meta',data:lineaKwh,borderColor:'#000',borderDash:[6,4],borderWidth:2,
-     pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
-  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
-    scales:{y:{min:0,max:(ELEC_CONFIG&&ELEC_CONFIG.tope_kwh)||120000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
+     pointRadius:0,fill:false,spanGaps:false,yAxisID:'y',datalabels:{display:false}}
+  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false},
+    tooltip:{callbacks:{afterBody:tooltipCostoTonKwh}}},
+    scales:{
+      y:{min:0,max:(ELEC_CONFIG&&ELEC_CONFIG.tope_kwh)||120000,ticks:{callback:function(v){return (v/1000)+'k';}}},
+      y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false}}
+    },
     onClick:clickMes}});
 }
 
@@ -30708,30 +30748,42 @@ function renderGas(){
 
   cont.innerHTML=html;
   _renderGasCharts(anio);
-  _gasPintarCostoTon();
+  _gasPintarCostoTon(anio);
+}
+
+// Tarifa real $/m³ de un año: promedio de "pesos capturados ÷ m³
+// capturados" de cada mes que sí tiene ambos datos (mismo cálculo que ya usa
+// la línea de meta en la gráfica de Pesos) — null si ningún mes del año
+// tiene datos todavía.
+function _gasPrecioRealUnidad(anio){
+  var suma=0,n=0;
+  for(var m=1;m<=12;m++){
+    var e=GAS_DATA.find(function(g){return g.anio===anio&&g.mes===m;});
+    if(e&&e.pesos&&e.m3){suma+=e.pesos/e.m3;n++;}
+  }
+  return n>0?suma/n:null;
 }
 
 // Ver comentario de _elecCostoPorTonelada — mismo cálculo, con m³ en vez de kWh.
-function _gasCostoPorTonelada(){
+function _gasCostoPorTonelada(anio){
   var c=GAS_CONFIG||{};
   if(c.modo==='mensual') return null;
   var ratio=c.ratio_anual;
   if(!ratio||ratio<=0) return null;
-  var topePesos=c.tope_pesos,topeM3=c.tope_m3;
-  if(!topePesos||!topeM3||topeM3<=0) return null;
   var m3PorTon=1000/ratio;
-  var precioUnitario=topePesos/topeM3;
+  var precioUnitario=_gasPrecioRealUnidad(anio);
+  if(precioUnitario==null) return null;
   return {unidadPorTon:m3PorTon,pesosPorTon:m3PorTon*precioUnitario};
 }
 
-function _gasPintarCostoTon(){
+function _gasPintarCostoTon(anio){
   var spanP=document.getElementById('gas-costo-ton-pesos');
   var spanM=document.getElementById('gas-costo-ton-m3');
   if(!spanP||!spanM) return;
-  var r=_gasCostoPorTonelada();
+  var r=_gasCostoPorTonelada(anio);
   if(!r){spanP.textContent='';spanM.textContent='';return;}
-  spanP.textContent='Costo por tonelada: $'+Math.round(r.pesosPorTon).toLocaleString('es-MX')+' por tonelada';
-  spanM.textContent='Costo por tonelada: '+_fmtCostoTonNum(r.unidadPorTon)+' m³ por tonelada';
+  spanP.textContent='Objetivo: $'+Math.round(r.pesosPorTon).toLocaleString('es-MX')+' por tonelada';
+  spanM.textContent='Objetivo: '+_fmtCostoTonNum(r.unidadPorTon)+' m³ por tonelada';
 }
 
 function filtGasAnio(anio){
@@ -30799,29 +30851,56 @@ function _renderGasCharts(anio){
   }
   var valoresPesos=datos.map(function(d){return d?d.pesos:0;});
   var valoresM3=datos.map(function(d){return d?d.m3:0;});
+  var valoresTon=datos.map(function(d){return d?d.toneladas:0;});
   var colores=_gasColoresMes(anio);
   var lineaPesos=_gasLineaTarget(anio,'pesos');
   var lineaM3=_gasLineaTarget(anio,'m3');
   var clickMes=function(evt,els){if(!els||!els.length)return;abrirGasForm(anio,els[0].index+1);};
+  // Costo/consumo real de ESE mes por tonelada — ver comentario análogo en
+  // _renderElectricidadCharts.
+  var tooltipCostoTonPesos=function(items){
+    var d=datos[items[0].dataIndex];
+    if(!d||!d.toneladas||!d.pesos) return '';
+    return 'Costo por tonelada este mes: $'+Math.round(d.pesos/d.toneladas).toLocaleString('es-MX');
+  };
+  var tooltipCostoTonM3=function(items){
+    var d=datos[items[0].dataIndex];
+    if(!d||!d.toneladas||!d.m3) return '';
+    return 'Consumo por tonelada este mes: '+_fmtCostoTonNum(d.m3/d.toneladas)+' m³';
+  };
 
   _gasChartPesos=new Chart(elP,{type:'bar',data:{labels:MESES_GAS,datasets:[
-    {label:'Pesos',data:valoresPesos,backgroundColor:colores,borderRadius:4,
+    {label:'Pesos',data:valoresPesos,backgroundColor:colores,borderRadius:4,yAxisID:'y',
      datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
        formatter:function(v){return v?_gasFmtPesos(v):'';}}},
+    {label:'Toneladas',data:valoresTon,backgroundColor:'rgba(156,163,175,.6)',borderRadius:4,yAxisID:'y1',
+     datalabels:{display:true,anchor:'end',align:'end',color:'#6b7280',font:{weight:'700',size:9},
+       formatter:function(v){return v?_fmtCostoTonNum(v):'';}}},
     {type:'line',label:'Meta',data:lineaPesos,borderColor:'#000',borderDash:[6,4],borderWidth:2,
-     pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
-  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
-    scales:{y:{min:0,max:(GAS_CONFIG&&GAS_CONFIG.tope_pesos)||500000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
+     pointRadius:0,fill:false,spanGaps:false,yAxisID:'y',datalabels:{display:false}}
+  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false},
+    tooltip:{callbacks:{afterBody:tooltipCostoTonPesos}}},
+    scales:{
+      y:{min:0,max:(GAS_CONFIG&&GAS_CONFIG.tope_pesos)||500000,ticks:{callback:function(v){return (v/1000)+'k';}}},
+      y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false}}
+    },
     onClick:clickMes}});
 
   _gasChartM3=new Chart(elK,{type:'bar',data:{labels:MESES_GAS,datasets:[
-    {label:'m³',data:valoresM3,backgroundColor:colores,borderRadius:4,
+    {label:'m³',data:valoresM3,backgroundColor:colores,borderRadius:4,yAxisID:'y',
      datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
        formatter:function(v){return v?_gasFmtPesos(v):'';}}},
+    {label:'Toneladas',data:valoresTon,backgroundColor:'rgba(156,163,175,.6)',borderRadius:4,yAxisID:'y1',
+     datalabels:{display:true,anchor:'end',align:'end',color:'#6b7280',font:{weight:'700',size:9},
+       formatter:function(v){return v?_fmtCostoTonNum(v):'';}}},
     {type:'line',label:'Meta',data:lineaM3,borderColor:'#000',borderDash:[6,4],borderWidth:2,
-     pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
-  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
-    scales:{y:{min:0,max:(GAS_CONFIG&&GAS_CONFIG.tope_m3)||40000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
+     pointRadius:0,fill:false,spanGaps:false,yAxisID:'y',datalabels:{display:false}}
+  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false},
+    tooltip:{callbacks:{afterBody:tooltipCostoTonM3}}},
+    scales:{
+      y:{min:0,max:(GAS_CONFIG&&GAS_CONFIG.tope_m3)||40000,ticks:{callback:function(v){return (v/1000)+'k';}}},
+      y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false}}
+    },
     onClick:clickMes}});
 }
 
@@ -30992,30 +31071,42 @@ function renderAguaMensual(){
 
   cont.innerHTML=html;
   _renderAguaMensualCharts(anio);
-  _aguamPintarCostoTon();
+  _aguamPintarCostoTon(anio);
+}
+
+// Tarifa real $/m³ de un año: promedio de "pesos capturados ÷ m³
+// capturados" de cada mes que sí tiene ambos datos (mismo cálculo que ya usa
+// la línea de meta en la gráfica de Pesos) — null si ningún mes del año
+// tiene datos todavía.
+function _aguamPrecioRealUnidad(anio){
+  var suma=0,n=0;
+  for(var m=1;m<=12;m++){
+    var e=AGUAM_DATA.find(function(g){return g.anio===anio&&g.mes===m;});
+    if(e&&e.pesos&&e.m3){suma+=e.pesos/e.m3;n++;}
+  }
+  return n>0?suma/n:null;
 }
 
 // Ver comentario de _elecCostoPorTonelada — mismo cálculo, con m³ en vez de kWh.
-function _aguamCostoPorTonelada(){
+function _aguamCostoPorTonelada(anio){
   var c=AGUAM_CONFIG||{};
   if(c.modo==='mensual') return null;
   var ratio=c.ratio_anual;
   if(!ratio||ratio<=0) return null;
-  var topePesos=c.tope_pesos,topeM3=c.tope_m3;
-  if(!topePesos||!topeM3||topeM3<=0) return null;
   var m3PorTon=1000/ratio;
-  var precioUnitario=topePesos/topeM3;
+  var precioUnitario=_aguamPrecioRealUnidad(anio);
+  if(precioUnitario==null) return null;
   return {unidadPorTon:m3PorTon,pesosPorTon:m3PorTon*precioUnitario};
 }
 
-function _aguamPintarCostoTon(){
+function _aguamPintarCostoTon(anio){
   var spanP=document.getElementById('aguam-costo-ton-pesos');
   var spanM=document.getElementById('aguam-costo-ton-m3');
   if(!spanP||!spanM) return;
-  var r=_aguamCostoPorTonelada();
+  var r=_aguamCostoPorTonelada(anio);
   if(!r){spanP.textContent='';spanM.textContent='';return;}
-  spanP.textContent='Costo por tonelada: $'+Math.round(r.pesosPorTon).toLocaleString('es-MX')+' por tonelada';
-  spanM.textContent='Costo por tonelada: '+_fmtCostoTonNum(r.unidadPorTon)+' m³ por tonelada';
+  spanP.textContent='Objetivo: $'+Math.round(r.pesosPorTon).toLocaleString('es-MX')+' por tonelada';
+  spanM.textContent='Objetivo: '+_fmtCostoTonNum(r.unidadPorTon)+' m³ por tonelada';
 }
 
 function filtAguamAnio(anio){
@@ -31082,29 +31173,56 @@ function _renderAguaMensualCharts(anio){
   }
   var valoresPesos=datos.map(function(d){return d?d.pesos:0;});
   var valoresM3=datos.map(function(d){return d?d.m3:0;});
+  var valoresTon=datos.map(function(d){return d?d.toneladas:0;});
   var colores=_aguamColoresMes(anio);
   var lineaPesos=_aguamLineaTarget(anio,'pesos');
   var lineaM3=_aguamLineaTarget(anio,'m3');
   var clickMes=function(evt,els){if(!els||!els.length)return;abrirAguamForm(anio,els[0].index+1);};
+  // Costo/consumo real de ESE mes por tonelada — ver comentario análogo en
+  // _renderElectricidadCharts.
+  var tooltipCostoTonPesos=function(items){
+    var d=datos[items[0].dataIndex];
+    if(!d||!d.toneladas||!d.pesos) return '';
+    return 'Costo por tonelada este mes: $'+Math.round(d.pesos/d.toneladas).toLocaleString('es-MX');
+  };
+  var tooltipCostoTonM3=function(items){
+    var d=datos[items[0].dataIndex];
+    if(!d||!d.toneladas||!d.m3) return '';
+    return 'Consumo por tonelada este mes: '+_fmtCostoTonNum(d.m3/d.toneladas)+' m³';
+  };
 
   _aguamChartPesos=new Chart(elP,{type:'bar',data:{labels:MESES_AGUAM,datasets:[
-    {label:'Pesos',data:valoresPesos,backgroundColor:colores,borderRadius:4,
+    {label:'Pesos',data:valoresPesos,backgroundColor:colores,borderRadius:4,yAxisID:'y',
      datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
        formatter:function(v){return v?_aguamFmtPesos(v):'';}}},
+    {label:'Toneladas',data:valoresTon,backgroundColor:'rgba(156,163,175,.6)',borderRadius:4,yAxisID:'y1',
+     datalabels:{display:true,anchor:'end',align:'end',color:'#6b7280',font:{weight:'700',size:9},
+       formatter:function(v){return v?_fmtCostoTonNum(v):'';}}},
     {type:'line',label:'Meta',data:lineaPesos,borderColor:'#000',borderDash:[6,4],borderWidth:2,
-     pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
-  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
-    scales:{y:{min:0,max:(AGUAM_CONFIG&&AGUAM_CONFIG.tope_pesos)||500000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
+     pointRadius:0,fill:false,spanGaps:false,yAxisID:'y',datalabels:{display:false}}
+  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false},
+    tooltip:{callbacks:{afterBody:tooltipCostoTonPesos}}},
+    scales:{
+      y:{min:0,max:(AGUAM_CONFIG&&AGUAM_CONFIG.tope_pesos)||500000,ticks:{callback:function(v){return (v/1000)+'k';}}},
+      y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false}}
+    },
     onClick:clickMes}});
 
   _aguamChartM3=new Chart(elK,{type:'bar',data:{labels:MESES_AGUAM,datasets:[
-    {label:'m³',data:valoresM3,backgroundColor:colores,borderRadius:4,
+    {label:'m³',data:valoresM3,backgroundColor:colores,borderRadius:4,yAxisID:'y',
      datalabels:{display:true,anchor:'end',align:'end',color:'#374151',font:{weight:'700',size:10},
        formatter:function(v){return v?_aguamFmtPesos(v):'';}}},
+    {label:'Toneladas',data:valoresTon,backgroundColor:'rgba(156,163,175,.6)',borderRadius:4,yAxisID:'y1',
+     datalabels:{display:true,anchor:'end',align:'end',color:'#6b7280',font:{weight:'700',size:9},
+       formatter:function(v){return v?_fmtCostoTonNum(v):'';}}},
     {type:'line',label:'Meta',data:lineaM3,borderColor:'#000',borderDash:[6,4],borderWidth:2,
-     pointRadius:0,fill:false,spanGaps:false,datalabels:{display:false}}
-  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false}},
-    scales:{y:{min:0,max:(AGUAM_CONFIG&&AGUAM_CONFIG.tope_m3)||20000,ticks:{callback:function(v){return (v/1000)+'k';}}}},
+     pointRadius:0,fill:false,spanGaps:false,yAxisID:'y',datalabels:{display:false}}
+  ]},options:{maintainAspectRatio:false,plugins:{legend:{display:false},
+    tooltip:{callbacks:{afterBody:tooltipCostoTonM3}}},
+    scales:{
+      y:{min:0,max:(AGUAM_CONFIG&&AGUAM_CONFIG.tope_m3)||20000,ticks:{callback:function(v){return (v/1000)+'k';}}},
+      y1:{position:'right',beginAtZero:true,grid:{drawOnChartArea:false}}
+    },
     onClick:clickMes}});
 }
 
