@@ -1733,6 +1733,23 @@ function precierreValidarYArmarDias(){
   return {trabajoDias:trabajoDias,total:total};
 }
 
+// ── Aviso de horas sospechosas al cerrar una PM ──────────────────────────────
+// Si algún día capturado supera las 3 horas, se pide confirmación antes de guardar
+// — para frenar capturas por error (ej. cerrar una PM con 8 o 12 horas sin querer).
+// Aplica igual a un solo día (arreglo de 1 elemento) que a varios: cada día se
+// evalúa por separado, a petición de Jorge. Devuelve true si se puede continuar
+// (ninguno pasó de 3 hrs, o el usuario confirmó), false si canceló.
+function _confirmarHorasExcedidas(dias){
+  var LIMITE_HRS=3;
+  var sospechosos=(dias||[]).filter(function(d){return (d.horas||0)>LIMITE_HRS;});
+  if(!sospechosos.length) return true;
+  var detalle=sospechosos.map(function(d){
+    var fechaTxt=d.fecha?(new Date(d.fecha+'T12:00:00').toLocaleDateString('es-MX',{day:'2-digit',month:'short'})+': '):'';
+    return '• '+fechaTxt+d.horas+' hrs';
+  }).join('\n');
+  return confirm('⚠️ Vas a registrar más de '+LIMITE_HRS+' horas de trabajo:\n\n'+detalle+'\n\n¿Es correcto? Si fue un error, cancela y revisa la hora de inicio/fin.');
+}
+
 function confirmarCierre(){
   const o=ORDENES.find(x=>x.id===otCerrandoId);if(!o)return;
   // Validar limpieza obligatoria
@@ -1779,6 +1796,9 @@ function confirmarCierre(){
   const horaIni=document.getElementById('cierre-hora-inicio')?.value||null;
   const horaFin=document.getElementById('cierre-hora-fin')?.value||null;
   const fechaTrabajoVal=document.getElementById('cierre-fecha-trabajo')?.value||null;
+  // Aviso de horas sospechosas (>3 hrs) antes de guardar — ver _confirmarHorasExcedidas.
+  var _diasParaValidarHrs=_diasPM02?_diasPM02.map(function(d){return{fecha:d.fecha,horas:d.horas};}):[{fecha:fechaTrabajoVal,horas:horas}];
+  if(!_confirmarHorasExcedidas(_diasParaValidarHrs)) return;
   o.estado='cerrada';o.observacionesCierre=obs;o.horasCierre=horas;o.refaccionesUsadas=refsStr;
   if(o.tipo!=='PM02'&&fechaTrabajoVal) o.fechaTrabajo=fechaTrabajoVal;
   if(_diasPM02){o.trabajoDias=_diasPM02;o.esTrabajoVariosDias=_diasPM02.length>1;}
@@ -2777,6 +2797,12 @@ function confirmarCierrePM03(id){
   if(faltanHoras){
     pm3ShowError('Indica la hora de inicio y hora final de todos los días de trabajo');return;
   }
+  // Aviso de horas sospechosas (>3 hrs) antes de guardar — cada día se evalúa por
+  // separado (ver _confirmarHorasExcedidas), igual que en el cierre genérico de OT.
+  var _diasConHorasPM03=p.diasTrabajo.map(function(d){
+    return {fecha:d.fecha,horas:Math.round((diffMin(d.horaInicio,d.horaFin)/60)*100)/100};
+  });
+  if(!_confirmarHorasExcedidas(_diasConHorasPM03)) return;
   var hi=p.diasTrabajo[0].horaInicio;
   var hf=p.diasTrabajo[p.diasTrabajo.length-1].horaFin;
 
@@ -4914,17 +4940,25 @@ function calcularTiempoCierre(){
   document.getElementById('cierre-horas').value=hDec;
 }
 
-// Para la tarjeta de Consultar Órdenes: PM01/PM02/PM04 ya cerradas muestran turno +
-// hora de finalización (ej. "🕐 T1 16:35"), usando los mismos rangos de horario que
-// ya existen para turnos (shoTurnoDe, 6:30-14:30/14:30-22:30/resto) — a petición de
-// Jorge, para ubicar de un vistazo en qué turno se cerró cada una. Las PM03 y las
-// órdenes aún abiertas (sin cerradaTs) conservan la fecha de creación de siempre.
+// Para la tarjeta de Consultar Órdenes: SIEMPRE se muestran dos líneas — arriba la
+// fecha (de creación) y abajo turno + hora, una encima de otra, a la derecha de la
+// tarjeta. La hora es la de cierre (o.cerradaTs) cuando la orden ya está cerrada
+// (PM01/PM02/PM04), o si no la de creación (o.ts) — así los checklist/inspección y
+// las PM03, que no traen cerradaTs, también muestran su hora en vez de quedarse solo
+// con la fecha. Usa los mismos rangos de turno que ya existen (shoTurnoDe,
+// 6:30-14:30/14:30-22:30/resto) — a petición de Jorge, para ubicar de un vistazo en
+// qué turno se cerró/levantó cada una, sin perder la fecha.
 function _fechaOTCardHTML(o){
-  if(o.tipo!=='PM03'&&o.cerradaTs){
-    var hora=new Date(o.cerradaTs).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',hour12:false});
-    return '🕐 '+shoTurnoDe(o.cerradaTs)+' '+hora;
+  var horaTs=(o.tipo!=='PM03'&&o.cerradaTs)?o.cerradaTs:o.ts;
+  var horaLinea='';
+  if(horaTs){
+    var hora=new Date(horaTs).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',hour12:false});
+    horaLinea='🕐 '+shoTurnoDe(horaTs)+' '+hora;
   }
-  return '📅 '+fmtDate(o.ts);
+  return '<span style="display:inline-flex;flex-direction:column;align-items:flex-end;line-height:1.3">'
+    +'<span>📅 '+fmtDate(o.ts)+'</span>'
+    +(horaLinea?'<span>'+horaLinea+'</span>':'')
+    +'</span>';
 }
 // ─── Filtrar ordenes (new version with all filters) ───
 function filtrarOrdenes(){
@@ -23733,7 +23767,12 @@ function _vacAsegurarPeriodos(emp,existentes){
     var ingresoISO=emp.fecha_ingreso;
     var mesesPreAnio=_vacMesesCumplidos(ingresoISO,hoy);
     var ingresoDate=new Date(ingresoISO+'T12:00:00');
-    var vencPreAnioDate=new Date(ingresoDate); vencPreAnioDate.setFullYear(vencPreAnioDate.getFullYear()+1);
+    // El vencimiento del periodo de adelanto NO es ingreso+1 año: la empresa permite
+    // usar los días desde el primer mes, pero los 18 meses de ley para que venzan
+    // corren a partir de que el colaborador cumple su primer año, igual que los
+    // periodos normales por aniversario (ver _vacFechaVencimiento).
+    var primerAniversarioDate=new Date(ingresoDate); primerAniversarioDate.setFullYear(primerAniversarioDate.getFullYear()+1);
+    var vencPreAnioDate=_vacFechaVencimiento(primerAniversarioDate);
     var vencPreAnio=_fechaISO(vencPreAnioDate);
     var existentePreAnio=existentes.find(function(p){return p.fecha_inicio_periodo===ingresoISO;});
     if(!existentePreAnio){
