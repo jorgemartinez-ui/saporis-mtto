@@ -29334,11 +29334,21 @@ function _reconGuardar(){
   };
   var btn=document.querySelector('#modal-recon-form button[onclick="_reconGuardar()"]');
   if(btn){btn.disabled=true;btn.textContent='Guardando…';}
-  supaUpsert('reconocimientos',payload).then(function(ok){
-    if(!ok){
-      showAlert('⚠️ No se pudo guardar — revisa tu conexión e intenta de nuevo','error');
-      if(btn){btn.disabled=false;btn.textContent='💾 Guardar';}
-      return;
+  // Hacemos el POST directo (en vez de usar supaUpsert) solo para esta pantalla,
+  // así podemos mostrar el motivo EXACTO que da Supabase si falla (permisos,
+  // columna faltante, etc.) en vez de un mensaje genérico — sin tocar
+  // supaUpsert, que usan muchas otras pantallas y no se debe arriesgar.
+  fetch(SUPA_URL+'/rest/v1/reconocimientos',{
+    method:'POST',
+    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
+    body:JSON.stringify(payload)
+  }).then(function(r){
+    if(!r.ok){
+      return r.text().then(function(txt){
+        console.error('Reconocimiento — error al guardar:',txt);
+        showAlert('⚠️ No se pudo guardar: '+txt.substring(0,180),'error');
+        if(btn){btn.disabled=false;btn.textContent='💾 Guardar';}
+      });
     }
     RECONOCIMIENTO_ACTUAL={esTodos:todos,colaboradores:colaboradores,motivo:motivo,creadoPor:currentUser.nombre,creadoTs:now,firmaImg:imgData,firmaNombre:currentUser.nombre,firmaTs:now};
     saveDB('reconocimiento_actual',RECONOCIMIENTO_ACTUAL);
@@ -29358,6 +29368,10 @@ function _reconGuardar(){
     var m=document.getElementById('modal-recon-form');if(m)m.remove();
     showAlert('✅ Reconocimiento guardado');
     if(document.getElementById('dor-content')) renderDOR();
+  }).catch(function(e){
+    console.error('Reconocimiento — error de red al guardar:',e);
+    showAlert('⚠️ No se pudo guardar (red): '+e.message,'error');
+    if(btn){btn.disabled=false;btn.textContent='💾 Guardar';}
   });
 }
 
