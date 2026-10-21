@@ -28115,14 +28115,16 @@ function renderResumenTecnicosOT(){
     }
   });
 
-  // PM02 abiertas (no cerradas) asignadas a cada técnico — a diferencia de PM03,
-  // una PM02 no va acumulando días mientras sigue abierta, así que aquí no es "ya
-  // está sumando horas", sino simplemente cuántas PM02 tiene pendientes ese técnico
-  // ahora mismo, sin importar el filtro de fecha/semana de esta tabla.
+  // PM02 abiertas (no cerradas) asignadas a cada técnico — igual que con las
+  // cerradas (que se filtran por cerradaTs dentro de tsDesde/tsHasta), aquí solo
+  // cuentan las que se levantaron (o.ts) dentro de ESTE período (día/semana que
+  // se está consultando), no todas las que el técnico tenga pendientes en general.
   var pm02AbiertasPorTec = {}; // normNombre -> cantidad
   ORDENES.forEach(function(o){
     if(o.tipo!=='PM02' || o.estado==='cerrada' || o.fuenteBitacora) return;
     if(!o.tecnicoNombre || o.tecnicoNombre==='Sin asignar') return;
+    var tsO=o.ts||0;
+    if(!(tsO>=tsDesde && tsO<tsHasta)) return;
     var _normPO=normNombre(o.tecnicoNombre);
     pm02AbiertasPorTec[_normPO]=(pm02AbiertasPorTec[_normPO]||0)+1;
   });
@@ -28180,13 +28182,19 @@ function renderResumenTecnicosOT(){
       .replace(/\s+/g,' ').trim();
   }
 
+  // Nunca mostrar a estos en este resumen (son administradores, no técnicos de
+  // campo) — mismo criterio ya usado en el dashboard de KPIs (renderDashboardPMs),
+  // aunque estén marcados como "técnico" en Admin > Listas > Técnicos para otros fines.
+  var _excluidosSiempre=['jorge martínez','jorge martinez','mauricio rangel'];
+
   // Administradores incluidos explícitamente como técnico (Admin > Listas > Técnicos)
-  // — a ellos SÍ se les debe sumar su trabajo aquí. Cualquier otro admin, no.
+  // — a ellos SÍ se les debe sumar su trabajo aquí, salvo los de _excluidosSiempre.
   var adminIncNames = (LISTAS.tecnicos_admin_ids||[]).map(function(id){
     var u = USERS.find(function(x){return x.id===id;});
     return u ? u.nombre : null;
   }).filter(Boolean);
   adminIncNames.forEach(function(n){
+    if(_excluidosSiempre.indexOf(normNombre(n))>=0) return;
     if(!tecnicos.some(function(t){return normNombre(t)===normNombre(n);})) tecnicos.push(n);
   });
   var adminNoIncluidos = USERS.filter(function(u){
@@ -28211,6 +28219,10 @@ function renderResumenTecnicosOT(){
   Object.keys(tecnicosConOT).forEach(function(k){
     tecnicos.push(tecnicosConOT[k]);
   });
+
+  // Filtro final de seguridad: sin importar por qué vía hayan entrado, nunca
+  // mostrar a los de _excluidosSiempre en esta tabla.
+  tecnicos = tecnicos.filter(function(t){ return _excluidosSiempre.indexOf(normNombre(t))<0; });
 
   var rows = tecnicos.map(function(nombre){
     var normN = normNombre(nombre);
