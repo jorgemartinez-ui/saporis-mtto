@@ -2933,7 +2933,6 @@ function confirmarCierrePM03(id){
   // Calcular horas totales sumando todos los días
   var totalHrs=p.diasTrabajo.reduce(function(s,d){return s+parseFloat((diffMin(d.horaInicio,d.horaFin)/60).toFixed(2));},0);
   p.horasCierre=Math.round(totalHrs*100)/100;
-  p.horasCierre=parseFloat((diffMin(hi,hf)/60).toFixed(2));
   p.comentariosActividades=comentariosActs;
   p.horasActividades=horasActs;
   p.personasActividades=personasActs;
@@ -14346,7 +14345,15 @@ function syncSupabase(){
     }
   }).catch(function(){});
   supaFetch('usuarios','GET',null,'activo=eq.true').then(function(rows){
-    if(!rows||!rows.length){supaUpsert('usuarios',DEFAULT_USERS.filter(function(u){return u.rol!=='super';}).map(function(u){return{id:u.id,username:u.username,nombre:u.nombre,password_hash:u.password,rol:u.rol,activo:true};})  ).catch(function(){});return;}
+    // supaFetch devuelve null cuando la consulta falló (sin conexión, error del
+    // servidor, etc.) — eso NO significa "la tabla está vacía". Antes esto se trataba
+    // igual que una tabla vacía y, de regreso, se volvía a sembrar Supabase con
+    // DEFAULT_USERS (las contraseñas originales de fábrica), borrando cualquier
+    // cambio de contraseña ya guardado en cuanto esta sincronización fallaba una
+    // sola vez — era justo lo que le regresaba la contraseña vieja a Jorge después
+    // de cada deploy. Si falló, no se toca nada (ni local ni Supabase).
+    if(rows===null) return;
+    if(!rows.length){supaUpsert('usuarios',DEFAULT_USERS.filter(function(u){return u.rol!=='super';}).map(function(u){return{id:u.id,username:u.username,nombre:u.nombre,password_hash:u.password,rol:u.rol,activo:true};})  ).catch(function(){});return;}
     // Filtrar super de los registros de Supabase para no sobreescribir
     var superLocal=USERS.filter(function(u){return u.rol==='super';});
     USERS=rows.filter(function(r){return r.rol!=='super';}).map(function(r){return{id:r.id,username:r.username,nombre:r.nombre,password:r.password_hash,rol:r.rol,email:r.email||''}});
@@ -21541,9 +21548,13 @@ function _protoAccionesPM03(pmId){
     });
   }
 
-  var lineaEsc=String(p.linea||'').replace(/'/g,"\\'");
-  var compEsc=String(p.componente||'').replace(/'/g,"\\'");
-  var actEsc=String(p.actividad||'').replace(/'/g,"\\'");
+  // Escapar comillas simples (para no romper el string JS del onclick) Y comillas
+  // dobles (para no romper el atributo onclick="...", que está delimitado con
+  // comillas dobles) — ej. una actividad con una medida en pulgadas (24" x 12")
+  // antes rompía este botón con "Invalid or unexpected token".
+  var lineaEsc=String(p.linea||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+  var compEsc=String(p.componente||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+  var actEsc=String(p.actividad||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
 
   var esAdminOSuper=currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super');
 
@@ -21689,6 +21700,11 @@ function abrirEditorProtocolo(id, prefill){
     var pLinea = p ? p.linea : (prefill&&prefill.linea?prefill.linea:'');
     var pEquipo = p ? (p.equipo||'') : (prefill&&prefill.equipo?prefill.equipo:'');
     var pActividad = p ? (p.equipo_secundario||'') : (prefill&&prefill.actividad?prefill.actividad:'');
+    // Versiones seguras para insertar en atributos value="..." — una comilla doble
+    // en el texto (ej. una medida en pulgadas) rompía el HTML del formulario.
+    var pLineaAttr=String(pLinea||'').replace(/"/g,'&quot;');
+    var pEquipoAttr=String(pEquipo||'').replace(/"/g,'&quot;');
+    var pActividadAttr=String(pActividad||'').replace(/"/g,'&quot;');
 
     var areaInicial = pLinea ? proto_areaFromLinea(pLinea) : '';
     var lineasInicial = areaInicial ? getLineasPorArea(areaInicial) : [];
@@ -21726,14 +21742,14 @@ function abrirEditorProtocolo(id, prefill){
       +'<select class="form-control" id="proto-linea-sel" onchange="proto_onLineaChange()" style="padding:9px">'
       +proto_lineaOptionsHTML(areaInicial, pLinea)
       +'</select>'
-      +'<input type="text" id="proto-linea-txt" class="form-control" placeholder="Escribe la línea" value="'+pLinea+'" style="padding:9px;margin-top:6px;display:'+(lineaLibre?'block':'none')+'"></div>'
+      +'<input type="text" id="proto-linea-txt" class="form-control" placeholder="Escribe la línea" value="'+pLineaAttr+'" style="padding:9px;margin-top:6px;display:'+(lineaLibre?'block':'none')+'"></div>'
       +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Equipo</label>'
       +'<select class="form-control" id="proto-equipo-sel" onchange="proto_onComboChange(\'equipo\')" style="padding:9px">'
       +proto_equipoOptionsHTML(areaInicial, pLinea, pEquipo)
       +'</select>'
-      +'<input type="text" id="proto-equipo-txt" class="form-control" placeholder="Ej: Línea de Galón" value="'+pEquipo+'" style="padding:9px;margin-top:6px;display:'+(equipoLibre?'block':'none')+'"></div>'
+      +'<input type="text" id="proto-equipo-txt" class="form-control" placeholder="Ej: Línea de Galón" value="'+pEquipoAttr+'" style="padding:9px;margin-top:6px;display:'+(equipoLibre?'block':'none')+'"></div>'
       +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Actividad</label>'
-      +'<input type="text" id="proto-actividad-txt" class="form-control" placeholder="Ej: Reemplazo de filtro, Lubricación mensual..." value="'+pActividad+'" style="padding:9px"></div>'
+      +'<input type="text" id="proto-actividad-txt" class="form-control" placeholder="Ej: Reemplazo de filtro, Lubricación mensual..." value="'+pActividadAttr+'" style="padding:9px"></div>'
       +'</div>'
       +'<div style="margin-bottom:14px">'
       +'<div style="font-size:.8rem;font-weight:800;color:#1a3c5e;text-transform:uppercase;margin-bottom:6px">✍️ Firmas requeridas al cerrar</div>'
@@ -26390,7 +26406,7 @@ function _abrirGestorPM02Render(id,o){
     +'<input type="text" id="gp-comp" class="form-control" value="'+(o.componente||'')+'" style="padding:8px"></div>'
     +'<div style="grid-column:1/-1"><label style="font-size:.72rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Detalle / Descripción</label>'
     +'<textarea id="gp-detalle" class="form-control" rows="2" style="padding:8px;resize:none">'+(o.detalle||'')+'</textarea></div>'
-    +(o.foto?'<div style="grid-column:1/-1"><label style="font-size:.72rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">📷 Foto</label><img src="'+o.foto+'" class="foto-preview"></div>':'')
+    +(o.foto?'<div style="grid-column:1/-1"><label style="font-size:.72rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">📷 Foto</label><img src="'+o.foto+'" class="foto-preview" style="cursor:pointer" onclick="verFotoOrdenGrande(\''+id+'\')"></div>':'')
     +'<div><label style="font-size:.72rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Tipo anormalidad</label>'
     +'<select id="gp-tipo" class="form-control" style="padding:8px"><option value="">-- Selecciona --</option>'+['Seguridad','Calidad','5s','Condición Básica','LDA (Lugar de Difícil Acceso)','FDS (Fuente de Suciedad)','Paro Menor','Otra'].map(function(t){return '<option value="'+t+'"'+(o.tipoAnormalidad===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div>'
     +'<div><label style="font-size:.72rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Prioridad</label>'
@@ -30564,6 +30580,39 @@ function _aguaLimpiarBorrador(fecha){
   try{localStorage.removeItem('agua_borrador_'+fecha);}catch(e){}
 }
 
+// PM02 genérica y ya cerrada que registra la toma de lecturas de agua del día —
+// mismo esquema de campos que usa guardarOT() para una PM02 normal, pero sin pasar
+// por el formulario de creación ni por el modal de cierre (se arma y se cierra de
+// una vez). "tsInicio" es cuándo se abrió el formulario de captura (abrirCapturaDiariaAgua)
+// y "horas" ya viene calculado (capado a 1 hr) desde guardarLecturaAgua.
+function _crearPM02LecturaAgua(fecha,horas,tsInicio){
+  var id=genID('PM02');
+  var tsFin=Date.now();
+  var fmtHora=function(ts){return new Date(ts).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',hour12:false});};
+  var ot={
+    id:id,tipo:'PM02',area:'servicios',linea:'Agua',componente:'Medidores de Agua',
+    prioridad:'C',tipoAnormalidad:'Otra',
+    detalle:'Toma de lecturas de medidores de agua del día '+fecha,
+    foto:null,
+    tecnicoAsignado:currentUser.id,tecnicoNombre:currentUser.nombre,
+    conciliadoCon:'',conciliadoConNombre:'',pendienteAsignacion:false,
+    levantadoPor:currentUser.nombre,levantadoId:currentUser.id,rolLevantador:currentUser.rol,
+    ts:tsInicio,horaCreacion:new Date(tsInicio).toISOString(),
+    estado:'cerrada',semana:currentWeek(),año:currentYear(),
+    colorOT:null,
+    horaInicioTrabajo:fmtHora(tsInicio),horaFinTrabajo:fmtHora(tsFin),fechaTrabajo:fecha,
+    observacionesCierre:'Toma de lecturas de medidores de agua — '+fecha,
+    horasCierre:horas,tecnicosAdicionales:[],
+    cerradaTs:tsFin,cerradaPor:currentUser.nombre,
+    limpiezaRequerida:false,limpiezaAvisadoA:'',limpiezaFirmaImg:'',
+    refaccionesUsadas:'',
+    historialReasignacion:[],historialModificacion:[]
+  };
+  ORDENES.push(ot);
+  saveDB('ordenes',ORDENES);
+  saveOrdenSupa(ot);
+}
+
 function guardarLecturaAgua(fecha){
   // Buscar la última lectura real anterior a esta fecha (no necesariamente ayer —
   // si se saltó un día, comparar contra 0 inflaba el consumo al valor completo
@@ -30677,12 +30726,22 @@ function guardarLecturaAgua(fecha){
     tiempo_llenado_hrs: parseFloat(tiempoLlenadoHrs.toFixed(2))
   };
 
+  var esLecturaNueva=AGUA_LECTURAS.findIndex(function(l){return l.fecha===fecha;})<0;
   var idx=AGUA_LECTURAS.findIndex(function(l){return l.fecha===fecha;});
   if(idx>=0) AGUA_LECTURAS[idx]=row; else AGUA_LECTURAS.unshift(row);
   saveDB('agua_lecturas',AGUA_LECTURAS);
 
   // Save to Supabase (avisa y encola reintento si falla — ver syncAguaSupa)
   syncAguaSupa(row);
+
+  // Generar una PM02 genérica "Toma de lecturas de agua del día", ya cerrada, con
+  // las horas desde que se abrió el formulario (abrirCapturaDiariaAgua) hasta este
+  // guardado — a petición de Jorge, para que esta tarea quede registrada y cuente
+  // tiempo igual que cualquier otra PM. Solo la primera vez que se guarda ese día
+  // (no en correcciones posteriores de la misma lectura, para no duplicar la PM02).
+  if(esLecturaNueva){
+    _crearPM02LecturaAgua(fecha,parseFloat(tiempoLlenadoHrs.toFixed(2)),_aguaInicioTs||Date.now());
+  }
 
   saveDB('agua_inicio_'+fecha, null); // ya se guardó, limpiar la marca de inicio
   _aguaLimpiarBorrador(fecha);
