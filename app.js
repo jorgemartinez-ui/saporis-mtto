@@ -1405,6 +1405,9 @@ function _renderDetalleOrden(id,o){
   var _edadOT=Date.now()-(o.ts||0);
   var canEditFull=(r==='super')||(r==='admin'&&o.estado==='abierta')||
     (r==='tecnico'&&o.tecnicoAsignado===currentUser.id&&_edadOT<_7dias);
+  // Editar fecha/hora de levantamiento: super sin límite de tiempo, o quien
+  // levantó la orden dentro de los primeros 7 días (mismo límite de arriba).
+  var canEditFechaHora=(r==='super')||(o.levantadoId===currentUser.id&&_edadOT<_7dias);
   const pC={A:'var(--rj)',B:'var(--am2)',C:'var(--vd2)'};
   let hist='';
   if(o.historialReasignacion?.length)hist+=`<div class="card"><div class="card-title">🔄 Reasignaciones</div>${o.historialReasignacion.map(h=>`<div class="traza-box">📅 ${fmtDateTime(h.ts)}<br>Por: <b>${h.cambiadoPor}</b> | De: ${h.de} → ${h.a}<br>Motivo: ${h.motivo}</div>`).join('')}</div>`;
@@ -1501,7 +1504,7 @@ function _renderDetalleOrden(id,o){
       ${o.estado==='conciliar'&&(r==='admin'||r==='super')?`<button class="btn btn-primary" style="background:#7c3aed;color:#fff;border:none" onclick="abrirGestorPM02('${o.id}')">✏️ Modificar y Asignar</button>`:''}
       ${canCloseAzul?`<button class="btn btn-azul-ot" onclick="abrirCierreAzul('${o.id}')">🔵 Marcar resuelta</button>`:''}
       ${canReasign?`<button class="btn btn-warning" onclick="abrirReasignacion('${o.id}')">🔄 Reasignar</button>`:''}
-      ${canEditOwn?`<button class="btn btn-outline" onclick="editarDetalleOp('${o.id}')">✏️ Editar mi aviso</button>`:''}
+      ${(canEditOwn||canEditFechaHora)?`<button class="btn btn-outline" onclick="editarDetalleOp('${o.id}')">✏️ Editar mi aviso</button>`:''}
       ${canDelete?`<button class="btn" style="background:#fef2f2;color:#7f1d1d;border:none;margin-top:6px" onclick="eliminarOrdenPropia('${o.id}')">🗑️ Eliminar aviso</button>`:''}
       ${canEditFull?`<button class="btn btn-outline" style="border-color:#7c3aed;color:#7c3aed" onclick="abrirEditorCompleto('${o.id}')">✏️ Editar Orden</button>`:''}
     </div>`;
@@ -1880,12 +1883,24 @@ function editarDetalleOp(id){
   const tiposOpts=TIPOS.map(t=>`<option value="${t}"${o.tipoAnormalidad===t?' selected':''}>${t}</option>`).join('');
   const esContencion=(o.colorOT==='rojo'&&o.prioridad==='A'&&(o.tipoAnormalidad==='Seguridad'||o.tipoAnormalidad==='Calidad'));
 
+  // Mismas reglas que en _renderDetalleOrden — quien levantó la orden (roles de
+  // aviso) mientras siga abierta ve/edita los campos de siempre; fecha/hora es
+  // aparte: super sin límite, o quien levantó dentro de los primeros 7 días.
+  const r=currentUser.rol;
+  const _rolesAviso=['operador','lider','lider_calidad','inspector_calidad','administrativo','supply'];
+  const canEditAviso=_rolesAviso.indexOf(r)>=0&&o.levantadoId===currentUser.id&&o.estado==='abierta';
+  const _7dias=7*24*60*60*1000;
+  const canEditFechaHora=(r==='super')||(o.levantadoId===currentUser.id&&(Date.now()-(o.ts||0))<_7dias);
+  const _dFH=new Date(o.ts||Date.now());
+  const _fechaVal=_dFH.getFullYear()+'-'+String(_dFH.getMonth()+1).padStart(2,'0')+'-'+String(_dFH.getDate()).padStart(2,'0');
+  const _horaVal=String(_dFH.getHours()).padStart(2,'0')+':'+String(_dFH.getMinutes()).padStart(2,'0');
+
   const m=document.createElement('div');
   m.id='modal-edit-op';
   m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
   m.innerHTML=`<div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">
     <div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:14px">✏️ Editar mi aviso</div>
-    <div class="form-group"><label class="form-label">Prioridad</label>
+    ${canEditAviso?`<div class="form-group"><label class="form-label">Prioridad</label>
       <select class="form-control" id="eop-prio">
         <option value="A"${o.prioridad==='A'?' selected':''}>🔴 Prioridad A</option>
         <option value="B"${o.prioridad==='B'?' selected':''}>🟠 Prioridad B</option>
@@ -1903,7 +1918,13 @@ function editarDetalleOp(id){
       <div class="form-group" style="background:#fff7ed;border:2px solid #f59e0b;border-radius:10px;padding:12px">
         <label class="form-label" style="color:#92400e;font-weight:800">⚠️ Medida de Contención <span style="color:#dc2626">*Obligatoria</span></label>
         <textarea class="form-control" id="eop-contencion" rows="2" placeholder="Describe la acción de contención...">${o.contencion||''}</textarea>
-      </div></div>
+      </div></div>`:''}
+    ${canEditFechaHora?`<div style="display:flex;gap:8px">
+      <div class="form-group" style="flex:1"><label class="form-label">📅 Fecha</label>
+        <input type="date" class="form-control" id="eop-fecha" value="${_fechaVal}"></div>
+      <div class="form-group" style="flex:1"><label class="form-label">🕐 Hora</label>
+        <input type="time" class="form-control" id="eop-hora" value="${_horaVal}"></div>
+    </div>`:''}
     <div style="display:flex;gap:8px;margin-top:12px">
       <button type="button" class="btn btn-outline" style="flex:1" onclick="document.getElementById('modal-edit-op').remove()">Cancelar</button>
       <button type="button" class="btn btn-primary" style="flex:2" onclick="guardarEditOp('${id}')">💾 Guardar</button>
@@ -1926,8 +1947,12 @@ function guardarEditOp(id){
   var comp=document.getElementById('eop-comp')?.value.trim()||o.componente;
   var det=document.getElementById('eop-detalle')?.value.trim()||o.detalle;
   var cont=document.getElementById('eop-contencion')?.value.trim()||'';
-  // Validar contención obligatoria
-  if(o.colorOT==='rojo'&&prio==='A'&&(tipo==='Seguridad'||tipo==='Calidad')&&!cont){
+  // El bloque de aviso (prioridad/tipo/componente/detalle/contención) solo se
+  // pinta en el modal si el usuario tiene permiso para editarlo (canEditAviso en
+  // editarDetalleOp) — si el campo de prioridad no existe en el DOM es porque
+  // este usuario solo puede ver/editar fecha+hora, así que no aplica esta validación.
+  var _avisoVisible=document.getElementById('eop-prio')!=null;
+  if(_avisoVisible&&o.colorOT==='rojo'&&prio==='A'&&(tipo==='Seguridad'||tipo==='Calidad')&&!cont){
     showAlert('La medida de contención es obligatoria para Seguridad/Calidad Prio A','error');return;
   }
   if(!o.historialModificacion)o.historialModificacion=[];
@@ -1936,6 +1961,27 @@ function guardarEditOp(id){
   if(det!==o.detalle)o.historialModificacion.push({ts:Date.now(),por:nombreEfectivo(),campo:'Detalle',de:o.detalle,a:det});
   o.prioridad=prio;o.tipoAnormalidad=tipo;o.componente=comp;o.detalle=det;
   if(cont)o.contencion=cont;
+
+  // Fecha/Hora de levantamiento (nuevo) — los campos solo existen en el DOM si
+  // editarDetalleOp decidió mostrarlos (super sin límite, o quien levantó la
+  // orden dentro de los primeros 7 días). Al cambiar la fecha se recalculan
+  // semana/año para que la orden caiga en el reporte semanal correcto. El
+  // super no deja huella en el historial de modificaciones; quien levantó la
+  // orden sí.
+  var fechaEl=document.getElementById('eop-fecha');
+  var horaEl=document.getElementById('eop-hora');
+  if(fechaEl&&horaEl&&fechaEl.value&&horaEl.value){
+    var nuevoTs=new Date(fechaEl.value+'T'+horaEl.value+':00').getTime();
+    if(!isNaN(nuevoTs)&&nuevoTs!==o.ts){
+      if(currentUser.rol!=='super'){
+        o.historialModificacion.push({ts:Date.now(),por:nombreEfectivo(),campo:'Fecha/Hora',de:fmtDateTime(o.ts),a:fmtDateTime(nuevoTs)});
+      }
+      o.ts=nuevoTs;
+      o.semana=getWeekNumber(new Date(nuevoTs));
+      o.año=new Date(nuevoTs).getFullYear();
+    }
+  }
+
   saveDB('ordenes',ORDENES);
   saveOrdenSupa(o);
   document.getElementById('modal-edit-op')?.remove();
@@ -28048,14 +28094,37 @@ function renderResumenTecnicosOT(){
   // PM03 de varios días capturados en PM03_PLAN (diasTrabajo:[{fecha,horaInicio,horaFin}])
   // Se cuentan aunque la PM03 siga abierta (no cerrada): cada día capturado debe
   // reflejarse de inmediato en el resumen de horas, sin esperar a que se firme el cierre.
+  // pm03AbiertasPorTec lleva, por técnico, el set de IDs de esas PM03 que siguen
+  // abiertas pero ya están sumando horas en este período — para mostrarlo en la
+  // columna PM03 como "(+N)" (no se cuentan las ya cerradas: esas ya van en pm03/base).
+  var pm03AbiertasPorTec = {}; // normNombre -> {pm03Id:true,...}
   PM03_PLAN.forEach(function(p){
     if(!p.diasTrabajo || !p.diasTrabajo.length) return;
+    var contribuyeEnPeriodo=false;
     p.diasTrabajo.forEach(function(d){
       if(fechasPeriodo.indexOf(d.fecha)>=0){
         var hrsDia = parseFloat((diffMin(d.horaInicio,d.horaFin)/60).toFixed(2))||0;
         _sumaHorasExtra(p.tecnicoNombre, hrsDia);
+        contribuyeEnPeriodo=true;
       }
     });
+    if(contribuyeEnPeriodo && p.estado!=='cerrada' && p.tecnicoNombre){
+      var _normPT=normNombre(p.tecnicoNombre);
+      if(!pm03AbiertasPorTec[_normPT]) pm03AbiertasPorTec[_normPT]={};
+      pm03AbiertasPorTec[_normPT][p.id]=true;
+    }
+  });
+
+  // PM02 abiertas (no cerradas) asignadas a cada técnico — a diferencia de PM03,
+  // una PM02 no va acumulando días mientras sigue abierta, así que aquí no es "ya
+  // está sumando horas", sino simplemente cuántas PM02 tiene pendientes ese técnico
+  // ahora mismo, sin importar el filtro de fecha/semana de esta tabla.
+  var pm02AbiertasPorTec = {}; // normNombre -> cantidad
+  ORDENES.forEach(function(o){
+    if(o.tipo!=='PM02' || o.estado==='cerrada' || o.fuenteBitacora) return;
+    if(!o.tecnicoNombre || o.tecnicoNombre==='Sin asignar') return;
+    var _normPO=normNombre(o.tecnicoNombre);
+    pm02AbiertasPorTec[_normPO]=(pm02AbiertasPorTec[_normPO]||0)+1;
   });
   // Tiempo de checklists (Inspección de Turno, Arranque/Paro de Servicios, Chiller, etc.)
   INSPECCIONES.forEach(function(insp){
@@ -28158,8 +28227,17 @@ function renderResumenTecnicosOT(){
       return acc+(parseFloat(o.horasCierre)||0);
     },0);
     horas += horasExtraPorTec[normN] || 0;
-    return {nombre:nombre,pm01:pm01,pm02:pm02,pm03:pm03,pm04:pm04,total:total,horas:horas.toFixed(1)};
+    var pm02Abiertas = pm02AbiertasPorTec[normN] || 0;
+    var pm03Abiertas = Object.keys(pm03AbiertasPorTec[normN]||{}).length;
+    return {nombre:nombre,pm01:pm01,pm02:pm02,pm03:pm03,pm04:pm04,total:total,horas:horas.toFixed(1),pm02Abiertas:pm02Abiertas,pm03Abiertas:pm03Abiertas};
   }).filter(function(r){ return r!==null; });
+
+  // Formato "cerradas/(+abiertas)" — omite la parte de "(+N)" cuando no hay ninguna,
+  // para no cambiar cómo se ve hoy cuando no aplica.
+  function _fmtColOT(cerradas,abiertas){
+    var base = cerradas>0 ? String(cerradas) : '—';
+    return abiertas>0 ? (base+'/(+'+abiertas+')') : base;
+  }
 
   var semOpts = Array.from({length:52},function(_,i){
     return '<option value="'+(i+1)+'"'+(parseInt(filtSem)===i+1?' selected':'')+'>Sem '+(i+1)+'</option>';
@@ -28169,8 +28247,8 @@ function renderResumenTecnicosOT(){
     return '<tr>'
       +'<td style="font-weight:600;font-size:12px;padding:6px 8px;border-bottom:1px solid #f3f4f6">'+r.nombre+'</td>'
       +'<td style="text-align:center;font-size:12px;padding:6px 5px;border-bottom:1px solid #f3f4f6">'+(r.pm01||'—')+'</td>'
-      +'<td style="text-align:center;font-size:12px;padding:6px 5px;border-bottom:1px solid #f3f4f6">'+(r.pm02||'—')+'</td>'
-      +'<td style="text-align:center;font-size:12px;padding:6px 5px;border-bottom:1px solid #f3f4f6">'+(r.pm03||'—')+'</td>'
+      +'<td style="text-align:center;font-size:12px;padding:6px 5px;border-bottom:1px solid #f3f4f6">'+_fmtColOT(r.pm02,r.pm02Abiertas)+'</td>'
+      +'<td style="text-align:center;font-size:12px;padding:6px 5px;border-bottom:1px solid #f3f4f6">'+_fmtColOT(r.pm03,r.pm03Abiertas)+'</td>'
       +'<td style="text-align:center;font-size:12px;padding:6px 5px;border-bottom:1px solid #f3f4f6">'+(r.pm04||'—')+'</td>'
       +(function(){
         var h=parseFloat(r.horas);
@@ -28185,7 +28263,9 @@ function renderResumenTecnicosOT(){
 
   var totpm01=rows.reduce(function(a,r){return a+r.pm01;},0);
   var totpm02=rows.reduce(function(a,r){return a+r.pm02;},0);
+  var totpm02Abiertas=rows.reduce(function(a,r){return a+r.pm02Abiertas;},0);
   var totpm03=rows.reduce(function(a,r){return a+r.pm03;},0);
+  var totpm03Abiertas=rows.reduce(function(a,r){return a+r.pm03Abiertas;},0);
   var totpm04=rows.reduce(function(a,r){return a+r.pm04;},0);
   var tottot=rows.reduce(function(a,r){return a+r.total;},0);
   var tothrs=rows.reduce(function(a,r){return a+parseFloat(r.horas);},0).toFixed(1);
@@ -28218,8 +28298,8 @@ function renderResumenTecnicosOT(){
         +'<tfoot><tr style="background:#f8fafc">'
           +'<td style="padding:6px 8px;font-size:11px;font-weight:700;color:#6b7280;border-top:2px solid #e5e7eb">TOTAL</td>'
           +'<td style="padding:6px 5px;text-align:center;font-size:11px;font-weight:700;border-top:2px solid #e5e7eb">'+totpm01+'</td>'
-          +'<td style="padding:6px 5px;text-align:center;font-size:11px;font-weight:700;border-top:2px solid #e5e7eb">'+totpm02+'</td>'
-          +'<td style="padding:6px 5px;text-align:center;font-size:11px;font-weight:700;border-top:2px solid #e5e7eb">'+totpm03+'</td>'
+          +'<td style="padding:6px 5px;text-align:center;font-size:11px;font-weight:700;border-top:2px solid #e5e7eb">'+_fmtColOT(totpm02,totpm02Abiertas)+'</td>'
+          +'<td style="padding:6px 5px;text-align:center;font-size:11px;font-weight:700;border-top:2px solid #e5e7eb">'+_fmtColOT(totpm03,totpm03Abiertas)+'</td>'
           +'<td style="padding:6px 5px;text-align:center;font-size:11px;font-weight:700;border-top:2px solid #e5e7eb">'+totpm04+'</td>'
           +(function(){var th=parseFloat(tothrs),to=rows.length*7;var fbg=th>=to*0.86?'#dcfce7':th>=to*0.5?'#fef3c7':'#fee2e2';var ffc=th>=to*0.86?'#16a34a':th>=to*0.5?'#d97706':'#dc2626';return '<td style="padding:6px 5px;text-align:center;border-top:2px solid #e5e7eb">'+'<span style="padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;background:'+fbg+';color:'+ffc+'">'+th.toFixed(1)+'h / '+to+'h</span></td>';})()
         +'</tr></tfoot>'
