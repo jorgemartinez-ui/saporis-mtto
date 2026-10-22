@@ -235,7 +235,7 @@ tr:nth-child(even) td{background:#F8FAFC}
 </script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="app.js?v=20261015y" defer></script>
+<script src="app.js?v=20261015z" defer></script>
 
 <style id="lup-css">
 .lup-doc{background:#fff;border:2px solid #1a3c5e;border-radius:10px;overflow:hidden;margin:12px;font-family:Arial,sans-serif}
@@ -633,12 +633,12 @@ tr:nth-child(even) td{background:#F8FAFC}
 <div id="screen-almacen" class="screen">
   <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">🔧 Almacén de Refacciones</div></div></div>
   <div class="scroll-content" style="padding:16px">
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
-    <button onclick="showOrdenesRefaccion()" style="padding:10px 6px;background:#1a3c5e;color:#fff;border:none;border-radius:10px;font-family:Nunito,sans-serif;font-size:.74rem;font-weight:700;cursor:pointer;line-height:1.25">🔩 Órdenes con Gasto de Refacción</button>
-    <button onclick="showRefacciones()" style="padding:10px 6px;background:#5D4037;color:#fff;border:none;border-radius:10px;font-family:Nunito,sans-serif;font-size:.74rem;font-weight:700;cursor:pointer;line-height:1.25">📦 Inventario de Refacciones</button>
-    <button onclick="showAlmacenUbicaciones()" style="padding:10px 6px;background:#0e7490;color:#fff;border:none;border-radius:10px;font-family:Nunito,sans-serif;font-size:.74rem;font-weight:700;cursor:pointer;line-height:1.25">🗺️ Ubicaciones de Almacén</button>
-    <button onclick="showRefFaltantes()" style="padding:10px 6px;background:#b45309;color:#fff;border:none;border-radius:10px;font-family:Nunito,sans-serif;font-size:.74rem;font-weight:700;cursor:pointer;line-height:1.25;position:relative" id="btn-ref-faltantes">🛒 Refacciones Faltantes <span id="badge-ref-faltantes" style="display:none;position:absolute;top:4px;right:4px;background:#dc2626;color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center"></span></button>
-    <button onclick="showRefConsumidas()" style="padding:10px 6px;background:#065f46;color:#fff;border:none;border-radius:10px;font-family:Nunito,sans-serif;font-size:.74rem;font-weight:700;cursor:pointer;line-height:1.25;position:relative" id="btn-ref-consumidas">🔩 Refacciones Consumidas <span id="badge-ref-consumidas" style="display:none;position:absolute;top:4px;right:4px;background:#dc2626;color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center"></span></button>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
+    <button onclick="showAlmacenUbicaciones()" style="padding:16px 8px;background:#0e7490;color:#fff;border:none;border-radius:12px;font-family:Nunito,sans-serif;font-size:.86rem;font-weight:700;cursor:pointer;line-height:1.3">🗺️ Ubicaciones de Almacén</button>
+    <button onclick="showRefConsumidas()" style="padding:16px 8px;background:#065f46;color:#fff;border:none;border-radius:12px;font-family:Nunito,sans-serif;font-size:.86rem;font-weight:700;cursor:pointer;line-height:1.3;position:relative" id="btn-ref-consumidas">🔩 Refacciones Consumidas <span id="badge-ref-consumidas" style="display:none;position:absolute;top:4px;right:4px;background:#dc2626;color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center"></span></button>
+    <button onclick="showOrdenesRefaccion()" style="padding:16px 8px;background:#1a3c5e;color:#fff;border:none;border-radius:12px;font-family:Nunito,sans-serif;font-size:.86rem;font-weight:700;cursor:pointer;line-height:1.3">🔩 Órdenes con Gasto de Refacción</button>
+    <button onclick="showRefacciones()" style="padding:16px 8px;background:#5D4037;color:#fff;border:none;border-radius:12px;font-family:Nunito,sans-serif;font-size:.86rem;font-weight:700;cursor:pointer;line-height:1.3">📦 Inventario de Refacciones</button>
+    <button onclick="showRefFaltantes()" style="padding:16px 8px;background:#b45309;color:#fff;border:none;border-radius:12px;font-family:Nunito,sans-serif;font-size:.86rem;font-weight:700;cursor:pointer;line-height:1.3;position:relative" id="btn-ref-faltantes">🛒 Refacciones Faltantes <span id="badge-ref-faltantes" style="display:none;position:absolute;top:4px;right:4px;background:#dc2626;color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center"></span></button>
     </div>
     <div id="almacen-content"></div>
   </div>

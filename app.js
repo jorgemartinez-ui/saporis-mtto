@@ -26667,9 +26667,60 @@ function _ubicAbrirCaja(id){
           +(caja.tipo_caja==='mixta'?'<button class="btn btn-outline" style="width:100%;margin-top:6px" onclick="mostrarQRUbic(\''+c.codigo_item+'\',\''+nombreRef.replace(/'/g,"\\'")+'\','+c.numero_item+')">📲 QR de esta bolsa</button>':'')
           +'</div>';
       }).join('');
+      var puedeAgregar=caja.tipo_caja==='mixta'||contenido.length===0;
+      if(puedeAgregar){
+        html+='<button class="btn btn-primary" style="width:100%;margin-top:4px" onclick="_ubicAbrirAgregarRefaccionACaja(\''+caja.id+'\',\''+caja.codigo+'\',\''+caja.tipo_caja+'\','+contenido.length+')">➕ Agregar refacción a esta caja</button>';
+      }
       cont.innerHTML=html;
     });
   });
+}
+
+// ── AGREGAR REFACCIÓN A UNA CAJA YA EXISTENTE ─────────────────────
+function _ubicAbrirAgregarRefaccionACaja(cajaId,cajaCodigo,tipoCaja,itemsActuales){
+  var m=document.createElement('div');
+  m.id='modal-ubic-add-ref-caja';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center;overflow-y:auto';
+  m.innerHTML='<div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;box-sizing:border-box">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800;color:#0e7490;margin-bottom:14px">➕ Agregar refacción a la caja '+cajaCodigo+'</div>'
+    +'<div id="ubic-add-ref-campos"><div style="text-align:center;padding:20px;color:#9ca3af">Cargando...</div></div>'
+    +'<div style="display:flex;gap:8px;margin-top:14px">'
+    +'<button class="btn btn-outline" style="flex:1" onclick="document.getElementById(\'modal-ubic-add-ref-caja\').remove()">Cancelar</button>'
+    +'<button class="btn btn-primary" style="flex:2" onclick="_ubicGuardarRefaccionACaja(\''+cajaId+'\',\''+cajaCodigo+'\',\''+tipoCaja+'\','+itemsActuales+')">💾 Agregar</button>'
+    +'</div></div>';
+  document.body.appendChild(m);
+  supaFetch('refacciones','GET',null,'activo=eq.true&select=id,nombre,codigo&order=nombre.asc').then(function(rows){
+    window._ubicRefaccionesCache=rows||[];
+    var cont=document.getElementById('ubic-add-ref-campos');
+    if(!cont) return;
+    cont.innerHTML='<div class="form-group"><label class="form-label">Refacción</label><select class="form-control" id="ubic-add-ref-sel" onchange="_ubicCheckNuevaRefaccionSelect(this)">'+_ubicOpcionesRefacciones()+'</select></div>'
+      +'<div class="form-group"><label class="form-label">Cantidad</label><input type="number" class="form-control" id="ubic-add-ref-cant" value="1" min="1"></div>';
+  });
+}
+
+function _ubicGuardarRefaccionACaja(cajaId,cajaCodigo,tipoCaja,itemsActuales){
+  var sel=document.getElementById('ubic-add-ref-sel');
+  var refId=sel?sel.value:'';
+  var cant=parseInt((document.getElementById('ubic-add-ref-cant')||{}).value)||0;
+  if(!refId){showAlert('Selecciona una refacción','error');return;}
+  if(cant<=0){showAlert('La cantidad debe ser mayor a 0','error');return;}
+  if(tipoCaja==='simple'&&itemsActuales>=1){showAlert('Una caja simple solo puede tener una refacción','error');return;}
+  var armarYGuardar=function(numeroItem){
+    var codigoItem=tipoCaja==='mixta' ? (cajaCodigo+'-I'+(itemsActuales+1)) : cajaCodigo;
+    var payload={id:gen_id(),caja_id:cajaId,refaccion_id:refId,cantidad:cant,codigo_item:codigoItem,numero_item:numeroItem};
+    fetch(SUPA_URL+'/rest/v1/almacen_caja_contenido',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
+      .then(function(r){
+        if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});return;}
+        var m=document.getElementById('modal-ubic-add-ref-caja');if(m)m.remove();
+        showAlert('✅ Refacción agregada a la caja');
+        _ubicAbrirCaja(cajaId);
+      });
+  };
+  if(tipoCaja==='mixta'){
+    _ubicSiguienteNumero('almacen_caja_contenido','numero_item').then(armarYGuardar);
+  } else {
+    armarYGuardar(null);
+  }
 }
 
 // ── QR (caja o bolsa) ─────────────────────────────────────────────
