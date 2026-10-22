@@ -26175,6 +26175,345 @@ function gen_id(){return 'ref-'+Date.now().toString(36)+Math.random().toString(3
 // ── FIN MÓDULO REFACCIONES ───────────────────────────────────────
 
 // ================================================================
+// ALMACÉN — UBICACIONES JERÁRQUICAS (Fase 1)
+// Niveles: 1=Almacén, 2=Anaquel, 3=Posición, 4=Caja
+// Una Caja puede ser "simple" (una sola refacción) o "mixta" (varias
+// refacciones, ej. kit completo para una máquina). Cada caja genera un
+// código + número; cada refacción dentro de una caja mixta ("bolsa")
+// genera también su propio código + número independiente.
+// Esta fase SOLO cubre: dar de alta la jerarquía, generar QR/código/
+// número, y consultar/buscar. El escaneo→standby y el consumo real
+// desde las OTs quedan para la fase 2.
+// ================================================================
+var _ubicNivelNombres=['','Almacén','Anaquel','Posición','Caja'];
+var _ubicNivelActual=1;
+var _ubicPathActual=[]; // breadcrumb: [{id,nombre,codigo,nivel}, ...]
+var _ubicListaActual=[];
+
+function showAlmacenUbicaciones(){
+  showScreen('screen-almacen-ubicaciones');
+  _ubicPathActual=[];
+  _ubicNivelActual=1;
+  _renderUbicNivel();
+}
+
+function _ubicPadreId(){
+  return _ubicPathActual.length ? _ubicPathActual[_ubicPathActual.length-1].id : null;
+}
+
+function _ubicSiguienteNumero(tabla,campo){
+  return supaFetch(tabla,'GET',null,'select='+campo+'&order='+campo+'.desc.nullslast&limit=1').then(function(rows){
+    var max=(rows&&rows[0]&&rows[0][campo])?rows[0][campo]:0;
+    return max+1;
+  });
+}
+
+function _renderUbicNivel(){
+  var cont=document.getElementById('almacen-ubic-content');
+  if(!cont) return;
+  cont.innerHTML='<div style="text-align:center;padding:20px;color:#9ca3af">Cargando...</div>';
+  var padreId=_ubicPadreId();
+  var filtro = padreId ? ('padre_id=eq.'+padreId) : 'padre_id=is.null';
+  supaFetch('almacen_ubicaciones','GET',null,filtro+'&order=nombre.asc').then(function(rows){
+    _ubicListaActual = rows||[];
+    _dibujarUbicNivel(cont);
+  });
+}
+
+function _dibujarUbicNivel(cont){
+  var nivel=_ubicNivelActual;
+  var isAdmin=currentUser.rol==='admin'||currentUser.rol==='super';
+  var breadcrumb='<div style="font-size:12px;color:#6b7280;margin-bottom:10px">'
+    +'<span style="cursor:pointer;color:#0e7490;font-weight:700" onclick="_ubicIrRaiz()">📦 Almacenes</span>'
+    +_ubicPathActual.map(function(p,i){return ' › <span style="cursor:pointer;color:#0e7490;font-weight:700" onclick="_ubicIrNivel('+i+')">'+p.nombre+'</span>';}).join('')
+    +'</div>';
+
+  var html=breadcrumb;
+
+  if(_ubicListaActual.length){
+    html+='<div id="ubic-lista">'+_ubicListaActual.map(function(u){
+      var esCaja=u.nivel===4;
+      var sub=esCaja ? ((u.tipo_caja==='mixta'?'Caja mixta':'Caja')+' · '+(u.codigo||'')+' · N° '+u.numero) : (u.codigo||'');
+      var nombreEsc=String(u.nombre||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
+      var onclickCall=esCaja
+        ? ("_ubicAbrirCaja('"+u.id+"')")
+        : ("_ubicEntrar('"+u.id+"','"+nombreEsc+"','"+(u.codigo||'')+"',"+u.nivel+")");
+      return '<div class="card" style="margin-bottom:8px;padding:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center" onclick="'+onclickCall+'">'
+        +'<div><div style="font-family:Nunito,sans-serif;font-weight:800;font-size:14px">'+(esCaja?'📦 ':'📁 ')+u.nombre+'</div><div style="font-size:11px;color:#6b7280">'+sub+'</div></div>'
+        +'<div style="color:#9ca3af">›</div></div>';
+    }).join('')+'</div>';
+  } else {
+    html+='<div class="card text-center" style="padding:30px;color:#9ca3af">Sin '+(_ubicNivelNombres[nivel]||'elementos').toLowerCase()+'s registrados aquí</div>';
+  }
+
+  if(isAdmin){
+    html+='<button class="btn btn-primary" style="width:100%;margin-top:12px" onclick="_ubicAbrirAlta()">➕ Agregar '+_ubicNivelNombres[nivel]+'</button>';
+  }
+
+  html+='<div class="card mt12"><div class="card-title mb8">🔍 Buscar por código, número o nombre</div>'
+    +'<input type="text" id="ubic-buscar-input" class="form-control" placeholder="Ej: ALM1-AN1-P1-C1, 103 o nombre de la refacción" style="padding:10px">'
+    +'<button class="btn btn-outline" style="width:100%;margin-top:8px" onclick="_ubicBuscarDirecto()">Buscar</button>'
+    +'<div style="font-size:.72rem;color:#9ca3af;margin-top:6px">Por ahora el ingreso es manual (código/número) o por nombre — la lectura por cámara llega en la siguiente fase.</div>'
+    +'<div id="ubic-buscar-resultado" class="mt12"></div></div>';
+
+  cont.innerHTML=html;
+}
+
+function _ubicIrRaiz(){_ubicPathActual=[];_ubicNivelActual=1;_renderUbicNivel();}
+function _ubicIrNivel(i){_ubicPathActual=_ubicPathActual.slice(0,i+1);_ubicNivelActual=_ubicPathActual[i].nivel+1;_renderUbicNivel();}
+function _ubicEntrar(id,nombre,codigo,nivel){
+  _ubicPathActual.push({id:id,nombre:nombre,codigo:codigo,nivel:nivel});
+  _ubicNivelActual=nivel+1;
+  _renderUbicNivel();
+}
+
+// ── ALTA: Almacén / Anaquel / Posición ───────────────────────────
+function _ubicAbrirAlta(){
+  var nivel=_ubicNivelActual;
+  var padreId=_ubicPadreId();
+  if(nivel===4){ _ubicAbrirAltaCaja(padreId); return; }
+  var ejemplos=['','Almacén 1','Anaquel 1','Nivel 2 Columna 5'];
+  var m=document.createElement('div');
+  m.id='modal-ubic-alta';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  m.innerHTML='<div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800;color:#0e7490;margin-bottom:14px">➕ Nuevo '+_ubicNivelNombres[nivel]+'</div>'
+    +'<div class="form-group"><label class="form-label">Nombre</label><input type="text" class="form-control" id="ubic-alta-nombre" placeholder="Ej: '+ejemplos[nivel]+'"></div>'
+    +'<div style="display:flex;gap:8px;margin-top:12px">'
+    +'<button class="btn btn-outline" style="flex:1" onclick="document.getElementById(\'modal-ubic-alta\').remove()">Cancelar</button>'
+    +'<button class="btn btn-primary" style="flex:2" onclick="_ubicGuardarAlta('+nivel+')">💾 Guardar</button>'
+    +'</div></div>';
+  document.body.appendChild(m);
+  setTimeout(function(){var el=document.getElementById('ubic-alta-nombre');if(el)el.focus();},200);
+}
+
+function _ubicGuardarAlta(nivel){
+  var nombre=(document.getElementById('ubic-alta-nombre').value||'').trim();
+  if(!nombre){showAlert('Escribe un nombre','error');return;}
+  var padreId=_ubicPadreId();
+  var padreCodigo=_ubicPathActual.length ? (_ubicPathActual[_ubicPathActual.length-1].codigo||'') : '';
+  var prefijos=['','ALM','AN','P'];
+  var filtroHermanos=(padreId?('padre_id=eq.'+padreId):'padre_id=is.null')+'&nivel=eq.'+nivel;
+  supaFetch('almacen_ubicaciones','GET',null,filtroHermanos).then(function(hermanos){
+    var n=(hermanos||[]).length+1;
+    var codigo=(padreCodigo?padreCodigo+'-':'')+prefijos[nivel]+n;
+    _ubicSiguienteNumero('almacen_ubicaciones','numero').then(function(numero){
+      var payload={id:gen_id(),nivel:nivel,nombre:nombre,padre_id:padreId||null,codigo:codigo,numero:numero};
+      fetch(SUPA_URL+'/rest/v1/almacen_ubicaciones',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
+        .then(function(r){
+          if(r.ok){var m=document.getElementById('modal-ubic-alta');if(m)m.remove();showAlert('✅ '+nombre+' agregado ('+codigo+')');_renderUbicNivel();}
+          else r.text().then(function(t){showAlert('⚠️ '+t.substring(0,100),'error');});
+        });
+    });
+  });
+}
+
+// ── ALTA: Caja (simple o mixta) ──────────────────────────────────
+function _ubicAbrirAltaCaja(padreId){
+  var m=document.createElement('div');
+  m.id='modal-ubic-caja';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center;overflow-y:auto';
+  m.innerHTML='<div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800;color:#0e7490;margin-bottom:14px">➕ Nueva Caja</div>'
+    +'<div class="form-group"><label class="form-label">Nombre / referencia</label><input type="text" class="form-control" id="ubic-caja-nombre" placeholder="Ej: Caja 3, Kit bomba línea 2..."></div>'
+    +'<div class="form-group"><label class="form-label">Tipo de caja</label><select class="form-control" id="ubic-caja-tipo" onchange="_ubicToggleTipoCaja()">'
+    +'<option value="simple">Simple — una sola refacción</option>'
+    +'<option value="mixta">Mixta — varias refacciones (ej. kit de una máquina)</option>'
+    +'</select></div>'
+    +'<div id="ubic-caja-contenido-wrap"></div>'
+    +'<button type="button" class="btn btn-outline" id="ubic-caja-add-item" style="display:none;width:100%;margin-top:8px" onclick="_ubicAgregarLineaContenido()">➕ Agregar otra refacción a la caja</button>'
+    +'<div style="display:flex;gap:8px;margin-top:14px">'
+    +'<button class="btn btn-outline" style="flex:1" onclick="document.getElementById(\'modal-ubic-caja\').remove()">Cancelar</button>'
+    +'<button class="btn btn-primary" style="flex:2" onclick="_ubicGuardarCaja(\''+(padreId||'')+'\')">💾 Guardar Caja</button>'
+    +'</div></div>';
+  document.body.appendChild(m);
+  supaFetch('refacciones','GET',null,'activo=eq.true&select=id,nombre,codigo&order=nombre.asc').then(function(rows){
+    window._ubicRefaccionesCache=rows||[];
+    _ubicPintarPrimeraLineaContenido();
+  });
+}
+
+function _ubicOpcionesRefacciones(){
+  var rows=window._ubicRefaccionesCache||[];
+  if(!rows.length) return '<option value="">(No hay refacciones en el catálogo todavía)</option>';
+  return '<option value="">-- Selecciona refacción --</option>'+rows.map(function(r){return '<option value="'+r.id+'">'+r.nombre+' ('+r.codigo+')</option>';}).join('');
+}
+
+function _ubicPintarPrimeraLineaContenido(){
+  var wrap=document.getElementById('ubic-caja-contenido-wrap');
+  if(!wrap) return;
+  wrap.innerHTML='<div class="ubic-linea-contenido" style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin-top:10px">'
+    +'<div class="form-group"><label class="form-label">Refacción</label><select class="form-control ubic-linea-ref">'+_ubicOpcionesRefacciones()+'</select></div>'
+    +'<div class="form-group"><label class="form-label">Cantidad</label><input type="number" class="form-control ubic-linea-cant" value="1" min="1"></div>'
+    +'</div>';
+}
+
+function _ubicToggleTipoCaja(){
+  var tipo=document.getElementById('ubic-caja-tipo').value;
+  document.getElementById('ubic-caja-add-item').style.display=tipo==='mixta'?'block':'none';
+}
+
+function _ubicAgregarLineaContenido(){
+  var wrap=document.getElementById('ubic-caja-contenido-wrap');
+  var div=document.createElement('div');
+  div.className='ubic-linea-contenido';
+  div.style.cssText='border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin-top:10px;position:relative';
+  div.innerHTML='<button type="button" onclick="this.parentElement.remove()" style="position:absolute;top:8px;right:8px;background:none;border:none;color:#dc2626;font-weight:800;cursor:pointer">✕</button>'
+    +'<div class="form-group"><label class="form-label">Refacción</label><select class="form-control ubic-linea-ref">'+_ubicOpcionesRefacciones()+'</select></div>'
+    +'<div class="form-group"><label class="form-label">Cantidad</label><input type="number" class="form-control ubic-linea-cant" value="1" min="1"></div>';
+  wrap.appendChild(div);
+}
+
+function _ubicGuardarCaja(padreId){
+  var nombre=(document.getElementById('ubic-caja-nombre').value||'').trim();
+  var tipo=document.getElementById('ubic-caja-tipo').value;
+  if(!nombre){showAlert('Escribe un nombre para la caja','error');return;}
+  var lineas=[];
+  document.querySelectorAll('#ubic-caja-contenido-wrap .ubic-linea-contenido').forEach(function(div){
+    var refId=div.querySelector('.ubic-linea-ref').value;
+    var cant=parseInt(div.querySelector('.ubic-linea-cant').value)||0;
+    if(refId&&cant>0) lineas.push({refaccion_id:refId,cantidad:cant});
+  });
+  if(!lineas.length){showAlert('Agrega al menos una refacción con cantidad','error');return;}
+  if(tipo==='simple'&&lineas.length>1){showAlert('Una caja simple solo puede tener una refacción. Cambia el tipo a "Mixta" o elimina las líneas extra.','error');return;}
+
+  var padreCodigo=_ubicPathActual.length ? (_ubicPathActual[_ubicPathActual.length-1].codigo||'') : '';
+  var filtroHermanos=(padreId?('padre_id=eq.'+padreId):'padre_id=is.null')+'&nivel=eq.4';
+  supaFetch('almacen_ubicaciones','GET',null,filtroHermanos).then(function(hermanos){
+    var n=(hermanos||[]).length+1;
+    var codigo=(padreCodigo?padreCodigo+'-':'')+'C'+n;
+    _ubicSiguienteNumero('almacen_ubicaciones','numero').then(function(numero){
+      var cajaId=gen_id();
+      var payload={id:cajaId,nivel:4,nombre:nombre,padre_id:padreId||null,tipo_caja:tipo,codigo:codigo,numero:numero};
+      fetch(SUPA_URL+'/rest/v1/almacen_ubicaciones',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
+        .then(function(r){
+          if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,100),'error');});return;}
+          _ubicGuardarContenidoCaja(cajaId,codigo,tipo,lineas,0);
+        });
+    });
+  });
+}
+
+function _ubicGuardarContenidoCaja(cajaId,cajaCodigo,tipo,lineas,i){
+  if(i>=lineas.length){
+    var m=document.getElementById('modal-ubic-caja');if(m)m.remove();
+    showAlert('✅ Caja '+cajaCodigo+' creada');
+    _renderUbicNivel();
+    return;
+  }
+  var linea=lineas[i];
+  var armarYGuardar=function(numeroItem){
+    var codigoItem=tipo==='mixta' ? (cajaCodigo+'-I'+(i+1)) : cajaCodigo;
+    var payload={id:gen_id(),caja_id:cajaId,refaccion_id:linea.refaccion_id,cantidad:linea.cantidad,codigo_item:codigoItem,numero_item:numeroItem};
+    fetch(SUPA_URL+'/rest/v1/almacen_caja_contenido',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
+      .then(function(){_ubicGuardarContenidoCaja(cajaId,cajaCodigo,tipo,lineas,i+1);});
+  };
+  if(tipo==='mixta'){
+    _ubicSiguienteNumero('almacen_caja_contenido','numero_item').then(armarYGuardar);
+  } else {
+    armarYGuardar(null);
+  }
+}
+
+// ── VER CONTENIDO DE UNA CAJA ─────────────────────────────────────
+function _ubicAbrirCaja(id){
+  var cont=document.getElementById('almacen-ubic-content');
+  if(!cont) return;
+  cont.innerHTML='<div style="text-align:center;padding:20px;color:#9ca3af">Cargando...</div>';
+  Promise.all([
+    supaFetch('almacen_ubicaciones','GET',null,'id=eq.'+id),
+    supaFetch('almacen_caja_contenido','GET',null,'caja_id=eq.'+id)
+  ]).then(function(res){
+    var caja=res[0]&&res[0][0];
+    var contenido=res[1]||[];
+    if(!caja){cont.innerHTML='<div class="card text-center" style="padding:30px">Caja no encontrada</div>';return;}
+    supaFetch('refacciones','GET',null,'select=id,nombre,codigo').then(function(refs){
+      var refMap={};(refs||[]).forEach(function(r){refMap[r.id]=r;});
+      var html='<div style="font-size:12px;color:#6b7280;margin-bottom:10px"><span style="cursor:pointer;color:#0e7490;font-weight:700" onclick="_renderUbicNivel()">← Volver</span></div>'
+        +'<div class="card" style="padding:14px;margin-bottom:10px">'
+        +'<div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800">📦 '+caja.nombre+'</div>'
+        +'<div style="font-size:12px;color:#6b7280;margin-top:2px">Código: <b>'+caja.codigo+'</b> · N° '+caja.numero+' · '+(caja.tipo_caja==='mixta'?'Caja mixta':'Caja simple')+'</div>'
+        +'<button class="btn btn-outline" style="width:100%;margin-top:10px" onclick="mostrarQRUbic(\''+caja.codigo+'\',\''+String(caja.nombre).replace(/'/g,"\\'")+'\','+caja.numero+')">📲 Ver / Imprimir QR de la caja</button>'
+        +'</div>'
+        +'<div class="card-title mb8" style="margin-top:10px">Contenido</div>';
+      html+=contenido.map(function(c){
+        var ref=refMap[c.refaccion_id]||{};
+        var nombreRef=String(ref.nombre||'—');
+        return '<div class="card" style="padding:12px;margin-bottom:8px">'
+          +'<div style="font-weight:700;font-size:14px">'+nombreRef+'</div>'
+          +'<div style="font-size:12px;color:#6b7280">Cantidad en esta caja: <b>'+c.cantidad+'</b>'+(caja.tipo_caja==='mixta'?' · Código: <b>'+c.codigo_item+'</b> · N° '+c.numero_item:'')+'</div>'
+          +(caja.tipo_caja==='mixta'?'<button class="btn btn-outline" style="width:100%;margin-top:6px" onclick="mostrarQRUbic(\''+c.codigo_item+'\',\''+nombreRef.replace(/'/g,"\\'")+'\','+c.numero_item+')">📲 QR de esta bolsa</button>':'')
+          +'</div>';
+      }).join('');
+      cont.innerHTML=html;
+    });
+  });
+}
+
+// ── QR (caja o bolsa) ─────────────────────────────────────────────
+function mostrarQRUbic(codigo,nombre,numero){
+  var modal=document.createElement('div');
+  modal.id='modal-qr-ubic';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML='<div style="background:#fff;border-radius:16px;padding:24px;max-width:320px;width:100%;text-align:center;box-sizing:border-box">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;color:#0e7490;margin-bottom:4px">'+nombre+'</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:16px">Código: '+codigo+'</div>'
+    +'<div id="qr-ubic-container" style="display:flex;justify-content:center;margin-bottom:10px"></div>'
+    +'<div style="font-size:1.4rem;font-weight:900;color:#1a3c5e;letter-spacing:2px;margin-bottom:4px">N° '+numero+'</div>'
+    +'<div style="font-size:.75rem;color:#9ca3af;margin-bottom:16px">Si el QR no es legible, teclea este número</div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button onclick="var m=document.getElementById(\'modal-qr-ubic\');if(m)m.remove()" style="flex:1;padding:12px;background:#f3f4f6;border:none;border-radius:10px;cursor:pointer">Cerrar</button>'
+    +'<button onclick="imprimirQRUbic(\''+codigo+'\',\''+String(nombre).replace(/'/g,"\\'")+'\','+numero+')" style="flex:1;padding:12px;background:#0e7490;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">🖨️ Imprimir</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+  var qrUrl='https://api.qrserver.com/v1/create-qr-code/?size=200x200&data='+encodeURIComponent('UBIC:'+codigo);
+  var img=document.createElement('img');
+  img.src=qrUrl;
+  img.style.cssText='width:200px;height:200px;border:1px solid #e5e7eb;border-radius:8px';
+  document.getElementById('qr-ubic-container').appendChild(img);
+}
+
+function imprimirQRUbic(codigo,nombre,numero){
+  var qrUrl='https://api.qrserver.com/v1/create-qr-code/?size=250x250&data='+encodeURIComponent('UBIC:'+codigo);
+  var w=window.open('','_blank');
+  w.document.write('<html><head><title>QR '+nombre+'</title><style>body{font-family:Arial;text-align:center;padding:20px}h3{margin-bottom:4px}p{color:#666;margin:4px 0}.num{font-size:28px;font-weight:900;letter-spacing:3px;margin-top:8px}img{border:1px solid #ddd;border-radius:8px}</style></head><body>');
+  w.document.write('<h3>'+nombre+'</h3><p>Código: '+codigo+'</p><img src="'+qrUrl+'"><div class="num">N° '+numero+'</div><br><br>');
+  w.document.write('<script>window.onload=function(){window.print();}<\/script></body></html>');
+  w.document.close();
+}
+
+// ── BÚSQUEDA DIRECTA (código, número o nombre) ────────────────────
+function _ubicBuscarDirecto(){
+  var q=(document.getElementById('ubic-buscar-input').value||'').trim();
+  var res=document.getElementById('ubic-buscar-resultado');
+  if(!q){res.innerHTML='';return;}
+  res.innerHTML='<div style="text-align:center;padding:10px;color:#9ca3af">Buscando...</div>';
+  var esNumero=/^\d+$/.test(q);
+  var filtroCaja=(esNumero?('numero=eq.'+q):('codigo=eq.'+encodeURIComponent(q)))+'&nivel=eq.4';
+  supaFetch('almacen_ubicaciones','GET',null,filtroCaja).then(function(cajas){
+    if(cajas&&cajas.length){_ubicAbrirCaja(cajas[0].id);return;}
+    var filtroItem=esNumero?('numero_item=eq.'+q):('codigo_item=eq.'+encodeURIComponent(q));
+    supaFetch('almacen_caja_contenido','GET',null,filtroItem).then(function(items){
+      if(items&&items.length){_ubicAbrirCaja(items[0].caja_id);return;}
+      supaFetch('refacciones','GET',null,'nombre=ilike.*'+encodeURIComponent(q)+'*&select=id,nombre,codigo').then(function(refs){
+        if(!refs||!refs.length){res.innerHTML='<div class="card text-center" style="padding:16px;color:#dc2626">❌ No se encontró nada con ese dato.</div>';return;}
+        var refIds=refs.map(function(r){return r.id;});
+        supaFetch('almacen_caja_contenido','GET',null,'refaccion_id=in.('+refIds.join(',')+')').then(function(contenidos){
+          if(!contenidos||!contenidos.length){res.innerHTML='<div class="card text-center" style="padding:16px;color:#dc2626">❌ Esa refacción no está asignada a ninguna caja todavía.</div>';return;}
+          var cajaIds=contenidos.map(function(c){return c.caja_id;}).filter(function(v,i,a){return a.indexOf(v)===i;});
+          supaFetch('almacen_ubicaciones','GET',null,'id=in.('+cajaIds.join(',')+')').then(function(cajas2){
+            res.innerHTML='<div class="card-title mb8">Encontrada en '+(cajas2||[]).length+' caja(s):</div>'+(cajas2||[]).map(function(c){
+              return '<div class="card" style="padding:12px;margin-bottom:8px;cursor:pointer" onclick="_ubicAbrirCaja(\''+c.id+'\')"><div style="font-weight:700">📦 '+c.nombre+'</div><div style="font-size:12px;color:#6b7280">'+c.codigo+'</div></div>';
+            }).join('');
+          });
+        });
+      });
+    });
+  });
+}
+// ── FIN MÓDULO ALMACÉN — UBICACIONES (Fase 1) ─────────────────────
+
+// ================================================================
 // SUPER USUARIO — Elegir quién levanta o cierra
 // ================================================================
 function _superElegirUsuario(accion, callback){
