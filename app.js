@@ -25845,6 +25845,7 @@ function _renderRefTabs(){
   var tabs = [
     {id:'catalogo', icon:'📦', label:'Catálogo'},
     {id:'movimientos', icon:'📋', label:'Movimientos'},
+    {id:'virtual', icon:'🗄️', label:'Almacén Virtual'},
   ];
   if(isAdmin) tabs.push({id:'nuevo', icon:'➕', label:'Nueva'});
   tabsDiv.innerHTML = tabs.map(function(t){
@@ -25853,6 +25854,7 @@ function _renderRefTabs(){
   }).join('');
   if(_refTab==='catalogo') _renderCatalogoRef(cont);
   else if(_refTab==='movimientos') _renderMovimientosRef(cont);
+  else if(_refTab==='virtual') _renderAlmacenVirtualRef(cont);
   else if(_refTab==='nuevo') _renderFormNuevaRef(cont);
 }
 
@@ -26721,6 +26723,330 @@ function _ubicGuardarRefaccionACaja(cajaId,cajaCodigo,tipoCaja,itemsActuales){
   } else {
     armarYGuardar(null);
   }
+}
+
+// ── CÁMARA QR (genérico, usa jsQR) ─────────────────────────────────
+function _qrLimpiarCodigo(raw){
+  return String(raw||'').replace(/^UBIC:/i,'').trim();
+}
+
+function _qrAbrirCamara(titulo,onResult){
+  var modal=document.createElement('div');
+  modal.id='modal-qr-camara';
+  modal.style.cssText='position:fixed;inset:0;background:#000;z-index:10001;display:flex;flex-direction:column;align-items:center;justify-content:center';
+  modal.innerHTML='<div style="color:#fff;font-family:Nunito,sans-serif;font-size:16px;font-weight:800;padding:14px;text-align:center">'+titulo+'</div>'
+    +'<video id="qr-video" playsinline autoplay muted style="width:100%;max-width:420px;border-radius:12px;background:#111"></video>'
+    +'<canvas id="qr-canvas" style="display:none"></canvas>'
+    +'<div style="color:#9ca3af;font-size:.8rem;margin:10px 0;text-align:center;padding:0 20px">Apunta la cámara al código QR</div>'
+    +'<div style="display:flex;gap:10px;width:100%;max-width:420px;padding:0 16px 20px;box-sizing:border-box">'
+    +'<button onclick="_qrCerrarCamara()" style="flex:1;padding:13px;background:#374151;color:#fff;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="_qrUsarManual()" style="flex:1;padding:13px;background:#5D4037;color:#fff;border:none;border-radius:11px;cursor:pointer">⌨️ Teclear código</button>'
+    +'</div>';
+  document.body.appendChild(modal);
+  window._qrOnResult=onResult;
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){
+    showAlert('Este dispositivo/navegador no permite usar la cámara aquí','error');
+    _qrUsarManual();
+    return;
+  }
+  navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}}).then(function(stream){
+    window._qrStream=stream;
+    var video=document.getElementById('qr-video');
+    if(!video){stream.getTracks().forEach(function(t){t.stop();});return;}
+    video.srcObject=stream;
+    video.play();
+    window._qrRAF=requestAnimationFrame(_qrTick);
+  }).catch(function(e){
+    showAlert('No se pudo abrir la cámara: '+(e&&e.message?e.message:e),'error');
+    _qrUsarManual();
+  });
+}
+
+function _qrTick(){
+  var video=document.getElementById('qr-video');
+  var canvas=document.getElementById('qr-canvas');
+  if(!video||!canvas||!window._qrStream) return;
+  if(video.readyState===video.HAVE_ENOUGH_DATA && typeof jsQR==='function'){
+    canvas.width=video.videoWidth;
+    canvas.height=video.videoHeight;
+    var ctx=canvas.getContext('2d');
+    ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    var imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
+    var code=jsQR(imgData.data,imgData.width,imgData.height);
+    if(code&&code.data){
+      var resultado=code.data;
+      var cb=window._qrOnResult;
+      _qrCerrarCamara();
+      if(cb) cb(resultado);
+      return;
+    }
+  }
+  window._qrRAF=requestAnimationFrame(_qrTick);
+}
+
+function _qrCerrarCamara(){
+  if(window._qrRAF) cancelAnimationFrame(window._qrRAF);
+  window._qrRAF=null;
+  if(window._qrStream){window._qrStream.getTracks().forEach(function(t){t.stop();});window._qrStream=null;}
+  var m=document.getElementById('modal-qr-camara');if(m)m.remove();
+}
+
+function _qrUsarManual(){
+  var cb=window._qrOnResult;
+  _qrCerrarCamara();
+  var val=prompt('Escribe el código:');
+  if(val&&val.trim()&&cb) cb(val.trim());
+}
+
+// ── ESCANEAR / BUSCAR (pantalla propia dentro de Almacén) ──────────
+function showAlmacenEscanearBuscar(){
+  showScreen('screen-almacen-escanear-buscar');
+  _renderAlmacenEscanearBuscar();
+}
+
+function _renderAlmacenEscanearBuscar(){
+  window._aebCajaActual=null;
+  var cont=document.getElementById('aeb-content');
+  if(!cont) return;
+  cont.innerHTML='<div class="card" style="padding:16px;margin-bottom:12px;text-align:center">'
+    +'<button class="btn btn-primary" style="width:100%;padding:18px;font-size:1.05rem;font-weight:800" onclick="_aeb_escanearCaja()">📷 Escanear caja</button>'
+    +'</div>'
+    +'<div class="card" style="padding:16px">'
+    +'<div class="form-group"><label class="form-label">🔍 Buscar (nombre, código, máquina...)</label>'
+    +'<input type="text" class="form-control" id="aeb-buscar-input" placeholder="Ej: rodamiento, bomba línea 2..." oninput="_aeb_buscarLibre()" style="padding:10px"></div>'
+    +'<div id="aeb-buscar-resultado"></div>'
+    +'</div>';
+}
+
+function _aeb_escanearCaja(){
+  _qrAbrirCamara('📷 Escanear caja',function(raw){
+    var codigo=_qrLimpiarCodigo(raw);
+    if(!codigo){showAlert('Código no reconocido','error');return;}
+    supaFetch('almacen_ubicaciones','GET',null,'codigo=eq.'+encodeURIComponent(codigo)+'&nivel=eq.4').then(function(rows){
+      if(!rows||!rows.length){showAlert('No se encontró ninguna caja con el código '+codigo,'error');return;}
+      _aeb_mostrarCaja(rows[0].id);
+    });
+  });
+}
+
+function _aeb_mostrarCaja(cajaId){
+  var cont=document.getElementById('aeb-content');
+  if(!cont) return;
+  cont.innerHTML='<div style="text-align:center;padding:20px;color:#9ca3af">Cargando...</div>';
+  Promise.all([
+    supaFetch('almacen_ubicaciones','GET',null,'id=eq.'+cajaId),
+    supaFetch('almacen_caja_contenido','GET',null,'caja_id=eq.'+cajaId),
+    supaFetch('refacciones','GET',null,'select=id,nombre,codigo')
+  ]).then(function(res){
+    var caja=res[0]&&res[0][0];
+    var contenido=res[1]||[];
+    var refs=res[2]||[];
+    if(!cont.isConnected) return;
+    if(!caja){cont.innerHTML='<div class="card text-center" style="padding:30px">Caja no encontrada</div>';return;}
+    var refMap={};refs.forEach(function(r){refMap[r.id]=r;});
+    window._aebCajaActual={caja:caja,contenido:contenido,refMap:refMap};
+    var html='<div style="font-size:12px;color:#6b7280;margin-bottom:10px"><span style="cursor:pointer;color:#0e7490;font-weight:700" onclick="_renderAlmacenEscanearBuscar()">← Volver</span></div>'
+      +'<div class="card" style="padding:14px;margin-bottom:10px">'
+      +'<div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800">📦 '+caja.nombre+'</div>'
+      +'<div style="font-size:12px;color:#6b7280;margin-top:2px">Código: <b>'+caja.codigo+'</b> · '+(caja.tipo_caja==='mixta'?'Caja mixta':'Caja simple')+'</div>'
+      +'</div>'
+      +'<input type="text" class="form-control" id="aeb-busq-caja" placeholder="🔍 Buscar en esta caja..." oninput="_aeb_filtrarContenidoCaja()" style="padding:9px;margin-bottom:10px">'
+      +'<div id="aeb-lista-contenido"></div>'
+      +'<button class="btn btn-primary" style="width:100%;margin-top:10px" onclick="_aeb_escanearBolsa()">📷 Escanear bolsa</button>';
+    cont.innerHTML=html;
+    _aeb_pintarContenidoCaja();
+  });
+}
+
+function _aeb_pintarContenidoCaja(){
+  var estado=window._aebCajaActual;
+  var wrap=document.getElementById('aeb-lista-contenido');
+  if(!wrap||!estado) return;
+  var contenido=estado.contenido;
+  if(!contenido.length){wrap.innerHTML='<div class="card text-center" style="padding:20px;color:#9ca3af">Esta caja no tiene contenido registrado</div>';return;}
+  wrap.innerHTML=contenido.map(function(c){
+    var ref=estado.refMap[c.refaccion_id]||{};
+    var nombreRef=String(ref.nombre||'—');
+    return '<div class="card aeb-item-contenido" data-nombre="'+_cemNorm(nombreRef)+'" style="padding:12px;margin-bottom:8px">'
+      +'<div style="font-weight:700;font-size:14px">'+nombreRef+'</div>'
+      +'<div style="font-size:12px;color:#6b7280">Cantidad disponible: <b>'+c.cantidad+'</b>'+(estado.caja.tipo_caja==='mixta'?' · Código: <b>'+c.codigo_item+'</b>':'')+'</div>'
+      +'</div>';
+  }).join('');
+}
+
+function _aeb_filtrarContenidoCaja(){
+  var el=document.getElementById('aeb-busq-caja');
+  var q=_cemNorm((el?el.value:'').trim());
+  document.querySelectorAll('#aeb-lista-contenido .aeb-item-contenido').forEach(function(div){
+    div.style.display=(!q||div.getAttribute('data-nombre').indexOf(q)!==-1)?'':'none';
+  });
+}
+
+function _aeb_escanearBolsa(){
+  var estado=window._aebCajaActual;
+  if(!estado){showAlert('Primero escanea una caja','error');return;}
+  _qrAbrirCamara('📷 Escanear bolsa',function(raw){
+    var codigo=_qrLimpiarCodigo(raw);
+    var item=(estado.contenido||[]).filter(function(c){return c.codigo_item===codigo;})[0];
+    if(!item && estado.caja.codigo===codigo && estado.contenido.length===1){
+      item=estado.contenido[0];
+    }
+    if(!item){showAlert('Esa bolsa no pertenece a esta caja ('+codigo+')','error');return;}
+    var ref=estado.refMap[item.refaccion_id]||{};
+    _aeb_abrirTomarPiezas(item,ref);
+  });
+}
+
+function _aeb_abrirTomarPiezas(item,ref){
+  var m=document.createElement('div');
+  m.id='modal-aeb-tomar';
+  m.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
+  m.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#5D4037;margin-bottom:4px">📤 Tomar refacción</div>'
+    +'<div style="font-size:13px;color:#6b7280;margin-bottom:16px">'+(ref.nombre||'—')+' · Disponible en esta bolsa: <strong>'+item.cantidad+'</strong></div>'
+    +'<div style="margin-bottom:16px"><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Piezas que vas a tomar *</label>'
+    +'<input type="number" id="aeb-tomar-cant" class="form-control" min="1" max="'+item.cantidad+'" value="1" style="padding:12px;font-size:1.1rem;font-weight:700"></div>'
+    +'<div style="display:flex;gap:10px">'
+    +'<button onclick="document.getElementById(\'modal-aeb-tomar\').remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="_aeb_confirmarTomarPiezas(\''+item.id+'\',\''+item.refaccion_id+'\','+item.cantidad+')" style="flex:2;padding:13px;background:#5D4037;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">📤 Confirmar (pasa a Almacén Virtual)</button>'
+    +'</div></div>';
+  document.body.appendChild(m);
+}
+
+function _aeb_confirmarTomarPiezas(itemId,refaccionId,cantidadDisponible){
+  var elCant=document.getElementById('aeb-tomar-cant');
+  var cant=parseInt(elCant?elCant.value:0)||0;
+  if(cant<=0){showAlert('Cantidad inválida','error');return;}
+  if(cant>cantidadDisponible){showAlert('No hay suficientes piezas en esta bolsa ('+cantidadDisponible+' disponibles)','error');return;}
+  var nuevaCantItem=cantidadDisponible-cant;
+  var cajaIdActual=(window._aebCajaActual&&window._aebCajaActual.caja&&window._aebCajaActual.caja.id)||null;
+  fetch(SUPA_URL+'/rest/v1/almacen_caja_contenido?id=eq.'+itemId,{
+    method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({cantidad:nuevaCantItem})
+  }).then(function(r){
+    if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});return;}
+    supaFetch('refacciones','GET',null,'id=eq.'+refaccionId).then(function(rows){
+      var ref=rows&&rows[0];
+      var stockActual=(ref&&ref.cantidad)||0;
+      var nuevoStock=Math.max(0,stockActual-cant);
+      fetch(SUPA_URL+'/rest/v1/refacciones?id=eq.'+refaccionId,{
+        method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+        body:JSON.stringify({cantidad:nuevoStock,updated_at:new Date().toISOString()})
+      }).then(function(r2){
+        if(!r2.ok){r2.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});return;}
+        fetch(SUPA_URL+'/rest/v1/refacciones_standby',{
+          method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+          body:JSON.stringify({
+            id:gen_id(),refaccion_id:refaccionId,cantidad:cant,
+            caja_id:cajaIdActual,item_contenido_id:itemId,
+            tecnico_id:currentUser.id,tecnico_nombre:currentUser.nombre,
+            estado:'pendiente',created_at:new Date().toISOString()
+          })
+        });
+        fetch(SUPA_URL+'/rest/v1/refacciones_movimientos',{
+          method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+          body:JSON.stringify({
+            refaccion_id:refaccionId,tipo:'salida',cantidad:cant,
+            cantidad_anterior:stockActual,cantidad_nueva:nuevoStock,
+            usuario_id:currentUser.id,usuario_nombre:currentUser.nombre,
+            orden_id:null,nota:'Tomada a Almacén Virtual (pendiente de usar en una OT)'
+          })
+        });
+        var m=document.getElementById('modal-aeb-tomar');if(m)m.remove();
+        showAlert('✅ '+cant+' pieza(s) de '+(ref?ref.nombre:'esa refacción')+' pasaron al Almacén Virtual');
+        if(cajaIdActual) _aeb_mostrarCaja(cajaIdActual);
+      });
+    });
+  });
+}
+
+function _aeb_buscarLibre(){
+  var el=document.getElementById('aeb-buscar-input');
+  var qRaw=(el?el.value:'').trim();
+  var q=_cemNorm(qRaw);
+  var res=document.getElementById('aeb-buscar-resultado');
+  if(!res) return;
+  if(!qRaw){res.innerHTML='';return;}
+  res.innerHTML='<div style="text-align:center;padding:10px;color:#9ca3af">Buscando...</div>';
+  // Se trae el catálogo completo (refacciones y cajas) y se filtra en el cliente
+  // sin distinguir acentos/mayúsculas — el ILIKE de Postgres sí distingue acentos
+  // y "reten" no encontraría "Retén" si se filtrara del lado del servidor.
+  Promise.all([
+    supaFetch('refacciones','GET',null,'select=id,nombre,codigo,descripcion'),
+    supaFetch('almacen_ubicaciones','GET',null,'nivel=eq.4&select=id,nombre,codigo')
+  ]).then(function(resAmbos){
+    var refsPorNombre=(resAmbos[0]||[]).filter(function(r){
+      return _cemNorm(r.nombre).indexOf(q)!==-1||_cemNorm(r.codigo).indexOf(q)!==-1||_cemNorm(r.descripcion).indexOf(q)!==-1;
+    });
+    var cajasPorNombre=(resAmbos[1]||[]).filter(function(c){
+      return _cemNorm(c.nombre).indexOf(q)!==-1||_cemNorm(c.codigo).indexOf(q)!==-1;
+    });
+    if(!refsPorNombre.length&&!cajasPorNombre.length){
+      res.innerHTML='<div class="card text-center" style="padding:20px;color:#9ca3af">❌ No se encontró nada con "'+q+'"</div>';
+      return;
+    }
+    var idsRef=refsPorNombre.map(function(r){return r.id;});
+    var fetchContenido=idsRef.length?supaFetch('almacen_caja_contenido','GET',null,'refaccion_id=in.('+idsRef.join(',')+')'):Promise.resolve([]);
+    fetchContenido.then(function(contenidos){
+      var cajaIds=(contenidos||[]).map(function(c){return c.caja_id;}).filter(function(v,i,a){return v&&a.indexOf(v)===i;});
+      cajasPorNombre.forEach(function(cj){if(cajaIds.indexOf(cj.id)===-1) cajaIds.push(cj.id);});
+      var fetchCajas=cajaIds.length?supaFetch('almacen_ubicaciones','GET',null,'id=in.('+cajaIds.join(',')+')'):Promise.resolve([]);
+      fetchCajas.then(function(cajasTodas){
+        var cajaMap={};(cajasTodas||[]).forEach(function(c){cajaMap[c.id]=c;});
+        var html='';
+        if(refsPorNombre.length){
+          html+=refsPorNombre.map(function(r){
+            var ubics=(contenidos||[]).filter(function(c){return c.refaccion_id===r.id&&c.cantidad>0;}).map(function(c){
+              var caja=cajaMap[c.caja_id];
+              if(!caja) return null;
+              return '<div style="font-size:12px;color:#0e7490;cursor:pointer" onclick="_aeb_mostrarCajaDesdeBusqueda(\''+caja.id+'\')">📍 '+caja.codigo+' ('+caja.nombre+')'+(c.codigo_item&&c.codigo_item!==caja.codigo?' · '+c.codigo_item:'')+' — '+c.cantidad+' pza(s)</div>';
+            }).filter(Boolean);
+            return '<div class="card" style="padding:12px;margin-bottom:8px">'
+              +'<div style="font-weight:700;font-size:14px">'+r.nombre+'</div>'
+              +'<div style="font-size:11px;color:#6b7280;margin-bottom:4px">Código: '+(r.codigo||'—')+'</div>'
+              +(ubics.length?ubics.join(''):'<div style="font-size:12px;color:#dc2626">Sin ubicación con stock registrada</div>')
+              +'</div>';
+          }).join('');
+        }
+        if(cajasPorNombre.length){
+          html+=cajasPorNombre.map(function(cj){
+            return '<div class="card" style="padding:12px;margin-bottom:8px;border-left:4px solid #0e7490;cursor:pointer" onclick="_aeb_mostrarCajaDesdeBusqueda(\''+cj.id+'\')">'
+              +'<div style="font-weight:700;font-size:14px">📦 '+cj.nombre+'</div>'
+              +'<div style="font-size:11px;color:#6b7280">Código: '+cj.codigo+' · Ver contenido →</div>'
+              +'</div>';
+          }).join('');
+        }
+        res.innerHTML=html;
+      });
+    });
+  });
+}
+
+function _aeb_mostrarCajaDesdeBusqueda(cajaId){
+  _aeb_mostrarCaja(cajaId);
+}
+
+// ── ALMACÉN VIRTUAL (refacciones en standby, pendientes de usar) ──
+function _renderAlmacenVirtualRef(cont){
+  cont.innerHTML='<div style="text-align:center;padding:20px;color:#9ca3af">Cargando...</div>';
+  supaFetch('refacciones_standby','GET',null,'estado=eq.pendiente&order=created_at.desc').then(function(rows){
+    if(!rows||!rows.length){
+      cont.innerHTML='<div class="card text-center" style="padding:40px"><div style="font-size:48px">🗄️</div><div style="font-weight:700;margin-top:12px">Almacén Virtual vacío</div><div style="font-size:13px;color:var(--txt3);margin-top:6px">Aquí aparecen las piezas tomadas por escaneo, en espera de usarse en una orden de trabajo</div></div>';
+      return;
+    }
+    supaFetch('refacciones','GET',null,'select=id,nombre,codigo').then(function(refs){
+      var refMap={};(refs||[]).forEach(function(r){refMap[r.id]=r;});
+      cont.innerHTML=rows.map(function(s){
+        var ref=refMap[s.refaccion_id]||{};
+        var fecha=s.created_at?new Date(s.created_at).toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';
+        return '<div class="card" style="padding:12px;margin-bottom:8px;border-left:4px solid #b45309">'
+          +'<div style="font-weight:700;font-size:14px">'+(ref.nombre||s.refaccion_id)+'</div>'
+          +'<div style="font-size:12px;color:#6b7280;margin-top:2px">Cantidad en standby: <b>'+s.cantidad+'</b></div>'
+          +'<div style="font-size:11px;color:#6b7280;margin-top:2px">Tomada por '+(s.tecnico_nombre||'—')+' · '+fecha+'</div>'
+          +'</div>';
+      }).join('');
+    });
+  });
 }
 
 // ── QR (caja o bolsa) ─────────────────────────────────────────────
