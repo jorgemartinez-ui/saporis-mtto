@@ -26206,7 +26206,7 @@ function _refGuardarNuevoTipoOCategoria(esTipo){
   var payload={id:gen_id(),nombre:nombre,prefijo:prefijo};
   fetch(SUPA_URL+'/rest/v1/'+tabla,{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
     .then(function(r){
-      if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,100),'error');});return;}
+      if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});return;}
       if(esTipo) window._refTiposCache.push(payload); else window._refCategoriasCache.push(payload);
       var m=document.getElementById('modal-ref-nuevo-cat');if(m)m.remove();
       showAlert('✅ '+nombre+' agregado');
@@ -26334,7 +26334,7 @@ function guardarRefaccion(id){
     var method=id?'PATCH':'POST';
     fetch(url,{method:method,headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
       .then(function(r){
-        if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,80),'error');});return;}
+        if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});return;}
         r.text().then(function(t){
           var creada=null;
           try{var arr=JSON.parse(t);creada=arr&&arr[0];}catch(e){}
@@ -26503,7 +26503,7 @@ function _ubicGuardarAlta(nivel){
       fetch(SUPA_URL+'/rest/v1/almacen_ubicaciones',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
         .then(function(r){
           if(r.ok){var m=document.getElementById('modal-ubic-alta');if(m)m.remove();showAlert('✅ '+nombre+' agregado ('+codigo+')');_renderUbicNivel();}
-          else r.text().then(function(t){showAlert('⚠️ '+t.substring(0,100),'error');});
+          else r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});
         });
     });
   });
@@ -26609,7 +26609,7 @@ function _ubicGuardarCaja(padreId){
       var payload={id:cajaId,nivel:4,nombre:nombre,padre_id:padreId||null,tipo_caja:tipo,codigo:codigo,numero:numero};
       fetch(SUPA_URL+'/rest/v1/almacen_ubicaciones',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
         .then(function(r){
-          if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,100),'error');});return;}
+          if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});return;}
           _ubicGuardarContenidoCaja(cajaId,codigo,tipo,lineas,0);
         });
     });
