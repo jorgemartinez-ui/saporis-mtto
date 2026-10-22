@@ -1169,12 +1169,13 @@ function renderAtencionStep(){
       <input type="text" class="form-control" id="atc-lider-pm04" value="${atencionState.liderPM04||''}" placeholder="Nombre del líder u oficial A...">
     </div>
     <div class="form-group"><label class="form-label">Refacciones utilizadas</label>
-      <input type="text" class="form-control" id="atc-refacciones" value="${atencionState.refacciones||''}" placeholder="Código o descripción..."></div>
+      <input type="text" class="form-control" id="atc-refacciones" value="${atencionState.refacciones||''}" placeholder="Código o descripción..."><div id="atc-ref-standby" style="margin-top:4px"></div></div>
     <div class="form-group"><label class="form-label">📷 Fotografía (opcional)</label>
       <div class="foto-btn" onclick="document.getElementById('atc-foto-input').click()">${atencionState.foto?'✅ Foto cargada':'📷 Agregar foto'}</div>
       <input type="file" id="atc-foto-input" accept="image/*" accept="image/*" style="display:none" onchange="procesarFotoAtc(this)">
       ${atencionState.foto?`<img src="${atencionState.foto}" class="foto-preview">`:''}
     </div>`;
+    _standbyDisponiblesHtml('atc-ref-standby','texto','atc-refacciones');
   }
 }
 
@@ -1281,6 +1282,7 @@ function guardarAtencion(){
   };
   ORDENES.push(ot);saveDB('ordenes',ORDENES);saveOrdenSupa(ot);
   if(atencionState.refacciones){CONSUMO_REF.push({ts:Date.now(),otId:id,tecnico:currentUser.nombre,descripcion:atencionState.refacciones,semana:currentWeek(),año:currentYear()});saveDB('consumo_ref',CONSUMO_REF);}
+  _standbyFinalizarUsados(id);
   showAlert('✅ Atención registrada: '+id);goMenu();
   // Reset slot y limpiar localStorage
   if(currentSlot){
@@ -1561,6 +1563,7 @@ function abrirCierre(id){
   window._cierreTecnicosAdicionales=(o&&o.tecnicosAdicionales)?JSON.parse(JSON.stringify(o.tecnicosAdicionales)):[];
   cierreRenderExtraTecs();
   resetLimpiezaCierreUI();
+  _standbyDisponiblesHtml('cierre-ref-standby','lista',null);
   showModal('modal-cierre');
 }
 
@@ -1638,7 +1641,7 @@ function getCierreRefacciones(){
   return refs;
 }
 
-function abrirCierreAzul(id){otCerrandoId=id;document.getElementById('cierre-obs').value='';document.getElementById('cierre-horas').value='0';precierreDesactivarDias();cierreRefReset();document.getElementById('cierre-ref-wrap').classList.add('hidden');var _cb=document.getElementById('cierre-uso-refacciones');if(_cb)_cb.checked=false;resetLimpiezaCierreUI();showModal('modal-cierre');}
+function abrirCierreAzul(id){otCerrandoId=id;document.getElementById('cierre-obs').value='';document.getElementById('cierre-horas').value='0';precierreDesactivarDias();cierreRefReset();document.getElementById('cierre-ref-wrap').classList.add('hidden');var _cb=document.getElementById('cierre-uso-refacciones');if(_cb)_cb.checked=false;resetLimpiezaCierreUI();_standbyDisponiblesHtml('cierre-ref-standby','lista',null);showModal('modal-cierre');}
 // Limpia el bloque de limpieza (botones/aviso/firma) al abrir el modal de cierre para una nueva OT,
 // para que no queden restos (texto o firma) de la orden anterior.
 function resetLimpiezaCierreUI(){
@@ -1845,6 +1848,7 @@ function confirmarCierre(){
         null,admin.id,otCerrandoId);
     });
   }
+  _standbyFinalizarUsados(otCerrandoId);
   saveDB('ordenes',ORDENES);saveOrdenSupa(o);cerrarModal('modal-cierre');showAlert('✅ Orden cerrada');showDetalle(otCerrandoId);
 }
 function abrirReasignacion(id){
@@ -2676,7 +2680,7 @@ function abrirCierrePM03(id){
     // Refacciones
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
     +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Refacciones usadas</label>'
-    +'<input type="text" id="pm3-refs" class="form-control" placeholder="Ninguna" value="'+(p.refaccionesUsadas||'')+'" oninput="pm3SaveCache(\''+id+'\')" style="padding:9px;font-size:.85rem"></div>'
+    +'<input type="text" id="pm3-refs" class="form-control" placeholder="Ninguna" value="'+(p.refaccionesUsadas||'')+'" oninput="pm3SaveCache(\''+id+'\')" style="padding:9px;font-size:.85rem"><div id="pm3-ref-standby" style="margin-top:4px"></div></div>'
     +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Refacciones nuevas</label>'
     +'<input type="text" id="pm3-refs-new" class="form-control" placeholder="Ninguna" value="'+(p.refaccionesNuevas||'')+'" oninput="pm3SaveCache(\''+id+'\')" style="padding:9px;font-size:.85rem"></div>'
     +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Herramienta ingresada</label>'
@@ -2741,6 +2745,7 @@ function abrirCierrePM03(id){
   window._pm3Desinf = p.desinfProduccion!=null ? p.desinfProduccion : null;
   window._pm3UsaGrasa = p.usaGrasa!=null ? p.usaGrasa : null;
   window._pm3HerrOut = p.herramientaSalida||null;
+  _standbyDisponiblesHtml('pm3-ref-standby','texto','pm3-refs');
 }
 
 function pm3SetActividad(id, actId, estado){
@@ -3012,6 +3017,7 @@ function confirmarCierrePM03(id){
 
   saveDB('pm03_plan',PM03_PLAN);
   savePM03Supa(p);
+  _standbyFinalizarUsados(id);
   // Limpiar usuario seleccionado por super
   window._superCierraPor=null;
   var m=document.getElementById('modal-cierre-pm03');if(m)m.remove();
@@ -19442,6 +19448,7 @@ function abrirPreCierre(id){
     btnConfirmar.textContent = '🔧 Registrar Pre-cierre';
     btnConfirmar.onclick = confirmarPreCierre;
   }
+  _standbyDisponiblesHtml('cierre-ref-standby','lista',null);
   showModal('modal-cierre');
 }
 
@@ -19471,6 +19478,7 @@ function confirmarPreCierre(){
   o.rechazadoTs   = null;
 
   saveDB('ordenes', ORDENES);
+  _standbyFinalizarUsados(o.id);
   supabaseStatePatch(o.id, {
     estado: 'pre_cierre',
     pre_cierre_ts: o.preCierreTs,
@@ -19992,6 +20000,7 @@ function guardarAtencionTemporal(){
   // atención temporal.
   var pm03={id:idPM3,linea:atencionState.lineaDisplay||'—',componente:atencionState.componente||'—',actividad:'Solución definitiva — '+tipo+' '+idPM+' — '+(atencionState.falla||'Atención a línea'),area:'productiva',semana:null,año:currentYear(),tecnicoId:'',tecnicoNombre:'Sin asignar',estado:'abierta',estadoFlujo:'por_reprogramar',generadoPor:nombreEfectivo()||'Sistema',origenPM02:idPM,esResueltaTemporal:true,ts:Date.now(),horaCreacion:new Date().toISOString(),observacionesCierre:null,horasCierre:0};
   ORDENES.push(ot);saveDB('ordenes',ORDENES);saveOrdenSupa(ot);
+  _standbyFinalizarUsados(idPM);
   PM03_PLAN.push(pm03);saveDB('pm03_plan',PM03_PLAN);savePM03Supa(pm03);
   if(currentSlot){ATENCION_SLOTS[currentSlot]=null;saveDB('atencion_slots',ATENCION_SLOTS);updateSlotPreview();}
   showAlert('✅ '+idPM+' cerrada como temporal | PM03 '+idPM3+' generada');
@@ -27068,6 +27077,88 @@ function _renderAlmacenVirtualRef(cont){
           +'</div>';
       }).join('');
     });
+  });
+}
+
+// ── "Disponibles" (jalar del Almacén Virtual) reutilizable en cualquier
+// paso de "refacción utilizada" de cualquier PM (Atención a línea, cierre
+// genérico PM01/02/04, pre-cierre, cierre PM03) ────────────────────────
+window._standbyAUsar = window._standbyAUsar || [];
+
+function _standbyDisponiblesHtml(contId,modo,inputId){
+  // modo: 'texto' (un solo input de texto) | 'lista' (filas dinámicas cierre-ref-row)
+  return supaFetch('refacciones_standby','GET',null,'estado=eq.pendiente&tecnico_id=eq.'+currentUser.id).then(function(rows){
+    rows=(rows||[]).filter(function(r){return !window._standbyAUsar.some(function(u){return u.id===r.id;});});
+    var cont=document.getElementById(contId);
+    if(!cont) return;
+    if(!rows.length){cont.innerHTML='';return;}
+    supaFetch('refacciones','GET',null,'select=id,nombre').then(function(refs){
+      var refMap={};(refs||[]).forEach(function(r){refMap[r.id]=r;});
+      cont.innerHTML='<div style="font-size:.72rem;font-weight:700;color:#b45309;margin-bottom:6px">📦 Tienes en tu Almacén Virtual:</div>'
+        +rows.map(function(r){
+          var nombre=(refMap[r.refaccion_id]||{}).nombre||r.refaccion_id;
+          var nombreEsc=String(nombre).replace(/'/g,"\\'");
+          return '<div style="display:flex;align-items:center;gap:8px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:7px 10px;margin-bottom:6px">'
+            +'<div style="flex:1;font-size:12px;color:#92400e">'+nombre+' · <b>'+r.cantidad+'</b> pza(s)</div>'
+            +'<button type="button" class="btn btn-outline" style="padding:5px 10px;font-size:11px;white-space:nowrap" onclick="_standbyUsarEn(\''+r.id+'\',\''+r.refaccion_id+'\',\''+nombreEsc+'\','+r.cantidad+',\''+modo+'\',\''+(inputId||'')+'\',\''+contId+'\')">✅ Usar aquí</button>'
+            +'</div>';
+        }).join('');
+    });
+  });
+}
+
+function _standbyUsarEn(standbyId,refaccionId,nombre,cantidad,modo,inputId,contId){
+  window._standbyAUsar.push({id:standbyId,refaccion_id:refaccionId,nombre:nombre,cantidad:cantidad});
+  if(modo==='texto'){
+    var inp=document.getElementById(inputId);
+    if(inp){
+      var actual=inp.value.trim();
+      var pieza=nombre+' x'+cantidad;
+      inp.value=actual?(actual+', '+pieza):pieza;
+      // Disparar el autoguardado propio de cada pantalla (pm3SaveCache, etc.) si lo tiene
+      if(inp.oninput) inp.oninput();
+    }
+  } else if(modo==='lista'){
+    var cb=document.getElementById('cierre-uso-refacciones');
+    if(cb&&!cb.checked){cb.checked=true;toggleCierreRefacciones(true);}
+    cierreRefAgregarConValor(nombre,cantidad);
+  }
+  _standbyDisponiblesHtml(contId,modo,inputId); // refresca quitando la que ya se usó
+}
+
+// Agrega una fila al cierre-ref-lista (modal-cierre genérico) ya con valores,
+// reutilizando cierreRefAgregar() para garantizar que la fila traiga también
+// el campo de cantidad (la primera fila de cierreRefReset() no lo tiene).
+function cierreRefAgregarConValor(nombre,cantidad){
+  var lista=document.getElementById('cierre-ref-lista');
+  if(!lista) return;
+  var filas=lista.querySelectorAll('.cierre-ref-row');
+  if(filas.length===1){
+    var inp0=filas[0].querySelector('.cierre-ref-input');
+    var cant0=filas[0].querySelector('.cierre-ref-cant');
+    if(inp0&&!inp0.value.trim()&&!cant0){filas[0].remove();}
+  }
+  cierreRefAgregar();
+  var nuevas=lista.querySelectorAll('.cierre-ref-row');
+  var ultima=nuevas[nuevas.length-1];
+  if(!ultima) return;
+  var inpF=ultima.querySelector('.cierre-ref-input'), cantF=ultima.querySelector('.cierre-ref-cant');
+  if(inpF) inpF.value=nombre;
+  if(cantF) cantF.value=cantidad;
+}
+
+// Finaliza (marca 'consumida' y liga a la orden) las refacciones del Almacén
+// Virtual que se hayan marcado "Usar aquí" durante este cierre/registro.
+// El stock YA se descontó al momento de tomarlas por escaneo — aquí solo se
+// cierra el ciclo y se deja trazabilidad de en qué orden se usaron.
+function _standbyFinalizarUsados(ordenId){
+  var usados=window._standbyAUsar;
+  window._standbyAUsar=[];
+  usados.forEach(function(u){
+    fetch(SUPA_URL+'/rest/v1/refacciones_standby?id=eq.'+u.id,{
+      method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+      body:JSON.stringify({estado:'consumida',orden_id:ordenId})
+    }).catch(function(){});
   });
 }
 
