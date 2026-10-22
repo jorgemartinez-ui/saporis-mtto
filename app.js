@@ -26112,21 +26112,169 @@ function _renderMovimientosRef(cont){
   });
 }
 
+// ── CATÁLOGOS DE TIPO / CATEGORÍA Y CÓDIGO AUTOMÁTICO ────────────
+// El código de una refacción se arma solo: TIPO-CATEGORIA-PRIORIDAD+consecutivo
+// (ej. ROD-MEC-A001). "Tipo" (Rodamiento, Retén, Pistón...) y "Categoría"
+// (Mecánico, Neumático, Instrumentación...) son catálogos propios, con su
+// buscador y su opción "➕ Agregar nuevo" siempre al inicio de la lista.
+// Una vez creada una refacción su código YA NO cambia, aunque después se le
+// edite el tipo/categoría/prioridad.
+function _refCargarTiposYCategorias(){
+  return Promise.all([
+    supaFetch('refacciones_tipos','GET',null,'order=nombre.asc'),
+    supaFetch('refacciones_categorias','GET',null,'order=nombre.asc')
+  ]).then(function(res){
+    window._refTiposCache=res[0]||[];
+    window._refCategoriasCache=res[1]||[];
+  });
+}
+
+function _refOpcionesCatalogoConNueva(cache,selectedId){
+  var rows=cache||[];
+  var html='<option value="">-- Selecciona --</option><option value="__nueva__">➕ Agregar nuevo...</option>';
+  html+=rows.map(function(r){return '<option value="'+r.id+'" data-prefijo="'+r.prefijo+'"'+(r.id===selectedId?' selected':'')+'>'+r.nombre+' ('+r.prefijo+')</option>';}).join('');
+  return html;
+}
+
+function _refSelectBuscable(label,idSelect,idBuscar,cache,selectedId){
+  return '<div class="form-group"><label class="form-label">'+label+' *</label>'
+    +'<input type="text" class="form-control" id="'+idBuscar+'" placeholder="🔍 Buscar..." style="margin-bottom:6px" oninput="_refFiltrarSelect(\''+idSelect+'\',\''+idBuscar+'\')">'
+    +'<select class="form-control" id="'+idSelect+'" onchange="_refOnChangeTipoCategoria(\''+idSelect+'\')">'+_refOpcionesCatalogoConNueva(cache,selectedId)+'</select>'
+    +'</div>';
+}
+
+function _refFiltrarSelect(idSelect,idBuscar){
+  var q=(document.getElementById(idBuscar).value||'').toLowerCase();
+  var sel=document.getElementById(idSelect);
+  var cache=idSelect==='rn-tipo'?window._refTiposCache:window._refCategoriasCache;
+  var current=sel.value;
+  var rows=(cache||[]).filter(function(r){return !q||r.nombre.toLowerCase().indexOf(q)>=0;});
+  sel.innerHTML='<option value="">-- Selecciona --</option><option value="__nueva__">➕ Agregar nuevo...</option>'
+    +rows.map(function(r){return '<option value="'+r.id+'" data-prefijo="'+r.prefijo+'">'+r.nombre+' ('+r.prefijo+')</option>';}).join('');
+  if(current===''||rows.some(function(r){return r.id===current;})) sel.value=current;
+}
+
+function _refOnChangeTipoCategoria(selectId){
+  var sel=document.getElementById(selectId);
+  if(sel.value==='__nueva__'){
+    var esTipo=selectId==='rn-tipo';
+    sel.value='';
+    _refAbrirNuevoTipoOCategoria(esTipo,function(nuevo){
+      var cache=esTipo?window._refTiposCache:window._refCategoriasCache;
+      sel.innerHTML=_refOpcionesCatalogoConNueva(cache,nuevo.id);
+      _refActualizarPreviewCodigo();
+    });
+  } else {
+    _refActualizarPreviewCodigo();
+  }
+}
+
+function _refAbrirNuevoTipoOCategoria(esTipo,callback){
+  var m=document.createElement('div');
+  m.id='modal-ref-nuevo-cat';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px';
+  m.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;max-width:380px;width:100%;box-sizing:border-box">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;color:#5D4037;margin-bottom:12px">➕ Nuevo '+(esTipo?'Tipo de pieza':'Categoría')+'</div>'
+    +'<div class="form-group"><label class="form-label">Nombre</label><input type="text" class="form-control" id="nuevo-cat-nombre" placeholder="Ej: '+(esTipo?'Rodamiento':'Mecánico')+'"></div>'
+    +'<div class="form-group"><label class="form-label">Prefijo (2-4 letras, para el código)</label><input type="text" class="form-control" id="nuevo-cat-prefijo" maxlength="4" style="text-transform:uppercase" placeholder="Ej: '+(esTipo?'ROD':'MEC')+'"></div>'
+    +'<div style="display:flex;gap:8px;margin-top:10px">'
+    +'<button class="btn btn-outline" style="flex:1" onclick="document.getElementById(\'modal-ref-nuevo-cat\').remove()">Cancelar</button>'
+    +'<button class="btn btn-primary" style="flex:2" onclick="_refGuardarNuevoTipoOCategoria('+esTipo+')">💾 Guardar</button>'
+    +'</div></div>';
+  document.body.appendChild(m);
+  window._refNuevoCatCallback=callback;
+  window._refNuevoCatEsTipo=esTipo;
+  var nomEl=document.getElementById('nuevo-cat-nombre');
+  var prefEl=document.getElementById('nuevo-cat-prefijo');
+  nomEl.addEventListener('input',function(){
+    if(!prefEl._tocado) prefEl.value=nomEl.value.replace(/[^a-zA-Z]/g,'').substring(0,3).toUpperCase();
+  });
+  prefEl.addEventListener('input',function(){this._tocado=true;});
+  setTimeout(function(){nomEl.focus();},100);
+}
+
+function _refGuardarNuevoTipoOCategoria(esTipo){
+  var nombre=(document.getElementById('nuevo-cat-nombre').value||'').trim();
+  var prefijo=(document.getElementById('nuevo-cat-prefijo').value||'').trim().toUpperCase().replace(/[^A-Z]/g,'');
+  if(!nombre){showAlert('Escribe un nombre','error');return;}
+  if(!prefijo){showAlert('Escribe un prefijo','error');return;}
+  var tabla=esTipo?'refacciones_tipos':'refacciones_categorias';
+  var cacheArr=esTipo?window._refTiposCache:window._refCategoriasCache;
+  if((cacheArr||[]).some(function(r){return r.prefijo===prefijo;})){
+    showAlert('Ya existe un '+(esTipo?'tipo':'categoría')+' con ese prefijo','error');return;
+  }
+  var payload={id:gen_id(),nombre:nombre,prefijo:prefijo};
+  fetch(SUPA_URL+'/rest/v1/'+tabla,{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
+    .then(function(r){
+      if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,100),'error');});return;}
+      if(esTipo) window._refTiposCache.push(payload); else window._refCategoriasCache.push(payload);
+      var m=document.getElementById('modal-ref-nuevo-cat');if(m)m.remove();
+      showAlert('✅ '+nombre+' agregado');
+      if(window._refNuevoCatCallback){var cb=window._refNuevoCatCallback;window._refNuevoCatCallback=null;cb(payload);}
+    });
+}
+
+function _refActualizarPreviewCodigo(){
+  var elPrev=document.getElementById('rn-codigo-preview');
+  if(!elPrev) return;
+  var tipoSel=document.getElementById('rn-tipo'),catSel=document.getElementById('rn-categoria'),prioSel=document.getElementById('rn-prioridad');
+  if(!tipoSel||!catSel||!prioSel) return;
+  var tipoOpt=tipoSel.selectedIndex>=0?tipoSel.options[tipoSel.selectedIndex]:null;
+  var catOpt=catSel.selectedIndex>=0?catSel.options[catSel.selectedIndex]:null;
+  var tipoPref=tipoOpt?tipoOpt.getAttribute('data-prefijo'):null;
+  var catPref=catOpt?catOpt.getAttribute('data-prefijo'):null;
+  var prio=prioSel.value;
+  if(tipoPref&&catPref&&prio){
+    elPrev.textContent='Se generará como: '+tipoPref+'-'+catPref+'-'+prio+'### (consecutivo)';
+    elPrev.style.color='#16a34a';elPrev.style.fontWeight='700';
+  } else {
+    elPrev.textContent='Selecciona tipo, categoría y prioridad para generar el código';
+    elPrev.style.color='#6b7280';elPrev.style.fontWeight='400';
+  }
+}
+
+function _refSiguienteConsecutivo(prefix){
+  return supaFetch('refacciones','GET',null,'codigo=ilike.'+encodeURIComponent(prefix+'*')+'&select=codigo').then(function(rows){
+    var maxNum=0;
+    (rows||[]).forEach(function(r){
+      var m=/(\d+)$/.exec(r.codigo||'');
+      if(m){var n=parseInt(m[1],10);if(n>maxNum)maxNum=n;}
+    });
+    return maxNum+1;
+  });
+}
+
 // ── NUEVA REFACCIÓN / EDITAR ─────────────────────────────────────
-function _renderFormNuevaRef(cont,data){
-  cont.innerHTML='<div class="card"><div class="card-title mb8">'+( data?'✏️ Editar Refacción':'➕ Nueva Refacción')+'</div>'
-    +'<div class="form-group"><label class="form-label">Nombre *</label><input type="text" class="form-control" id="rn-nombre" value="'+(data?data.nombre:'')+'" placeholder="Ej: Rodamiento 6205"></div>'
-    +'<div class="form-group"><label class="form-label">Código único *</label><input type="text" class="form-control" id="rn-codigo" value="'+(data?data.codigo:'')+'" placeholder="Ej: ROD-6205" '+(data?'readonly':'')+'></div>'
+function _refCamposFormHtml(data){
+  var tipoHtml=_refSelectBuscable('Tipo de pieza','rn-tipo','rn-tipo-buscar',window._refTiposCache,data?data.tipo_id:null);
+  var catHtml=_refSelectBuscable('Categoría','rn-categoria','rn-categoria-buscar',window._refCategoriasCache,data?data.categoria_id:null);
+  var prioOpts=['A','B','C'].map(function(p){return '<option value="'+p+'"'+(data&&data.prioridad===p?' selected':'')+'>Prioridad '+p+'</option>';}).join('');
+  return '<div class="form-group"><label class="form-label">Nombre *</label><input type="text" class="form-control" id="rn-nombre" value="'+(data?data.nombre:'')+'" placeholder="Ej: Rodamiento 6205"></div>'
+    +tipoHtml+catHtml
+    +'<div class="form-group"><label class="form-label">Prioridad *</label><select class="form-control" id="rn-prioridad" onchange="_refActualizarPreviewCodigo()"><option value="">-- Selecciona --</option>'+prioOpts+'</select></div>'
+    +(data
+      ?'<div class="form-group"><label class="form-label">Código</label><input type="text" class="form-control" value="'+data.codigo+'" readonly style="background:#f3f4f6"></div>'
+      :'<div class="form-group"><label class="form-label">Código (se genera solo)</label><div id="rn-codigo-preview" style="font-size:13px;color:#6b7280;padding:8px 0">Selecciona tipo, categoría y prioridad para generar el código</div></div>')
     +'<div class="form-group"><label class="form-label">Descripción</label><input type="text" class="form-control" id="rn-desc" value="'+(data?data.descripcion||'':'')+'" placeholder="Detalles adicionales..."></div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'
     +'<div class="form-group"><label class="form-label">Cantidad actual</label><input type="number" class="form-control" id="rn-cant" value="'+(data?data.cantidad:0)+'" min="0"></div>'
     +'<div class="form-group"><label class="form-label">Cantidad mínima</label><input type="number" class="form-control" id="rn-min" value="'+(data?data.cantidad_minima:1)+'" min="0"></div>'
     +'<div class="form-group"><label class="form-label">Ubicación</label><input type="text" class="form-control" id="rn-ubic" value="'+(data?data.ubicacion||'':'')+'" placeholder="Ej: Estante A-3"></div>'
     +'<div class="form-group"><label class="form-label">Precio unitario</label><input type="number" class="form-control" id="rn-precio" value="'+(data?data.precio_unitario||0:0)+'" min="0" step="0.01"></div>'
-    +'</div>'
+    +'</div>';
+}
+
+function _dibujarFormNuevaRef(cont,data){
+  cont.innerHTML='<div class="card"><div class="card-title mb8">'+( data?'✏️ Editar Refacción':'➕ Nueva Refacción')+'</div>'
+    +_refCamposFormHtml(data)
     +'<button class="btn btn-primary" onclick="guardarRefaccion(\''+( data?data.id:'')+'\')">💾 '+(data?'Actualizar':'Crear Refacción')+'</button>'
     +(data?'<button onclick="eliminarRef(\''+data.id+'\')" style="width:100%;margin-top:8px;padding:12px;background:#fee2e2;border:none;border-radius:10px;color:#dc2626;font-weight:700;cursor:pointer">🗑️ Eliminar refacción</button>':'')
     +'</div>';
+}
+
+function _renderFormNuevaRef(cont,data){
+  cont.innerHTML='<div style="text-align:center;padding:20px;color:#9ca3af">Cargando...</div>';
+  _refCargarTiposYCategorias().then(function(){_dibujarFormNuevaRef(cont,data);});
 }
 
 function editarRef(id){
@@ -26139,27 +26287,80 @@ function editarRef(id){
   });
 }
 
+// ── MODAL — crear una refacción nueva desde dentro de otra pantalla ──────
+// Usado por la pantalla de Ubicaciones de Almacén al armar el contenido de
+// una caja, para no tener que salirse a dar de alta la refacción aparte.
+function _ubicAbrirNuevaRefaccionModal(onCreada){
+  var m=document.createElement('div');
+  m.id='modal-ubic-nueva-ref';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:10000;display:flex;align-items:flex-end;justify-content:center;overflow-y:auto';
+  m.innerHTML='<div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;max-height:92vh;overflow-y:auto;box-sizing:border-box">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800;color:#5D4037;margin-bottom:14px">➕ Nueva Refacción</div>'
+    +'<div id="ubic-nueva-ref-campos"><div style="text-align:center;padding:20px;color:#9ca3af">Cargando...</div></div>'
+    +'<div style="display:flex;gap:8px;margin-top:10px">'
+    +'<button class="btn btn-outline" style="flex:1" onclick="document.getElementById(\'modal-ubic-nueva-ref\').remove()">Cancelar</button>'
+    +'<button class="btn btn-primary" style="flex:2" onclick="guardarRefaccion(\'\')">💾 Crear Refacción</button>'
+    +'</div></div>';
+  document.body.appendChild(m);
+  window._refNuevaRefaccionCallback=function(creada){
+    var mm=document.getElementById('modal-ubic-nueva-ref');if(mm)mm.remove();
+    if(onCreada) onCreada(creada);
+  };
+  _refCargarTiposYCategorias().then(function(){
+    var cont=document.getElementById('ubic-nueva-ref-campos');
+    if(cont) cont.innerHTML=_refCamposFormHtml(null);
+  });
+}
+
 function guardarRefaccion(id){
   var nombre=document.getElementById('rn-nombre').value.trim();
-  var codigo=document.getElementById('rn-codigo').value.trim().toUpperCase();
-  if(!nombre||!codigo){showAlert('Nombre y código son obligatorios','error');return;}
+  if(!nombre){showAlert('El nombre es obligatorio','error');return;}
+  var tipoSel=document.getElementById('rn-tipo'),catSel=document.getElementById('rn-categoria'),prioSel=document.getElementById('rn-prioridad');
+  var tipoId=tipoSel.value||null,categoriaId=catSel.value||null,prioridad=prioSel.value||null;
   var payload={
-    nombre:nombre,codigo:codigo,
+    nombre:nombre,
     descripcion:document.getElementById('rn-desc').value.trim()||null,
     cantidad:parseInt(document.getElementById('rn-cant').value)||0,
     cantidad_minima:parseInt(document.getElementById('rn-min').value)||1,
     ubicacion:document.getElementById('rn-ubic').value.trim()||null,
     precio_unitario:parseFloat(document.getElementById('rn-precio').value)||0,
+    tipo_id:tipoId,categoria_id:categoriaId,prioridad:prioridad,
     activo:true,updated_at:new Date().toISOString()
   };
-  if(!id) payload.id=gen_id();
-  var url=SUPA_URL+'/rest/v1/refacciones'+(id?'?id=eq.'+id:'');
-  var method=id?'PATCH':'POST';
-  fetch(url,{method:method,headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
-    .then(function(r){
-      if(r.ok){showAlert('✅ Refacción guardada');_refTab='catalogo';_renderRefTabs();}
-      else r.text().then(function(t){showAlert('⚠️ '+t.substring(0,80),'error');});
+
+  function _enviar(){
+    if(!id) payload.id=gen_id();
+    var url=SUPA_URL+'/rest/v1/refacciones'+(id?'?id=eq.'+id:'');
+    var method=id?'PATCH':'POST';
+    fetch(url,{method:method,headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
+      .then(function(r){
+        if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,80),'error');});return;}
+        r.text().then(function(t){
+          var creada=null;
+          try{var arr=JSON.parse(t);creada=arr&&arr[0];}catch(e){}
+          showAlert('✅ Refacción guardada');
+          if(window._refNuevaRefaccionCallback){
+            var cb=window._refNuevaRefaccionCallback;window._refNuevaRefaccionCallback=null;
+            cb(creada||payload);
+          } else {
+            _refTab='catalogo';_renderRefTabs();
+          }
+        });
+      });
+  }
+
+  if(!id){
+    if(!tipoId||!categoriaId||!prioridad){showAlert('Selecciona tipo, categoría y prioridad','error');return;}
+    var tipoOpt=tipoSel.options[tipoSel.selectedIndex],catOpt=catSel.options[catSel.selectedIndex];
+    var tipoPref=tipoOpt.getAttribute('data-prefijo'),catPref=catOpt.getAttribute('data-prefijo');
+    var prefix=tipoPref+'-'+catPref+'-'+prioridad;
+    _refSiguienteConsecutivo(prefix).then(function(n){
+      payload.codigo=prefix+String(n).padStart(3,'0');
+      _enviar();
     });
+  } else {
+    _enviar();
+  }
 }
 
 function eliminarRef(id){
@@ -26335,15 +26536,36 @@ function _ubicAbrirAltaCaja(padreId){
 
 function _ubicOpcionesRefacciones(){
   var rows=window._ubicRefaccionesCache||[];
-  if(!rows.length) return '<option value="">(No hay refacciones en el catálogo todavía)</option>';
-  return '<option value="">-- Selecciona refacción --</option>'+rows.map(function(r){return '<option value="'+r.id+'">'+r.nombre+' ('+r.codigo+')</option>';}).join('');
+  var html='<option value="">-- Selecciona refacción --</option><option value="__nueva_ref__">➕ Agregar nueva refacción</option>';
+  html+=rows.map(function(r){return '<option value="'+r.id+'">'+r.nombre+' ('+r.codigo+')</option>';}).join('');
+  return html;
+}
+
+// Si eligieron "➕ Agregar nueva refacción" en la línea de contenido de una caja,
+// abre el alta de refacción sin salirse del flujo; al crearla queda seleccionada
+// ahí mismo y disponible en las demás líneas abiertas.
+function _ubicCheckNuevaRefaccionSelect(selectEl){
+  if(selectEl.value!=='__nueva_ref__') return;
+  selectEl.value='';
+  _ubicAbrirNuevaRefaccionModal(function(creada){
+    window._ubicRefaccionesCache=window._ubicRefaccionesCache||[];
+    window._ubicRefaccionesCache.push({id:creada.id,nombre:creada.nombre,codigo:creada.codigo});
+    document.querySelectorAll('#ubic-caja-contenido-wrap .ubic-linea-ref').forEach(function(sel){
+      var cur=sel.value;
+      sel.innerHTML=_ubicOpcionesRefacciones();
+      sel.value=cur;
+    });
+    selectEl.innerHTML=_ubicOpcionesRefacciones();
+    selectEl.value=creada.id;
+    showAlert('✅ '+creada.nombre+' creada y seleccionada');
+  });
 }
 
 function _ubicPintarPrimeraLineaContenido(){
   var wrap=document.getElementById('ubic-caja-contenido-wrap');
   if(!wrap) return;
   wrap.innerHTML='<div class="ubic-linea-contenido" style="border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin-top:10px">'
-    +'<div class="form-group"><label class="form-label">Refacción</label><select class="form-control ubic-linea-ref">'+_ubicOpcionesRefacciones()+'</select></div>'
+    +'<div class="form-group"><label class="form-label">Refacción</label><select class="form-control ubic-linea-ref" onchange="_ubicCheckNuevaRefaccionSelect(this)">'+_ubicOpcionesRefacciones()+'</select></div>'
     +'<div class="form-group"><label class="form-label">Cantidad</label><input type="number" class="form-control ubic-linea-cant" value="1" min="1"></div>'
     +'</div>';
 }
@@ -26359,7 +26581,7 @@ function _ubicAgregarLineaContenido(){
   div.className='ubic-linea-contenido';
   div.style.cssText='border:1px solid #e5e7eb;border-radius:10px;padding:10px;margin-top:10px;position:relative';
   div.innerHTML='<button type="button" onclick="this.parentElement.remove()" style="position:absolute;top:8px;right:8px;background:none;border:none;color:#dc2626;font-weight:800;cursor:pointer">✕</button>'
-    +'<div class="form-group"><label class="form-label">Refacción</label><select class="form-control ubic-linea-ref">'+_ubicOpcionesRefacciones()+'</select></div>'
+    +'<div class="form-group"><label class="form-label">Refacción</label><select class="form-control ubic-linea-ref" onchange="_ubicCheckNuevaRefaccionSelect(this)">'+_ubicOpcionesRefacciones()+'</select></div>'
     +'<div class="form-group"><label class="form-label">Cantidad</label><input type="number" class="form-control ubic-linea-cant" value="1" min="1"></div>';
   wrap.appendChild(div);
 }
