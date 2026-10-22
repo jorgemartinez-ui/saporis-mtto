@@ -26906,7 +26906,15 @@ function _aeb_escanearBolsa(){
   if(!estado){showAlert('Primero escanea una caja','error');return;}
   _qrAbrirCamara('📷 Escanear bolsa',function(raw){
     var codigo=_qrLimpiarCodigo(raw);
+    var esRef=/^REF:/i.test(codigo);
+    var codRef=codigo.replace(/^REF:/i,'').trim();
     var item=(estado.contenido||[]).filter(function(c){return c.codigo_item===codigo;})[0];
+    if(!item && esRef){
+      item=(estado.contenido||[]).filter(function(c){
+        var ref=estado.refMap[c.refaccion_id]||{};
+        return ref.codigo===codRef;
+      })[0];
+    }
     if(!item && estado.caja.codigo===codigo && estado.contenido.length===1){
       item=estado.contenido[0];
     }
