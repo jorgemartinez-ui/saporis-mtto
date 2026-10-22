@@ -26870,8 +26870,18 @@ function _aeb_pintarContenidoCaja(){
     return '<div class="card aeb-item-contenido" data-nombre="'+_cemNorm(nombreRef)+'" style="padding:12px;margin-bottom:8px">'
       +'<div style="font-weight:700;font-size:14px">'+nombreRef+'</div>'
       +'<div style="font-size:12px;color:#6b7280">Cantidad disponible: <b>'+c.cantidad+'</b>'+(estado.caja.tipo_caja==='mixta'?' · Código: <b>'+c.codigo_item+'</b>':'')+'</div>'
+      +(c.cantidad>0?'<button class="btn btn-outline" style="width:100%;margin-top:6px" onclick="_aeb_tomarDesdeLista(\''+c.id+'\')">📤 Tomar piezas</button>':'')
       +'</div>';
   }).join('');
+}
+
+function _aeb_tomarDesdeLista(itemId){
+  var estado=window._aebCajaActual;
+  if(!estado){showAlert('Primero entra a una caja','error');return;}
+  var item=(estado.contenido||[]).filter(function(c){return c.id===itemId;})[0];
+  if(!item){showAlert('No se encontró ese renglón','error');return;}
+  var ref=estado.refMap[item.refaccion_id]||{};
+  _aeb_abrirTomarPiezas(item,ref,estado.caja.id);
 }
 
 function _aeb_filtrarContenidoCaja(){
@@ -26893,33 +26903,33 @@ function _aeb_escanearBolsa(){
     }
     if(!item){showAlert('Esa bolsa no pertenece a esta caja ('+codigo+')','error');return;}
     var ref=estado.refMap[item.refaccion_id]||{};
-    _aeb_abrirTomarPiezas(item,ref);
+    _aeb_abrirTomarPiezas(item,ref,estado.caja.id);
   });
 }
 
-function _aeb_abrirTomarPiezas(item,ref){
+function _aeb_abrirTomarPiezas(item,ref,cajaId){
   var m=document.createElement('div');
   m.id='modal-aeb-tomar';
   m.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
   m.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box">'
     +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#5D4037;margin-bottom:4px">📤 Tomar refacción</div>'
-    +'<div style="font-size:13px;color:#6b7280;margin-bottom:16px">'+(ref.nombre||'—')+' · Disponible en esta bolsa: <strong>'+item.cantidad+'</strong></div>'
+    +'<div style="font-size:13px;color:#6b7280;margin-bottom:16px">'+(ref.nombre||'—')+' · Disponible: <strong>'+item.cantidad+'</strong></div>'
     +'<div style="margin-bottom:16px"><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Piezas que vas a tomar *</label>'
     +'<input type="number" id="aeb-tomar-cant" class="form-control" min="1" max="'+item.cantidad+'" value="1" style="padding:12px;font-size:1.1rem;font-weight:700"></div>'
     +'<div style="display:flex;gap:10px">'
     +'<button onclick="document.getElementById(\'modal-aeb-tomar\').remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
-    +'<button onclick="_aeb_confirmarTomarPiezas(\''+item.id+'\',\''+item.refaccion_id+'\','+item.cantidad+')" style="flex:2;padding:13px;background:#5D4037;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">📤 Confirmar (pasa a Almacén Virtual)</button>'
+    +'<button onclick="_aeb_confirmarTomarPiezas(\''+item.id+'\',\''+item.refaccion_id+'\','+item.cantidad+',\''+(cajaId||'')+'\')" style="flex:2;padding:13px;background:#5D4037;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">📤 Confirmar (pasa a Almacén Virtual)</button>'
     +'</div></div>';
   document.body.appendChild(m);
 }
 
-function _aeb_confirmarTomarPiezas(itemId,refaccionId,cantidadDisponible){
+function _aeb_confirmarTomarPiezas(itemId,refaccionId,cantidadDisponible,cajaId){
   var elCant=document.getElementById('aeb-tomar-cant');
   var cant=parseInt(elCant?elCant.value:0)||0;
   if(cant<=0){showAlert('Cantidad inválida','error');return;}
   if(cant>cantidadDisponible){showAlert('No hay suficientes piezas en esta bolsa ('+cantidadDisponible+' disponibles)','error');return;}
   var nuevaCantItem=cantidadDisponible-cant;
-  var cajaIdActual=(window._aebCajaActual&&window._aebCajaActual.caja&&window._aebCajaActual.caja.id)||null;
+  var cajaIdActual=cajaId||(window._aebCajaActual&&window._aebCajaActual.caja&&window._aebCajaActual.caja.id)||null;
   fetch(SUPA_URL+'/rest/v1/almacen_caja_contenido?id=eq.'+itemId,{
     method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
     body:JSON.stringify({cantidad:nuevaCantItem})
@@ -26954,7 +26964,11 @@ function _aeb_confirmarTomarPiezas(itemId,refaccionId,cantidadDisponible){
         });
         var m=document.getElementById('modal-aeb-tomar');if(m)m.remove();
         showAlert('✅ '+cant+' pieza(s) de '+(ref?ref.nombre:'esa refacción')+' pasaron al Almacén Virtual');
-        if(cajaIdActual) _aeb_mostrarCaja(cajaIdActual);
+        if(document.getElementById('aeb-lista-contenido')&&cajaIdActual){
+          _aeb_mostrarCaja(cajaIdActual);
+        } else if(document.getElementById('aeb-buscar-resultado')){
+          _aeb_buscarLibre();
+        }
       });
     });
   });
@@ -26996,10 +27010,14 @@ function _aeb_buscarLibre(){
         var html='';
         if(refsPorNombre.length){
           html+=refsPorNombre.map(function(r){
+            var nombreEsc=String(r.nombre||'').replace(/'/g,"\\'");
             var ubics=(contenidos||[]).filter(function(c){return c.refaccion_id===r.id&&c.cantidad>0;}).map(function(c){
               var caja=cajaMap[c.caja_id];
               if(!caja) return null;
-              return '<div style="font-size:12px;color:#0e7490;cursor:pointer" onclick="_aeb_mostrarCajaDesdeBusqueda(\''+caja.id+'\')">📍 '+caja.codigo+' ('+caja.nombre+')'+(c.codigo_item&&c.codigo_item!==caja.codigo?' · '+c.codigo_item:'')+' — '+c.cantidad+' pza(s)</div>';
+              return '<div style="display:flex;align-items:center;gap:8px;margin-top:4px">'
+                +'<div style="font-size:12px;color:#0e7490;cursor:pointer;flex:1" onclick="_aeb_mostrarCajaDesdeBusqueda(\''+caja.id+'\')">📍 '+caja.codigo+' ('+caja.nombre+')'+(c.codigo_item&&c.codigo_item!==caja.codigo?' · '+c.codigo_item:'')+' — '+c.cantidad+' pza(s)</div>'
+                +'<button class="btn btn-outline" style="padding:6px 10px;font-size:11px;white-space:nowrap" onclick="_aeb_tomarDesdeBusqueda(\''+c.id+'\',\''+r.id+'\',\''+nombreEsc+'\','+c.cantidad+',\''+caja.id+'\')">📤 Tomar</button>'
+                +'</div>';
             }).filter(Boolean);
             return '<div class="card" style="padding:12px;margin-bottom:8px">'
               +'<div style="font-weight:700;font-size:14px">'+r.nombre+'</div>'
@@ -27024,6 +27042,10 @@ function _aeb_buscarLibre(){
 
 function _aeb_mostrarCajaDesdeBusqueda(cajaId){
   _aeb_mostrarCaja(cajaId);
+}
+
+function _aeb_tomarDesdeBusqueda(itemId,refaccionId,refNombre,cantidadDisponible,cajaId){
+  _aeb_abrirTomarPiezas({id:itemId,cantidad:cantidadDisponible,refaccion_id:refaccionId},{nombre:refNombre},cajaId);
 }
 
 // ── ALMACÉN VIRTUAL (refacciones en standby, pendientes de usar) ──
