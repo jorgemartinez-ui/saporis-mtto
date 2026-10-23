@@ -485,6 +485,7 @@ function doLogout(){currentUser=null;saveDB('session',null);document.getElementB
 function renderMenu(){
   setTimeout(actualizarBadgesAdmin, 100);
   setTimeout(actualizarAlertaVacaciones, 100);
+  setTimeout(verificarAlertaStockMinimo, 100);
   if(!currentUser)return;
   const roles={admin:'Administrador',tecnico:'Técnico',operador:'Operador',lider:'Líder Área',super:'⚡ Super Usuario'};
   var _rolMostrar=rolEsCustom(currentUser.rol)?nombreRolCustom(currentUser.rol):roles[currentUser.rol];
@@ -815,11 +816,11 @@ function renderPMStep(){
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div>
           <label style="font-size:.82rem;font-weight:700;color:var(--txt2);display:block;margin-bottom:4px">Hora inicio</label>
-          <input type="time" id="inp-hora-inicio-trabajo" class="form-control" value="${hiVal}" placeholder="--:--">
+          <input type="time" lang="en-GB" id="inp-hora-inicio-trabajo" class="form-control" value="${hiVal}" placeholder="--:--">
         </div>
         <div>
           <label style="font-size:.82rem;font-weight:700;color:var(--txt2);display:block;margin-bottom:4px">Hora fin</label>
-          <input type="time" id="inp-hora-fin-trabajo" class="form-control" value="${hfVal}" placeholder="--:--">
+          <input type="time" lang="en-GB" id="inp-hora-fin-trabajo" class="form-control" value="${hfVal}" placeholder="--:--">
         </div>
       </div>
       <div style="margin-top:14px">
@@ -1109,6 +1110,7 @@ function guardarOT(){
     });
   }
   ORDENES.push(ot);saveDB('ordenes',ORDENES);saveOrdenSupa(ot);
+  _standbyFinalizarUsados(id);
   saveDB('pm_draft_'+currentUser.id,null); // Limpiar borrador
   showAlert('✅ Orden '+id+' creada');goMenu();
 }
@@ -1667,8 +1669,8 @@ function precierreDiasHTML(){
       +'<span style="font-size:.72rem;font-weight:700;color:#6b7280;white-space:nowrap">Día '+(idx+1)+'</span>'
       +'<input type="date" class="form-control" value="'+d.fecha+'" onchange="precierreUpdateDia('+idx+',\'fecha\',this.value)" style="padding:6px;font-size:.82rem">'
       +'<div style="display:flex;gap:4px">'
-      +'<input type="time" class="form-control" value="'+d.horaInicio+'" onchange="precierreUpdateDia('+idx+',\'horaInicio\',this.value)" style="padding:6px;font-size:.82rem;flex:1">'
-      +'<input type="time" class="form-control" value="'+d.horaFin+'" onchange="precierreUpdateDia('+idx+',\'horaFin\',this.value)" style="padding:6px;font-size:.82rem;flex:1">'
+      +'<input type="time" lang="en-GB" class="form-control" value="'+d.horaInicio+'" onchange="precierreUpdateDia('+idx+',\'horaInicio\',this.value)" style="padding:6px;font-size:.82rem;flex:1">'
+      +'<input type="time" lang="en-GB" class="form-control" value="'+d.horaFin+'" onchange="precierreUpdateDia('+idx+',\'horaFin\',this.value)" style="padding:6px;font-size:.82rem;flex:1">'
       +'</div>'
       +(idx>0?'<button type="button" onclick="precierreRemoveDia('+idx+')" style="padding:4px 8px;background:#fee2e2;border:none;border-radius:6px;color:#dc2626;cursor:pointer;font-size:.8rem">✕</button>':'<span></span>')
       +'</div>';
@@ -1819,7 +1821,7 @@ function confirmarCierre(){
   if(refs.length){
     refs.forEach(function(r){
       var cant=r.cantidad||1;
-      var ref=REFACCIONES.find(function(x){return x.codigo===r.nombre||x.descripcion.toLowerCase().includes(r.nombre.toLowerCase());});
+      var ref=REFACCIONES.find(function(x){return x.codigo===r.nombre||(x.descripcion||'').toLowerCase().includes(r.nombre.toLowerCase());});
       if(ref&&ref.cantidad>0) ref.cantidad=Math.max(0,ref.cantidad-cant);
       CONSUMO_REF.push({ts:Date.now(),otId:otCerrandoId,tecnico:currentUser.nombre,codigo:r.nombre,descripcion:r.nombre,cantidad:cant,semana:currentWeek(),año:currentYear()});
     });
@@ -1927,7 +1929,7 @@ function editarDetalleOp(id){
       <div class="form-group" style="flex:1"><label class="form-label">📅 Fecha</label>
         <input type="date" class="form-control" id="eop-fecha" value="${_fechaVal}"></div>
       <div class="form-group" style="flex:1"><label class="form-label">🕐 Hora</label>
-        <input type="time" class="form-control" id="eop-hora" value="${_horaVal}"></div>
+        <input type="time" lang="en-GB" class="form-control" id="eop-hora" value="${_horaVal}"></div>
     </div>`:''}
     <div style="display:flex;gap:8px;margin-top:12px">
       <button type="button" class="btn btn-outline" style="flex:1" onclick="document.getElementById('modal-edit-op').remove()">Cancelar</button>
@@ -4836,9 +4838,9 @@ function mostrarFormTiempoResolucion(modo){
   <div style="background:var(--az3);border-radius:10px;padding:14px;margin-bottom:12px">
     <div style="display:flex;gap:10px;margin-bottom:10px">
       <div style="flex:1"><label class="form-label" style="font-size:11px">Hora inicio (24h)</label>
-        <input type="time" class="form-control" id="res-ini" value="${hiD}" onchange="calcResTime()"></div>
+        <input type="time" lang="en-GB" class="form-control" id="res-ini" value="${hiD}" onchange="calcResTime()"></div>
       <div style="flex:1"><label class="form-label" style="font-size:11px">Hora fin (24h)</label>
-        <input type="time" class="form-control" id="res-fin" value="${hfD}" onchange="calcResTime()"></div>
+        <input type="time" lang="en-GB" class="form-control" id="res-fin" value="${hfD}" onchange="calcResTime()"></div>
     </div>
     <div id="res-tiempo-calc" style="text-align:center;font-size:14px;font-weight:700;color:var(--mo)"></div>
   </div>
@@ -4861,6 +4863,7 @@ function mostrarFormTiempoResolucion(modo){
       <input type="checkbox" id="res-cb-ref" style="width:18px;height:18px" onchange="resToggleRef(this.checked)">
       🔩 Usé refacciones / materiales
     </label>
+    <div id="res-ref-standby" style="margin-top:8px"></div>
     <div id="res-ref-wrap" style="display:none;margin-top:10px">
       <div id="res-ref-lista">
         <div style="display:flex;gap:6px;margin-bottom:6px"><input type="text" class="form-control res-ref-input" placeholder="Ej: Balero 6205, O-ring 2&quot;..." style="flex:1;font-size:13px"><input type="number" class="form-control res-ref-cant" placeholder="Cant." min="1" style="width:64px;font-size:13px"><button type="button" onclick="resRefQuitar(this)" style="padding:6px 10px;background:#fee2e2;border:none;border-radius:8px;color:#dc2626;font-size:14px;cursor:pointer">✕</button></div>
@@ -4871,6 +4874,7 @@ function mostrarFormTiempoResolucion(modo){
   <button class="btn btn-success" onclick="${esTmp?'confirmarResolucion_temp()':'confirmarResolucion()'}">✅ Guardar como Resuelta</button>`;
   document.getElementById('pm-btn-next').style.display='none';
   if(hiD&&hfD) calcResTime();
+  _standbyDisponiblesHtml('res-ref-standby','lista_res',null);
 }
 
 function calcResTime(){
@@ -4907,6 +4911,22 @@ function resRefQuitar(btn){
   var lista=row.parentElement;
   if(lista.querySelectorAll('div').length<=1){row.querySelector('input').value='';return;}
   row.remove();
+}
+function resRefAgregarConValor(nombre,cantidad){
+  var lista=document.getElementById('res-ref-lista');
+  if(!lista) return;
+  var filas=lista.querySelectorAll(':scope > div');
+  if(filas.length===1){
+    var inp0=filas[0].querySelector('.res-ref-input');
+    if(inp0&&!inp0.value.trim()){filas[0].remove();}
+  }
+  resRefAgregar();
+  var nuevas=lista.querySelectorAll(':scope > div');
+  var ultima=nuevas[nuevas.length-1];
+  if(!ultima) return;
+  var inpF=ultima.querySelector('.res-ref-input'), cantF=ultima.querySelector('.res-ref-cant');
+  if(inpF) inpF.value=nombre;
+  if(cantF) cantF.value=cantidad;
 }
 function resGetRefs(){
   var lista=document.getElementById('res-ref-lista');
@@ -6930,9 +6950,9 @@ function mostrarFormVariosDias(){
       +'</div>'
       +'<div style="display:flex;gap:8px">'
       +'<div style="flex:1"><label style="font-size:.72rem;font-weight:700;color:#6b7280;display:block;margin-bottom:2px">Hora inicio</label>'
-      +'<input type="time" class="form-control" id="vd-ini-'+i+'" style="padding:7px;font-size:.85rem" onchange="calcVdHoras('+i+')"></div>'
+      +'<input type="time" lang="en-GB" class="form-control" id="vd-ini-'+i+'" style="padding:7px;font-size:.85rem" onchange="calcVdHoras('+i+')"></div>'
       +'<div style="flex:1"><label style="font-size:.72rem;font-weight:700;color:#6b7280;display:block;margin-bottom:2px">Hora fin</label>'
-      +'<input type="time" class="form-control" id="vd-fin-'+i+'" style="padding:7px;font-size:.85rem" onchange="calcVdHoras('+i+')"></div>'
+      +'<input type="time" lang="en-GB" class="form-control" id="vd-fin-'+i+'" style="padding:7px;font-size:.85rem" onchange="calcVdHoras('+i+')"></div>'
       +'<div style="flex:1"><label style="font-size:.72rem;font-weight:700;color:#6b7280;display:block;margin-bottom:2px">Horas</label>'
       +'<input type="number" class="form-control" id="vd-horas-'+i+'" placeholder="0" min="0" max="24" step="0.25" style="padding:7px;font-size:.85rem"></div>'
       +'</div>'
@@ -10449,8 +10469,8 @@ function pm3DiasHTML(p){
       +'<span style="font-size:.72rem;font-weight:700;color:#6b7280;white-space:nowrap">Día '+(idx+1)+'</span>'
       +'<input type="date" class="form-control" value="'+d.fecha+'" onchange="pm3UpdateDia(\''+p.id+'\','+idx+',\'fecha\',this.value)" style="padding:6px;font-size:.82rem">'
       +'<div style="display:flex;gap:4px">'
-      +'<input type="time" class="form-control" value="'+d.horaInicio+'" onchange="pm3UpdateDia(\''+p.id+'\','+idx+',\'horaInicio\',this.value)" style="padding:6px;font-size:.82rem;flex:1">'
-      +'<input type="time" class="form-control" value="'+d.horaFin+'" onchange="pm3UpdateDia(\''+p.id+'\','+idx+',\'horaFin\',this.value)" style="padding:6px;font-size:.82rem;flex:1">'
+      +'<input type="time" lang="en-GB" class="form-control" value="'+d.horaInicio+'" onchange="pm3UpdateDia(\''+p.id+'\','+idx+',\'horaInicio\',this.value)" style="padding:6px;font-size:.82rem;flex:1">'
+      +'<input type="time" lang="en-GB" class="form-control" value="'+d.horaFin+'" onchange="pm3UpdateDia(\''+p.id+'\','+idx+',\'horaFin\',this.value)" style="padding:6px;font-size:.82rem;flex:1">'
       +'</div>'
       +(idx>0?'<button onclick="pm3RemoveDia(\''+p.id+'\','+idx+')" style="padding:4px 8px;background:#fee2e2;border:none;border-radius:6px;color:#dc2626;cursor:pointer;font-size:.8rem">✕</button>':'<span></span>')
       +'</div>';
@@ -13247,8 +13267,8 @@ function _renderFormAnom(){
       '<label class="form-label">📅 Fecha y hora del trabajo</label>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">'
       +'<input type="date" class="form-control" id="anom-fecha" value="'+(pmState.fechaTrabajo||todayStr())+'" max="'+todayStr()+'">'
-      +'<input type="time" class="form-control" id="anom-ini" placeholder="Inicio" value="'+(pmState.horaInicioTrabajo||'')+'">'
-      +'<input type="time" class="form-control" id="anom-fin" placeholder="Fin" value="'+(pmState.horaFinTrabajo||'')+'">'
+      +'<input type="time" lang="en-GB" class="form-control" id="anom-ini" placeholder="Inicio" value="'+(pmState.horaInicioTrabajo||'')+'">'
+      +'<input type="time" lang="en-GB" class="form-control" id="anom-fin" placeholder="Fin" value="'+(pmState.horaFinTrabajo||'')+'">'
       +'</div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">'
       +'<button class="btn btn-primary" onclick="guardarAnomUnico(false)">📋 Guardar Abierta</button>'
@@ -16683,9 +16703,9 @@ function mostrarFormVariosDias(){
       +'</div>'
       +'<div style="display:flex;gap:8px">'
       +'<div style="flex:1"><label style="font-size:.72rem;font-weight:700;color:#6b7280;display:block;margin-bottom:2px">Hora inicio</label>'
-      +'<input type="time" class="form-control" id="vd-ini-'+i+'" style="padding:7px;font-size:.85rem" onchange="calcVdHoras('+i+')"></div>'
+      +'<input type="time" lang="en-GB" class="form-control" id="vd-ini-'+i+'" style="padding:7px;font-size:.85rem" onchange="calcVdHoras('+i+')"></div>'
       +'<div style="flex:1"><label style="font-size:.72rem;font-weight:700;color:#6b7280;display:block;margin-bottom:2px">Hora fin</label>'
-      +'<input type="time" class="form-control" id="vd-fin-'+i+'" style="padding:7px;font-size:.85rem" onchange="calcVdHoras('+i+')"></div>'
+      +'<input type="time" lang="en-GB" class="form-control" id="vd-fin-'+i+'" style="padding:7px;font-size:.85rem" onchange="calcVdHoras('+i+')"></div>'
       +'<div style="flex:1"><label style="font-size:.72rem;font-weight:700;color:#6b7280;display:block;margin-bottom:2px">Horas</label>'
       +'<input type="number" class="form-control" id="vd-horas-'+i+'" placeholder="0" min="0" max="24" step="0.25" style="padding:7px;font-size:.85rem"></div>'
       +'</div>'
@@ -19200,10 +19220,10 @@ function guardarChecklist() {
     if(notifCfg.buzon!==false) crearNotificacion('checklist_rojo','🔴 Checklist con Puntos Fuera',''+insp.tipoLabel+' — '+rojo+' punto(s) en rojo | '+insp.tecnicoNombre+(nombresRojos.length?' | Puntos: '+nombresRojos.join(', '):''),'admin',null,insp.id);
     if(notifCfg.dor!==false) crearAlertaChecklist(insp);
   }
-  // Comportamiento propio de Inspección de Turno: crea/mantiene abierta una OT PM02 si hay rojos
-  if(_chkActual.tipoId==='inspeccion_turno'){
-    _crearOTInspeccionTurno(insp, verde, rojo, napl, visibles.length);
-  }
+  // Toda PM02 de seguimiento del checklist (cualquier tipo), con hora de inicio/fin
+  // reales (ver _crearOTInspeccionTurno) — para Inspección de Turno además queda
+  // "abierta" mientras haya puntos en rojo (comportamiento histórico, sin cambios).
+  _crearOTInspeccionTurno(insp, verde, rojo, napl, visibles.length);
   showAlert('✅ Check list guardado — ' + verde + ' ✅ / ' + rojo + ' 🔴 / ' + napl + ' ⬛');
   _chkActual = null;
   showChecklistMenu();
@@ -19243,16 +19263,25 @@ function _chkDescartarYSalir(){
   showChecklistMenu();
 }
 
-// Preserva el comportamiento histórico de "Inspección de Turno": genera una OT PM02 que
-// queda abierta (persistente) mientras haya puntos en rojo, y se cierra sola si no hay ninguno.
+// Genera automáticamente una PM02 de seguimiento para CUALQUIER checklist que se guarde
+// (Inspección de Turno, Arranque/Paro de Servicios, Chiller, y cualquier checklist nuevo
+// que se agregue desde el admin) — con hora de inicio/fin REALES (fin topado a máx. 1h de
+// duración), para que ese tiempo viaje con la propia orden al resumen de horas por técnico
+// (Consultar OT), igual que cualquier otra PM — a petición de Jorge. Para Inspección de
+// Turno además se preserva el comportamiento histórico: queda abierta (persistente, sin
+// cerradaTs) mientras haya puntos en rojo, y se cierra sola si no hay ninguno.
 function _crearOTInspeccionTurno(insp, verde, rojo, napl, total){
   var pct = (total-napl)>0 ? Math.round((verde/(total-napl))*100) : 100;
+  var tsIni = insp.tsInicio || Date.now();
+  var tsFin = Date.now();
+  var durCapMs = Math.min(Math.max(0, tsFin-tsIni), 3600000); // tope de 1 hora
+  var fmtHora = function(ts){ return new Date(ts).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',hour12:false}); };
   var inspOT = {
     id: genID('PM02'),
     tipo: 'PM02',
     area: insp.area||'servicios',
-    linea: 'Inspección Turno '+(insp.turno||''),
-    componente: insp.tipoLabel||'Inspección de Turno',
+    linea: (insp.tipoLabel||'Checklist')+(insp.turno?' Turno '+insp.turno:''),
+    componente: insp.tipoLabel||'Checklist',
     prioridad: 'B',
     tipoAnormalidad: 'Inspección',
     detalle: 'Turno '+(insp.turno||'')+' — '+verde+' ✅ / '+rojo+' 🔴 / '+napl+' ⬛ — '+pct+'% cumplimiento',
@@ -19268,10 +19297,13 @@ function _crearOTInspeccionTurno(insp, verde, rojo, napl, total){
     año: insp.año,
     colorOT: rojo>0?'rojo':'azul',
     observacionesCierre: 'Inspeccion: '+verde+' verde, '+rojo+' rojo, '+napl+' no aplica. '+pct+'% cumplimiento.',
-    // El tiempo del checklist ya se cuenta aparte (una sola vez, con candado de 1h) en
-    // el resumen de OTs por técnico — esta OT es solo para dar seguimiento a los puntos
-    // en rojo, no debe además sumar sus propias horas para no duplicarlas.
-    horasCierre: 0,
+    // Hora de inicio/fin real del checklist (fin topado a máx. 1h) — con esto el tiempo
+    // viaja con la propia orden al resumen de horas por técnico (ya no se suma aparte),
+    // y si se traslapa con otra orden del mismo técnico tampoco se duplica.
+    fechaTrabajo: fechaLocal(tsFin),
+    horaInicioTrabajo: fmtHora(tsIni),
+    horaFinTrabajo: fmtHora(tsIni+durCapMs),
+    horasCierre: parseFloat((durCapMs/3600000).toFixed(2)),
     cerradaTs: rojo===0?Date.now():null,
     cerradaPor: rojo===0?insp.tecnicoNombre:null,
     esInspeccion: true,
@@ -19894,6 +19926,26 @@ function guardarRessueltaTemporalmente(){
     historialReasignacion: [], historialModificacion: []
   };
 
+  // Guardar refacciones usadas (material de almacén provisional en la reparación temporal)
+  var _refsTmp=Array.isArray(pmState.refaccionesUsadas)?pmState.refaccionesUsadas:(pmState.refaccionesUsadas?[{nombre:pmState.refaccionesUsadas,cantidad:1}]:[]);
+  if(_refsTmp && _refsTmp.length>0){
+    pm02.refaccionesUsadas=_refsTmp.map(function(r){return r.nombre;}).join(', ');
+    CONSUMO_REF=CONSUMO_REF||[];
+    _refsTmp.forEach(function(ref,ri){
+      if(!ref||!ref.nombre) return;
+      var consumoRow={id:'CONS-'+Date.now()+'-'+ri,ts:Date.now(),ot_id:idPM02,linea:pm02.linea||'',area:pm02.area||'',tecnico:currentUser.nombre,refacciones:ref.nombre,nombre:ref.nombre,cantidad:ref.cantidad||1,estado:'levantada',semana:currentWeek(),anio:currentYear()};
+      CONSUMO_REF.push(consumoRow);
+      saveDB('consumo_ref',CONSUMO_REF);
+      supaFetch('consumo_refacciones','POST',consumoRow,'').catch(function(){});
+    });
+    var _refNamesTmp=_refsTmp.map(function(r){return r.nombre;}).join(', ');
+    USERS.filter(function(u){return u.rol==='admin'||u.rol==='super';}).forEach(function(admin){
+      crearNotificacion('refaccion','🔩 Refacciones consumidas',
+        currentUser.nombre+' usó: '+_refNamesTmp+' en '+idPM02+' ('+(pm02.linea||pm02.area||'')+').',
+        null,admin.id,idPM02);
+    });
+  }
+
   // 2. Generar PM03 para solución definitiva — sin semana para que vaya a "Por Reprogramar"
   var pm03 = {
     id: idPM03,
@@ -19920,6 +19972,7 @@ function guardarRessueltaTemporalmente(){
   saveDB('ordenes', ORDENES);
   saveDB('pm_draft_'+currentUser.id, null);
   saveOrdenSupa(pm02);
+  _standbyFinalizarUsados(idPM02);
 
   PM03_PLAN.push(pm03);
   saveDB('pm03_plan', PM03_PLAN);
@@ -20982,8 +21035,8 @@ function pm3DiasHTML(p){
       +'<span style="font-size:.72rem;font-weight:700;color:#6b7280;white-space:nowrap">Día '+(idx+1)+'</span>'
       +'<input type="date" class="form-control" value="'+d.fecha+'" onchange="pm3UpdateDia(\''+p.id+'\','+idx+',\'fecha\',this.value)" style="padding:6px;font-size:.82rem">'
       +'<div style="display:flex;gap:4px">'
-      +'<input type="time" class="form-control" value="'+d.horaInicio+'" onchange="pm3UpdateDia(\''+p.id+'\','+idx+',\'horaInicio\',this.value)" style="padding:6px;font-size:.82rem;flex:1">'
-      +'<input type="time" class="form-control" value="'+d.horaFin+'" onchange="pm3UpdateDia(\''+p.id+'\','+idx+',\'horaFin\',this.value)" style="padding:6px;font-size:.82rem;flex:1">'
+      +'<input type="time" lang="en-GB" class="form-control" value="'+d.horaInicio+'" onchange="pm3UpdateDia(\''+p.id+'\','+idx+',\'horaInicio\',this.value)" style="padding:6px;font-size:.82rem;flex:1">'
+      +'<input type="time" lang="en-GB" class="form-control" value="'+d.horaFin+'" onchange="pm3UpdateDia(\''+p.id+'\','+idx+',\'horaFin\',this.value)" style="padding:6px;font-size:.82rem;flex:1">'
       +'</div>'
       +(idx>0?'<button onclick="pm3RemoveDia(\''+p.id+'\','+idx+')" style="padding:4px 8px;background:#fee2e2;border:none;border-radius:6px;color:#dc2626;cursor:pointer;font-size:.8rem">✕</button>':'<span></span>')
       +'</div>';
@@ -23924,6 +23977,62 @@ function actualizarAlertaVacaciones(){
   }).catch(function(){});
 }
 
+// ── ALERTA DE STOCK MÍNIMO (refacciones) — modal al entrar, solo admin/super ──
+function verificarAlertaStockMinimo(){
+  if(!currentUser) return;
+  if(currentUser.rol!=='admin'&&currentUser.rol!=='super') return;
+  if(document.getElementById('modal-stock-minimo')) return; // ya está abierta
+  supaFetch('refacciones','GET',null,'activo=eq.true').then(function(rows){
+    var ahora=Date.now();
+    var bajas=(rows||[]).filter(function(r){
+      if(r.cantidad>r.cantidad_minima) return false;
+      if(r.alerta_prox_aviso && new Date(r.alerta_prox_aviso).getTime()>ahora) return false;
+      return true;
+    });
+    if(!bajas.length) return;
+    _mostrarModalStockMinimo(bajas);
+  }).catch(function(){});
+}
+
+function _mostrarModalStockMinimo(items){
+  var m=document.createElement('div');
+  m.id='modal-stock-minimo';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end;justify-content:center;overflow-y:auto';
+  m.innerHTML='<div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;box-sizing:border-box">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#dc2626;margin-bottom:4px">⚠️ Refacciones en stock bajo</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:14px">'+items.length+' refacción(es) están en su cantidad mínima o por debajo</div>'
+    +'<div id="stock-min-lista">'+items.map(_stockMinItemHTML).join('')+'</div>'
+    +'<button type="button" onclick="document.getElementById(\'modal-stock-minimo\').remove()" style="width:100%;margin-top:4px;padding:12px;background:#f3f4f6;border:none;border-radius:10px;font-weight:700;cursor:pointer">Cerrar</button>'
+    +'</div>';
+  document.body.appendChild(m);
+}
+
+function _stockMinItemHTML(r){
+  return '<div class="card" id="stock-min-row-'+r.id+'" style="border-left:4px solid #dc2626;padding:12px;margin-bottom:10px">'
+    +'<div style="font-weight:700;font-size:14px">'+r.nombre+'</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:8px">Cantidad actual: <b style="color:#dc2626">'+r.cantidad+'</b> · Mínimo: <b>'+r.cantidad_minima+'</b></div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+    +'<button type="button" onclick="_stockMinPosponer(\''+r.id+'\',7)" style="flex:1;min-width:95px;padding:8px 6px;background:#ecfdf5;border:1px solid #86efac;border-radius:8px;font-size:11.5px;font-weight:700;color:#16a34a;cursor:pointer">✅ Refacción pedida</button>'
+    +'<button type="button" onclick="_stockMinPosponer(\''+r.id+'\',7)" style="flex:1;min-width:95px;padding:8px 6px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:11.5px;font-weight:700;color:#2563eb;cursor:pointer">📅 Recordar en 7 días</button>'
+    +'<button type="button" onclick="_stockMinPosponer(\''+r.id+'\',1)" style="flex:1;min-width:95px;padding:8px 6px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:11.5px;font-weight:700;color:#b45309;cursor:pointer">⏰ Recordar en 24 hrs</button>'
+    +'</div></div>';
+}
+
+function _stockMinPosponer(refId,dias){
+  var proxAviso=new Date(Date.now()+dias*86400000).toISOString();
+  fetch(SUPA_URL+'/rest/v1/refacciones?id=eq.'+refId,{
+    method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({alerta_prox_aviso:proxAviso})
+  }).catch(function(){});
+  var fila=document.getElementById('stock-min-row-'+refId);
+  if(fila) fila.remove();
+  var lista=document.getElementById('stock-min-lista');
+  if(lista&&!lista.children.length){
+    var m=document.getElementById('modal-stock-minimo');
+    if(m) m.remove();
+  }
+}
+
 // Cuenta, dentro de [fechaInicio, fechaFin], cuántos días tienen un turno de
 // trabajo real (1/2/3/M) según el horario ya capturado del colaborador. Un
 // descanso (D) o un día sin horario capturado NUNCA cuenta — así nunca se
@@ -25463,8 +25572,8 @@ function _renderFormAnom(){
       '<label class="form-label">📅 Fecha y hora del trabajo</label>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">'
       +'<input type="date" class="form-control" id="anom-fecha" value="'+(pmState.fechaTrabajo||todayStr())+'" max="'+todayStr()+'">'
-      +'<input type="time" class="form-control" id="anom-ini" placeholder="Inicio" value="'+(pmState.horaInicioTrabajo||'')+'">'
-      +'<input type="time" class="form-control" id="anom-fin" placeholder="Fin" value="'+(pmState.horaFinTrabajo||'')+'">'
+      +'<input type="time" lang="en-GB" class="form-control" id="anom-ini" placeholder="Inicio" value="'+(pmState.horaInicioTrabajo||'')+'">'
+      +'<input type="time" lang="en-GB" class="form-control" id="anom-fin" placeholder="Fin" value="'+(pmState.horaFinTrabajo||'')+'">'
       +'</div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">'
       +'<button class="btn btn-primary" onclick="guardarAnomUnico(false)">📋 Guardar Abierta</button>'
@@ -25668,15 +25777,15 @@ function _renderContrasenas(lDiv){
         +'<table style="width:100%;border-collapse:collapse;font-size:13px">'
         +'<thead><tr style="background:#1a3c5e;color:#fff">'
         +'<th style="padding:10px 12px;text-align:left;border-radius:8px 0 0 0">Equipo</th>'
-        +'<th style="padding:10px 12px;text-align:left">Usuario</th>'
+        +'<th style="padding:10px 12px;text-align:left;max-width:90px">Usuario</th>'
         +'<th style="padding:10px 12px;text-align:left">Contraseña</th>'
         +(esAdmin?'<th style="padding:10px 12px;border-radius:0 8px 0 0"></th>':'')
         +'</tr></thead><tbody>'
         +lista.map(function(r,i){
           return '<tr style="background:'+(i%2===0?'#fff':'#f9fafb')+';border-bottom:1px solid #e5e7eb">'
             +'<td style="padding:10px 12px;font-weight:700">'+r.equipo+'</td>'
-            +'<td style="padding:10px 12px">'+r.usuario+'</td>'
-            +'<td style="padding:10px 12px;font-family:monospace">'+r.contrasena+'</td>'
+            +'<td style="padding:10px 12px;max-width:90px;word-break:break-word">'+r.usuario+'</td>'
+            +'<td style="padding:10px 12px;font-family:monospace;word-break:break-word">'+r.contrasena+'</td>'
             +(esAdmin?'<td style="padding:8px"><button onclick="eliminarContrasena(\''+r.id+'\')" style="background:#fef2f2;color:#7f1d1d;border:none;border-radius:6px;padding:4px 10px;cursor:pointer;font-size:.78rem">🗑️</button></td>':'')
             +'</tr>';
         }).join('')
@@ -27130,6 +27239,10 @@ function _standbyUsarEn(standbyId,refaccionId,nombre,cantidad,modo,inputId,contI
     var cb=document.getElementById('cierre-uso-refacciones');
     if(cb&&!cb.checked){cb.checked=true;toggleCierreRefacciones(true);}
     cierreRefAgregarConValor(nombre,cantidad);
+  } else if(modo==='lista_res'){
+    var cbR=document.getElementById('res-cb-ref');
+    if(cbR&&!cbR.checked){cbR.checked=true;resToggleRef(true);}
+    resRefAgregarConValor(nombre,cantidad);
   }
   _standbyDisponiblesHtml(contId,modo,inputId); // refresca quitando la que ya se usó
 }
@@ -27792,6 +27905,9 @@ function confirmarResolucion_temp(){
     pmState.limpiezaFirmaImg='';
   }
   window._resLimp=null;
+  var _resCbT=document.getElementById('res-cb-ref');
+  if(_resCbT&&_resCbT.checked) pmState.refaccionesUsadas=resGetRefs();
+  else pmState.refaccionesUsadas=[];
   guardarRessueltaTemporalmente();
 }
 
@@ -29059,6 +29175,35 @@ function renderPanelCargaTecnicos(){
 // ================================================================
 // RESUMEN DE OTs POR TÉCNICO — Consultar OT
 // ================================================================
+// Suma las horas de un conjunto de órdenes SIN contar dos veces el tiempo en
+// que dos (o más) de ellas se traslapan — p.ej. un técnico que levantó dos PMs
+// "simultáneas" con el mismo horario de inicio/fin. Las que sí traen fecha +
+// hora de inicio/fin válidas se funden como intervalos de tiempo real; las que
+// no (solo capturaron horasCierre a mano, sin horario) se siguen sumando tal
+// cual como antes, para no cambiar su comportamiento.
+function _horasSinTraslape(ordenes){
+  var conHorario=[], sinHorario=0;
+  (ordenes||[]).forEach(function(o){
+    if(o.fechaTrabajo && o.horaInicioTrabajo && o.horaFinTrabajo){
+      var dur=diffMin(o.horaInicioTrabajo,o.horaFinTrabajo);
+      if(dur>0){
+        var ini=new Date(o.fechaTrabajo+'T'+o.horaInicioTrabajo+':00').getTime();
+        if(!isNaN(ini)){ conHorario.push({ini:ini,fin:ini+dur*60000}); return; }
+      }
+    }
+    sinHorario += parseFloat(o.horasCierre)||0;
+  });
+  if(!conHorario.length) return sinHorario;
+  conHorario.sort(function(a,b){return a.ini-b.ini;});
+  var totalMs=0, curIni=conHorario[0].ini, curFin=conHorario[0].fin;
+  for(var i=1;i<conHorario.length;i++){
+    var iv=conHorario[i];
+    if(iv.ini<=curFin){ if(iv.fin>curFin) curFin=iv.fin; }
+    else { totalMs+=(curFin-curIni); curIni=iv.ini; curFin=iv.fin; }
+  }
+  totalMs+=(curFin-curIni);
+  return sinHorario + (totalMs/3600000);
+}
 function renderResumenTecnicosOT(){
   var cont = document.getElementById('resumen-tecnicos-ot');
   if(!cont) return;
@@ -29187,17 +29332,10 @@ function renderResumenTecnicosOT(){
     var _normPO=normNombre(o.tecnicoNombre);
     pm02AbiertasPorTec[_normPO]=(pm02AbiertasPorTec[_normPO]||0)+1;
   });
-  // Tiempo de checklists (Inspección de Turno, Arranque/Paro de Servicios, Chiller, etc.)
-  INSPECCIONES.forEach(function(insp){
-    if(insp.estado!=='cerrada') return;
-    var tsIni = insp.tsInicio || insp.ts_inicio;
-    var tsFin = insp.tsCierre || insp.ts_cierre;
-    if(!tsIni || !tsFin) return;
-    if(fechasPeriodo.indexOf(fechaLocal(tsFin))<0) return;
-    var dur = (tsFin - tsIni)/3600000;
-    if(!(dur>0)) return;
-    _sumaHorasExtra(insp.tecnicoNombre || insp.tecnico_nombre || insp.tecnico, Math.min(dur,1));
-  });
+  // NOTA: el tiempo de los checklists ya NO se suma aparte aquí — cada checklist genera
+  // su propia PM02 con hora de inicio/fin real (topada a 1h, ver _crearOTInspeccionTurno),
+  // que ya cuenta igual que cualquier otra orden más arriba (vía _horasSinTraslape).
+  // Sumarlo aquí también lo duplicaría.
   // Tiempo de llenado del registro de agua
   AGUA_LECTURAS.forEach(function(l){
     if(!(l.tiempo_llenado_hrs>0) || !l.capturado_por) return;
@@ -29291,12 +29429,10 @@ function renderResumenTecnicosOT(){
     var pm03 = mis.filter(function(o){ return o.tipo==='PM03'; }).length;
     var pm04 = mis.filter(function(o){ return o.tipo==='PM04'; }).length;
     var total = mis.length;
-    var horas = mis.reduce(function(acc,o){
-      // Los de varios días ya se reparten por día arriba (horasExtraPorTec) — no sumar
-      // aquí también su horasCierre completo, para no duplicarlo.
-      if(o.trabajoDias && o.trabajoDias.length) return acc;
-      return acc+(parseFloat(o.horasCierre)||0);
-    },0);
+    // Los de varios días ya se reparten por día arriba (horasExtraPorTec) — no sumar
+    // aquí también su horasCierre completo, para no duplicarlo.
+    var misParaHoras = mis.filter(function(o){ return !(o.trabajoDias && o.trabajoDias.length); });
+    var horas = _horasSinTraslape(misParaHoras);
     horas += horasExtraPorTec[normN] || 0;
     var pm02Abiertas = pm02AbiertasPorTec[normN] || 0;
     var pm03Abiertas = Object.keys(pm03AbiertasPorTec[normN]||{}).length;
