@@ -307,6 +307,13 @@ function getTurno(){
 function showAlert(msg,tipo='success'){const el=document.getElementById('global-alert');el.textContent=msg;el.className='alert alert-'+tipo;el.classList.remove('hidden');setTimeout(()=>el.classList.add('hidden'),3000);}
 function cerrarModal(id){document.getElementById(id).classList.add('hidden');}
 function showModal(id){document.getElementById(id).classList.remove('hidden');}
+// Cancelar el cierre genérico (modal-cierre): además de cerrar el modal, libera
+// cualquier refacción del Almacén Virtual que se haya marcado "Usar aquí" en este
+// intento, para que no se quede atorada sin poder usarse en otra orden.
+function _cancelarModalCierre(){
+  if(typeof _standbyLiberarTodos==='function') _standbyLiberarTodos();
+  cerrarModal('modal-cierre');
+}
 
 // ===== Reordenar arrastrando (mouse y touch) — genérico, usado en listas del admin y en editor de checklists =====
 var _dragReorder = null;
@@ -396,6 +403,13 @@ function showScreen(id){
   // de contenido en la misma pantalla "brinque" al usuario a otra posición).
   var prev=document.querySelector('.screen.active');
   if(prev&&prev.id===id) return;
+  // Si había refacciones del Almacén Virtual marcadas "Usar aquí" en un cierre que
+  // nunca se guardó, al cambiar de verdad de pantalla se liberan de vuelta — si el
+  // cierre sí se guardó, _standbyFinalizarUsados ya las vació antes de llegar aquí,
+  // así que este reset no afecta nada en ese caso (ver _standbyLiberarTodos).
+  if(typeof _standbyLiberarTodos==='function' && window._standbyAUsar && window._standbyAUsar.length){
+    _standbyLiberarTodos();
+  }
   // Guardar scroll de pantalla activa antes de cambiar. Lo que realmente se
   // desplaza en esta app es la página completa (window) — el div interno
   // .scroll-content nunca llega a desbordarse con el layout actual — así que
@@ -486,6 +500,7 @@ function renderMenu(){
   setTimeout(actualizarBadgesAdmin, 100);
   setTimeout(actualizarAlertaVacaciones, 100);
   setTimeout(verificarAlertaStockMinimo, 100);
+  setTimeout(verificarAlertaStandby24h, 100);
   if(!currentUser)return;
   const roles={admin:'Administrador',tecnico:'Técnico',operador:'Operador',lider:'Líder Área',super:'⚡ Super Usuario'};
   var _rolMostrar=rolEsCustom(currentUser.rol)?nombreRolCustom(currentUser.rol):roles[currentUser.rol];
@@ -1622,8 +1637,16 @@ function cierreRefAgregar(){
 }
 function cierreRefQuitar(btn){
   var rows=document.querySelectorAll('.cierre-ref-row');
+  var row=btn.parentElement;
+  // Si esta fila vino del Almacén Virtual ("Usar aquí"), liberarla de vuelta para
+  // que reaparezca como disponible — antes se quedaba "atorada" aunque se borrara.
+  if(row.dataset.standbyId){
+    _standbyLiberar(row.dataset.standbyId);
+    delete row.dataset.standbyId;
+    _standbyDisponiblesHtml('cierre-ref-standby','lista',null);
+  }
   if(rows.length<=1){btn.previousElementSibling.value='';return;}
-  btn.parentElement.remove();
+  row.remove();
 }
 function cierreRefReset(){
   var lista=document.getElementById('cierre-ref-lista');
@@ -4909,6 +4932,13 @@ function resRefAgregar(){
 function resRefQuitar(btn){
   var row=btn.parentElement;
   var lista=row.parentElement;
+  // Si esta fila vino del Almacén Virtual ("Usar aquí"), liberarla de vuelta para
+  // que reaparezca como disponible — antes se quedaba "atorada" aunque se borrara.
+  if(row.dataset.standbyId){
+    _standbyLiberar(row.dataset.standbyId);
+    delete row.dataset.standbyId;
+    _standbyDisponiblesHtml('res-ref-standby','lista_res',null);
+  }
   if(lista.querySelectorAll('div').length<=1){row.querySelector('input').value='';return;}
   row.remove();
 }
@@ -18252,6 +18282,7 @@ async function mejKPIBuscar(){
 function abrirEditarOTAdmin(id){
   var o = ORDENES.find(function(x){return x.id===id;});
   if(!o) return;
+  window._eotIdActual = id;
   var modal = document.createElement('div');
   modal.id = 'modal-edit-ot-admin';
   modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
@@ -18273,13 +18304,31 @@ function abrirEditarOTAdmin(id){
       return '<button id="eot-btn-'+t+'" onclick="eotSetTipo(\''+t+'\')" style="padding:12px;border-radius:10px;border:2px solid '+(sel?'#2563eb':'#d1d5db')+';background:'+(sel?'#dbeafe':'#fff')+';font-weight:700;font-size:.9rem;cursor:pointer">'+t+'</button>';
     }).join('')
     +'</div></div>'
+    // Refacciones usadas — permite, al editar una orden ya cerrada, agregar piezas que
+    // estén en el Almacén Virtual del técnico de la orden y que por error no se hayan
+    // consumido al cerrarla (a petición de Jorge).
+    +'<div style="margin-bottom:16px"><label style="font-size:.75rem;font-weight:700;color:#374151;text-transform:uppercase;display:block;margin-bottom:6px">Refacciones usadas</label>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:8px">Ya registradas: '+(o.refaccionesUsadas||'—')+'</div>'
+    +'<div id="eot-ref-standby" style="margin-bottom:6px"></div>'
+    +'<div id="eot-ref-lista"></div>'
+    +'<button type="button" onclick="eotRefAgregar()" style="margin-top:4px;padding:8px 12px;background:#f3f4f6;border:none;border-radius:8px;font-size:12px;font-weight:700;color:#374151;cursor:pointer">+ Agregar refacción</button>'
+    +'</div>'
     +'<div style="display:flex;gap:10px">'
-    +'<button onclick="document.getElementById(\'modal-edit-ot-admin\').remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;font-size:.95rem;font-weight:600;cursor:pointer">Cancelar</button>'
+    +'<button onclick="_cancelarEditarOTAdmin()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;font-size:.95rem;font-weight:600;cursor:pointer">Cancelar</button>'
     +'<button onclick="guardarEdicionOTAdmin(\''+id+'\')" style="flex:1;padding:13px;background:#7c3aed;color:#fff;border:none;border-radius:11px;font-size:.95rem;font-weight:700;cursor:pointer">💾 Guardar</button>'
     +'</div></div>';
   document.body.appendChild(modal);
   window._eotEstado = o.estado;
   window._eotTipo   = o.tipo;
+  eotRefReset();
+  if(o.tecnicoAsignado) _standbyDisponiblesHtml('eot-ref-standby','lista_eot',null,o.tecnicoAsignado);
+}
+
+// Cancelar la edición: además de cerrar el modal, libera cualquier refacción del
+// Almacén Virtual que se haya marcado "Usar aquí" en este intento (ver _standbyLiberarTodos).
+function _cancelarEditarOTAdmin(){
+  if(typeof _standbyLiberarTodos==='function') _standbyLiberarTodos();
+  var m=document.getElementById('modal-edit-ot-admin'); if(m) m.remove();
 }
 
 function eotSetEstado(val){
@@ -18300,6 +18349,55 @@ function eotSetTipo(val){
   });
 }
 
+// ── Refacciones del modal "Editar Orden" (admin) — mismo patrón que cierre-ref-* ──
+function eotRefReset(){
+  var lista=document.getElementById('eot-ref-lista');
+  if(lista) lista.innerHTML='';
+}
+function eotRefAgregar(){
+  var lista=document.getElementById('eot-ref-lista');
+  if(!lista) return;
+  var row=document.createElement('div');
+  row.className='eot-ref-row';
+  row.style.cssText='display:flex;gap:6px;margin-bottom:6px';
+  row.innerHTML='<input type="text" class="form-control eot-ref-input" placeholder="Ej: Sello mecánico, empaque..." style="flex:1;font-size:13px"><input type="number" class="form-control eot-ref-cant" placeholder="Cant." min="1" style="width:64px;font-size:13px"><button type="button" onclick="eotRefQuitar(this)" style="padding:6px 10px;background:#fee2e2;border:none;border-radius:8px;color:#dc2626;font-size:14px;cursor:pointer">✕</button>';
+  lista.appendChild(row);
+  row.querySelector('input').focus();
+}
+function eotRefQuitar(btn){
+  var row=btn.parentElement;
+  // Si esta fila vino del Almacén Virtual ("Usar aquí"), liberarla de vuelta.
+  if(row.dataset.standbyId){
+    _standbyLiberar(row.dataset.standbyId);
+    delete row.dataset.standbyId;
+    var o=ORDENES.find(function(x){return x.id===window._eotIdActual;});
+    if(o&&o.tecnicoAsignado) _standbyDisponiblesHtml('eot-ref-standby','lista_eot',null,o.tecnicoAsignado);
+  }
+  row.remove();
+}
+function eotRefAgregarConValor(nombre,cantidad){
+  var lista=document.getElementById('eot-ref-lista');
+  if(!lista) return;
+  eotRefAgregar();
+  var filas=lista.querySelectorAll('.eot-ref-row');
+  var ultima=filas[filas.length-1];
+  if(!ultima) return;
+  var inpF=ultima.querySelector('.eot-ref-input'), cantF=ultima.querySelector('.eot-ref-cant');
+  if(inpF) inpF.value=nombre;
+  if(cantF) cantF.value=cantidad;
+}
+function getEotRefacciones(){
+  var rows=document.querySelectorAll('.eot-ref-row');
+  var refs=[];
+  rows.forEach(function(row){
+    var inp=row.querySelector('.eot-ref-input');
+    var cant=row.querySelector('.eot-ref-cant');
+    var v=inp?inp.value.trim():'';
+    if(v) refs.push({nombre:v,cantidad:parseFloat(cant&&cant.value)||1,standbyId:row.dataset.standbyId||null});
+  });
+  return refs;
+}
+
 function guardarEdicionOTAdmin(id){
   var o = ORDENES.find(function(x){return x.id===id;});
   if(!o) return;
@@ -18308,6 +18406,24 @@ function guardarEdicionOTAdmin(id){
   var cambios = [];
   if(nuevoEstado !== o.estado){ cambios.push('Estado: '+o.estado+' → '+nuevoEstado); o.estado=nuevoEstado; if(nuevoEstado==='cerrada'&&!o.cerradaTs){o.cerradaTs=Date.now();o.cerradaPor=currentUser.nombre;} if(nuevoEstado==='abierta'){o.cerradaTs=null;o.cerradaPor='';} }
   if(nuevoTipo !== o.tipo){ cambios.push('Tipo: '+o.tipo+' → '+nuevoTipo); o.tipo=nuevoTipo; }
+  // Refacciones agregadas en esta edición (típicamente jaladas del Almacén Virtual) —
+  // se suman a las ya registradas, sin reemplazarlas.
+  var nuevasRefs=getEotRefacciones();
+  if(nuevasRefs.length){
+    var nombresNuevos=nuevasRefs.map(function(r){return r.nombre;}).join(', ');
+    o.refaccionesUsadas=o.refaccionesUsadas?(o.refaccionesUsadas+', '+nombresNuevos):nombresNuevos;
+    cambios.push('Refacciones agregadas: '+nombresNuevos);
+    CONSUMO_REF=CONSUMO_REF||[];
+    nuevasRefs.forEach(function(ref,ri){
+      var consumoRow={id:'CONS-'+Date.now()+'-'+ri,ts:Date.now(),ot_id:id,linea:o.linea||'',area:o.area||'',tecnico:o.tecnicoNombre||currentUser.nombre,refacciones:ref.nombre,nombre:ref.nombre,cantidad:ref.cantidad||1,estado:'levantada',semana:currentWeek(),anio:currentYear()};
+      CONSUMO_REF.push(consumoRow);
+      saveDB('consumo_ref',CONSUMO_REF);
+      supaFetch('consumo_refacciones','POST',consumoRow,'').catch(function(){});
+    });
+    // Finaliza (marca 'consumida') las que vinieron del Almacén Virtual, igual que en
+    // cualquier otro cierre — las escritas a mano no están en _standbyAUsar y no les afecta.
+    _standbyFinalizarUsados(id);
+  }
   if(!cambios.length){ document.getElementById('modal-edit-ot-admin').remove(); return; }
   if(!o.historialModificacion) o.historialModificacion=[];
   o.historialModificacion.push({ts:Date.now(),por:nombreEfectivo(),campo:'Admin Edit',de:'—',a:cambios.join(' | ')});
@@ -24033,6 +24149,69 @@ function _stockMinPosponer(refId,dias){
   }
 }
 
+// ── ALERTA DE REFACCIONES ATORADAS EN ALMACÉN VIRTUAL (>24 hrs sin usar) — admin/super ──
+// A petición de Jorge: si una pieza lleva más de 24 hrs tomada por escaneo y sin
+// consumirse en ninguna orden, avisar a los admins para que revisen por qué no se usó.
+function verificarAlertaStandby24h(){
+  if(!currentUser) return;
+  if(currentUser.rol!=='admin'&&currentUser.rol!=='super') return;
+  if(document.getElementById('modal-standby-24h')) return; // ya está abierta
+  supaFetch('refacciones_standby','GET',null,'estado=eq.pendiente').then(function(rows){
+    var ahora=Date.now();
+    var vencidas=(rows||[]).filter(function(s){
+      var horas=s.created_at?(ahora-new Date(s.created_at).getTime())/3600000:0;
+      if(horas<=24) return false;
+      if(s.alerta_prox_aviso && new Date(s.alerta_prox_aviso).getTime()>ahora) return false;
+      return true;
+    });
+    if(!vencidas.length) return;
+    supaFetch('refacciones','GET',null,'select=id,nombre').then(function(refs){
+      var refMap={};(refs||[]).forEach(function(r){refMap[r.id]=r;});
+      _mostrarModalStandby24h(vencidas,refMap);
+    });
+  }).catch(function(){});
+}
+
+function _mostrarModalStandby24h(items,refMap){
+  var m=document.createElement('div');
+  m.id='modal-standby-24h';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end;justify-content:center;overflow-y:auto';
+  m.innerHTML='<div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;max-height:88vh;overflow-y:auto;box-sizing:border-box">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#b45309;margin-bottom:4px">🗄️ Refacciones sin usar en Almacén Virtual</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:14px">'+items.length+' pieza(s) llevan más de 24 hrs tomadas y sin consumirse en ninguna orden — revisa si de verdad se usaron</div>'
+    +'<div id="standby24h-lista">'+items.map(function(s){return _standby24hItemHTML(s,refMap);}).join('')+'</div>'
+    +'<button type="button" onclick="document.getElementById(\'modal-standby-24h\').remove()" style="width:100%;margin-top:4px;padding:12px;background:#f3f4f6;border:none;border-radius:10px;font-weight:700;cursor:pointer">Cerrar</button>'
+    +'</div>';
+  document.body.appendChild(m);
+}
+
+function _standby24hItemHTML(s,refMap){
+  var ref=refMap[s.refaccion_id]||{};
+  var horas=s.created_at?Math.round((Date.now()-new Date(s.created_at).getTime())/3600000):0;
+  return '<div class="card" id="standby24h-row-'+s.id+'" style="border-left:4px solid #b45309;padding:12px;margin-bottom:10px">'
+    +'<div style="font-weight:700;font-size:14px">'+(ref.nombre||s.refaccion_id)+'</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:8px">Tomada por <b>'+(s.tecnico_nombre||'—')+'</b> · hace '+horas+' hrs · cantidad: <b>'+s.cantidad+'</b></div>'
+    +'<div style="display:flex;gap:6px;flex-wrap:wrap">'
+    +'<button type="button" onclick="_standby24hPosponer(\''+s.id+'\',1)" style="flex:1;min-width:95px;padding:8px 6px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;font-size:11.5px;font-weight:700;color:#b45309;cursor:pointer">⏰ Recordar en 24 hrs</button>'
+    +'<button type="button" onclick="_standby24hPosponer(\''+s.id+'\',7)" style="flex:1;min-width:95px;padding:8px 6px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;font-size:11.5px;font-weight:700;color:#2563eb;cursor:pointer">📅 Recordar en 7 días</button>'
+    +'</div></div>';
+}
+
+function _standby24hPosponer(standbyId,dias){
+  var proxAviso=new Date(Date.now()+dias*86400000).toISOString();
+  fetch(SUPA_URL+'/rest/v1/refacciones_standby?id=eq.'+standbyId,{
+    method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({alerta_prox_aviso:proxAviso})
+  }).catch(function(){});
+  var fila=document.getElementById('standby24h-row-'+standbyId);
+  if(fila) fila.remove();
+  var lista=document.getElementById('standby24h-lista');
+  if(lista&&!lista.children.length){
+    var m=document.getElementById('modal-standby-24h');
+    if(m) m.remove();
+  }
+}
+
 // Cuenta, dentro de [fechaInicio, fechaFin], cuántos días tienen un turno de
 // trabajo real (1/2/3/M) según el horario ya capturado del colaborador. Un
 // descanso (D) o un día sin horario capturado NUNCA cuenta — así nunca se
@@ -27177,6 +27356,7 @@ function _aeb_tomarDesdeBusqueda(itemId,refaccionId,refNombre,cantidadDisponible
 // ── ALMACÉN VIRTUAL (refacciones en standby, pendientes de usar) ──
 function _renderAlmacenVirtualRef(cont){
   cont.innerHTML='<div style="text-align:center;padding:20px;color:#9ca3af">Cargando...</div>';
+  var esAdmin=currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super');
   supaFetch('refacciones_standby','GET',null,'estado=eq.pendiente&order=created_at.desc').then(function(rows){
     if(!rows||!rows.length){
       cont.innerHTML='<div class="card text-center" style="padding:40px"><div style="font-size:48px">🗄️</div><div style="font-weight:700;margin-top:12px">Almacén Virtual vacío</div><div style="font-size:13px;color:var(--txt3);margin-top:6px">Aquí aparecen las piezas tomadas por escaneo, en espera de usarse en una orden de trabajo</div></div>';
@@ -27187,12 +27367,83 @@ function _renderAlmacenVirtualRef(cont){
       cont.innerHTML=rows.map(function(s){
         var ref=refMap[s.refaccion_id]||{};
         var fecha=s.created_at?new Date(s.created_at).toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';
-        return '<div class="card" style="padding:12px;margin-bottom:8px;border-left:4px solid #b45309">'
+        var horasPendiente=s.created_at?(Date.now()-new Date(s.created_at).getTime())/3600000:0;
+        var vencida=horasPendiente>24;
+        // Puede regresarla a su origen el técnico que la tomó, o un admin/super —
+        // a petición de Jorge, por si por error nunca se llegó a usar.
+        var puedeRegresar=esAdmin||(currentUser&&s.tecnico_id===currentUser.id);
+        return '<div class="card" style="padding:12px;margin-bottom:8px;border-left:4px solid '+(vencida?'#dc2626':'#b45309')+'">'
           +'<div style="font-weight:700;font-size:14px">'+(ref.nombre||s.refaccion_id)+'</div>'
           +'<div style="font-size:12px;color:#6b7280;margin-top:2px">Cantidad en standby: <b>'+s.cantidad+'</b></div>'
           +'<div style="font-size:11px;color:#6b7280;margin-top:2px">Tomada por '+(s.tecnico_nombre||'—')+' · '+fecha+'</div>'
+          +(vencida?'<div style="font-size:11px;color:#dc2626;font-weight:700;margin-top:4px">⏰ Pendiente hace más de 24 hrs</div>':'')
+          +(puedeRegresar?'<div style="margin-top:8px"><button type="button" onclick="_standbyRegresarOrigen(\''+s.id+'\')" style="padding:7px 12px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#7f1d1d;font-size:11.5px;font-weight:700;cursor:pointer">↩️ Regresar a su origen (no se usó)</button></div>':'')
           +'</div>';
       }).join('');
+    });
+  });
+}
+
+// Revierte una pieza del Almacén Virtual que nunca se llegó a usar: la regresa a su
+// ubicación/caja de origen y a la existencia general, y la marca 'regresada' para que
+// deje de contar como pendiente. Puede hacerlo el técnico que la tomó o un admin/super
+// (ver _renderAlmacenVirtualRef) — a petición de Jorge.
+function _standbyRegresarOrigen(standbyId){
+  if(!confirm('¿Regresar esta pieza a su ubicación de origen? Úsalo solo si de verdad no se consumió en ninguna orden.')) return;
+  supaFetch('refacciones_standby','GET',null,'id=eq.'+standbyId).then(function(rows){
+    var s=rows&&rows[0];
+    if(!s){showAlert('No se encontró ese registro','error');return;}
+    var esAdmin=currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super');
+    if(!esAdmin&&s.tecnico_id!==currentUser.id){showAlert('Solo quien la tomó o un admin puede regresarla','error');return;}
+    var pasos=[];
+    // 1) Regresar la cantidad a su renglón de caja de origen, si todavía existe
+    if(s.item_contenido_id){
+      pasos.push(
+        supaFetch('almacen_caja_contenido','GET',null,'id=eq.'+s.item_contenido_id).then(function(itemRows){
+          var item=itemRows&&itemRows[0];
+          if(!item) return null;
+          return fetch(SUPA_URL+'/rest/v1/almacen_caja_contenido?id=eq.'+s.item_contenido_id,{
+            method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+            body:JSON.stringify({cantidad:(item.cantidad||0)+s.cantidad})
+          });
+        })
+      );
+    }
+    // 2) Regresar a la existencia general de la refacción, con su movimiento de entrada
+    pasos.push(
+      supaFetch('refacciones','GET',null,'id=eq.'+s.refaccion_id).then(function(refRows){
+        var ref=refRows&&refRows[0];
+        var stockActual=(ref&&ref.cantidad)||0;
+        var nuevoStock=stockActual+s.cantidad;
+        return fetch(SUPA_URL+'/rest/v1/refacciones?id=eq.'+s.refaccion_id,{
+          method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+          body:JSON.stringify({cantidad:nuevoStock,updated_at:new Date().toISOString()})
+        }).then(function(){
+          return fetch(SUPA_URL+'/rest/v1/refacciones_movimientos',{
+            method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+            body:JSON.stringify({
+              refaccion_id:s.refaccion_id,tipo:'entrada',cantidad:s.cantidad,
+              cantidad_anterior:stockActual,cantidad_nueva:nuevoStock,
+              usuario_id:currentUser.id,usuario_nombre:currentUser.nombre,
+              orden_id:null,nota:'Regresada del Almacén Virtual a su ubicación (no se usó) — tomada por '+(s.tecnico_nombre||'—')
+            })
+          });
+        });
+      })
+    );
+    // 3) Marcar el registro de standby como 'regresada' para que deje de verse pendiente
+    pasos.push(
+      fetch(SUPA_URL+'/rest/v1/refacciones_standby?id=eq.'+standbyId,{
+        method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+        body:JSON.stringify({estado:'regresada'})
+      })
+    );
+    Promise.all(pasos).then(function(){
+      showAlert('✅ Pieza regresada a su origen');
+      var contEl=document.getElementById('ref-content');
+      if(contEl) _renderAlmacenVirtualRef(contEl);
+    }).catch(function(){
+      showAlert('⚠️ Hubo un problema al regresarla, revisa Supabase','error');
     });
   });
 }
@@ -27202,29 +27453,33 @@ function _renderAlmacenVirtualRef(cont){
 // genérico PM01/02/04, pre-cierre, cierre PM03) ────────────────────────
 window._standbyAUsar = window._standbyAUsar || [];
 
-function _standbyDisponiblesHtml(contId,modo,inputId){
-  // modo: 'texto' (un solo input de texto) | 'lista' (filas dinámicas cierre-ref-row)
-  return supaFetch('refacciones_standby','GET',null,'estado=eq.pendiente&tecnico_id=eq.'+currentUser.id).then(function(rows){
+function _standbyDisponiblesHtml(contId,modo,inputId,tecnicoId){
+  // modo: 'texto' (un solo input de texto) | 'lista' (filas dinámicas cierre-ref-row) |
+  // 'lista_res' (Resuelta al Momento/Temporal) | 'lista_eot' (editar una orden ya cerrada,
+  // vía admin — ahí tecnicoId es el técnico DUEÑO de la orden, no necesariamente quien
+  // está editando).
+  var tecId=tecnicoId||(currentUser&&currentUser.id);
+  return supaFetch('refacciones_standby','GET',null,'estado=eq.pendiente&tecnico_id=eq.'+tecId).then(function(rows){
     rows=(rows||[]).filter(function(r){return !window._standbyAUsar.some(function(u){return u.id===r.id;});});
     var cont=document.getElementById(contId);
     if(!cont) return;
     if(!rows.length){cont.innerHTML='';return;}
     supaFetch('refacciones','GET',null,'select=id,nombre').then(function(refs){
       var refMap={};(refs||[]).forEach(function(r){refMap[r.id]=r;});
-      cont.innerHTML='<div style="font-size:.72rem;font-weight:700;color:#b45309;margin-bottom:6px">📦 Tienes en tu Almacén Virtual:</div>'
+      cont.innerHTML='<div style="font-size:.72rem;font-weight:700;color:#b45309;margin-bottom:6px">📦 '+(tecnicoId?'Tiene':'Tienes')+' en su Almacén Virtual:</div>'
         +rows.map(function(r){
           var nombre=(refMap[r.refaccion_id]||{}).nombre||r.refaccion_id;
           var nombreEsc=String(nombre).replace(/'/g,"\\'");
           return '<div style="display:flex;align-items:center;gap:8px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:7px 10px;margin-bottom:6px">'
             +'<div style="flex:1;font-size:12px;color:#92400e">'+nombre+' · <b>'+r.cantidad+'</b> pza(s)</div>'
-            +'<button type="button" class="btn btn-outline" style="padding:5px 10px;font-size:11px;white-space:nowrap" onclick="_standbyUsarEn(\''+r.id+'\',\''+r.refaccion_id+'\',\''+nombreEsc+'\','+r.cantidad+',\''+modo+'\',\''+(inputId||'')+'\',\''+contId+'\')">✅ Usar aquí</button>'
+            +'<button type="button" class="btn btn-outline" style="padding:5px 10px;font-size:11px;white-space:nowrap" onclick="_standbyUsarEn(\''+r.id+'\',\''+r.refaccion_id+'\',\''+nombreEsc+'\','+r.cantidad+',\''+modo+'\',\''+(inputId||'')+'\',\''+contId+'\',\''+tecId+'\')">✅ Usar aquí</button>'
             +'</div>';
         }).join('');
     });
   });
 }
 
-function _standbyUsarEn(standbyId,refaccionId,nombre,cantidad,modo,inputId,contId){
+function _standbyUsarEn(standbyId,refaccionId,nombre,cantidad,modo,inputId,contId,tecnicoId){
   window._standbyAUsar.push({id:standbyId,refaccion_id:refaccionId,nombre:nombre,cantidad:cantidad});
   if(modo==='texto'){
     var inp=document.getElementById(inputId);
@@ -27239,12 +27494,44 @@ function _standbyUsarEn(standbyId,refaccionId,nombre,cantidad,modo,inputId,contI
     var cb=document.getElementById('cierre-uso-refacciones');
     if(cb&&!cb.checked){cb.checked=true;toggleCierreRefacciones(true);}
     cierreRefAgregarConValor(nombre,cantidad);
+    // Marcar la fila recién creada con el id del Almacén Virtual del que vino,
+    // para poder liberarla de vuelta si se borra con "✕" (ver cierreRefQuitar).
+    var _listaL=document.getElementById('cierre-ref-lista');
+    var _filasL=_listaL?_listaL.querySelectorAll('.cierre-ref-row'):[];
+    var _ultimaL=_filasL[_filasL.length-1];
+    if(_ultimaL) _ultimaL.dataset.standbyId=standbyId;
   } else if(modo==='lista_res'){
     var cbR=document.getElementById('res-cb-ref');
     if(cbR&&!cbR.checked){cbR.checked=true;resToggleRef(true);}
     resRefAgregarConValor(nombre,cantidad);
+    // Igual que en 'lista': marcar la fila con el id del Almacén Virtual (ver resRefQuitar).
+    var _listaR=document.getElementById('res-ref-lista');
+    var _filasR=_listaR?_listaR.querySelectorAll(':scope > div'):[];
+    var _ultimaR=_filasR[_filasR.length-1];
+    if(_ultimaR) _ultimaR.dataset.standbyId=standbyId;
+  } else if(modo==='lista_eot'){
+    eotRefAgregarConValor(nombre,cantidad);
+    var _listaE=document.getElementById('eot-ref-lista');
+    var _filasE=_listaE?_listaE.querySelectorAll('.eot-ref-row'):[];
+    var _ultimaE=_filasE[_filasE.length-1];
+    if(_ultimaE) _ultimaE.dataset.standbyId=standbyId;
   }
-  _standbyDisponiblesHtml(contId,modo,inputId); // refresca quitando la que ya se usó
+  _standbyDisponiblesHtml(contId,modo,inputId,tecnicoId); // refresca quitando la que ya se usó
+}
+
+// Quita del arreglo en memoria una pieza que se había marcado "Usar aquí" (sin tocar
+// Supabase: el stock ya se descontó al tomarla por escaneo, y aquí no se llegó a
+// guardar ningún consumo) — para que vuelva a aparecer como disponible.
+function _standbyLiberar(standbyId){
+  if(!standbyId) return;
+  window._standbyAUsar=(window._standbyAUsar||[]).filter(function(u){return u.id!==standbyId;});
+}
+
+// Libera TODO lo que se haya marcado "Usar aquí" y no se haya guardado todavía — se
+// llama al cambiar de pantalla (ver showScreen) para que un cierre abandonado a medias
+// no deje piezas "atoradas" sin poder usarse en ninguna otra orden.
+function _standbyLiberarTodos(){
+  window._standbyAUsar=[];
 }
 
 // Agrega una fila al cierre-ref-lista (modal-cierre genérico) ya con valores,
