@@ -1453,7 +1453,7 @@ function _renderDetalleOrden(id,o){
   if(o.foto && !o.fotoVistaTs && o.tecnicoAsignado && o.tecnicoAsignado===currentUser.id){
     o.fotoVistaTs=Date.now();
     saveDB('ordenes',ORDENES);
-    fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+o.id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({foto_vista_ts:o.fotoVistaTs})}).catch(function(){});
+    fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+o.id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({foto_vista_ts:o.fotoVistaTs})}).catch(function(){});
   }
   // Determinar si la PM02 roja fue levantada por operador/lider (requiere aprobación)
   const esAnomOperador = o.tipo==='PM02' &&
@@ -2591,7 +2591,7 @@ function confirmarReprogramarDesdeDetalle(id){
   // un refresh sin respaldo local.)
   fetch(SUPA_URL+'/rest/v1/pm03_plan?id=eq.'+id,{
     method:'PATCH',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
     body:JSON.stringify({semana:p.semana,estado:'abierta',nota_reprogramacion:nota,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null})
   }).catch(function(){savePM03Supa(p);});
   // Cerrar modal y regresar a la lista
@@ -5245,7 +5245,7 @@ function eliminarOT(id){
   const idx=ORDENES.findIndex(x=>x.id===id);
   if(idx>=0) ORDENES.splice(idx,1);
   saveDB('ordenes',ORDENES);
-  fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+id,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}}).catch(function(){});
+  fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+id,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader()}}).catch(function(){});
   showAlert('Orden eliminada','warning');
   filtrarOrdenes();
   renderResumenConsulta();
@@ -5939,7 +5939,35 @@ function _supaAuthStartAutoRefresh(){
   _supaRefreshInterval=setInterval(supaAuthRefresh,45*60*1000); // antes de que expire (~1h)
 }
 
-function supaFetch(t,m,b,p){var url=SUPA_URL+'/rest/v1/'+t+(p?'?'+p:'');var headers={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Accept':'application/json'};if(m==='POST')headers['Prefer']='resolution=merge-duplicates,return=representation';var o={method:m||'GET',headers:headers};if(b)o.body=JSON.stringify(b);return fetch(url,o).then(function(r){
+// Fase C: header Authorization "inteligente" -- usa el token real de sesion
+// si existe y no esta por vencer (30s de margen), si no cae de vuelta a la
+// llave publica (igual que se comportaba toda la app antes de la Fase C).
+function supaAuthHeader(){
+  if(supaSession&&supaSession.access_token&&supaSession.expires_at&&supaSession.expires_at>Date.now()+30000){
+    return 'Bearer '+supaSession.access_token;
+  }
+  return 'Bearer '+SUPA_KEY;
+}
+// true si la peticion esta a punto de usar el token real (para saber si vale
+// la pena reintentar con la llave publica en caso de 401)
+function _supaUsandoTokenReal(){
+  return !!(supaSession&&supaSession.access_token&&supaSession.expires_at&&supaSession.expires_at>Date.now()+30000);
+}
+
+function supaFetch(t,m,b,p){var url=SUPA_URL+'/rest/v1/'+t+(p?'?'+p:'');var usandoToken=_supaUsandoTokenReal();var headers={'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Accept':'application/json'};if(m==='POST')headers['Prefer']='resolution=merge-duplicates,return=representation';var o={method:m||'GET',headers:headers};if(b)o.body=JSON.stringify(b);return fetch(url,o).then(function(r){
+  if(r.status===401&&usandoToken){
+    // El token real fallo (vencido/revocado) -- reintenta una vez con la llave
+    // publica, igual que funcionaba antes de la Fase C. Mientras RLS siga
+    // desactivado esto nunca deberia fallar tampoco.
+    console.warn('supaFetch ['+t+']: token real dio 401, reintentando con llave publica');
+    var headers2={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Accept':'application/json'};
+    if(m==='POST')headers2['Prefer']='resolution=merge-duplicates,return=representation';
+    var o2={method:m||'GET',headers:headers2};if(b)o2.body=JSON.stringify(b);
+    return fetch(url,o2).then(function(r2){return _supaFetchHandleResponse(r2,t);});
+  }
+  return _supaFetchHandleResponse(r,t);
+}).catch(function(e){console.error('supaFetch catch:',e);return null;});}
+function _supaFetchHandleResponse(r,t){
   if(!r.ok){return r.text().then(function(txt){console.error('supaFetch error ['+t+']:',txt);return null;});}
   // PATCH/DELETE normalmente responden 204 sin cuerpo — antes se intentaba leer ese
   // cuerpo vacío como JSON, lo cual truena y caía al catch de abajo, reportando un
@@ -5951,25 +5979,37 @@ function supaFetch(t,m,b,p){var url=SUPA_URL+'/rest/v1/'+t+(p?'?'+p:'');var head
     if(!txt) return true;
     try{ return JSON.parse(txt); }catch(e){ return true; }
   });
-}).catch(function(e){console.error('supaFetch catch:',e);return null;});}
+}
 function supaUpsert(t,b){
   window._supaUpsert=supaUpsert;
+  var usandoToken=_supaUsandoTokenReal();
   return fetch(SUPA_URL+'/rest/v1/'+t,{
     method:'POST',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
     body:JSON.stringify(b)
   }).then(function(r){
-    if(!r.ok){
-      return r.text().then(function(txt){
-        console.error('supaUpsert ERROR ['+t+']:', txt.substring(0,200));
-        return null;
-      });
+    if(r.status===401&&usandoToken){
+      console.warn('supaUpsert ['+t+']: token real dio 401, reintentando con llave publica');
+      return fetch(SUPA_URL+'/rest/v1/'+t,{
+        method:'POST',
+        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
+        body:JSON.stringify(b)
+      }).then(function(r2){return _supaUpsertHandleResponse(t,r2);});
     }
-    return r.json();
+    return _supaUpsertHandleResponse(t,r);
   }).catch(function(e){
     console.error('supaUpsert CATCH ['+t+']:', e.message);
     return null;
   });
+}
+function _supaUpsertHandleResponse(t,r){
+  if(!r.ok){
+    return r.text().then(function(txt){
+      console.error('supaUpsert ERROR ['+t+']:', txt.substring(0,200));
+      return null;
+    });
+  }
+  return r.json();
 }
 
 
@@ -5989,7 +6029,7 @@ function _limpiarFotosAntiguas(){
   });
   ordenesConFoto.forEach(function(o){
     o.foto=null;
-    fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+o.id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},body:JSON.stringify({foto:null})}).catch(function(){});
+    fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+o.id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},body:JSON.stringify({foto:null})}).catch(function(){});
   });
   if(ordenesConFoto.length>0){saveDB('ordenes',ORDENES);console.log('[FOTOS] Limpiadas '+ordenesConFoto.length+' fotos');}
   var pm3ConFoto=PM03_PLAN.filter(function(p){
@@ -5997,7 +6037,7 @@ function _limpiarFotosAntiguas(){
   });
   pm3ConFoto.forEach(function(p){
     p.fotos=[];
-    fetch(SUPA_URL+'/rest/v1/pm03_plan?id=eq.'+p.id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},body:JSON.stringify({fotos:null})}).catch(function(){});
+    fetch(SUPA_URL+'/rest/v1/pm03_plan?id=eq.'+p.id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},body:JSON.stringify({fotos:null})}).catch(function(){});
   });
   if(pm3ConFoto.length>0){saveDB('pm03_plan',PM03_PLAN);}
 
@@ -6009,7 +6049,7 @@ function _limpiarFotosAntiguas(){
   });
   ordenesConFotoVista.forEach(function(o){
     o.foto=null;
-    fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+o.id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},body:JSON.stringify({foto:null})}).catch(function(){});
+    fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+o.id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},body:JSON.stringify({foto:null})}).catch(function(){});
   });
   if(ordenesConFotoVista.length>0){saveDB('ordenes',ORDENES);console.log('[FOTOS] Limpiadas (1 mes desde vista técnico) '+ordenesConFotoVista.length+' fotos');}
 }
@@ -6060,7 +6100,7 @@ function _escalarCorreccionesTemporales(){
       // PATCH directo a Supabase
       fetch(SUPA_URL+'/rest/v1/pm03_plan?id=eq.'+p.id,{
         method:'PATCH',
-        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+        headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
         body:JSON.stringify({
           prioridad:'A',
           semana:p.semana,
@@ -6462,7 +6502,7 @@ function saveOrdenSupa(o){
     method: 'POST',
     headers: {
       'apikey': SUPA_KEY,
-      'Authorization': 'Bearer '+SUPA_KEY,
+      'Authorization': supaAuthHeader(),
       'Content-Type': 'application/json',
       'Prefer': 'resolution=merge-duplicates,return=representation'
     },
@@ -6503,7 +6543,7 @@ function reintentarOrdenesSync(){
 }
 setTimeout(reintentarOrdenesSync, 5000);
 function savePM03Supa(p){supaUpsert('pm03_plan',{id:p.id,linea:p.linea,componente:p.componente||null,actividad:p.actividad,area:p.area||null,semana:p.semana,anio:p.año||2026,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null,estado:p.estado||'abierta',prioridad:p.prioridad||null,fuente_excel:p.fuenteExcel||false,horas_cierre:p.horasCierre||0,observaciones_cierre:p.observacionesCierre||null,cerrada_ts:p.cerradaTs||null,cerrada_por:p.cerradaPor||null,generado_por:p.generadoPor||null,origen_ot:p.origenOT||null,ts:p.ts||Date.now(),liberado_por:p.liberadoPor||null,liberado_ts:p.liberadoTs||null,estado_calidad:p.estadoCalidad||null,rechazo_calidad:p.rechazoCalidad||null,actividades_estado:p.actividadesEstado?JSON.stringify(p.actividadesEstado):null,refacciones_usadas:p.refaccionesUsadas||null,herramienta_ingresada:p.herramientaIngresada||null,herramienta_salida:p.herramientaSalida||null,grasa_aceite:p.grasaAceite||null,limpieza_mtto:typeof p.limpiezaMtto==='boolean'?p.limpiezaMtto:null,desinf_produccion:typeof p.desinfProduccion==='boolean'?p.desinfProduccion:null,firma_tecnico:p.firmaTecnico||null,firma_tecnico_ts:p.firmaTecnicoTs||null,comentarios_actividades:p.comentariosActividades?JSON.stringify(p.comentariosActividades):null,liberado_prod_por:p.liberadoProdPor||null,liberado_prod_ts:p.liberadoProdTs||null,liberado_admin_por:p.liberadoAdminPor||null,liberado_admin_ts:p.liberadoAdminTs||null,estado_flujo:p.estadoFlujo||'ejecucion',comentario_firma_calidad:p.comentarioFirmaCalidad||null,comentario_firma_prod:p.comentarioFirmaProd||null,comentario_firma_admin:p.comentarioFirmaAdmin||null,fotos:p.fotos&&p.fotos.length?JSON.stringify(p.fotos):null,firma_img_operador:p.firmaImgOperador||null,firma_nombre_operador:p.firmaNombreOperador||null,firma_ts_operador:p.firmaTsOperador||null,firma_img_lider:p.firmaImgLider||null,firma_nombre_lider:p.firmaNombreLider||null,firma_ts_lider:p.firmaTsLider||null,firma_img_calidad:p.firmaImgCalidad||null,firma_nombre_calidad:p.firmaNombreCalidad||null,firma_ts_calidad:p.firmaTsCalidad||null,firma_img_admin:p.firmaImgAdmin||null,firma_nombre_admin:p.firmaNombreAdmin||null,firma_ts_admin:p.firmaTsAdmin||null}).catch(function(){});}
-function deleteOrdenSupa(id){fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+id,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}}).catch(function(){});}
+function deleteOrdenSupa(id){fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+id,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader()}}).catch(function(){});}
 
 // PM03 Excel Plan
 
@@ -8436,7 +8476,7 @@ async function mejAbrirDetalle(m){
     try{
       var fotoUrl = SUPA_URL+'/rest/v1/mejoras?select=foto_antes,foto_despues&id=eq.'+m.id;
       var fotoResp = await fetch(fotoUrl,{headers:{
-        'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Accept':'application/json'
+        'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Accept':'application/json'
       }});
       if(fotoResp.ok){
         var fotoData = await fotoResp.json();
@@ -8796,7 +8836,7 @@ function mejKPIDescargaPDF(){
     var r = rows[idx];
     if(!r.foto_antes && !r.foto_despues && r.id){
       fetch(SUPA_URL+'/rest/v1/mejoras?select=foto_antes,foto_despues&id=eq.'+r.id,{
-        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Accept':'application/json'}
+        headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Accept':'application/json'}
       }).then(function(fr){ return fr.ok?fr.json():null; })
       .then(function(fd){ if(fd&&fd[0]){rows[idx].foto_antes=fd[0].foto_antes;rows[idx].foto_despues=fd[0].foto_despues;} idx++; cargarSiguiente(); })
       .catch(function(){ idx++; cargarSiguiente(); });
@@ -9726,7 +9766,7 @@ function supabaseStatePatch(id, fields){
     method: 'PATCH',
     headers: {
       'apikey': SUPA_KEY,
-      'Authorization': 'Bearer '+SUPA_KEY,
+      'Authorization': supaAuthHeader(),
       'Content-Type': 'application/json',
       'Prefer': 'return=minimal'
     },
@@ -9749,10 +9789,10 @@ function saveHistorialSupa(ordenId, campo, de, a){
   var entry={orden_id:ordenId,ts:Date.now(),por:currentUser?currentUser.nombre:'Sistema',campo:campo,de:String(de||''),a:String(a||'').substring(0,200)};
   var o=ORDENES.find(function(x){return x.id===ordenId;});
   if(o){if(!o.historialModificacion)o.historialModificacion=[];o.historialModificacion.push(entry);saveDB('ordenes',ORDENES);}
-  fetch(SUPA_URL+'/rest/v1/historial_ordenes',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(entry)}).then(function(r){if(!r.ok)r.text().then(function(t){console.error('historial error:',t);});}).catch(function(e){console.error('historial catch:',e.message);});
+  fetch(SUPA_URL+'/rest/v1/historial_ordenes',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(entry)}).then(function(r){if(!r.ok)r.text().then(function(t){console.error('historial error:',t);});}).catch(function(e){console.error('historial catch:',e.message);});
 }
 async function loadHistorialSupa(ordenId){
-  var r=await fetch(SUPA_URL+'/rest/v1/historial_ordenes?orden_id=eq.'+ordenId+'&order=ts.asc',{headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Accept':'application/json'}});
+  var r=await fetch(SUPA_URL+'/rest/v1/historial_ordenes?orden_id=eq.'+ordenId+'&order=ts.asc',{headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Accept':'application/json'}});
   if(!r.ok)return [];
   return await r.json();
 }
@@ -9796,8 +9836,8 @@ function superEliminarOT(id){
   ORDENES=ORDENES.filter(function(x){return x.id!==id;});saveDB('ordenes',ORDENES);
   var deleted=loadDB('ordenes_eliminadas',[]);if(deleted.indexOf(id)<0){deleted.push(id);saveDB('ordenes_eliminadas',deleted);}
   var q=loadDB('supa_retry_queue',[]);saveDB('supa_retry_queue',q.filter(function(x){return x.id!==id;}));
-  fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+id,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'}}).then(function(r){if(r.ok){showAlert('🗑️ Orden '+id+' eliminada');}else{r.text().then(function(t){showAlert('⚠️ Error: '+t.substring(0,60),'error');});}});
-  fetch(SUPA_URL+'/rest/v1/historial_ordenes?orden_id=eq.'+id,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}});
+  fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+id,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Prefer':'return=minimal'}}).then(function(r){if(r.ok){showAlert('🗑️ Orden '+id+' eliminada');}else{r.text().then(function(t){showAlert('⚠️ Error: '+t.substring(0,60),'error');});}});
+  fetch(SUPA_URL+'/rest/v1/historial_ordenes?orden_id=eq.'+id,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader()}});
   var prev=detalleBackScreen||'screen-ordenes';showScreen(prev);
 }
 function buildSuperEditFields(o){
@@ -10301,7 +10341,7 @@ function superEliminarPM03(id){
   // Eliminar de Supabase
   fetch(SUPA_URL+'/rest/v1/pm03_plan?id=eq.'+id,{
     method:'DELETE',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'}
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Prefer':'return=minimal'}
   }).then(function(r){
     if(r.ok) console.log('PM03 '+id+' eliminada de Supabase');
     else r.text().then(function(t){console.error('Error:',t);});
@@ -10842,7 +10882,7 @@ function guardarProtocolo(id){
 
   var url=SUPA_URL+'/rest/v1/protocolos_pm03';
   var method='POST';
-  var headers={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'};
+  var headers={'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'};
 
   if(id){
     url=SUPA_URL+'/rest/v1/protocolos_pm03?id=eq.'+id;
@@ -10865,7 +10905,7 @@ function guardarProtocolo(id){
 function toggleProtocolo(id, activo){
   fetch(SUPA_URL+'/rest/v1/protocolos_pm03?id=eq.'+id,{
     method:'PATCH',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
     body:JSON.stringify({activo:activo})
   }).then(function(){showAdminProtocolos();});
 }
@@ -10944,7 +10984,7 @@ function confirmarReprogramar(id){
   // PATCH directo para asegurar estado='reprogramada' en Supabase
   fetch(SUPA_URL+'/rest/v1/pm03_plan?id=eq.'+id,{
     method:'PATCH',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
     body:JSON.stringify({estado:'reprogramada',reprogramada_a:newId,nota_reprogramacion:nota})
   }).then(function(){savePM03Supa(nueva);}).catch(function(){savePM03Supa(p);savePM03Supa(nueva);});
   var m=document.getElementById('modal-reprog-pm3');if(m)m.remove();
@@ -11349,7 +11389,7 @@ function guardarProveedor(id){
   var payload={nombre:nombre,contactos:contacts,actividades:acts,notas:notas,activo:true};
   var url=SUPA_URL+'/rest/v1/proveedores';
   var method='POST';
-  var headers={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'};
+  var headers={'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'};
   if(id){url+='?id=eq.'+id;method='PATCH';}
   fetch(url,{method:method,headers:headers,body:JSON.stringify(payload)}).then(function(r){
     if(r.ok){var m=document.getElementById('modal-editor-prov');if(m)m.remove();showAlert('✅ Proveedor guardado');showProveedores();}
@@ -12123,7 +12163,7 @@ function guardarEmpleado(id){
   var url=SUPA_URL+'/rest/v1/empleados';
   var method='POST';
   if(id){url+='?id=eq.'+id;method='PATCH';}
-  fetch(url,{method:method,headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
+  fetch(url,{method:method,headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
     .then(function(r){
       if(r.ok){var m=document.getElementById('modal-editor-emp');if(m)m.remove();showAlert('✅ Empleado guardado');showGestionPersonal();}
       else r.text().then(function(t){showAlert('⚠️ Error: '+t.substring(0,80),'error');});
@@ -12132,7 +12172,7 @@ function guardarEmpleado(id){
 
 function bajaEmpleado(id){
   if(!confirm('¿Dar de baja a este empleado? Conservará su historial.')) return;
-  fetch(SUPA_URL+'/rest/v1/empleados?id=eq.'+id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},body:JSON.stringify({activo:false})})
+  fetch(SUPA_URL+'/rest/v1/empleados?id=eq.'+id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},body:JSON.stringify({activo:false})})
     .then(function(){showAlert('✅ Empleado dado de baja');showGestionPersonal();});
 }
 
@@ -12344,7 +12384,7 @@ function guardarHorarioEmp(empId,mes,año){
   var payload={empleado_id:empId,mes:mes,anio:año,turno_inicio:turno,dia_descanso:descanso};
   fetch(SUPA_URL+'/rest/v1/horarios_empleado',{
     method:'POST',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
     body:JSON.stringify(payload)
   }).then(function(r){
     if(r.ok){var m=document.getElementById('modal-horario-emp');if(m)m.remove();showAlert('✅ Horario guardado');_renderHorarios(document.getElementById('personal-content'));}
@@ -12443,7 +12483,7 @@ function guardarAjusteVacaciones(empId,año){
   var tom=parseInt(document.getElementById('ajvac-tom').value)||0;
   fetch(SUPA_URL+'/rest/v1/vacaciones',{
     method:'POST',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
     body:JSON.stringify({empleado_id:empId,año:año,dias_correspondientes:corr,dias_tomados:tom})
   }).then(function(r){
     if(r.ok){var m=document.getElementById('modal-ajuste-vac');if(m)m.remove();showAlert('✅ Vacaciones ajustadas');_renderVacaciones(document.getElementById('personal-content'));}
@@ -12483,7 +12523,7 @@ function guardarVacaciones(empId,año){
   // Upsert vacaciones del año
   fetch(SUPA_URL+'/rest/v1/vacaciones',{
     method:'POST',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
     body:JSON.stringify({empleado_id:empId,año:año,dias_correspondientes:corr,dias_tomados:tomar,fecha_inicio:inicio||null,fecha_fin:fin||null})
   }).then(function(r){
     if(r.ok){var m=document.getElementById('modal-vac');if(m)m.remove();showAlert('✅ Vacaciones guardadas');_renderVacaciones(document.getElementById('personal-content'));}
@@ -12594,7 +12634,7 @@ function guardarIncidencia(){
   };
   fetch(SUPA_URL+'/rest/v1/incidencias',{
     method:'POST',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'},
     body:JSON.stringify(payload)
   }).then(function(r){
     if(r.ok){var m=document.getElementById('modal-incidencia');if(m)m.remove();showAlert('✅ Incidencia registrada');_renderIncidencias(document.getElementById('personal-content'));}
@@ -12641,7 +12681,7 @@ async function verificarBitacora(){
   _impLog('Consultando Supabase...','#1a3c5e');
   try{
     var r=await fetch(SUPA_URL+'/rest/v1/ordenes?fuente_bitacora=eq.true&select=id',{
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Accept':'application/json','Range':'0-999'}
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Accept':'application/json','Range':'0-999'}
     });
     var data=await r.json();
     if(Array.isArray(data)){
@@ -12668,7 +12708,7 @@ async function ejecutarImportarBitacora(){
     try{
       var r=await fetch(SUPA_URL+'/rest/v1/ordenes',{
         method:'POST',
-        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+        headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
         body:JSON.stringify(lote)
       });
       if(r.ok||r.status===201||r.status===200||r.status===204){ok+=lote.length;}
@@ -12689,7 +12729,7 @@ async function borrarBitacoraSuper(){
   _impLog('Eliminando...','#dc2626');
   var r=await fetch(SUPA_URL+'/rest/v1/ordenes?fuente_bitacora=eq.true',{
     method:'DELETE',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'}
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Prefer':'return=minimal'}
   });
   if(r.ok){_impLog('✅ Eliminadas.','#16a34a');document.getElementById('btn-imp-borrar').style.display='none';}
   else _impLog('Error: '+r.status,'#dc2626');
@@ -12720,7 +12760,7 @@ async function actualizarTecnicosLineas(){
     try{
       var r=await fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+u.id,{
         method:'PATCH',
-        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+        headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
         body:JSON.stringify(body)
       });
       if(r.ok||r.status===204) ok++;
@@ -13040,7 +13080,7 @@ async function shoCerrarComentario(id){
   try{
     var res=await fetch(SUPA_URL+'/rest/v1/sho_comentarios?id=eq.'+id,{
       method:'PATCH',
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify({cerrado:true,cerrado_por:nombreEfectivo(),cerrado_ts:Date.now()})
     });
     if(res.ok){renderSHO();showAlert('✅ Comentario cerrado');}
@@ -13275,7 +13315,7 @@ async function importarEmpleadosArchivo(){
       if(e.usuario_id) payload.usuario_id=e.usuario_id;
       var r2=await fetch(SUPA_URL+'/rest/v1/empleados',{
         method:'POST',
-        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+        headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
         body:JSON.stringify(payload)
       });
       if(r2.ok||r2.status===201||r2.status===204){ok++;}else{
@@ -13305,20 +13345,20 @@ async function importarHorariosExcel(){
     // Intentar PATCH primero
     var patchR=await fetch(SUPA_URL+'/rest/v1/horarios_empleado?empleado_id=eq.'+datos[i].empleado_id+'&mes=eq.'+datos[i].mes+'&anio=eq.'+datos[i].anio,{
       method:'PATCH',
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify({dias_config:datos[i].dias_config,turno_inicio:datos[i].turno_inicio})
     });
     if(patchR.ok||patchR.status===204){
       // Verificar si actualizó algo
       var chkR=await fetch(SUPA_URL+'/rest/v1/horarios_empleado?empleado_id=eq.'+datos[i].empleado_id+'&mes=eq.'+datos[i].mes+'&anio=eq.'+datos[i].anio+'&select=id',{
-        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Accept':'application/json'}
+        headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Accept':'application/json'}
       });
       var existing=await chkR.json();
       if(!existing||!existing.length){
         // No existe, insertar
         var r2=await fetch(SUPA_URL+'/rest/v1/horarios_empleado',{
           method:'POST',
-          headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+          headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
           body:JSON.stringify(datos[i])
         });
         if(r2.ok||r2.status===201||r2.status===204){ok++;}else{fail++;var t=await r2.text();console.error('Error horario',datos[i].empleado_id,t.substring(0,80));}
@@ -13675,7 +13715,7 @@ async function guardarContrasena(){
   if(!eq||!us||!pw){showAlert('Completa todos los campos','error');return;}
   var r=await fetch(SUPA_URL+'/rest/v1/contrasenas_equipo',{
     method:'POST',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
     body:JSON.stringify({equipo:eq,usuario:us,contrasena:pw})
   });
   if(r.ok||r.status===201||r.status===204){
@@ -13691,7 +13731,7 @@ async function eliminarContrasena(id){
   if(!confirm('¿Eliminar esta contraseña?'))return;
   var r=await fetch(SUPA_URL+'/rest/v1/contrasenas_equipo?id=eq.'+id,{
     method:'DELETE',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'}
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Prefer':'return=minimal'}
   });
   if(r.ok||r.status===204){
     showAlert('Eliminada');
@@ -13920,14 +13960,14 @@ function confirmarDescuento(id,stockActual){
   // Actualizar stock
   fetch(SUPA_URL+'/rest/v1/refacciones?id=eq.'+id,{
     method:'PATCH',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
     body:JSON.stringify({cantidad:nuevaCant,updated_at:new Date().toISOString()})
   }).then(function(r){
     if(!r.ok){r.text().then(function(t){showAlert('Error: '+t.substring(0,80),'error');});return;}
     // Registrar movimiento
     fetch(SUPA_URL+'/rest/v1/refacciones_movimientos',{
       method:'POST',
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
       body:JSON.stringify({
         refaccion_id:id,tipo:'salida',cantidad:cant,
         cantidad_anterior:stockActual,cantidad_nueva:nuevaCant,
@@ -13967,13 +14007,13 @@ function confirmarEntrada(id,stockActual){
   var nuevaCant=stockActual+cant;
   fetch(SUPA_URL+'/rest/v1/refacciones?id=eq.'+id,{
     method:'PATCH',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
     body:JSON.stringify({cantidad:nuevaCant,updated_at:new Date().toISOString()})
   }).then(function(r){
     if(!r.ok) return;
     fetch(SUPA_URL+'/rest/v1/refacciones_movimientos',{
       method:'POST',
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
       body:JSON.stringify({
         refaccion_id:id,tipo:'entrada',cantidad:cant,
         cantidad_anterior:stockActual,cantidad_nueva:nuevaCant,
@@ -14125,7 +14165,7 @@ function guardarRefaccion(id){
   if(!id) payload.id=gen_id();
   var url=SUPA_URL+'/rest/v1/refacciones'+(id?'?id=eq.'+id:'');
   var method=id?'PATCH':'POST';
-  fetch(url,{method:method,headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
+  fetch(url,{method:method,headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
     .then(function(r){
       if(r.ok){showAlert('✅ Refacción guardada');_refTab='catalogo';_renderRefTabs();}
       else r.text().then(function(t){showAlert('⚠️ '+t.substring(0,80),'error');});
@@ -14136,7 +14176,7 @@ function eliminarRef(id){
   if(!confirm('¿Eliminar esta refacción? Se conservarán sus movimientos.')) return;
   fetch(SUPA_URL+'/rest/v1/refacciones?id=eq.'+id,{
     method:'PATCH',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
     body:JSON.stringify({activo:false})
   }).then(function(){showAlert('✅ Refacción eliminada');_refTab='catalogo';_renderRefTabs();});
 }
@@ -14890,7 +14930,7 @@ function saveOrdenSupa(o){
     method: 'POST',
     headers: {
       'apikey': SUPA_KEY,
-      'Authorization': 'Bearer '+SUPA_KEY,
+      'Authorization': supaAuthHeader(),
       'Content-Type': 'application/json',
       'Prefer': 'resolution=merge-duplicates,return=representation'
     },
@@ -15046,7 +15086,7 @@ function syncAguaSupa(row){
     }
   });
 }
-function deleteOrdenSupa(id){fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+id,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}}).catch(function(){});}
+function deleteOrdenSupa(id){fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+id,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader()}}).catch(function(){});}
 
 // PM03 Excel Plan
 
@@ -16157,7 +16197,7 @@ function guardarPlanPreventivoConProtocolo(activoId,protocoloIdExistente,modo){
   var payload={linea:linea,equipo:equipo,equipo_secundario:equipo2,codigo:codigo,actividades:acts,activo:true};
   var url=SUPA_URL+'/rest/v1/protocolos_pm03';
   var method='POST';
-  var headers={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'};
+  var headers={'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'};
   if(modo==='combinar'&&protocoloIdExistente){
     url=SUPA_URL+'/rest/v1/protocolos_pm03?id=eq.'+protocoloIdExistente;
     method='PATCH';
@@ -16169,7 +16209,7 @@ function guardarPlanPreventivoConProtocolo(activoId,protocoloIdExistente,modo){
     if(modo==='nuevo'&&protocoloIdExistente){
       fetch(SUPA_URL+'/rest/v1/protocolos_pm03?id=eq.'+protocoloIdExistente,{
         method:'PATCH',
-        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+        headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
         body:JSON.stringify({activo:false})
       }).catch(function(){});
     }
@@ -18192,7 +18232,7 @@ async function mejAbrirDetalle(m){
     try{
       var fotoUrl = SUPA_URL+'/rest/v1/mejoras?select=foto_antes,foto_despues&id=eq.'+m.id;
       var fotoResp = await fetch(fotoUrl,{headers:{
-        'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Accept':'application/json'
+        'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Accept':'application/json'
       }});
       if(fotoResp.ok){
         var fotoData = await fotoResp.json();
@@ -18638,7 +18678,7 @@ function mejKPIDescargaPDF(){
     var r = rows[idx];
     if(!r.foto_antes && !r.foto_despues && r.id){
       fetch(SUPA_URL+'/rest/v1/mejoras?select=foto_antes,foto_despues&id=eq.'+r.id,{
-        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Accept':'application/json'}
+        headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Accept':'application/json'}
       }).then(function(fr){ return fr.ok?fr.json():null; })
       .then(function(fd){ if(fd&&fd[0]){rows[idx].foto_antes=fd[0].foto_antes;rows[idx].foto_despues=fd[0].foto_despues;} idx++; cargarSiguiente(); })
       .catch(function(){ idx++; cargarSiguiente(); });
@@ -19007,7 +19047,7 @@ function crearNuevoChecklist(){
   saveDB('chk_notif_'+id, {dor:true, buzon:true});
   _chkRebuildTipos();
   var payload = {id:id, nombre:nombre, icono:icono, color:color, puntos:'[]', activo:true, notif_dor:true, notif_buzon:true, updated_at:new Date().toISOString()};
-  fetch(SUPA_URL+'/rest/v1/checklist_config',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(payload)}).catch(function(){});
+  fetch(SUPA_URL+'/rest/v1/checklist_config',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(payload)}).catch(function(){});
   showAlert('✅ Checklist creado: '+nombre);
   showChecklistMenu();
   setTimeout(function(){ abrirEditorChecklist(id); }, 150);
@@ -19020,7 +19060,7 @@ function desactivarChecklistTipo(tipoId){
   if(t) t.activo=false;
   saveDB('chk_tipos_custom', CHECKLIST_TIPOS_CUSTOM);
   _chkRebuildTipos();
-  fetch(SUPA_URL+'/rest/v1/checklist_config?id=eq.'+tipoId,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({activo:false,updated_at:new Date().toISOString()})}).catch(function(){});
+  fetch(SUPA_URL+'/rest/v1/checklist_config?id=eq.'+tipoId,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify({activo:false,updated_at:new Date().toISOString()})}).catch(function(){});
   showAlert('🚫 Checklist desactivado');
   showChecklistMenu();
 }
@@ -19466,7 +19506,7 @@ function guardarChecklist() {
   // Liberar el progreso compartido en Supabase (ya se cerró el checklist)
   fetch(SUPA_URL+'/rest/v1/checklist_progreso?id=eq.'+encodeURIComponent(insp.tipoId||''),{
     method:'DELETE',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader()}
   }).catch(function(){});
   // Notificar si hay puntos rojos, según lo que el admin configuró para este checklist
   if(rojo>0){
@@ -19510,7 +19550,7 @@ function _chkDescartarYSalir(){
     // Liberar el progreso compartido en Supabase para que no quede colgado a nombre de nadie
     fetch(SUPA_URL+'/rest/v1/checklist_progreso?id=eq.'+encodeURIComponent(tipoId),{
       method:'DELETE',
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader()}
     }).catch(function(){});
   }
   _chkActual = null;
@@ -20247,7 +20287,7 @@ function supabaseStatePatch(id, fields){
     method: 'PATCH',
     headers: {
       'apikey': SUPA_KEY,
-      'Authorization': 'Bearer '+SUPA_KEY,
+      'Authorization': supaAuthHeader(),
       'Content-Type': 'application/json',
       'Prefer': 'return=minimal'
     },
@@ -20270,10 +20310,10 @@ function saveHistorialSupa(ordenId, campo, de, a){
   var entry={orden_id:ordenId,ts:Date.now(),por:currentUser?currentUser.nombre:'Sistema',campo:campo,de:String(de||''),a:String(a||'').substring(0,200)};
   var o=ORDENES.find(function(x){return x.id===ordenId;});
   if(o){if(!o.historialModificacion)o.historialModificacion=[];o.historialModificacion.push(entry);saveDB('ordenes',ORDENES);}
-  fetch(SUPA_URL+'/rest/v1/historial_ordenes',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(entry)}).then(function(r){if(!r.ok)r.text().then(function(t){console.error('historial error:',t);});}).catch(function(e){console.error('historial catch:',e.message);});
+  fetch(SUPA_URL+'/rest/v1/historial_ordenes',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(entry)}).then(function(r){if(!r.ok)r.text().then(function(t){console.error('historial error:',t);});}).catch(function(e){console.error('historial catch:',e.message);});
 }
 async function loadHistorialSupa(ordenId){
-  var r=await fetch(SUPA_URL+'/rest/v1/historial_ordenes?orden_id=eq.'+ordenId+'&order=ts.asc',{headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Accept':'application/json'}});
+  var r=await fetch(SUPA_URL+'/rest/v1/historial_ordenes?orden_id=eq.'+ordenId+'&order=ts.asc',{headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Accept':'application/json'}});
   if(!r.ok)return [];
   return await r.json();
 }
@@ -20322,8 +20362,8 @@ function superEliminarOT(id){
   ORDENES=ORDENES.filter(function(x){return x.id!==id;});saveDB('ordenes',ORDENES);
   var deleted=loadDB('ordenes_eliminadas',[]);if(deleted.indexOf(id)<0){deleted.push(id);saveDB('ordenes_eliminadas',deleted);}
   var q=loadDB('supa_retry_queue',[]);saveDB('supa_retry_queue',q.filter(function(x){return x.id!==id;}));
-  fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+id,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'}}).then(function(r){if(r.ok){showAlert('🗑️ Orden '+id+' eliminada');}else{r.text().then(function(t){showAlert('⚠️ Error: '+t.substring(0,60),'error');});}});
-  fetch(SUPA_URL+'/rest/v1/historial_ordenes?orden_id=eq.'+id,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}});
+  fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+id,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Prefer':'return=minimal'}}).then(function(r){if(r.ok){showAlert('🗑️ Orden '+id+' eliminada');}else{r.text().then(function(t){showAlert('⚠️ Error: '+t.substring(0,60),'error');});}});
+  fetch(SUPA_URL+'/rest/v1/historial_ordenes?orden_id=eq.'+id,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader()}});
   var prev=detalleBackScreen||'screen-ordenes';showScreen(prev);
 }
 function buildSuperEditFields(o){
@@ -20889,7 +20929,7 @@ function superEliminarPM03(id){
   // Eliminar de Supabase
   fetch(SUPA_URL+'/rest/v1/pm03_plan?id=eq.'+id,{
     method:'DELETE',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'}
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Prefer':'return=minimal'}
   }).then(function(r){
     if(r.ok) console.log('PM03 '+id+' eliminada de Supabase');
     else r.text().then(function(t){console.error('Error:',t);});
@@ -21942,7 +21982,7 @@ function _protoEliminarDesdeAccion(protoId){
   if(!confirm('¿Eliminar este protocolo? Esta acción no se puede deshacer.')) return;
   fetch(SUPA_URL+'/rest/v1/protocolos_pm03?id=eq.'+protoId,{
     method:'DELETE',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader()}
   }).then(function(r){
     var m=document.getElementById('modal-proto-acciones-pm03'); if(m) m.remove();
     if(!r.ok){ showAlert('⚠️ No se pudo eliminar el protocolo','error'); return; }
@@ -22316,7 +22356,7 @@ function guardarProtocolo(id){
 
   var url=SUPA_URL+'/rest/v1/protocolos_pm03';
   var method='POST';
-  var headers={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'};
+  var headers={'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'};
 
   if(id){
     url=SUPA_URL+'/rest/v1/protocolos_pm03?id=eq.'+id;
@@ -22340,7 +22380,7 @@ function guardarProtocolo(id){
 function toggleProtocolo(id, activo){
   fetch(SUPA_URL+'/rest/v1/protocolos_pm03?id=eq.'+id,{
     method:'PATCH',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
     body:JSON.stringify({activo:activo})
   }).then(function(){showAdminProtocolos();});
 }
@@ -22426,7 +22466,7 @@ function confirmarReprogramar(id){
   // PATCH directo para asegurar estado='reprogramada' en Supabase
   fetch(SUPA_URL+'/rest/v1/pm03_plan?id=eq.'+id,{
     method:'PATCH',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
     body:JSON.stringify({estado:'reprogramada',reprogramada_a:newId,nota_reprogramacion:nota,reprogramada_por:p.reprogramadaPor,reprogramada_ts:p.reprogramadaTs})
   }).then(function(){savePM03Supa(nueva);}).catch(function(){savePM03Supa(p);savePM03Supa(nueva);});
   var m=document.getElementById('modal-reprog-pm3');if(m)m.remove();
@@ -22595,7 +22635,7 @@ function adminEliminarPM03Confirmar(id){
   if(del.indexOf(id)<0){del.push(id);saveDB('pm03_eliminadas',del);}
   fetch(SUPA_URL+'/rest/v1/pm03_plan?id=eq.'+id,{
     method:'DELETE',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'}
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Prefer':'return=minimal'}
   }).then(function(r){
     if(r.ok) console.log('PM03 '+id+' eliminada de Supabase (admin)');
     else r.text().then(function(t){console.error('Error:',t);});
@@ -22911,7 +22951,7 @@ function guardarProveedor(id){
   var payload={nombre:nombre,contactos:contacts,actividades:acts,notas:notas,activo:true};
   var url=SUPA_URL+'/rest/v1/proveedores';
   var method='POST';
-  var headers={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'};
+  var headers={'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'};
   if(id){url+='?id=eq.'+id;method='PATCH';}
   fetch(url,{method:method,headers:headers,body:JSON.stringify(payload)}).then(function(r){
     if(r.ok){var m=document.getElementById('modal-editor-prov');if(m)m.remove();showAlert('✅ Proveedor guardado');showProveedores();}
@@ -23620,7 +23660,7 @@ function guardarEmpleado(id){
   var url=SUPA_URL+'/rest/v1/empleados';
   var method='POST';
   if(id){url+='?id=eq.'+id;method='PATCH';}
-  fetch(url,{method:method,headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
+  fetch(url,{method:method,headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
     .then(function(r){
       if(r.ok){var m=document.getElementById('modal-editor-emp');if(m)m.remove();showAlert('✅ Empleado guardado');showGestionPersonal();}
       else r.text().then(function(t){showAlert('⚠️ Error: '+t.substring(0,80),'error');});
@@ -23629,7 +23669,7 @@ function guardarEmpleado(id){
 
 function bajaEmpleado(id){
   if(!confirm('¿Dar de baja a este empleado? Conservará su historial.')) return;
-  fetch(SUPA_URL+'/rest/v1/empleados?id=eq.'+id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},body:JSON.stringify({activo:false})})
+  fetch(SUPA_URL+'/rest/v1/empleados?id=eq.'+id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},body:JSON.stringify({activo:false})})
     .then(function(){showAlert('✅ Empleado dado de baja');showGestionPersonal();});
 }
 
@@ -23947,17 +23987,17 @@ function horGuardar(){
     var diasConfig=JSON.stringify(window._horData[empId]||{});
     fetch(SUPA_URL+'/rest/v1/horarios_empleado?empleado_id=eq.'+empId+'&mes=eq.'+mes+'&anio=eq.'+anio,{
       method:'PATCH',
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify({dias_config:diasConfig})
     }).then(function(patchR){
       if(!(patchR.ok||patchR.status===204)) return false;
       return fetch(SUPA_URL+'/rest/v1/horarios_empleado?empleado_id=eq.'+empId+'&mes=eq.'+mes+'&anio=eq.'+anio+'&select=id',{
-        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Accept':'application/json'}
+        headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Accept':'application/json'}
       }).then(function(chkR){ return chkR.json(); }).then(function(existing){
         if(existing&&existing.length) return true;
         return fetch(SUPA_URL+'/rest/v1/horarios_empleado',{
           method:'POST',
-          headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+          headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
           body:JSON.stringify({empleado_id:empId,mes:mes,anio:anio,dias_config:diasConfig})
         }).then(function(r2){ return r2.ok||r2.status===201||r2.status===204; });
       });
@@ -24059,7 +24099,7 @@ function guardarHorarioEmp(empId,mes,año){
   var payload={empleado_id:empId,mes:mes,anio:año,turno_inicio:turno,dia_descanso:descanso};
   fetch(SUPA_URL+'/rest/v1/horarios_empleado',{
     method:'POST',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
     body:JSON.stringify(payload)
   }).then(function(r){
     if(r.ok){var m=document.getElementById('modal-horario-emp');if(m)m.remove();showAlert('✅ Horario guardado');_renderHorarios(document.getElementById('personal-content'));}
@@ -24132,7 +24172,7 @@ function _vacAsegurarPeriodos(emp,existentes){
     // primaria (id, siempre nueva) — ver misma nota histórica en guardarVacaciones.
     return fetch(SUPA_URL+'/rest/v1/vacaciones_periodos?on_conflict=empleado_id,fecha_inicio_periodo',{
       method:'POST',
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
       body:JSON.stringify(body)
     }).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
   });
@@ -24157,13 +24197,13 @@ function _vacAsegurarPeriodos(emp,existentes){
     if(!existentePreAnio){
       preAnioPromise=fetch(SUPA_URL+'/rest/v1/vacaciones_periodos?on_conflict=empleado_id,fecha_inicio_periodo',{
         method:'POST',
-        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
+        headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
         body:JSON.stringify({empleado_id:emp.id,fecha_inicio_periodo:ingresoISO,fecha_vencimiento:vencPreAnio,dias_correspondientes:mesesPreAnio,dias_tomados:0,vencida:false,dias_perdidos:0})
       }).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
     } else if(mesesPreAnio>(existentePreAnio.dias_correspondientes||0)){
       preAnioPromise=fetch(SUPA_URL+'/rest/v1/vacaciones_periodos?id=eq.'+existentePreAnio.id,{
         method:'PATCH',
-        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+        headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'},
         body:JSON.stringify({dias_correspondientes:mesesPreAnio})
       }).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
     }
@@ -24190,7 +24230,7 @@ function _vacMarcarVencidos(periodos){
     p.vencida=true; p.dias_perdidos=saldo;
     return fetch(SUPA_URL+'/rest/v1/vacaciones_periodos?id=eq.'+p.id,{
       method:'PATCH',
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify({vencida:true,dias_perdidos:saldo})
     }).catch(function(){});
   });
@@ -24276,7 +24316,7 @@ function _stockMinItemHTML(r){
 function _stockMinPosponer(refId,dias){
   var proxAviso=new Date(Date.now()+dias*86400000).toISOString();
   fetch(SUPA_URL+'/rest/v1/refacciones?id=eq.'+refId,{
-    method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+    method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
     body:JSON.stringify({alerta_prox_aviso:proxAviso})
   }).catch(function(){});
   var fila=document.getElementById('stock-min-row-'+refId);
@@ -24339,7 +24379,7 @@ function _standby24hItemHTML(s,refMap){
 function _standby24hPosponer(standbyId,dias){
   var proxAviso=new Date(Date.now()+dias*86400000).toISOString();
   fetch(SUPA_URL+'/rest/v1/refacciones_standby?id=eq.'+standbyId,{
-    method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+    method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
     body:JSON.stringify({alerta_prox_aviso:proxAviso})
   }).catch(function(){});
   var fila=document.getElementById('standby24h-row-'+standbyId);
@@ -24443,7 +24483,7 @@ function _vacAplicarDescuento(empId,dias,fechaInicio,fechaFin){
   return Promise.all(actualizaciones.map(function(u){
     return fetch(SUPA_URL+'/rest/v1/vacaciones_periodos?id=eq.'+u.id,{
       method:'PATCH',
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify({dias_tomados:u.dias_tomados})
     });
   })).then(function(resultados){
@@ -24622,7 +24662,7 @@ function guardarAjusteVacaciones(empId){
     var tom=parseInt(document.getElementById('ajvac-tom-'+i).value)||0;
     return fetch(SUPA_URL+'/rest/v1/vacaciones_periodos?id=eq.'+id,{
       method:'PATCH',
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify({dias_correspondientes:corr,dias_tomados:tom})
     });
   });
@@ -24719,7 +24759,7 @@ function enviarSolicitudVacaciones(empId){
     var body={empleado_id:empId,dias:dias,fecha_inicio:inicio,fecha_fin:fin||inicio,estado:'pendiente'};
     fetch(SUPA_URL+'/rest/v1/vacaciones_solicitudes',{
       method:'POST',
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'},
       body:JSON.stringify(body)
     }).then(function(r){return r.ok?r.json():null;}).then(function(rows){
       if(!rows||!rows[0]){ showAlert('⚠️ Ocurrió un error al enviar la solicitud','error'); return; }
@@ -24741,7 +24781,7 @@ function confirmarSolicitudVacaciones(solicitudId){
     if(!aplicado) return;
     fetch(SUPA_URL+'/rest/v1/vacaciones_solicitudes?id=eq.'+s.id,{
       method:'PATCH',
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify({estado:'confirmada',resuelto_at:new Date().toISOString()})
     }).then(function(){
       if(emp.usuario_id) crearNotificacion('vacaciones_resuelta','✅ Vacaciones aprobadas','Tu solicitud de '+s.dias+' día(s) (del '+_vacFmtFecha(s.fecha_inicio)+' al '+_vacFmtFecha(s.fecha_fin)+') fue aprobada.','tecnico',emp.usuario_id,s.id);
@@ -24774,7 +24814,7 @@ function guardarRechazoSolicitud(solicitudId){
   var motivo=((elMotivo&&elMotivo.value)||'').trim();
   fetch(SUPA_URL+'/rest/v1/vacaciones_solicitudes?id=eq.'+s.id,{
     method:'PATCH',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
     body:JSON.stringify({estado:'rechazada',comentario_rechazo:motivo||null,resuelto_at:new Date().toISOString()})
   }).then(function(){
     var m=document.getElementById('modal-rechazar-sol');if(m)m.remove();
@@ -24794,7 +24834,7 @@ function _vacNotificarCorreoAdmins(asunto,texto){
     if(!destinatarios.length) return;
     return fetch(SUPA_URL+'/functions/v1/notificar-vacaciones',{
       method:'POST',
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
       body:JSON.stringify({to:destinatarios,subject:asunto,text:texto})
     });
   }).catch(function(){});
@@ -24904,7 +24944,7 @@ function guardarIncidencia(){
   };
   fetch(SUPA_URL+'/rest/v1/incidencias',{
     method:'POST',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'},
     body:JSON.stringify(payload)
   }).then(function(r){
     if(!r.ok){ r.text().then(function(t){showAlert('⚠️ '+t.substring(0,80),'error');}); return; }
@@ -24963,7 +25003,7 @@ async function verificarBitacora(){
   _impLog('Consultando Supabase...','#1a3c5e');
   try{
     var r=await fetch(SUPA_URL+'/rest/v1/ordenes?fuente_bitacora=eq.true&select=id',{
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Accept':'application/json','Range':'0-999'}
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Accept':'application/json','Range':'0-999'}
     });
     var data=await r.json();
     if(Array.isArray(data)){
@@ -24990,7 +25030,7 @@ async function ejecutarImportarBitacora(){
     try{
       var r=await fetch(SUPA_URL+'/rest/v1/ordenes',{
         method:'POST',
-        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+        headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
         body:JSON.stringify(lote)
       });
       if(r.ok||r.status===201||r.status===200||r.status===204){ok+=lote.length;}
@@ -25011,7 +25051,7 @@ async function borrarBitacoraSuper(){
   _impLog('Eliminando...','#dc2626');
   var r=await fetch(SUPA_URL+'/rest/v1/ordenes?fuente_bitacora=eq.true',{
     method:'DELETE',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'}
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Prefer':'return=minimal'}
   });
   if(r.ok){_impLog('✅ Eliminadas.','#16a34a');document.getElementById('btn-imp-borrar').style.display='none';}
   else _impLog('Error: '+r.status,'#dc2626');
@@ -25042,7 +25082,7 @@ async function actualizarTecnicosLineas(){
     try{
       var r=await fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+u.id,{
         method:'PATCH',
-        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+        headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
         body:JSON.stringify(body)
       });
       if(r.ok||r.status===204) ok++;
@@ -25500,7 +25540,7 @@ async function shoCerrarComentario(id){
   try{
     var res=await fetch(SUPA_URL+'/rest/v1/sho_comentarios?id=eq.'+id,{
       method:'PATCH',
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify({cerrado:true,cerrado_por:nombreEfectivo(),cerrado_ts:Date.now()})
     });
     if(res.ok){renderSHO();showAlert('✅ Comentario cerrado');}
@@ -25741,7 +25781,7 @@ async function importarEmpleadosArchivo(){
       if(e.usuario_id) payload.usuario_id=e.usuario_id;
       var r2=await fetch(SUPA_URL+'/rest/v1/empleados',{
         method:'POST',
-        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+        headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
         body:JSON.stringify(payload)
       });
       if(r2.ok||r2.status===201||r2.status===204){ok++;}else{
@@ -25771,20 +25811,20 @@ async function importarHorariosExcel(){
     // Intentar PATCH primero
     var patchR=await fetch(SUPA_URL+'/rest/v1/horarios_empleado?empleado_id=eq.'+datos[i].empleado_id+'&mes=eq.'+datos[i].mes+'&anio=eq.'+datos[i].anio,{
       method:'PATCH',
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
       body:JSON.stringify({dias_config:datos[i].dias_config,turno_inicio:datos[i].turno_inicio})
     });
     if(patchR.ok||patchR.status===204){
       // Verificar si actualizó algo
       var chkR=await fetch(SUPA_URL+'/rest/v1/horarios_empleado?empleado_id=eq.'+datos[i].empleado_id+'&mes=eq.'+datos[i].mes+'&anio=eq.'+datos[i].anio+'&select=id',{
-        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Accept':'application/json'}
+        headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Accept':'application/json'}
       });
       var existing=await chkR.json();
       if(!existing||!existing.length){
         // No existe, insertar
         var r2=await fetch(SUPA_URL+'/rest/v1/horarios_empleado',{
           method:'POST',
-          headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+          headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
           body:JSON.stringify(datos[i])
         });
         if(r2.ok||r2.status===201||r2.status===204){ok++;}else{fail++;var t=await r2.text();console.error('Error horario',datos[i].empleado_id,t.substring(0,80));}
@@ -26141,7 +26181,7 @@ async function guardarContrasena(){
   if(!eq||!us||!pw){showAlert('Completa todos los campos','error');return;}
   var r=await fetch(SUPA_URL+'/rest/v1/contrasenas_equipo',{
     method:'POST',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
     body:JSON.stringify({equipo:eq,usuario:us,contrasena:pw})
   });
   if(r.ok||r.status===201||r.status===204){
@@ -26157,7 +26197,7 @@ async function eliminarContrasena(id){
   if(!confirm('¿Eliminar esta contraseña?'))return;
   var r=await fetch(SUPA_URL+'/rest/v1/contrasenas_equipo?id=eq.'+id,{
     method:'DELETE',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'}
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Prefer':'return=minimal'}
   });
   if(r.ok||r.status===204){
     showAlert('Eliminada');
@@ -26388,14 +26428,14 @@ function confirmarDescuento(id,stockActual){
   // Actualizar stock
   fetch(SUPA_URL+'/rest/v1/refacciones?id=eq.'+id,{
     method:'PATCH',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
     body:JSON.stringify({cantidad:nuevaCant,updated_at:new Date().toISOString()})
   }).then(function(r){
     if(!r.ok){r.text().then(function(t){showAlert('Error: '+t.substring(0,80),'error');});return;}
     // Registrar movimiento
     fetch(SUPA_URL+'/rest/v1/refacciones_movimientos',{
       method:'POST',
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
       body:JSON.stringify({
         refaccion_id:id,tipo:'salida',cantidad:cant,
         cantidad_anterior:stockActual,cantidad_nueva:nuevaCant,
@@ -26435,13 +26475,13 @@ function confirmarEntrada(id,stockActual){
   var nuevaCant=stockActual+cant;
   fetch(SUPA_URL+'/rest/v1/refacciones?id=eq.'+id,{
     method:'PATCH',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
     body:JSON.stringify({cantidad:nuevaCant,updated_at:new Date().toISOString()})
   }).then(function(r){
     if(!r.ok) return;
     fetch(SUPA_URL+'/rest/v1/refacciones_movimientos',{
       method:'POST',
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
       body:JSON.stringify({
         refaccion_id:id,tipo:'entrada',cantidad:cant,
         cantidad_anterior:stockActual,cantidad_nueva:nuevaCant,
@@ -26626,7 +26666,7 @@ function _refGuardarNuevoProveedor(){
   var nombre=(document.getElementById('nuevo-prov-nombre').value||'').trim();
   if(!nombre){showAlert('Escribe un nombre','error');return;}
   var payload={id:gen_id(),nombre:nombre};
-  fetch(SUPA_URL+'/rest/v1/refacciones_proveedores',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
+  fetch(SUPA_URL+'/rest/v1/refacciones_proveedores',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
     .then(function(r){
       if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});return;}
       window._refProveedoresCache=window._refProveedoresCache||[];
@@ -26712,7 +26752,7 @@ function _refGuardarNuevoTipoOCategoria(esTipo){
     showAlert('Ya existe un '+(esTipo?'tipo':'categoría')+' con ese prefijo','error');return;
   }
   var payload={id:gen_id(),nombre:nombre,prefijo:prefijo};
-  fetch(SUPA_URL+'/rest/v1/'+tabla,{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
+  fetch(SUPA_URL+'/rest/v1/'+tabla,{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
     .then(function(r){
       if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});return;}
       if(esTipo) window._refTiposCache.push(payload); else window._refCategoriasCache.push(payload);
@@ -26846,7 +26886,7 @@ function guardarRefaccion(id){
     if(!id) payload.id=gen_id();
     var url=SUPA_URL+'/rest/v1/refacciones'+(id?'?id=eq.'+id:'');
     var method=id?'PATCH':'POST';
-    fetch(url,{method:method,headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
+    fetch(url,{method:method,headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
       .then(function(r){
         if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});return;}
         r.text().then(function(t){
@@ -26881,7 +26921,7 @@ function eliminarRef(id){
   if(!confirm('¿Eliminar esta refacción? Se conservarán sus movimientos.')) return;
   fetch(SUPA_URL+'/rest/v1/refacciones?id=eq.'+id,{
     method:'PATCH',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
     body:JSON.stringify({activo:false})
   }).then(function(){showAlert('✅ Refacción eliminada');_refTab='catalogo';_renderRefTabs();});
 }
@@ -27019,7 +27059,7 @@ function _ubicGuardarAlta(nivel){
     var codigo=(padreCodigo?padreCodigo+'-':'')+prefijos[nivel]+n;
     _ubicSiguienteNumero('almacen_ubicaciones','numero').then(function(numero){
       var payload={id:gen_id(),nivel:nivel,nombre:nombre,padre_id:padreId||null,codigo:codigo,numero:numero};
-      fetch(SUPA_URL+'/rest/v1/almacen_ubicaciones',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
+      fetch(SUPA_URL+'/rest/v1/almacen_ubicaciones',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
         .then(function(r){
           if(r.ok){var m=document.getElementById('modal-ubic-alta');if(m)m.remove();showAlert('✅ '+nombre+' agregado ('+codigo+')');_renderUbicNivel();}
           else r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});
@@ -27062,7 +27102,7 @@ function _ubicGuardarAltaNivelColumna(nivel){
     }
     _ubicSiguienteNumero('almacen_ubicaciones','numero').then(function(numero){
       var payload={id:gen_id(),nivel:nivel,nombre:nombre,padre_id:padreId||null,codigo:codigo,numero:numero};
-      fetch(SUPA_URL+'/rest/v1/almacen_ubicaciones',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
+      fetch(SUPA_URL+'/rest/v1/almacen_ubicaciones',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
         .then(function(r){
           if(r.ok){var m=document.getElementById('modal-ubic-alta');if(m)m.remove();showAlert('✅ '+nombre+' agregado ('+codigo+')');_renderUbicNivel();}
           else r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});
@@ -27172,7 +27212,7 @@ function _ubicGuardarCaja(padreId,nivel){
     _ubicSiguienteNumero('almacen_ubicaciones','numero').then(function(numero){
       var cajaId=gen_id();
       var payload={id:cajaId,nivel:nivel,nombre:nombre,padre_id:padreId||null,tipo_caja:tipo,codigo:codigo,numero:numero};
-      fetch(SUPA_URL+'/rest/v1/almacen_ubicaciones',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
+      fetch(SUPA_URL+'/rest/v1/almacen_ubicaciones',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
         .then(function(r){
           if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});return;}
           _ubicGuardarContenidoCaja(cajaId,codigo,tipo,lineas,0);
@@ -27192,7 +27232,7 @@ function _ubicGuardarContenidoCaja(cajaId,cajaCodigo,tipo,lineas,i){
   var armarYGuardar=function(numeroItem){
     var codigoItem=tipo==='mixta' ? (cajaCodigo+'-I'+(i+1)) : cajaCodigo;
     var payload={id:gen_id(),caja_id:cajaId,refaccion_id:linea.refaccion_id,cantidad:linea.cantidad,codigo_item:codigoItem,numero_item:numeroItem};
-    fetch(SUPA_URL+'/rest/v1/almacen_caja_contenido',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
+    fetch(SUPA_URL+'/rest/v1/almacen_caja_contenido',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
       .then(function(){_ubicGuardarContenidoCaja(cajaId,cajaCodigo,tipo,lineas,i+1);});
   };
   if(tipo==='mixta'){
@@ -27302,14 +27342,14 @@ function _ubicConfirmarMoverAqui(){
     var cajasHermanas=(hermanos||[]).filter(function(h){return h.id!==cajaId;});
     var n=cajasHermanas.length+1;
     var nuevoCodigo=(destPadreCodigo?destPadreCodigo+'-':'')+'C'+n;
-    fetch(SUPA_URL+'/rest/v1/almacen_ubicaciones?id=eq.'+cajaId,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},body:JSON.stringify({padre_id:destPadreId||null,codigo:nuevoCodigo})})
+    fetch(SUPA_URL+'/rest/v1/almacen_ubicaciones?id=eq.'+cajaId,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},body:JSON.stringify({padre_id:destPadreId||null,codigo:nuevoCodigo})})
       .then(function(r){
         if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});return;}
         if(tipoCaja==='mixta'){
           supaFetch('almacen_caja_contenido','GET',null,'caja_id=eq.'+cajaId+'&order=codigo_item.asc').then(function(items){
             var proms=(items||[]).map(function(it,idx){
               var nuevoCodItem=nuevoCodigo+'-I'+(idx+1);
-              return fetch(SUPA_URL+'/rest/v1/almacen_caja_contenido?id=eq.'+it.id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},body:JSON.stringify({codigo_item:nuevoCodItem})});
+              return fetch(SUPA_URL+'/rest/v1/almacen_caja_contenido?id=eq.'+it.id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},body:JSON.stringify({codigo_item:nuevoCodItem})});
             });
             Promise.all(proms).then(function(){
               var m=document.getElementById('modal-ubic-mover');if(m)m.remove();
@@ -27355,7 +27395,7 @@ function _ubicConfirmarMoverBolsa(itemId){
       if(destCaja.tipo_caja==='simple'&&(itemsDestino||[]).length>=1){showAlert('Esa caja es simple y ya tiene una refacción','error');return;}
       var n=(itemsDestino||[]).length+1;
       var nuevoCodItem=destCaja.tipo_caja==='mixta'?(destCaja.codigo+'-I'+n):destCaja.codigo;
-      fetch(SUPA_URL+'/rest/v1/almacen_caja_contenido?id=eq.'+itemId,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},body:JSON.stringify({caja_id:destCaja.id,codigo_item:nuevoCodItem})})
+      fetch(SUPA_URL+'/rest/v1/almacen_caja_contenido?id=eq.'+itemId,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},body:JSON.stringify({caja_id:destCaja.id,codigo_item:nuevoCodItem})})
         .then(function(r){
           if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});return;}
           var m=document.getElementById('modal-ubic-mover-bolsa');if(m)m.remove();
@@ -27399,7 +27439,7 @@ function _ubicGuardarRefaccionACaja(cajaId,cajaCodigo,tipoCaja,itemsActuales){
   var armarYGuardar=function(numeroItem){
     var codigoItem=tipoCaja==='mixta' ? (cajaCodigo+'-I'+(itemsActuales+1)) : cajaCodigo;
     var payload={id:gen_id(),caja_id:cajaId,refaccion_id:refId,cantidad:cant,codigo_item:codigoItem,numero_item:numeroItem};
-    fetch(SUPA_URL+'/rest/v1/almacen_caja_contenido',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
+    fetch(SUPA_URL+'/rest/v1/almacen_caja_contenido',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
       .then(function(r){
         if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});return;}
         var m=document.getElementById('modal-ubic-add-ref-caja');if(m)m.remove();
@@ -27628,7 +27668,7 @@ function _aeb_confirmarTomarPiezas(itemId,refaccionId,cantidadDisponible,cajaId)
   var nuevaCantItem=cantidadDisponible-cant;
   var cajaIdActual=cajaId||(window._aebCajaActual&&window._aebCajaActual.caja&&window._aebCajaActual.caja.id)||null;
   fetch(SUPA_URL+'/rest/v1/almacen_caja_contenido?id=eq.'+itemId,{
-    method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+    method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
     body:JSON.stringify({cantidad:nuevaCantItem})
   }).then(function(r){
     if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});return;}
@@ -27637,12 +27677,12 @@ function _aeb_confirmarTomarPiezas(itemId,refaccionId,cantidadDisponible,cajaId)
       var stockActual=(ref&&ref.cantidad)||0;
       var nuevoStock=Math.max(0,stockActual-cant);
       fetch(SUPA_URL+'/rest/v1/refacciones?id=eq.'+refaccionId,{
-        method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+        method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
         body:JSON.stringify({cantidad:nuevoStock,updated_at:new Date().toISOString()})
       }).then(function(r2){
         if(!r2.ok){r2.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});return;}
         fetch(SUPA_URL+'/rest/v1/refacciones_standby',{
-          method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+          method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
           body:JSON.stringify({
             id:gen_id(),refaccion_id:refaccionId,cantidad:cant,
             caja_id:cajaIdActual,item_contenido_id:itemId,
@@ -27651,7 +27691,7 @@ function _aeb_confirmarTomarPiezas(itemId,refaccionId,cantidadDisponible,cajaId)
           })
         });
         fetch(SUPA_URL+'/rest/v1/refacciones_movimientos',{
-          method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+          method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
           body:JSON.stringify({
             refaccion_id:refaccionId,tipo:'salida',cantidad:cant,
             cantidad_anterior:stockActual,cantidad_nueva:nuevoStock,
@@ -27795,7 +27835,7 @@ function _standbyRegresarOrigen(standbyId){
           var item=itemRows&&itemRows[0];
           if(!item) return null;
           return fetch(SUPA_URL+'/rest/v1/almacen_caja_contenido?id=eq.'+s.item_contenido_id,{
-            method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+            method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
             body:JSON.stringify({cantidad:(item.cantidad||0)+s.cantidad})
           });
         })
@@ -27808,11 +27848,11 @@ function _standbyRegresarOrigen(standbyId){
         var stockActual=(ref&&ref.cantidad)||0;
         var nuevoStock=stockActual+s.cantidad;
         return fetch(SUPA_URL+'/rest/v1/refacciones?id=eq.'+s.refaccion_id,{
-          method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+          method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
           body:JSON.stringify({cantidad:nuevoStock,updated_at:new Date().toISOString()})
         }).then(function(){
           return fetch(SUPA_URL+'/rest/v1/refacciones_movimientos',{
-            method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+            method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
             body:JSON.stringify({
               refaccion_id:s.refaccion_id,tipo:'entrada',cantidad:s.cantidad,
               cantidad_anterior:stockActual,cantidad_nueva:nuevoStock,
@@ -27826,7 +27866,7 @@ function _standbyRegresarOrigen(standbyId){
     // 3) Marcar el registro de standby como 'regresada' para que deje de verse pendiente
     pasos.push(
       fetch(SUPA_URL+'/rest/v1/refacciones_standby?id=eq.'+standbyId,{
-        method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+        method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
         body:JSON.stringify({estado:'regresada'})
       })
     );
@@ -27956,7 +27996,7 @@ function _standbyFinalizarUsados(ordenId){
   window._standbyAUsar=[];
   usados.forEach(function(u){
     fetch(SUPA_URL+'/rest/v1/refacciones_standby?id=eq.'+u.id,{
-      method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+      method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
       body:JSON.stringify({estado:'consumida',orden_id:ordenId})
     }).catch(function(){});
   });
@@ -28439,7 +28479,7 @@ function gpEliminar(id){
   saveDB('ordenes',ORDENES);
   fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+id,{
     method:'DELETE',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'}
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Prefer':'return=minimal'}
   }).catch(function(){});
   var m=document.getElementById('modal-gestor-pm02');if(m)m.remove();
   showAlert('🗑️ PM02 eliminada');
@@ -29400,7 +29440,7 @@ function cambiarEstadoRefFaltante(id, nuevoEstado){
 
   fetch(SUPA_URL+'/rest/v1/refacciones_faltantes?id=eq.'+id,{
     method:'PATCH',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
     body:JSON.stringify({estado:nuevoEstado,gestion_por:r.gestion_por,gestion_ts:r.gestion_ts})
   }).catch(function(){});
 
@@ -29424,7 +29464,7 @@ function regresarEstadoRefFaltante(id){
   saveDB('ref_faltantes', REF_FALTANTES);
   fetch(SUPA_URL+'/rest/v1/refacciones_faltantes?id=eq.'+id,{
     method:'PATCH',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
     body:JSON.stringify({estado:estadoAnterior,gestion_por:r.gestion_por,gestion_ts:r.gestion_ts})
   }).catch(function(){});
   actualizarBadgeRefFaltantes();
@@ -29517,7 +29557,7 @@ function eliminarRefFaltante(id){
   saveDB('ref_faltantes', REF_FALTANTES);
   fetch(SUPA_URL+'/rest/v1/refacciones_faltantes?id=eq.'+id,{
     method:'DELETE',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'}
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Prefer':'return=minimal'}
   }).catch(function(){});
   actualizarBadgeRefFaltantes();
   renderRefFaltantes();
@@ -29669,7 +29709,7 @@ function syncNotificaciones(){
         // Keep local leida=true, patch Supabase
         fetch(SUPA_URL+'/rest/v1/notificaciones_mtto?id=eq.'+r.id,{
           method:'PATCH',
-          headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json'},
+          headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
           body:JSON.stringify({leida:true})
         }).catch(function(){});
       }
@@ -29736,7 +29776,7 @@ function marcarNotifLeida(id){
   // Update Supabase
   fetch(SUPA_URL+'/rest/v1/notificaciones_mtto?id=eq.'+id,{
     method:'PATCH',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
     body:JSON.stringify({leida:true})
   }).catch(function(){});
   actualizarBadgeBuzon();
@@ -29749,7 +29789,7 @@ function marcarTodasLeidas(){
       n.leida = true;
       fetch(SUPA_URL+'/rest/v1/notificaciones_mtto?id=eq.'+n.id,{
         method:'PATCH',
-        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+        headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
         body:JSON.stringify({leida:true})
       }).catch(function(){});
     }
@@ -30692,7 +30732,7 @@ function eliminarOrdenPropia(id){
   // Delete from Supabase in background
   fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+id,{
     method:'DELETE',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader()}
   }).catch(function(){});
 }
 // ── FIN ELIMINAR ORDEN ────────────────────────────────────────────
@@ -31091,7 +31131,7 @@ function borrarAlertaDOR(id){
   if(!confirm('¿Borrar esta alerta?')) return;
   DOR_ALERTAS=DOR_ALERTAS.filter(function(x){return x.id!==id;});
   saveDB('dor_alertas',DOR_ALERTAS);
-  fetch(SUPA_URL+'/rest/v1/dor_alertas?id=eq.'+id,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}}).catch(function(){});
+  fetch(SUPA_URL+'/rest/v1/dor_alertas?id=eq.'+id,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader()}}).catch(function(){});
   renderDOR();
 }
 
@@ -31537,7 +31577,7 @@ function _reconGuardar(){
   // supaUpsert, que usan muchas otras pantallas y no se debe arriesgar.
   fetch(SUPA_URL+'/rest/v1/reconocimientos',{
     method:'POST',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'},
     body:JSON.stringify(payload)
   }).then(function(r){
     if(!r.ok){
@@ -34578,8 +34618,8 @@ function eliminarRolCustom(rolId){
   PERMISOS_ROL=PERMISOS_ROL.filter(function(p){return p.rol_id!==rolId;});
   saveDB('roles_custom',ROLES_CUSTOM);
   saveDB('permisos_rol',PERMISOS_ROL);
-  fetch(SUPA_URL+'/rest/v1/roles_custom?id=eq.'+rolId,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}}).catch(function(){});
-  fetch(SUPA_URL+'/rest/v1/permisos_rol?rol_id=eq.'+rolId,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY}}).catch(function(){});
+  fetch(SUPA_URL+'/rest/v1/roles_custom?id=eq.'+rolId,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader()}}).catch(function(){});
+  fetch(SUPA_URL+'/rest/v1/permisos_rol?rol_id=eq.'+rolId,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader()}}).catch(function(){});
   window._rolesPermisosSel=null;
   showAlert('✅ Rol eliminado');
   renderAdminTab('roles');
@@ -35298,7 +35338,7 @@ function _guardarEditActividadFinal(id,desc,comp,freq,motivo,protocolo,fechaDeto
       saveDB('pm03_eliminadas',elim);
       fetch(SUPA_URL+'/rest/v1/pm03_plan?id=in.('+idsBorrar.join(',')+')',{
         method:'DELETE',
-        headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'}
+        headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Prefer':'return=minimal'}
       }).catch(function(){});
       nBorradas=idsBorrar.length;
     }
@@ -36023,7 +36063,7 @@ function eliminarActividadOrfanaCalendario(areaId,linea,eq,actLabel){
   saveDB('pm03_eliminadas',del);
   fetch(SUPA_URL+'/rest/v1/pm03_plan?id=in.('+ids.join(',')+')',{
     method:'DELETE',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'}
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Prefer':'return=minimal'}
   }).then(function(r){
     if(!r.ok) r.text().then(function(t){console.error('Error al eliminar PM03 huérfanas:',t);});
   }).catch(function(){});
@@ -36061,7 +36101,7 @@ function detenerActividadOrfanaCalendario(areaId,linea,eq,actLabel){
   saveDB('pm03_eliminadas',del);
   fetch(SUPA_URL+'/rest/v1/pm03_plan?id=in.('+ids.join(',')+')',{
     method:'DELETE',
-    headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'}
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Prefer':'return=minimal'}
   }).then(function(r){
     if(!r.ok) r.text().then(function(t){console.error('Error al detener PM03 huérfanas:',t);});
   }).catch(function(){});
@@ -36591,7 +36631,7 @@ function _resincronizarSeriePM03(actividadPlanId,semanaDeton,anioDeton,nuevaFrec
     saveDB('pm03_eliminadas',elim);
     fetch(SUPA_URL+'/rest/v1/pm03_plan?id=in.('+idsBorrar.join(',')+')',{
       method:'DELETE',
-      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=minimal'}
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Prefer':'return=minimal'}
     }).then(function(r){
       if(!r.ok) r.text().then(function(t){console.error('Error borrando serie PM03 vieja:',t);});
     }).catch(function(){});
