@@ -236,7 +236,7 @@ tr:nth-child(even) td{background:#F8FAFC}
 </script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="app.js?v=20261027a" defer></script>
+<script src="app.js?v=20261027b" defer></script>
 
 <style id="lup-css">
 .lup-doc{background:#fff;border:2px solid #1a3c5e;border-radius:10px;overflow:hidden;margin:12px;font-family:Arial,sans-serif}
@@ -472,7 +472,7 @@ tr:nth-child(even) td{background:#F8FAFC}
         <div style="font-size:18px;font-weight:900;color:#fff">DOR</div>
         <div style="font-size:11px;color:#93c5fd;margin-top:4px">Daily Operations Review</div>
       </div>
-      <div onclick="showAlert('WOR próximamente','info')" style="background:linear-gradient(135deg,#374151,#4b5563);border-radius:16px;padding:24px 12px;text-align:center;cursor:pointer;box-shadow:0 4px 12px rgba(55,65,81,.3)">
+      <div onclick="showWOR()" style="background:linear-gradient(135deg,#374151,#4b5563);border-radius:16px;padding:24px 12px;text-align:center;cursor:pointer;box-shadow:0 4px 12px rgba(55,65,81,.3)">
         <div style="font-size:32px;margin-bottom:8px">📈</div>
         <div style="font-size:18px;font-weight:900;color:#fff">WOR</div>
         <div style="font-size:11px;color:#d1d5db;margin-top:4px">Weekly Operations Review</div>
@@ -484,6 +484,11 @@ tr:nth-child(even) td{background:#F8FAFC}
 <div id="screen-dor" class="screen">
   <div class="topbar"><button class="topbar-back" onclick="showDORWOR()">←</button><div><div class="topbar-title">📋 DOR — Mtto</div><div class="topbar-sub" id="dor-sub"></div></div></div>
   <div class="content" id="dor-content" style="padding:12px"></div>
+</div>
+
+<div id="screen-wor" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showDORWOR()">←</button><div><div class="topbar-title">📈 WOR — Mtto</div><div class="topbar-sub" id="wor-sub"></div></div></div>
+  <div class="content" id="wor-content" style="padding:12px"></div>
 </div>
 
 <div id="screen-dor-planes" class="screen">
@@ -587,12 +592,8 @@ tr:nth-child(even) td{background:#F8FAFC}
       <div style="flex:1;min-width:130px"><label class="form-label">Por técnico</label><select class="form-control" id="filtro-tecnico" onchange="filtrarOrdenes()"><option value="">Todos</option></select></div>
       <div style="flex:1;min-width:130px"><label class="form-label">Levantó la orden</label><select class="form-control" id="filtro-levantado" onchange="filtrarOrdenes()"><option value="">Todos</option></select></div>
     </div>
-    <div class="filter-row" id="ft-anom">
-      <div class="filter-chip active" onclick="setFiltro('anom','todas',this)">Tipo anorm.: Todas</div>
-      <div class="filter-chip" onclick="setFiltro('anom','Seguridad',this)">Seguridad</div>
-      <div class="filter-chip" onclick="setFiltro('anom','Calidad',this)">Calidad</div>
-      <div class="filter-chip" onclick="setFiltro('anom','Condición Básica',this)">Condición Básica</div>
-      <div class="filter-chip" onclick="setFiltro('anom','LDA',this)">LDA</div>
+    <div style="margin-bottom:8px"><label class="form-label">Tipo de anormalidad</label>
+      <select class="form-control" id="filtro-anom-consulta" onchange="filtrosConsulta.anom=this.value;filtrarOrdenes()"><option value="todas">Todas</option></select>
     </div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
       <button onclick="limpiarFiltrosConsulta()" style="padding:7px 14px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:8px;font-size:13px;font-weight:700;color:#374151;cursor:pointer">🔄 Limpiar filtros</button>

@@ -190,6 +190,23 @@ const DEFAULT_LISTAS={
 };
 let LISTAS=loadDB('listas',DEFAULT_LISTAS);
 
+// Catálogo "legacy" de tipos de anormalidad usado por las OT importadas de la
+// bitácora histórica (REG-MTT-001.03), de antes de que existiera el catálogo
+// editable en Administración → Editar Listas. Se mantiene aparte para que el
+// editor de OT no pierda la clasificación de esas órdenes viejas al mostrarlas.
+var TIPOS_ANORM_LEGACY_BITACORA=['Mantenimiento','Correctivo','Apoyo','Paro','Velocidad reducida','Microparos','Calidad reducida','Instalación','Arranque'];
+// Catálogo completo de tipos de anormalidad para selects/filtros. incluirLegacy=true
+// agrega también los valores históricos de la bitácora (para el editor de OT, que
+// puede abrir cualquier orden, vieja o nueva); false es solo el catálogo editable
+// (para crear anomalías nuevas y para filtros).
+function _tipoAnormCatalogo(incluirLegacy){
+  var base=(LISTAS.tipos_anormalidad||[]).slice();
+  if(incluirLegacy){
+    TIPOS_ANORM_LEGACY_BITACORA.forEach(function(t){ if(base.indexOf(t)<0) base.push(t); });
+  }
+  return base;
+}
+
 function getTecnicos(){
   var internos=USERS.filter(function(u){return u.rol==='tecnico';});
   var adminsInc=(LISTAS.tecnicos_admin_ids||[]).map(function(id){
@@ -276,8 +293,8 @@ let _prevDetalleBackScreen=null;
 let pmState={};let pmStepNum=0;let pmTipo='';
 let atencionState={};let atencionStepNum=0;
 let otCerrandoId=null;let reasignandoId=null;
-let filtrosConsulta={tipo:'todas',estado:'todos',color:'todos',prio:'todas',areaGroup:'todas'};
-let filtrosPend={estado:'abierta',tipo:'todas',color:'todos',prio:'todas'};
+let filtrosConsulta={tipo:'todas',estado:'todos',color:'todos',prio:'todas',anom:'todas',areaGroup:'todas'};
+let filtrosPend={estado:'abierta',tipo:'todas',color:'todos',prio:'todas',anom:'todas'};
 // Inspección state
 let inspeccionActual=null;
 let puntoRojoIdx=-1;
@@ -488,10 +505,12 @@ function doLogin(){
   currentUser=found;saveDB('session',{id:found.id,rol:found.rol});
   renderMenu();showScreen('screen-menu');
   setTimeout(syncSupabase,500);
+  // Sesion real de Supabase Auth en segundo plano (no bloquea el login si falla)
+  supaAuthLogin(found.email,p).then(function(sess){if(sess)_supaAuthStartAutoRefresh();});
   _initScrollListeners();
 }
 document.getElementById('inp-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
-function doLogout(){currentUser=null;saveDB('session',null);document.getElementById('inp-user').value='';document.getElementById('inp-pass').value='';showScreen('screen-login');}
+function doLogout(){currentUser=null;saveDB('session',null);supaAuthClear();document.getElementById('inp-user').value='';document.getElementById('inp-pass').value='';showScreen('screen-login');}
 
 // ================================================================
 // MENÚ
@@ -1943,7 +1962,7 @@ function confirmarReasignacion(){
 }
 function editarDetalleOp(id){
   const o=ORDENES.find(x=>x.id===id);if(!o)return;
-  const TIPOS=['Seguridad','Calidad','5s','Condición Básica','LDA (Lugar de Difícil Acceso)','FDS (Fuente de Suciedad)','Paro Menor','Otra'];
+  const TIPOS=_tipoAnormCatalogo(false).concat('Otra');
   const tiposOpts=TIPOS.map(t=>`<option value="${t}"${o.tipoAnormalidad===t?' selected':''}>${t}</option>`).join('');
   const esContencion=(o.colorOT==='rojo'&&o.prioridad==='A'&&(o.tipoAnormalidad==='Seguridad'||o.tipoAnormalidad==='Calidad'));
 
@@ -2069,7 +2088,15 @@ function showConsultaOT(){
   const sel=document.getElementById('filtro-tecnico');
   const tecs=getTecnicos();
   sel.innerHTML=`<option value="">Todos los técnicos</option>${tecs.map(t=>`<option value="${t.id}">${t.nombre}</option>`).join('')}`;
-  filtrosConsulta={tipo:'todas',estado:'todos',color:'todos',prio:'todas',areaGroup:'todas'};
+  // Tipo de anormalidad: catálogo dinámico de Administración → Editar Listas (incluye "Mejora" y cualquier tipo nuevo que se agregue ahí)
+  const selAnom=document.getElementById('filtro-anom-consulta');
+  if(selAnom) selAnom.innerHTML=`<option value="todas">Todas</option>${_tipoAnormCatalogo(false).concat('Otra').map(t=>`<option value="${t}">${t}</option>`).join('')}`;
+  // Levantó la orden: nombres que realmente aparecen en las órdenes (se actualiza solo con los datos reales, sin mantener una lista aparte)
+  const selLev=document.getElementById('filtro-levantado');
+  if(selLev){
+    const levantadores=[...new Set(ORDENES.map(o=>o.levantadoPor).filter(Boolean))].sort();
+    selLev.innerHTML=`<option value="">Todos</option>${levantadores.map(n=>`<option value="${n}">${n}</option>`).join('')}`;
+  }
   renderResumenConsulta();
   // Add semana/año filter if not present
   setTimeout(function(){
@@ -4839,7 +4866,13 @@ function _initScrollListeners(){
       if(sess.rol==='super'){currentUser={id:'u_super',username:'superusuario',nombre:'Super Usuario',rol:'super'};}
       else{currentUser=USERS.find(function(x){return x.id===sess.id;})||null;}
     }
-    if(currentUser){renderMenu();showScreen('screen-menu');_initScrollListeners();}
+    if(currentUser){
+      renderMenu();showScreen('screen-menu');_initScrollListeners();
+      if(currentUser.rol!=='super'){
+        // Reanudar sesion real de Supabase Auth sin pedir contraseña otra vez
+        supaAuthRefresh().then(function(sess){if(sess)_supaAuthStartAutoRefresh();});
+      }
+    }
     else showScreen('screen-login');
     setTimeout(syncSupabase,800);
   }catch(e){console.error('Init:',e);showScreen('screen-login');}
@@ -5384,6 +5417,7 @@ function aplicarFiltrosPendientes(){updatePendChart();
   if(filtrosPend.tipo==='PM03') ots=[];
   if(filtrosPend.color!=='todos') ots=ots.filter(o=>o.colorOT===filtrosPend.color);
   if(filtrosPend.prio!=='todas') ots=ots.filter(o=>o.prioridad===filtrosPend.prio);
+  if(filtrosPend.anom&&filtrosPend.anom!=='todas') ots=ots.filter(o=>o.tipoAnormalidad===filtrosPend.anom);
   if(tecFiltro) ots=ots.filter(o=>o.tecnicoAsignado===tecFiltro);
   if(semsDelMes) ots=ots.filter(o=>semsDelMes.includes(o.semana)&&(o.año||currentYear())===añoFiltro);
   else if(semFiltro>0) ots=ots.filter(o=>o.semana===semFiltro&&(o.año||currentYear())===añoFiltro);
@@ -5794,6 +5828,7 @@ function renderMisOrdenes(){
   fDiv.innerHTML=`
     <div class="filter-row"><div class="filter-chip" onclick="setFP('estado','todos',this)">Todos</div><div class="filter-chip active" onclick="setFP('estado','abierta',this)">Abiertas</div><div class="filter-chip" onclick="setFP('estado','pre_cierre',this)" style="color:#7c3aed;border-color:#7c3aed">⏳ Pre-cierre</div><div class="filter-chip" onclick="setFP('estado','cerrada',this)">Cerradas</div></div>
     <div class="filter-row"><div class="filter-chip active" onclick="setFP('tipo','todas',this)">Todos tipos</div><div class="filter-chip" onclick="setFP('tipo','PM01',this)">PM01</div><div class="filter-chip" onclick="setFP('tipo','PM02',this)">PM02</div><div class="filter-chip" onclick="setFP('tipo','PM03',this)">PM03</div><div class="filter-chip" onclick="setFP('tipo','PM04',this)">PM04</div><div class="filter-chip" onclick="setFP('tipo','temporal',this)" style="border-color:#F59E0B;color:#B45309">⚡ Temporal</div></div>
+    <div class="filter-row"><div class="filter-chip active" onclick="setFP('color','todos',this)">Todos colores</div><div class="filter-chip" onclick="setFP('color','azul',this)" style="border-color:var(--az)">🔵 Azul</div><div class="filter-chip" onclick="setFP('color','rojo',this)" style="border-color:var(--rj)">🔴 Rojo</div></div>
     <div class="filter-row"><div class="filter-chip active" onclick="setFP('prio','todas',this)">Toda prioridad</div><div class="filter-chip" onclick="setFP('prio','A',this)">Prio A</div><div class="filter-chip" onclick="setFP('prio','B',this)">Prio B</div><div class="filter-chip" onclick="setFP('prio','C',this)">Prio C</div></div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
       <div style="flex:1;min-width:100px"><label style="font-size:12px;font-weight:700;color:var(--txt2);display:block;margin-bottom:4px">Mes</label>
@@ -5807,6 +5842,10 @@ function renderMisOrdenes(){
       <div style="flex:1;min-width:80px"><label style="font-size:12px;font-weight:700;color:var(--txt2);display:block;margin-bottom:4px">Año</label>
         <select class="form-control" id="fp-año" onchange="aplicarFiltrosPendientes()" style="padding:8px 12px">
           ${años.map(a=>`<option value="${a}" ${a===currentYear()?'selected':''}>${a}</option>`).join('')}
+        </select></div>
+      <div style="flex:1;min-width:140px"><label style="font-size:12px;font-weight:700;color:var(--txt2);display:block;margin-bottom:4px">Tipo de anormalidad</label>
+        <select class="form-control" id="fp-anom" onchange="filtrosPend.anom=this.value;aplicarFiltrosPendientes()" style="padding:8px 12px">
+          <option value="todas" selected>Todas</option>${_tipoAnormCatalogo(false).concat('Otra').map(t=>`<option value="${t}">${t}</option>`).join('')}
         </select></div>
     </div>
     ${isAdmin?`<div class="form-group mb8"><label class="form-label">Por técnico</label><select class="form-control" id="fpen-tecnico" onchange="aplicarFiltrosPendientes()">${r==='admin'?`<option value="${currentUser.id}" selected>🙋 Solo lo mío</option><option value="">Todos</option>`:`<option value="">Todos</option>`}${tecs.map(t=>`<option value="${t.id}">${t.nombre}</option>`).join('')}</select></div>`:''}`;
@@ -5847,6 +5886,58 @@ function renderGestionLinea(){
 var SUPA_URL='https://bwjvmtwkgvyewyjfazou.supabase.co';
 var SUPA_KEY='sb_publishable_bMC14dd2RT3n0Ka3Mwb8Yg_JRXlz-OE';
 var SUPER_PWD='Apocalipsis$2016';
+
+// ================================================================
+// SUPABASE AUTH (Fase B — seguridad RLS)
+// ================================================================
+// Sesion real de Supabase Auth, en paralelo al login propio de la app (USERS/
+// sap4_session). Por ahora es aditivo: si falla (sin internet, correo no
+// coincide, etc.) NO bloquea el acceso a la app -- el login local sigue
+// mandando igual que siempre. Cuando se usa de verdad (Fase C/D) es para que
+// RLS pueda distinguir "un usuario valido" de "cualquiera con la llave publica".
+var supaSession=loadDB('supaSession',null);
+var _supaRefreshInterval=null;
+
+function supaAuthLogin(email,password){
+  if(!email)return Promise.resolve(null);
+  return fetch(SUPA_URL+'/auth/v1/token?grant_type=password',{
+    method:'POST',
+    headers:{'apikey':SUPA_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({email:email,password:password})
+  }).then(function(r){return r.json().then(function(j){return{ok:r.ok,body:j};});})
+    .then(function(res){
+      if(!res.ok){console.warn('supaAuthLogin: no se pudo obtener sesion real de Supabase Auth:',res.body);return null;}
+      var sess={access_token:res.body.access_token,refresh_token:res.body.refresh_token,expires_at:Date.now()+(res.body.expires_in||3600)*1000};
+      supaSession=sess;saveDB('supaSession',sess);
+      return sess;
+    }).catch(function(e){console.warn('supaAuthLogin error (se sigue con el login local):',e.message);return null;});
+}
+
+function supaAuthRefresh(){
+  var s=supaSession||loadDB('supaSession',null);
+  if(!s||!s.refresh_token)return Promise.resolve(null);
+  return fetch(SUPA_URL+'/auth/v1/token?grant_type=refresh_token',{
+    method:'POST',
+    headers:{'apikey':SUPA_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({refresh_token:s.refresh_token})
+  }).then(function(r){return r.json().then(function(j){return{ok:r.ok,body:j};});})
+    .then(function(res){
+      if(!res.ok){console.warn('supaAuthRefresh: fallo el refresco de sesion:',res.body);return null;}
+      var sess={access_token:res.body.access_token,refresh_token:res.body.refresh_token,expires_at:Date.now()+(res.body.expires_in||3600)*1000};
+      supaSession=sess;saveDB('supaSession',sess);
+      return sess;
+    }).catch(function(e){console.warn('supaAuthRefresh error:',e.message);return null;});
+}
+
+function supaAuthClear(){
+  supaSession=null;saveDB('supaSession',null);
+  if(_supaRefreshInterval){clearInterval(_supaRefreshInterval);_supaRefreshInterval=null;}
+}
+
+function _supaAuthStartAutoRefresh(){
+  if(_supaRefreshInterval)clearInterval(_supaRefreshInterval);
+  _supaRefreshInterval=setInterval(supaAuthRefresh,45*60*1000); // antes de que expire (~1h)
+}
 
 function supaFetch(t,m,b,p){var url=SUPA_URL+'/rest/v1/'+t+(p?'?'+p:'');var headers={'apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Content-Type':'application/json','Accept':'application/json'};if(m==='POST')headers['Prefer']='resolution=merge-duplicates,return=representation';var o={method:m||'GET',headers:headers};if(b)o.body=JSON.stringify(b);return fetch(url,o).then(function(r){
   if(!r.ok){return r.text().then(function(txt){console.error('supaFetch error ['+t+']:',txt);return null;});}
@@ -14424,6 +14515,7 @@ function syncSupabase(){
       saveDB('dor_planes',DOR_PLANES);
       // Re-render DOR if open
       if(document.getElementById('dor-content')) renderDOR();
+      if(document.getElementById('wor-content')) renderWOR();
     }
   }).catch(function(){});
   // Sync DOR alertas (checklist en rojo)
@@ -28019,7 +28111,14 @@ function abrirEditorCompleto(id){
     +field('Línea / Área','linea',o.linea||o.area)
     +field('Componente','componente',o.componente)
     +field('Detalle / Falla','detalle',o.detalle,'textarea')
-    +(function(){var tipoAnomOpts='<option value="">-- Selecciona --</option><option value="Seguridad">Seguridad</option><option value="Calidad">Calidad</option><option value="Mantenimiento">Mantenimiento</option><option value="Correctivo">Correctivo</option><option value="Apoyo">Apoyo</option><option value="Paro">Paro</option><option value="Velocidad reducida">Velocidad reducida</option><option value="Microparos">Microparos</option><option value="Calidad reducida">Calidad reducida</option><option value="Instalación">Instalación</option><option value="Arranque">Arranque</option><option value="Otra">Otra</option>'.replace('value="'+o.tipoAnormalidad+'"','value="'+o.tipoAnormalidad+'" selected');return field('Tipo de anormalidad','tipo_anom',o.tipoAnormalidad,'select',tipoAnomOpts);})() 
+    +(function(){
+      // Catálogo editable (incluye "Mejora" y lo que se agregue en Administración
+      // → Editar Listas) + catálogo legacy de la bitácora histórica, para que
+      // esta pantalla pueda editar tanto OT nuevas como importadas sin perder
+      // su clasificación original.
+      var tipoAnomOpts='<option value="">-- Selecciona --</option>'+_tipoAnormCatalogo(true).concat('Otra').map(function(t){return '<option value="'+t+'"'+(o.tipoAnormalidad===t?' selected':'')+'>'+t+'</option>';}).join('');
+      return field('Tipo de anormalidad','tipo_anom',o.tipoAnormalidad,'select',tipoAnomOpts);
+    })()
     +field('Causa raíz','causa',o.causaRaiz,'textarea')
     +field('Prioridad','prioridad','','select',prioOpts)
     +field('Refacciones utilizadas','refacciones',o.refaccionesUsadas,'textarea')
@@ -28223,7 +28322,7 @@ function _abrirGestorPM02Render(id,o){
     +'<textarea id="gp-detalle" class="form-control" rows="2" style="padding:8px;resize:none">'+(o.detalle||'')+'</textarea></div>'
     +(o.foto?'<div style="grid-column:1/-1"><label style="font-size:.72rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">📷 Foto</label><img src="'+o.foto+'" class="foto-preview" style="cursor:pointer" onclick="verFotoOrdenGrande(\''+id+'\')"></div>':'')
     +'<div><label style="font-size:.72rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Tipo anormalidad</label>'
-    +'<select id="gp-tipo" class="form-control" style="padding:8px"><option value="">-- Selecciona --</option>'+['Seguridad','Calidad','5s','Condición Básica','LDA (Lugar de Difícil Acceso)','FDS (Fuente de Suciedad)','Paro Menor','Otra'].map(function(t){return '<option value="'+t+'"'+(o.tipoAnormalidad===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div>'
+    +'<select id="gp-tipo" class="form-control" style="padding:8px"><option value="">-- Selecciona --</option>'+_tipoAnormCatalogo(false).concat('Otra').map(function(t){return '<option value="'+t+'"'+(o.tipoAnormalidad===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div>'
     +'<div><label style="font-size:.72rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Prioridad</label>'
     +'<select id="gp-prio" class="form-control" style="padding:8px"><option value="A"'+(o.prioridad==='A'?' selected':'')+'>A</option><option value="B"'+(o.prioridad==='B'?' selected':'')+'>B</option><option value="C"'+(o.prioridad==='C'?' selected':'')+'>C</option></select></div>'
     +'</div>'
@@ -30375,7 +30474,7 @@ function _renderPM02ConsultaAsignadas(){
 function limpiarFiltrosConsulta(){
   // Reset filtros chip
   filtrosConsulta={tipo:'todas',estado:'todos',color:'todos',prio:'todas',anom:'todas',areaGroup:'todas'};
-  ['ft-tipo','ft-estado','ft-color','ft-prio','ft-anom'].forEach(function(id){
+  ['ft-tipo','ft-estado','ft-color','ft-prio'].forEach(function(id){
     var row=document.getElementById(id);
     if(!row) return;
     row.querySelectorAll('.filter-chip').forEach(function(c){c.classList.remove('active');});
@@ -30387,6 +30486,19 @@ function limpiarFiltrosConsulta(){
   if(tecSel) tecSel.value='';
   var levSel=document.getElementById('filtro-levantado');
   if(levSel) levSel.value='';
+  var anomSel=document.getElementById('filtro-anom-consulta');
+  if(anomSel) anomSel.value='todas';
+  // Reset filtros de mes/semana/año/día (se agregan dinámicamente al entrar a
+  // la pantalla) — antes no se limpiaban aquí, así que "Limpiar filtros" los
+  // dejaba tal cual aunque la persona ya hubiera elegido un mes/semana/día.
+  var mesSel=document.getElementById('filtro-mes-consulta');
+  if(mesSel) mesSel.value='';
+  var semSel=document.getElementById('filtro-semana-consulta');
+  if(semSel) semSel.value='';
+  var añoSel=document.getElementById('filtro-año-consulta');
+  if(añoSel) añoSel.value=String(currentYear());
+  var diaSel=document.getElementById('filtro-dia-consulta');
+  if(diaSel) diaSel.value='';
   // Reset buscador
   var search=document.getElementById('consulta-search');
   if(search) search.value='';
@@ -30600,6 +30712,148 @@ function showDOR(){
     sub.textContent=now.toLocaleDateString('es-MX',{weekday:'long',day:'2-digit',month:'long',year:'numeric'});
   }
   renderDOR();
+}
+
+// ── WOR — Weekly/Monthly Operations Review ─────────────────────────
+function showWOR(){
+  showScreen('screen-wor');
+  var sub=document.getElementById('wor-sub');
+  if(sub){
+    var now=new Date();
+    sub.textContent=now.toLocaleDateString('es-MX',{month:'long',year:'numeric'});
+  }
+  renderWOR();
+}
+
+function renderWOR(){
+  var cont=document.getElementById('wor-content');
+  if(!cont) return;
+  shoCargarAccidente().then(function(acc){
+    var dias=shoDiasDesde(acc.fecha||'2026-05-12');
+    var ultimoAcc=acc.fecha||'2026-05-12';
+    _renderWORInner(cont,dias,ultimoAcc);
+  });
+}
+
+// Promedio de Avance a Mtto planeado de las semanas YA CERRADAS de este mes
+// (excluye la semana en curso y cualquier semana futura del mes). "Semana de
+// este mes" usa el mismo criterio que ya existe en getWeeksInMonth (cuenta si
+// 4 o más de sus 7 días caen en este mes).
+function _worAvanceMensual(){
+  var hoy=new Date();
+  var anio=hoy.getFullYear(), mes=hoy.getMonth()+1;
+  var semanaActual=currentWeek();
+  var semanasMes=getWeeksInMonth(anio,mes).filter(function(s){return s<semanaActual;});
+  var pcts=semanasMes.map(function(s){return _pm3KpiSemana(anio,s).pct;}).filter(function(p){return p!==null;});
+  if(!pcts.length) return {pct:null,label:'—',color:'#6b7280',nSemanas:0};
+  var prom=Math.round(pcts.reduce(function(a,b){return a+b;},0)/pcts.length);
+  var color=prom>=90?'#4a7c59':prom>=50?'#d97706':'#dc2626';
+  return {pct:prom,label:prom+'%',color:color,nSemanas:pcts.length};
+}
+
+function _renderWORInner(cont,dias,ultimoAcc){
+  // Recordar qué sección (Planes/Prioridades/Historial) estaba abierta antes
+  // de reconstruir el tablero, igual que hace DOR.
+  var _seccionAbiertaPrev='';
+  var _wrapPrevio=document.getElementById('wor-seccion-wrap');
+  if(_wrapPrevio&&_wrapPrevio.dataset.tipo) _seccionAbiertaPrev=_wrapPrevio.dataset.tipo;
+
+  var colAcc=dias<=7?'#7f1d1d':'#14532d';
+  var anom=shoAnomaliasSeg();
+  var colAnom=anom===0?'#14532d':'#7f1d1d';
+  var anomCal=shoAnomaliasCalidad();
+  var colCal=anomCal===0?'#14532d':'#7f1d1d';
+  var avMes=_worAvanceMensual();
+
+  var planes=DOR_PLANES.filter(function(p){return p.tipo!=='prioridad'&&p.estado!=='cerrado';});
+  var prioridades=DOR_PLANES.filter(function(p){return p.tipo==='prioridad'&&p.estado!=='cerrado';});
+  var planesVenc=planes.filter(function(p){return p.fechaVencimiento&&new Date(p.fechaVencimiento)<new Date();}).length;
+  var priorVenc=prioridades.filter(function(p){return p.fechaVencimiento&&new Date(p.fechaVencimiento)<new Date();}).length;
+
+  var html='';
+
+  // ── Indicadores del Mes ────────────────────────────────────────
+  html+='<div style="font-size:11px;font-weight:800;color:#374151;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">📊 Indicadores del Mes</div>';
+  html+='<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:16px">';
+
+  html+='<div style="background:'+colAcc+';border-radius:12px;padding:12px;color:#fff;text-align:center">'
+    +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Días sin accidentes</div>'
+    +'<div style="font-size:28px;font-weight:900;line-height:1.1">'+dias+'</div>'
+    +'<div style="font-size:9px;opacity:.7;margin-top:2px">Último: '+ultimoAcc+'</div>'
+    +'</div>';
+
+  html+='<div onclick="shoMostrarListaAnom(shoGetAnomaliasSeg(),\'🚨 Seguridad Prio A\')" style="background:'+colAnom+';border-radius:12px;padding:12px;color:#fff;text-align:center;cursor:pointer">'
+    +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Anorm. Seguridad</div>'
+    +'<div style="font-size:28px;font-weight:900;line-height:1.1">'+anom+'</div>'
+    +'<div style="font-size:9px;opacity:.85;margin-top:2px">Prioridad A abiertas</div>'
+    +'</div>';
+
+  html+='<div onclick="shoMostrarListaAnom(shoGetAnomaliasCalidad(),\'🔬 Calidad Prio A\')" style="background:'+colCal+';border-radius:12px;padding:12px;color:#fff;text-align:center;cursor:pointer">'
+    +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Anorm. Calidad</div>'
+    +'<div style="font-size:28px;font-weight:900;line-height:1.1">'+anomCal+'</div>'
+    +'<div style="font-size:9px;opacity:.85;margin-top:2px">Prioridad A abiertas</div>'
+    +'</div>';
+
+  html+='<div onclick="pm3MostrarHistorialKPI()" style="background:'+avMes.color+';border-radius:12px;padding:12px;color:#fff;text-align:center;cursor:pointer">'
+    +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Avance PM — Mes</div>'
+    +'<div style="font-size:28px;font-weight:900;line-height:1.1">'+avMes.label+'</div>'
+    +'<div style="font-size:9px;opacity:.7;margin-top:2px">'+(avMes.pct===null?'Sin semanas cerradas aún':'Prom. '+avMes.nSemanas+' semana(s) cerradas')+'</div>'
+    +'</div>';
+  html+='</div>';
+
+  // ── Seguimiento (Planes/Prioridades) ──────────────────────────
+  html+='<div style="font-size:11px;font-weight:800;color:#374151;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">✅ Seguimiento</div>';
+
+  html+='<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">';
+  html+='<div style="background:#fff;border:1px solid #d1d5db;border-radius:10px;padding:10px">'
+    +'<div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:6px">📋 PLANES DE ACCIÓN</div>'
+    +'<div style="display:flex;justify-content:space-around">'
+    +'<div style="text-align:center"><div style="font-size:20px;font-weight:900;color:#1a3c5e">'+planes.length+'</div><div style="font-size:9px;color:#6b7280">ABIERTOS</div></div>'
+    +'<div style="text-align:center"><div style="font-size:20px;font-weight:900;color:#7f1d1d">'+planesVenc+'</div><div style="font-size:9px;color:#6b7280">VENCIDOS</div></div>'
+    +'</div></div>';
+  html+='<div style="background:#fff;border:1px solid #d1d5db;border-radius:10px;padding:10px">'
+    +'<div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:6px">🎯 PRIORIDADES</div>'
+    +'<div style="display:flex;justify-content:space-around">'
+    +'<div style="text-align:center"><div style="font-size:20px;font-weight:900;color:#1a3c5e">'+prioridades.length+'</div><div style="font-size:9px;color:#6b7280">ABIERTAS</div></div>'
+    +'<div style="text-align:center"><div style="font-size:20px;font-weight:900;color:#7f1d1d">'+priorVenc+'</div><div style="font-size:9px;color:#6b7280">VENCIDAS</div></div>'
+    +'</div></div>';
+  html+='</div>';
+
+  html+='<div style="display:flex;gap:8px;margin-bottom:12px">';
+  html+='<button onclick="worToggleSeccion(\'prioridades\')" style="flex:1;padding:9px;background:#1a3c5e;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">🎯 Prioridades</button>';
+  html+='<button onclick="worToggleSeccion(\'planes\')" style="flex:1;padding:9px;background:#1a3c5e;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">📋 Planes</button>';
+  html+='<button onclick="abrirNuevoPlan()" style="flex:1;padding:9px;background:#14532d;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">➕ Nuevo</button>';
+  html+='<button onclick="worToggleSeccion(\'historial\')" style="flex:1;padding:9px;background:#374151;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">📦 Historial</button>';
+  html+='</div>';
+
+  html+='<div id="wor-seccion-wrap"></div>';
+
+  cont.innerHTML=html;
+
+  if(_seccionAbiertaPrev){
+    var _wrapNuevo=document.getElementById('wor-seccion-wrap');
+    if(_wrapNuevo){
+      _wrapNuevo.dataset.tipo=_seccionAbiertaPrev;
+      if(_seccionAbiertaPrev==='historial') dorRenderHistorial(_wrapNuevo);
+      else dorRenderSeccionInline(_wrapNuevo,_seccionAbiertaPrev);
+    }
+  }
+}
+
+function worToggleSeccion(tipo){
+  var wrap=document.getElementById('wor-seccion-wrap');
+  if(!wrap) return;
+  if(wrap.dataset.tipo===tipo&&wrap.innerHTML!==''){
+    wrap.innerHTML='';
+    wrap.dataset.tipo='';
+    return;
+  }
+  wrap.dataset.tipo=tipo;
+  if(tipo==='historial'){
+    dorRenderHistorial(wrap);
+  } else {
+    dorRenderSeccionInline(wrap,tipo);
+  }
 }
 
 function renderDOR(){
@@ -30922,7 +31176,10 @@ function dorRenderSeccionInline(wrap,tipo){
       +(p.prioridad?'<span style="background:'+(priCol[p.prioridad]||'#374151')+';color:#fff;border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;flex-shrink:0">'+p.prioridad+'</span>':'')
       +'<div style="font-size:13px;font-weight:700;color:#111827">'+p.descripcion+'</div>'
       +'</div>'
-      +'<button onclick="cerrarPlanDOR(\''+p.id+'\')" style="padding:3px 8px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;font-size:11px;color:#374151;cursor:pointer;margin-left:8px;flex-shrink:0">Cerrar</button>'
+      +'<div style="display:flex;gap:4px;margin-left:8px;flex-shrink:0">'
+      +'<button onclick="cambiarTipoPlanDOR(\''+p.id+'\')" style="padding:3px 8px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;font-size:11px;color:#4338ca;cursor:pointer">'+(p.tipo==='prioridad'?'🔁 A Plan':'🔁 A Prioridad')+'</button>'
+      +'<button onclick="cerrarPlanDOR(\''+p.id+'\')" style="padding:3px 8px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;font-size:11px;color:#374151;cursor:pointer">Cerrar</button>'
+      +'</div>'
       +'</div>'
       +'<div style="font-size:11px;color:'+(esVencido?'#7f1d1d':'#6b7280')+'">📅 '+fechaStr+(esVencido?' ⚠️ Vencido':'')+'</div>'
       +'<div style="font-size:11px;color:#6b7280">👤 '+(p.responsable||'—')+'</div>'
@@ -30995,6 +31252,7 @@ function reabrirPlanDOR(id){
   supaFetch('dor_planes','PATCH',{estado:'abierto',cierre_ts:null,cerrado_por:null},'id=eq.'+id).catch(function(){});
   showAlert('🔓 Plan reabierto');
   renderDOR();
+  if(document.getElementById('wor-content')) renderWOR();
 }
 
 // ── Planes de Acción ─────────────────────────────────────────────
@@ -31413,6 +31671,7 @@ function renderDORPlanesList(){
         +'<button onclick="cerrarPlanDOR(\''+p.id+'\')" style="padding:2px 8px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;font-size:10px;font-weight:700;color:#16a34a;cursor:pointer">✅ Cerrar</button>'
         +'<button onclick="togglePlanBloqueo(\''+p.id+'\',\'refaccion\')" style="padding:2px 8px;background:'+(p.bloqueo==='refaccion'?'#fef3c7':'#f9fafb')+';border:1px solid '+(p.bloqueo==='refaccion'?'#f59e0b':'#d1d5db')+';border-radius:6px;font-size:10px;font-weight:700;color:'+(p.bloqueo==='refaccion'?'#92400e':'#6b7280')+';cursor:pointer">🔩</button>'
         +'<button onclick="togglePlanBloqueo(\''+p.id+'\',\'contratista\')" style="padding:2px 8px;background:'+(p.bloqueo==='contratista'?'#ede9fe':'#f9fafb')+';border:1px solid '+(p.bloqueo==='contratista'?'#7c3aed':'#d1d5db')+';border-radius:6px;font-size:10px;font-weight:700;color:'+(p.bloqueo==='contratista'?'#5b21b6':'#6b7280')+';cursor:pointer">👷</button>'
+        +'<button onclick="cambiarTipoPlanDOR(\''+p.id+'\')" style="padding:2px 8px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;font-size:10px;font-weight:700;color:#4338ca;cursor:pointer">'+(p.tipo==='prioridad'?'🔁 A Plan':'🔁 A Prioridad')+'</button>'
         +'</div>'
         :'<span style="font-size:10px;color:#16a34a;font-weight:700">✅ Cerrado</span>')
       +'</div>'
@@ -31493,6 +31752,7 @@ function guardarNuevoPlan(){
   showAlert('✅ '+( planTipo==='prioridad'?'Prioridad':'Plan de acción')+' guardado');
   // Refrescar ambas pantallas (DOR y Planes) — este botón se puede abrir desde cualquiera de las dos.
   renderDOR();
+  if(document.getElementById('wor-content')) renderWOR();
   if(document.getElementById('dor-planes-list')) renderDORPlanesList();
 }
 
@@ -31561,6 +31821,38 @@ function cerrarPlanDOR(id){
     dorRenderSeccionInline(wrap,wrap.dataset.tipo);
   } else if(document.getElementById('dor-content')){
     renderDOR();
+  }
+  var wrapW=document.getElementById('wor-seccion-wrap');
+  if(wrapW&&wrapW.dataset.tipo){
+    dorRenderSeccionInline(wrapW,wrapW.dataset.tipo);
+  } else if(document.getElementById('wor-content')){
+    renderWOR();
+  }
+}
+
+// Cambia un plan/prioridad ya creado de un tipo a otro (plan↔prioridad).
+function cambiarTipoPlanDOR(id){
+  var p=DOR_PLANES.find(function(x){return x.id===id;});
+  if(!p) return;
+  var nuevoTipo=p.tipo==='prioridad'?'plan':'prioridad';
+  var etiqueta=nuevoTipo==='prioridad'?'Prioridad':'Plan de Acción';
+  if(!confirm('¿Cambiar este registro a '+etiqueta+'?')) return;
+  p.tipo=nuevoTipo;
+  saveDB('dor_planes',DOR_PLANES);
+  supaFetch('dor_planes','PATCH',{tipo:nuevoTipo},'id=eq.'+id).catch(function(){});
+  showAlert('✅ Cambiado a '+etiqueta);
+  renderDORPlanesList();
+  var wrapD=document.getElementById('dor-seccion-wrap');
+  if(wrapD&&wrapD.dataset.tipo){
+    dorRenderSeccionInline(wrapD,wrapD.dataset.tipo);
+  } else if(document.getElementById('dor-content')){
+    renderDOR();
+  }
+  var wrapW2=document.getElementById('wor-seccion-wrap');
+  if(wrapW2&&wrapW2.dataset.tipo){
+    dorRenderSeccionInline(wrapW2,wrapW2.dataset.tipo);
+  } else if(document.getElementById('wor-content')){
+    renderWOR();
   }
 }
 
