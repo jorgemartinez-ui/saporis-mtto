@@ -1073,6 +1073,15 @@ function checkDuplicado(){
 }
 
 function guardarOT(){
+  // Aviso de horas sospechosas (>3 hrs) también para las OTs que nacen ya
+  // resueltas (wizard de varios días, anomalía azul resuelta en el momento) —
+  // antes solo lo validaban confirmarCierre() y el cierre de PM03.
+  if(pmState.resuelta){
+    var _diasChkGOT=(pmState.trabajoDias&&pmState.trabajoDias.length)
+      ?pmState.trabajoDias.map(function(d){return {fecha:d.fecha,horas:d.horas};})
+      :[{fecha:pmState.fechaTrabajo||todayStr(),horas:pmState.horasCierre||0}];
+    if(!_confirmarHorasExcedidas(_diasChkGOT)) return;
+  }
   const id=genID(pmTipo);
   let tecId=pmState.tecnicoAsignado||'',tecNom=pmState.tecnicoNombre||'Sin asignar';
   // Auto-assign to self if tecnico is raising the order
@@ -1326,6 +1335,31 @@ function buildFiltrosPendientes(){
   <div class="filter-row"><div class="filter-chip active" onclick="setFP('prio','todas',this)">Toda prioridad</div><div class="filter-chip" onclick="setFP('prio','A',this)">Prio A</div><div class="filter-chip" onclick="setFP('prio','B',this)">Prio B</div><div class="filter-chip" onclick="setFP('prio','C',this)">Prio C</div></div>
   ${isAdmin?`<div class="form-group mb8"><label class="form-label">Por técnico</label><select class="form-control" id="fpen-tecnico" onchange="aplicarFiltrosPendientes()"><option value="">Todos los técnicos</option>${tecs.map(t=>`<option value="${t.id}">${t.nombre}</option>`).join('')}</select></div>`:''}`;
 }
+// Rango de horas (inicio-fin, 24 hrs) para la tarjeta de preview de una OT —
+// toma el dato real según cómo se haya cerrado la orden (varios días, hora de
+// trabajo de un solo día, o atención a línea), sin inventar nada si no hay.
+function _otRangoHorasTexto(o){
+  var ini='',fin='';
+  if(o.trabajoDias&&o.trabajoDias.length){
+    var ordenado=o.trabajoDias.slice().sort(function(a,b){return a.fecha>b.fecha?1:-1;});
+    ini=ordenado[0].horaInicio||'';
+    fin=ordenado[ordenado.length-1].horaFin||'';
+  } else if(o.horaInicioTrabajo||o.horaFinTrabajo){
+    ini=o.horaInicioTrabajo||'';
+    fin=o.horaFinTrabajo||'';
+  } else if(o.horaInicio&&o.horaEntrega){
+    ini=new Date(o.horaInicio).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',hour12:false});
+    fin=new Date(o.horaEntrega).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',hour12:false});
+  }
+  if(!ini||!fin) return '';
+  return ini+'-'+fin;
+}
+function _otEtiquetaTurnoHoras(o){
+  var rango=_otRangoHorasTexto(o);
+  var texto=(o.turno?('T'+o.turno):'')+((o.turno&&rango)?' ':'')+(rango||'');
+  if(!texto) return '';
+  return '<div style="font-size:11px;color:var(--txt3);margin-top:2px">🕐 '+texto+'</div>';
+}
 function renderOTCard(o){
   const pB={A:'badge-pA',B:'badge-pB',C:'badge-pC'};
   const cc=o.colorOT?`color-${o.colorOT}`:'';
@@ -1347,6 +1381,7 @@ function renderOTCard(o){
     <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:11px;color:var(--txt3)">
       <span>👤 ${o.levantadoPor}</span><span>📅 ${fmtDate(o.ts)}</span>
     </div>
+    ${_otEtiquetaTurnoHoras(o)}
   </div>`;
 }
 
@@ -9512,6 +9547,7 @@ function guardarRessueltaTemporalmente(){
   // Las horas ya están en pmState.horasCierre desde confirmarResolucion
   var hrs = pmState.horasCierre||0;
   if(hrs<=0){ showAlert('Las horas se calculan automáticamente — verifica hora inicio y fin','error'); return; }
+  if(!_confirmarHorasExcedidas([{fecha:pmState.fechaTrabajo||todayStr(),horas:hrs}])) return;
 
   // 1. Guardar PM02 como cerrada (resuelta temporalmente)
   pmState.resuelta = true;
@@ -14135,6 +14171,15 @@ function guardarEditorCompleto(id){
   var isAdmin=r==='admin'||r==='super';
   var cambios=[];
 
+  // Validar el aviso de horas sospechosas (>3 hrs) ANTES de tocar cualquier
+  // otro campo — así, si el admin cancela el aviso, no queda ningún cambio
+  // a medias aplicado sobre la orden.
+  var hEl=document.getElementById('eo-horas');
+  var hv=(hEl&&hEl.value)?parseFloat(hEl.value):null;
+  if(hv!=null&&hv!==(o.horasCierre||0)){
+    if(!_confirmarHorasExcedidas([{fecha:o.fechaTrabajo||todayStr(),horas:hv}])) return;
+  }
+
   function upd(campo,elId,objKey){
     var el=document.getElementById('eo-'+elId);
     if(!el) return;
@@ -14153,8 +14198,9 @@ function guardarEditorCompleto(id){
   upd('Refacciones','refacciones','refaccionesUsadas');
   upd('Observaciones','obs','observacionesCierre');
 
-  var hEl=document.getElementById('eo-horas');
-  if(hEl&&hEl.value){var hv=parseFloat(hEl.value);if(hv!==(o.horasCierre||0)){cambios.push({campo:'Horas',de:o.horasCierre||0,a:hv});o.horasCierre=hv;}}
+  if(hv!=null&&hv!==(o.horasCierre||0)){
+    cambios.push({campo:'Horas',de:o.horasCierre||0,a:hv});o.horasCierre=hv;
+  }
 
   // Solo admin/super
   if(isAdmin){
@@ -20000,6 +20046,7 @@ function guardarRessueltaTemporalmente(){
   // Las horas ya están en pmState.horasCierre desde confirmarResolucion
   var hrs = pmState.horasCierre||0;
   if(hrs<=0){ showAlert('Las horas se calculan automáticamente — verifica hora inicio y fin','error'); return; }
+  if(!_confirmarHorasExcedidas([{fecha:pmState.fechaTrabajo||todayStr(),horas:hrs}])) return;
 
   // 1. Guardar PM02 como cerrada (resuelta temporalmente)
   pmState.resuelta = true;
@@ -28001,6 +28048,15 @@ function guardarEditorCompleto(id){
   var isAdmin=r==='admin'||r==='super';
   var cambios=[];
 
+  // Validar el aviso de horas sospechosas (>3 hrs) ANTES de tocar cualquier
+  // otro campo — así, si el admin cancela el aviso, no queda ningún cambio
+  // a medias aplicado sobre la orden.
+  var hEl=document.getElementById('eo-horas');
+  var hv=(hEl&&hEl.value)?parseFloat(hEl.value):null;
+  if(hv!=null&&hv!==(o.horasCierre||0)){
+    if(!_confirmarHorasExcedidas([{fecha:o.fechaTrabajo||todayStr(),horas:hv}])) return;
+  }
+
   function upd(campo,elId,objKey){
     var el=document.getElementById('eo-'+elId);
     if(!el) return;
@@ -28019,8 +28075,9 @@ function guardarEditorCompleto(id){
   upd('Refacciones','refacciones','refaccionesUsadas');
   upd('Observaciones','obs','observacionesCierre');
 
-  var hEl=document.getElementById('eo-horas');
-  if(hEl&&hEl.value){var hv=parseFloat(hEl.value);if(hv!==(o.horasCierre||0)){cambios.push({campo:'Horas',de:o.horasCierre||0,a:hv});o.horasCierre=hv;}}
+  if(hv!=null&&hv!==(o.horasCierre||0)){
+    cambios.push({campo:'Horas',de:o.horasCierre||0,a:hv});o.horasCierre=hv;
+  }
 
   // Solo admin/super
   if(isAdmin){
