@@ -2131,7 +2131,7 @@ function setFiltro(tipo,val,btn){filtrosConsulta[tipo]=val;const row=btn.closest
 // ================================================================
 // PM03
 // ================================================================
-function showPM03(){window._pm3FiltroTec='';window._pm3FiltroEstado='todas';window._pm3FiltroLinea='';_pm3FiltroSem=0;_pm3FiltroMes=0;renderPM03();showScreen('screen-pm03');}
+function showPM03(){window._pm3FiltroTec='';window._pm3FiltroEstado='todas';window._pm3FiltroLinea='';_pm3FiltroSem=0;_pm3FiltroMes=0;_pm3PedirMotivosPendientes();renderPM03();showScreen('screen-pm03');}
 // Estado de filtros PM03
 var _pm3FiltroSem  = 0; // 0 = semana actual
 var _pm3FiltroMes  = 0;
@@ -25436,7 +25436,7 @@ function _pm3RenderHistorialSemanal(mes){
     var alturaPct=pct===null?0:pct;
     var color=pct===null?'#e5e7eb':(pct>=95?'#16a34a':'#dc2626');
     var etiqueta=pct===null?'—':String(pct).padStart(2,'0');
-    return '<div style="flex:1;display:flex;flex-direction:column;align-items:center">'
+    return '<div onclick="_pm3VerVencidasSemana('+anio+','+s+')" style="flex:1;display:flex;flex-direction:column;align-items:center;cursor:pointer">'
       +'<div style="font-size:10px;font-weight:800;color:#374151;margin-bottom:2px">'+etiqueta+'</div>'
       +'<div style="width:100%;max-width:26px;height:90px;background:#f3f4f6;border-radius:4px;display:flex;align-items:flex-end;overflow:hidden">'
       +'<div style="width:100%;height:'+alturaPct+'%;background:'+color+';border-radius:4px"></div>'
@@ -25449,10 +25449,38 @@ function _pm3RenderHistorialSemanal(mes){
     +'<div style="font-size:16px;font-weight:800;color:#1a3c5e">📊 '+meses[mes-1]+' '+anio+' — por semana</div>'
     +'<button onclick="document.getElementById(\'modal-hist-kpi\').remove()" style="padding:4px 10px;background:#f3f4f6;border:none;border-radius:8px;cursor:pointer;font-size:13px">✕</button>'
     +'</div>'
-    +'<div style="margin-bottom:12px;font-size:11px;color:#6b7280">Meta: 95%</div>'
+    +'<div style="margin-bottom:12px;font-size:11px;color:#6b7280">Meta: 95% · Click en una semana para ver las PM03 vencidas y su comentario</div>'
     +'<div style="display:flex;gap:6px;align-items:flex-end;overflow-x:auto;padding-bottom:4px">'+barras+'</div>'
     +'<button onclick="_pm3RenderHistorialMensual()" style="margin-top:14px;padding:10px;background:#f3f4f6;border:none;border-radius:10px;font-weight:700;cursor:pointer">← Volver al mes</button>'
     +'</div>';
+}
+
+// Lista de PM03 vencidas de una semana/año específicos (DOR → historial), con
+// su comentario (motivoRecorrido) si ya se contestó — mismo mecanismo que el
+// tooltip del Calendario, pero en formato lista por si hay varias.
+function _pm3VerVencidasSemana(anio,semana){
+  var items=(PM03_PLAN||[]).filter(function(p){
+    return (p.semanasVencidas||[]).some(function(v){return v.semana===semana&&v.anio===anio;});
+  });
+  if(!items.length){ showAlert('✅ Sin PM03 vencidas esa semana'); return; }
+  var modal=document.createElement('div');
+  modal.id='modal-pm3-vencidas-sem';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10000;overflow-y:auto;padding:12px;box-sizing:border-box';
+  var rows=items.map(function(p){
+    var tieneMotivo=!!p.motivoRecorrido;
+    return '<div onclick="document.getElementById(\'modal-pm3-vencidas-sem\').remove();showDetallePM03(\''+p.id+'\')" style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid #7f1d1d;border-radius:8px;padding:10px;margin-bottom:8px;cursor:pointer">'
+      +'<div style="font-size:12px;font-weight:700;color:#1a3c5e;margin-bottom:2px">'+(p.componente||'General')+' — '+(p.actividad||'—')+'</div>'
+      +'<div style="font-size:11px;color:#6b7280;margin-bottom:4px">'+(p.tecnicoNombre||'Sin asignar')+' · Estado: '+(p.estado||'—')+'</div>'
+      +'<div style="font-size:11px;color:'+(tieneMotivo?'#374151':'#dc2626')+';font-style:'+(tieneMotivo?'normal':'italic')+'">'+(tieneMotivo?('💬 '+p.motivoRecorrido):'⚠️ Sin comentario aún')+'</div>'
+      +'</div>';
+  }).join('');
+  modal.onclick=function(e){if(e.target===modal)modal.remove();};
+  modal.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;max-width:500px;margin:20px auto;box-sizing:border-box">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
+    +'<div style="font-size:15px;font-weight:800;color:#1a3c5e">⚠️ Vencidas — Sem '+semana+'/'+anio+'</div>'
+    +'<button onclick="document.getElementById(\'modal-pm3-vencidas-sem\').remove()" style="padding:4px 10px;background:#f3f4f6;border:none;border-radius:8px;cursor:pointer;font-size:13px">✕</button>'
+    +'</div>'+rows+'</div>';
+  document.body.appendChild(modal);
 }
 
 // ---- Anormalidades seguridad abiertas ----
@@ -36249,7 +36277,7 @@ function showPlanCalendario(areaId,linea){
     p.semanasVencidas.forEach(function(v){
       if(v.anio!==anio) return;
       if(!vencidasPorKey[k]) vencidasPorKey[k]={};
-      vencidasPorKey[k][v.semana]=p.id;
+      vencidasPorKey[k][v.semana]={id:p.id,motivo:p.motivoRecorrido||''};
     });
   });
 
@@ -36355,9 +36383,12 @@ function showPlanCalendario(areaId,linea){
           // Esta semana ya no tiene fila propia (la PM03 se recorrió hacia
           // adelante sin cerrarse), pero sí se dejó pasar sin ejecutarse — se
           // pinta igual de rojo, y lleva al detalle de la PM03 que la sigue
-          // cargando (ahora en una semana posterior).
-          var _pmIdVenc=act.vencidas[s];
-          html+='<td style="background:#7f1d1d;text-align:center;cursor:pointer" data-pm3id="'+_pmIdVenc+'" onclick="if(this.dataset.pm3id)showDetallePM03(this.dataset.pm3id)" title="Sem '+s+' — '+act.label+' — se recorrió sin cerrarse"><span style="color:#fff;font-size:9px;pointer-events:none">P</span></td>';
+          // cargando (ahora en una semana posterior). El tooltip muestra el
+          // comentario (motivoRecorrido) si ya se contestó.
+          var _vInfo=act.vencidas[s];
+          var _pmIdVenc=_vInfo.id;
+          var _tituloVenc=('Sem '+s+' — '+act.label+' — se recorrió sin cerrarse — '+(_vInfo.motivo?('Motivo: '+_vInfo.motivo):'⚠️ Sin comentario aún')).replace(/"/g,'&quot;');
+          html+='<td style="background:#7f1d1d;text-align:center;cursor:pointer" data-pm3id="'+_pmIdVenc+'" onclick="if(this.dataset.pm3id)showDetallePM03(this.dataset.pm3id)" title="'+_tituloVenc+'"><span style="color:#fff;font-size:9px;pointer-events:none">P</span></td>';
         } else {
           // Celda en blanco: admin/super puede detonar aquí una PM03 anticipada (semana actual
           // o futura) para actividades ya definidas en el plan, sin afectar el render normal
@@ -36581,6 +36612,48 @@ function _pm3AplicarCortes(){
     savePM03Supa(p);
   });
   saveDB('pm03_plan',PM03_PLAN);
+}
+
+// ================================================================
+// Comentario insistente de PM03 recorridas (a partir de semana 44/2026)
+// ================================================================
+// Reusa el campo que ya existía (motivoRecorrido) para explicar por qué una
+// PM03 se recorrió de semana sin cerrarse — antes solo se pedía hasta el
+// momento de firmar como Coordinador de Mantenimiento (ver abrirModalFirma/
+// firmaGuardar); ahora, además, se pide en cuanto un admin/super abre el
+// botón PM03, de forma insistente (se vuelve a preguntar cada vez que entra
+// mientras siga sin contestar, sin importar cuántas semanas lleve así). Solo
+// aplica desde PM3_COMENTARIO_DESDE — lo anterior (semana 42-43/2026) se deja
+// tal cual, igual que el corte automático nunca tocó ese backlog.
+var PM3_COMENTARIO_DESDE={anio:2026,semana:44};
+function _pm3DesdeComentario(anio,semana){
+  if(anio>PM3_COMENTARIO_DESDE.anio) return true;
+  if(anio<PM3_COMENTARIO_DESDE.anio) return false;
+  return semana>=PM3_COMENTARIO_DESDE.semana;
+}
+function _pm3PendientesDeMotivo(){
+  if(!currentUser||(currentUser.rol!=='admin'&&currentUser.rol!=='super')) return [];
+  return (PM03_PLAN||[]).filter(function(p){
+    if(p.motivoRecorrido) return false;
+    if(!p.semanasVencidas||!p.semanasVencidas.length) return false;
+    return p.semanasVencidas.some(function(v){return _pm3DesdeComentario(v.anio,v.semana);});
+  });
+}
+function _pm3PedirMotivosPendientes(){
+  var pendientes=_pm3PendientesDeMotivo();
+  if(!pendientes.length) return;
+  var hayCambios=false;
+  pendientes.forEach(function(p){
+    var semsTxt=p.semanasVencidas.map(function(v){return 'Sem '+v.semana+'/'+v.anio;}).join(', ');
+    var motivo=prompt('⚠️ '+(p.componente||'General')+' — '+(p.actividad||'—')+'\nNo se cerró a tiempo ('+semsTxt+').\n\n¿Por qué no se ejecutó? (si cancelas, se te volverá a preguntar la próxima vez)');
+    if(motivo&&motivo.trim()){
+      p.motivoRecorrido=motivo.trim();
+      p._editadoTs=Date.now();
+      savePM03Supa(p);
+      hayCambios=true;
+    }
+  });
+  if(hayCambios) saveDB('pm03_plan',PM03_PLAN);
 }
 
 function abrirDetonarPM03Anticipada(actividadPlanId,semana,anio){
