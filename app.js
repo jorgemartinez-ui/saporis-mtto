@@ -5120,11 +5120,16 @@ function calcularTiempoCierre(){
 // 6:30-14:30/14:30-22:30/resto) — a petición de Jorge, para ubicar de un vistazo en
 // qué turno se cerró/levantó cada una, sin perder la fecha.
 function _fechaOTCardHTML(o){
-  var horaTs=(o.tipo!=='PM03'&&o.cerradaTs)?o.cerradaTs:o.ts;
+  var rango=_otRangoHorasTexto(o);
   var horaLinea='';
-  if(horaTs){
-    var hora=new Date(horaTs).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',hour12:false});
-    horaLinea='🕐 '+shoTurnoDe(horaTs)+' '+hora;
+  if(rango){
+    horaLinea='🕐 '+(o.turno?('T'+o.turno+' '):'')+rango;
+  } else {
+    var horaTs=(o.tipo!=='PM03'&&o.cerradaTs)?o.cerradaTs:o.ts;
+    if(horaTs){
+      var hora=new Date(horaTs).toLocaleTimeString('es-MX',{hour:'2-digit',minute:'2-digit',hour12:false});
+      horaLinea='🕐 '+shoTurnoDe(horaTs)+' '+hora;
+    }
   }
   return '<span style="display:inline-flex;flex-direction:column;align-items:flex-end;line-height:1.3">'
     +'<span>📅 '+fmtDate(o.ts)+'</span>'
