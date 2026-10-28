@@ -6275,7 +6275,11 @@ function syncSupabase(){
     }
   }).catch(function(){});
   supaFetch('usuarios','GET',null,'activo=eq.true').then(function(rows){
-    if(!rows||!rows.length){supaUpsert('usuarios',DEFAULT_USERS.filter(function(u){return u.rol!=='super';}).map(function(u){return{id:u.id,username:u.username,nombre:u.nombre,password_hash:u.password,rol:u.rol,activo:true};})  ).catch(function(){});return;}
+    // Ya NO se re-siembra automáticamente con DEFAULT_USERS cuando rows sale
+    // vacío (ver la misma nota en la otra copia de syncSupabase) -- eso fue lo
+    // que sobrescribió contraseñas reales con las de fábrica. Si sale vacío o
+    // falló, simplemente no se toca nada.
+    if(!rows||!rows.length)return;
     // Filtrar super de los registros de Supabase para no sobreescribir
     var superLocal=USERS.filter(function(u){return u.rol==='super';});
     USERS=rows.filter(function(r){return r.rol!=='super';}).map(function(r){return{id:r.id,username:r.username,nombre:r.nombre,password:r.password_hash,rol:r.rol}});
@@ -14651,24 +14655,17 @@ function syncSupabase(){
   }).catch(function(){});
   supaFetch('usuarios','GET',null,'activo=eq.true').then(function(rows){
     // supaFetch devuelve null cuando la consulta falló (sin conexión, error del
-    // servidor, etc.) — eso NO significa "la tabla está vacía". Antes esto se trataba
-    // igual que una tabla vacía y, de regreso, se volvía a sembrar Supabase con
-    // DEFAULT_USERS (las contraseñas originales de fábrica), borrando cualquier
-    // cambio de contraseña ya guardado en cuanto esta sincronización fallaba una
-    // sola vez — era justo lo que le regresaba la contraseña vieja a Jorge después
-    // de cada deploy. Si falló, no se toca nada (ni local ni Supabase).
+    // servidor, etc.) -- no se toca nada (ni local ni Supabase).
     if(rows===null) return;
-    // Un arreglo vacío con la llave pública (anon) no significa "la tabla está
-    // vacía" -- desde que RLS quedó activo, cualquier lectura sin token real
-    // regresa vacía aunque la tabla tenga datos. Solo re-sembrar con
-    // DEFAULT_USERS cuando estamos seguros de que se usó el token real; si no,
-    // tratarlo igual que una falla (no tocar nada, ni local ni Supabase).
-    if(!rows.length){
-      if(_supaUsandoTokenReal()){
-        supaUpsert('usuarios',DEFAULT_USERS.filter(function(u){return u.rol!=='super';}).map(function(u){return{id:u.id,username:u.username,nombre:u.nombre,password_hash:u.password,rol:u.rol,activo:true};})  ).catch(function(){});
-      }
-      return;
-    }
+    // Ya NO se re-siembra automáticamente con DEFAULT_USERS cuando rows sale
+    // vacío. Se intentó condicionar eso a "solo si se usó token real", pero
+    // quedó demostrado que no es confiable: supaFetch puede reintentar con la
+    // llave pública a medio camino (si el token real da 401) y rows llega
+    // vacío por RLS aunque _supaUsandoTokenReal() siga diciendo que sí había
+    // sesión real -- eso fue justo lo que sobrescribió las contraseñas de
+    // varios usuarios con las de fábrica. Si rows sale vacío, simplemente no
+    // se toca nada; la tabla real ya tiene usuarios, no necesita auto-siembra.
+    if(!rows.length) return;
     // Filtrar super de los registros de Supabase para no sobreescribir
     var superLocal=USERS.filter(function(u){return u.rol==='super';});
     USERS=rows.filter(function(r){return r.rol!=='super';}).map(function(r){return{id:r.id,username:r.username,nombre:r.nombre,password:r.password_hash,rol:r.rol,email:r.email||''}});
