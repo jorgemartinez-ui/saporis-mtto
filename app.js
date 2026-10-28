@@ -498,8 +498,10 @@ function doLogin(){
     currentUser={id:'u_super',username:'superusuario',nombre:'Super Usuario',rol:'super'};
     saveDB('session',{id:'u_super',rol:'super',nombre:'Super Usuario'});
     renderMenu();showScreen('screen-menu');
-    setTimeout(syncSupabase,500);
-    supaAuthLogin(SUPER_AUTH_EMAIL,SUPER_AUTH_PWD).then(function(sess){if(sess)_supaAuthStartAutoRefresh();});
+    // syncSupabase espera a que termine el intento de token real (exito o no) --
+    // antes corria en paralelo con un setTimeout fijo y casi siempre le ganaba
+    // la carrera al login real, dejando todo en la llave publica (bloqueada por RLS).
+    supaAuthLogin(SUPER_AUTH_EMAIL,SUPER_AUTH_PWD).then(function(sess){if(sess)_supaAuthStartAutoRefresh();syncSupabase();});
     _initScrollListeners();return;
   }
   const found=USERS.find(x=>x.username.toLowerCase()===u&&x.password===p&&x.rol!=='super');
@@ -507,9 +509,10 @@ function doLogin(){
   errEl.classList.add('hidden');
   currentUser=found;saveDB('session',{id:found.id,rol:found.rol});
   renderMenu();showScreen('screen-menu');
-  setTimeout(syncSupabase,500);
-  // Sesion real de Supabase Auth en segundo plano (no bloquea el login si falla)
-  supaAuthLogin(found.email,p).then(function(sess){if(sess)_supaAuthStartAutoRefresh();});
+  // Sesion real de Supabase Auth en segundo plano (no bloquea el login si falla).
+  // syncSupabase espera a que esto termine (exito o no) para no usar la llave
+  // publica por una condicion de carrera con RLS ya activo.
+  supaAuthLogin(found.email,p).then(function(sess){if(sess)_supaAuthStartAutoRefresh();syncSupabase();});
   _initScrollListeners();
 }
 document.getElementById('inp-pass').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
@@ -4872,11 +4875,13 @@ function _initScrollListeners(){
     if(currentUser){
       renderMenu();showScreen('screen-menu');_initScrollListeners();
       // Reanudar sesion real de Supabase Auth sin pedir contraseña otra vez
-      // (incluye al superusuario, que tambien tiene cuenta real desde Fase D)
-      supaAuthRefresh().then(function(sess){if(sess)_supaAuthStartAutoRefresh();});
+      // (incluye al superusuario, que tambien tiene cuenta real desde Fase D).
+      // syncSupabase espera a que esto termine para no usar la llave publica por
+      // una condicion de carrera con RLS ya activo (antes corria en paralelo con
+      // un setTimeout fijo y casi siempre le ganaba la carrera al refresh real).
+      supaAuthRefresh().then(function(sess){if(sess)_supaAuthStartAutoRefresh();syncSupabase();});
     }
-    else showScreen('screen-login');
-    setTimeout(syncSupabase,800);
+    else{showScreen('screen-login');setTimeout(syncSupabase,800);}
   }catch(e){console.error('Init:',e);showScreen('screen-login');}
 })();
 
