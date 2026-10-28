@@ -4863,6 +4863,27 @@ function _initScrollListeners(){
 }
 
 // ================================================================
+// SUPABASE INTEGRATION (constantes) -- deben ir ANTES de INIT: ahí abajo se
+// llama a supaAuthRefresh() al restaurar sesión, y esa función ya las usa.
+// Si quedaran después (como estaban antes), INIT las lee con valor undefined
+// todavía (el archivo corre de arriba hacia abajo), mandando peticiones mal
+// armadas ("undefined/auth/v1/...") y dejando el refresco de token fallando
+// en silencio en cada apertura de la app con sesión guardada.
+// ================================================================
+var SUPA_URL='https://bwjvmtwkgvyewyjfazou.supabase.co';
+var SUPA_KEY='sb_publishable_bMC14dd2RT3n0Ka3Mwb8Yg_JRXlz-OE';
+var SUPER_PWD='Apocalipsis$2016';
+// Credenciales reales de Supabase Auth para el superusuario -- distintas de
+// SUPER_PWD a propósito: SUPER_PWD sigue siendo lo que se teclea para entrar
+// a la app, esto es solo lo que se usa por detrás para obtener el token real.
+var SUPER_AUTH_EMAIL='jorgemtzz89@icloud.com';
+var SUPER_AUTH_PWD='MIDnight436743';
+// Sesion real de Supabase Auth, en paralelo al login propio de la app (USERS/
+// sap4_session).
+var supaSession=loadDB('supaSession',null);
+var _supaRefreshInterval=null;
+
+// ================================================================
 // INIT
 // ================================================================
 (function(){
@@ -5893,28 +5914,15 @@ function renderGestionLinea(){
 
 
 // ================================================================
-// SUPABASE INTEGRATION
-// ================================================================
-var SUPA_URL='https://bwjvmtwkgvyewyjfazou.supabase.co';
-var SUPA_KEY='sb_publishable_bMC14dd2RT3n0Ka3Mwb8Yg_JRXlz-OE';
-var SUPER_PWD='Apocalipsis$2016';
-// Credenciales reales de Supabase Auth para el superusuario -- distintas de
-// SUPER_PWD a propósito: SUPER_PWD sigue siendo lo que se teclea para entrar
-// a la app, esto es solo lo que se usa por detrás para obtener el token real.
-var SUPER_AUTH_EMAIL='jorgemtzz89@icloud.com';
-var SUPER_AUTH_PWD='MIDnight436743';
-
-// ================================================================
 // SUPABASE AUTH (Fase B — seguridad RLS)
 // ================================================================
-// Sesion real de Supabase Auth, en paralelo al login propio de la app (USERS/
-// sap4_session). Por ahora es aditivo: si falla (sin internet, correo no
-// coincide, etc.) NO bloquea el acceso a la app -- el login local sigue
-// mandando igual que siempre. Cuando se usa de verdad (Fase C/D) es para que
-// RLS pueda distinguir "un usuario valido" de "cualquiera con la llave publica".
-var supaSession=loadDB('supaSession',null);
-var _supaRefreshInterval=null;
-
+// SUPA_URL, SUPA_KEY, SUPER_PWD, SUPER_AUTH_EMAIL/PWD, supaSession y
+// _supaRefreshInterval ahora se declaran antes de INIT (ver arriba) -- aquí
+// solo quedan las funciones. Por ahora esto es aditivo: si falla (sin
+// internet, correo no coincide, etc.) NO bloquea el acceso a la app -- el
+// login local sigue mandando igual que siempre. Cuando se usa de verdad
+// (Fase C/D) es para que RLS pueda distinguir "un usuario valido" de
+// "cualquiera con la llave publica".
 function supaAuthLogin(email,password){
   if(!email)return Promise.resolve(null);
   return fetch(SUPA_URL+'/auth/v1/token?grant_type=password',{
