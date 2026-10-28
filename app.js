@@ -14650,7 +14650,17 @@ function syncSupabase(){
     // sola vez — era justo lo que le regresaba la contraseña vieja a Jorge después
     // de cada deploy. Si falló, no se toca nada (ni local ni Supabase).
     if(rows===null) return;
-    if(!rows.length){supaUpsert('usuarios',DEFAULT_USERS.filter(function(u){return u.rol!=='super';}).map(function(u){return{id:u.id,username:u.username,nombre:u.nombre,password_hash:u.password,rol:u.rol,activo:true};})  ).catch(function(){});return;}
+    // Un arreglo vacío con la llave pública (anon) no significa "la tabla está
+    // vacía" -- desde que RLS quedó activo, cualquier lectura sin token real
+    // regresa vacía aunque la tabla tenga datos. Solo re-sembrar con
+    // DEFAULT_USERS cuando estamos seguros de que se usó el token real; si no,
+    // tratarlo igual que una falla (no tocar nada, ni local ni Supabase).
+    if(!rows.length){
+      if(_supaUsandoTokenReal()){
+        supaUpsert('usuarios',DEFAULT_USERS.filter(function(u){return u.rol!=='super';}).map(function(u){return{id:u.id,username:u.username,nombre:u.nombre,password_hash:u.password,rol:u.rol,activo:true};})  ).catch(function(){});
+      }
+      return;
+    }
     // Filtrar super de los registros de Supabase para no sobreescribir
     var superLocal=USERS.filter(function(u){return u.rol==='super';});
     USERS=rows.filter(function(r){return r.rol!=='super';}).map(function(r){return{id:r.id,username:r.username,nombre:r.nombre,password:r.password_hash,rol:r.rol,email:r.email||''}});
