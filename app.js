@@ -497,7 +497,10 @@ function doLogin(){
   if(u==='superusuario'&&p===SUPER_PWD){
     currentUser={id:'u_super',username:'superusuario',nombre:'Super Usuario',rol:'super'};
     saveDB('session',{id:'u_super',rol:'super',nombre:'Super Usuario'});
-    renderMenu();showScreen('screen-menu');_initScrollListeners();return;
+    renderMenu();showScreen('screen-menu');
+    setTimeout(syncSupabase,500);
+    supaAuthLogin(SUPER_AUTH_EMAIL,SUPER_AUTH_PWD).then(function(sess){if(sess)_supaAuthStartAutoRefresh();});
+    _initScrollListeners();return;
   }
   const found=USERS.find(x=>x.username.toLowerCase()===u&&x.password===p&&x.rol!=='super');
   if(!found){errEl.textContent='Usuario o contraseña incorrectos.';errEl.classList.remove('hidden');return;}
@@ -4868,10 +4871,9 @@ function _initScrollListeners(){
     }
     if(currentUser){
       renderMenu();showScreen('screen-menu');_initScrollListeners();
-      if(currentUser.rol!=='super'){
-        // Reanudar sesion real de Supabase Auth sin pedir contraseña otra vez
-        supaAuthRefresh().then(function(sess){if(sess)_supaAuthStartAutoRefresh();});
-      }
+      // Reanudar sesion real de Supabase Auth sin pedir contraseña otra vez
+      // (incluye al superusuario, que tambien tiene cuenta real desde Fase D)
+      supaAuthRefresh().then(function(sess){if(sess)_supaAuthStartAutoRefresh();});
     }
     else showScreen('screen-login');
     setTimeout(syncSupabase,800);
@@ -5886,6 +5888,11 @@ function renderGestionLinea(){
 var SUPA_URL='https://bwjvmtwkgvyewyjfazou.supabase.co';
 var SUPA_KEY='sb_publishable_bMC14dd2RT3n0Ka3Mwb8Yg_JRXlz-OE';
 var SUPER_PWD='Apocalipsis$2016';
+// Credenciales reales de Supabase Auth para el superusuario -- distintas de
+// SUPER_PWD a propósito: SUPER_PWD sigue siendo lo que se teclea para entrar
+// a la app, esto es solo lo que se usa por detrás para obtener el token real.
+var SUPER_AUTH_EMAIL='jorgemtzz89@icloud.com';
+var SUPER_AUTH_PWD='MIDnight436743';
 
 // ================================================================
 // SUPABASE AUTH (Fase B — seguridad RLS)
