@@ -4883,11 +4883,39 @@ var SUPER_AUTH_PWD='MIDnight436743';
 var supaSession=loadDB('supaSession',null);
 var _supaRefreshInterval=null;
 
+// Arranque silencioso: si la caché local de USERS tiene a alguien sin correo
+// guardado (dispositivos con copia vieja, de antes de la migración a Supabase
+// Auth), usa las credenciales del superusuario SOLO para esta lectura puntual
+// de 'usuarios' y corregir los correos/contraseñas locales -- nunca guarda ese
+// token como sesión activa (no toca supaSession), así que no le da a nadie
+// acceso de superusuario real ni dura más allá de esta sincronización.
+function _bootstrapUsuariosSiFalta(){
+  var faltaCorreo=USERS.some(function(u){return u.rol!=='super'&&!u.email;});
+  if(!faltaCorreo) return;
+  fetch(SUPA_URL+'/auth/v1/token?grant_type=password',{
+    method:'POST',
+    headers:{'apikey':SUPA_KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({email:SUPER_AUTH_EMAIL,password:SUPER_AUTH_PWD})
+  }).then(function(r){return r.json();}).then(function(auth){
+    if(!auth||!auth.access_token) return null;
+    return fetch(SUPA_URL+'/rest/v1/usuarios?activo=eq.true',{
+      headers:{'apikey':SUPA_KEY,'Authorization':'Bearer '+auth.access_token}
+    });
+  }).then(function(r){return r&&r.ok?r.json():null;}).then(function(rows){
+    if(!rows||!rows.length) return;
+    var superLocal=USERS.filter(function(u){return u.rol==='super';});
+    USERS=rows.filter(function(r){return r.rol!=='super';}).map(function(r){return{id:r.id,username:r.username,nombre:r.nombre,password:r.password_hash,rol:r.rol,email:r.email||''}});
+    USERS=USERS.concat(superLocal);
+    saveDB('users',USERS);
+  }).catch(function(){});
+}
+
 // ================================================================
 // INIT
 // ================================================================
 (function(){
   try{
+    _bootstrapUsuariosSiFalta();
     var sess=loadDB('session',null);
     if(sess&&sess.id){
       if(sess.rol==='super'){currentUser={id:'u_super',username:'superusuario',nombre:'Super Usuario',rol:'super'};}
