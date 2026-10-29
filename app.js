@@ -2437,7 +2437,7 @@ function _renderDetallePM03(id,p){
     ${p.desinfProduccion&&p.comentarioDesinfeccion?row('📝 Comentario desinfección',p.comentarioDesinfeccion):''}
   </div>`:''}
   ${p.actividadesEstado&&Object.keys(p.actividadesEstado).length?(function(){
-    var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
+    var proto=_pm3ProtocoloEfectivo(p);
     if(!proto) return '';
     // Los códigos reales que guarda el técnico son B/R/C (Bien/Regular/Reprogramar —
     // ver pm3SetEstadoCampo), no A/B/C: la versión anterior de esta tabla comparaba
@@ -2488,7 +2488,7 @@ function _renderDetallePM03(id,p){
   ${p.estado==='cerrada'&&p.estadoFlujo==='pendiente_calidad'&&currentUser.rol==='super'?`<button class="btn btn-success" style="margin-top:8px;background:#0891b2" onclick="liberarPM03('${id}')">🔬 Liberar (Calidad)</button>`:''}
   ${p.estado==='cerrada'&&p.estadoFlujo==='pendiente_produccion'&&currentUser.rol==='super'?`<button class="btn btn-success" style="margin-top:8px;background:#16a34a" onclick="abrirLiberarProduccion('${id}')">🏭 Liberar (Producción)</button>`:''}
   ${p.estado==='cerrada'&&p.estadoFlujo==='pendiente_admin'&&currentUser.rol==='super'?`<button class="btn btn-success" style="margin-top:8px;background:#7c3aed" onclick="confirmarAprobacionAdmin('${id}')">📋 Aprobar Final</button>`:''}
-  ${p.estado==='cerrada'?renderFirmasPhysical(p,getProtocoloPM03(p.linea,p.componente,p.actividad)):''}
+  ${p.estado==='cerrada'?renderFirmasPhysical(p,_pm3ProtocoloEfectivo(p)):''}
   ${p.estado==='cerrada'?`<button class="btn btn-outline" style="border-color:#0891b2;color:#0891b2;margin-top:8px" onclick="imprimirProtocoloPM03('${id}')">🖨️ Imprimir Protocolo REG-MTT</button>`:''}
   ${(p.fotos&&p.fotos.length)?`<div class="card" style="margin-top:8px"><div class="card-title">📷 Fotos (${p.fotos.length})</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">${p.fotos.map(function(f,i){return'<img src="'+f+'" style="width:90px;height:90px;object-fit:cover;border-radius:8px;cursor:pointer" onclick="pm3VerFotoGrande(\''+id+'\','+i+')">';}).join('')}</div></div>`:''}
   ${!necesitaAsignacion?`<button onclick="pm3AgregarFotos('${id}')" style="width:calc(100% - 32px);margin:8px 16px 0;padding:11px;background:#e0f7fa;color:#0891b2;border:2px solid #0891b2;border-radius:11px;font-weight:700;cursor:pointer">📷 ${p.fotos&&p.fotos.length?'Ver / Agregar fotos ('+p.fotos.length+')':'Agregar fotos'}</button>`:``}
@@ -2622,7 +2622,7 @@ function abrirCierrePM03(id){
   var p=PM03_PLAN.find(function(x){return x.id===id;});if(!p)return;
   if(pm3EstaBloqueada(p)){showAlert('🔒 Esta PM03 quedó bloqueada (no se ejecutó a tiempo). Solo el superusuario puede modificarla.','error');return;}
   window._pm3CierreActualId=id; // para que los toggles (limpieza/desinfección/grasa/herramienta) sepan qué PM03 autoguardar
-  var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
+  var proto=_pm3ProtocoloEfectivo(p);
   if(!p.actividadesEstado) p.actividadesEstado={};
   if(!p.actividadesEstadoInicial) p.actividadesEstadoInicial={};
   if(!p.actividadesEstadoFinal) p.actividadesEstadoFinal={};
@@ -2848,7 +2848,7 @@ function pm3SetActividad(id, actId, estado){
   p.actividadesEstado[actId]=estado;
   saveDB('pm03_plan',PM03_PLAN);
   // Actualizar botones visualmente
-  var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
+  var proto=_pm3ProtocoloEfectivo(p);
   if(!proto) return;
   ['A','B','C'].forEach(function(e){
     var btns=document.querySelectorAll('[data-act="'+actId+'"][data-est="'+e+'"]');
@@ -2901,7 +2901,7 @@ function pm3ProgresoInfo(p){
   if(p.estado==='afectada') return {pct:100,color:'#fca5a5'};
   if(p.estado==='cerrada') return {pct:100,color:'#86efac'};
   if(p.estado==='reprogramada'||p.estadoFlujo==='por_reprogramar') return {pct:0,color:'#ffffff'};
-  var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
+  var proto=_pm3ProtocoloEfectivo(p);
   if(!proto||!proto.actividades||!proto.actividades.length){
     // Sin protocolo de referencia (ej. inspecciones o PM03 sin checklist):
     // estimación simple según si ya se registró algo de avance.
@@ -2950,7 +2950,7 @@ function confirmarCierrePM03(id){
   var hi=p.diasTrabajo[0].horaInicio;
   var hf=p.diasTrabajo[p.diasTrabajo.length-1].horaFin;
 
-  var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
+  var proto=_pm3ProtocoloEfectivo(p);
 
   // Validar limpieza obligatoria
   if(window._pm3Limp===null||window._pm3Limp===undefined){
@@ -11958,7 +11958,7 @@ function _pm3FirmaPendienteAntes(p,proto,campo){
 function abrirModalFirma(otId, campo){
   var _pChk=PM03_PLAN.find(function(x){return x.id===otId;});
   if(!_pChk) return;
-  var _protoChk=getProtocoloPM03(_pChk.linea,_pChk.componente,_pChk.actividad);
+  var _protoChk=_pm3ProtocoloEfectivo(_pChk);
   var _chk=_pm3ChecklistCompleto(_pChk,_protoChk);
   if(!_chk.ok){showAlert('⚠️ '+_chk.msg,'error');return;}
   var _faltaAntes=_pm3FirmaPendienteAntes(_pChk,_protoChk,campo);
@@ -12039,7 +12039,7 @@ function firmaGuardar(){
   var campo=_firmaCampo;
   var now=Date.now();
   var nombre=currentUser.nombre;
-  var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
+  var proto=_pm3ProtocoloEfectivo(p);
   var _firmasReq=pm3FirmasRequeridas(proto);
 
   // Si esta PM03 ya se recorrió de semana sin cerrarse, el Coordinador de
@@ -14800,7 +14800,7 @@ function syncSupabase(){
     // una lista incompleta hasta que tocaba un filtro manualmente.
     if(document.getElementById('screen-ordenes')&&document.getElementById('screen-ordenes').classList.contains('active')&&document.getElementById('fp-semana')) aplicarFiltrosPendientes();
   }).catch(function(){});
-  supaFetch('pm03_plan','GET',null,'order=semana.asc&limit=999999&select=actividad,actividades_estado,actividades_estado_final,actividades_estado_inicial,anio,area,cerrada_por,cerrada_ts,comentarios_actividades,componente,desinf_produccion,dias_trabajo,draft_ts,es_inspeccion,estado,estado_calidad,estado_flujo,firma_nombre_admin,origen_ot,origen_pm02,firma_nombre_calidad,firma_nombre_lider,firma_nombre_operador,firma_tecnico,firma_tecnico_ts,firma_ts_admin,firma_ts_calidad,firma_ts_lider,firma_ts_operador,fuente_excel,generado_por,grasa_aceite,herramienta_ingresada,herramienta_salida,hora_fin,hora_inicio,horas_actividades,horas_cierre,id,liberado_admin_por,liberado_admin_ts,liberado_por,liberado_prod_por,liberado_prod_ts,liberado_ts,limpieza_mtto,comentario_desinfeccion,linea,mediciones_actividades,observaciones_cierre,personas_actividades,rechazo_calidad,refacciones_nuevas,refacciones_usadas,reporte_actividades,responsable_area_id,responsable_area_nombre,semana,tecnico_id,tecnico_nombre,ts,semanas_vencidas,motivo_recorrido').then(function(rows){
+  supaFetch('pm03_plan','GET',null,'order=semana.asc&limit=999999&select=actividad,actividades_estado,actividades_estado_final,actividades_estado_inicial,anio,area,cerrada_por,cerrada_ts,comentarios_actividades,componente,desinf_produccion,dias_trabajo,draft_ts,es_inspeccion,estado,estado_calidad,estado_flujo,firma_nombre_admin,origen_ot,origen_pm02,firma_nombre_calidad,firma_nombre_lider,firma_nombre_operador,firma_tecnico,firma_tecnico_ts,firma_ts_admin,firma_ts_calidad,firma_ts_lider,firma_ts_operador,fuente_excel,generado_por,grasa_aceite,herramienta_ingresada,herramienta_salida,hora_fin,hora_inicio,horas_actividades,horas_cierre,id,liberado_admin_por,liberado_admin_ts,liberado_por,liberado_prod_por,liberado_prod_ts,liberado_ts,limpieza_mtto,comentario_desinfeccion,linea,mediciones_actividades,observaciones_cierre,personas_actividades,rechazo_calidad,refacciones_nuevas,refacciones_usadas,reporte_actividades,responsable_area_id,responsable_area_nombre,semana,tecnico_id,tecnico_nombre,ts,semanas_vencidas,motivo_recorrido,protocolo_snapshot').then(function(rows){
     if(!rows)return;
     var localPM03=loadDB('pm03_plan',[]);
     PM03_PLAN=rows.map(function(r){
@@ -14914,6 +14914,10 @@ function syncSupabase(){
         // aunque la fila ya viva en una semana posterior (ver _pm3AplicarCortes).
         semanasVencidas:(function(){try{return r.semanas_vencidas?JSON.parse(r.semanas_vencidas):(local?local.semanasVencidas:null);}catch(e){return local?local.semanasVencidas:null;}})(),
         motivoRecorrido:r.motivo_recorrido||(local?local.motivoRecorrido:null),
+        // Copia congelada del protocolo (ver _pm3ProtocoloEfectivo / guardarProtocolo):
+        // si esta PM03 ya tenía avance cuando se editó el protocolo, se queda viendo
+        // esta copia en vez del protocolo vigente, hasta que se cierre.
+        protocoloSnapshot:(function(){try{return r.protocolo_snapshot?JSON.parse(r.protocolo_snapshot):(local?local.protocoloSnapshot:null);}catch(e){return local?local.protocoloSnapshot:null;}})(),
         tecnicosAdicionales:(function(){
           var sup=r.tecnicos_adicionales; var loc=local?local.tecnicosAdicionales:null;
           var supD=r.draft_ts||0, locD=local&&local._draftTs?local._draftTs:0;
@@ -15108,6 +15112,7 @@ setInterval(reintentarOrdenesSync, 5*60*1000);
 function savePM03Supa(p){supaUpsert('pm03_plan',{id:p.id,linea:p.linea,componente:p.componente||null,actividad:p.actividad,area:p.area||null,semana:p.semana,anio:p.año||2026,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null,responsable_area_id:p.responsableAreaId||null,responsable_area_nombre:p.responsableAreaNombre||null,estado:p.estado||'abierta',prioridad:p.prioridad||null,fuente_excel:p.fuenteExcel||false,horas_cierre:p.horasCierre||0,observaciones_cierre:p.observacionesCierre||null,cerrada_ts:p.cerradaTs||null,cerrada_por:p.cerradaPor||null,generado_por:p.generadoPor||null,origen_ot:p.origenOT||null,origen_pm02:p.origenPM02||null,ts:p.ts||Date.now(),liberado_por:p.liberadoPor||null,liberado_ts:p.liberadoTs||null,estado_calidad:p.estadoCalidad||null,rechazo_calidad:p.rechazoCalidad||null,actividades_estado:p.actividadesEstado?JSON.stringify(p.actividadesEstado):null,refacciones_usadas:p.refaccionesUsadas||null,herramienta_ingresada:p.herramientaIngresada||null,herramienta_salida:p.herramientaSalida||null,grasa_aceite:p.grasaAceite||null,limpieza_mtto:typeof p.limpiezaMtto==='boolean'?p.limpiezaMtto:null,desinf_produccion:typeof p.desinfProduccion==='boolean'?p.desinfProduccion:null,firma_tecnico:p.firmaTecnico||null,firma_tecnico_ts:p.firmaTecnicoTs||null,comentarios_actividades:p.comentariosActividades?JSON.stringify(p.comentariosActividades):null,mediciones_actividades:p.medicionesActividades?JSON.stringify(p.medicionesActividades):null,liberado_prod_por:p.liberadoProdPor||null,liberado_prod_ts:p.liberadoProdTs||null,liberado_admin_por:p.liberadoAdminPor||null,liberado_admin_ts:p.liberadoAdminTs||null,estado_flujo:p.estadoFlujo||'ejecucion',nota_reprogramacion:p.notaReprogramacion||null,reprogramada_por:p.reprogramadaPor||null,reprogramada_ts:p.reprogramadaTs||null,comentario_desinfeccion:p.comentarioDesinfeccion||null,tecnicos_adicionales:p.tecnicosAdicionales&&p.tecnicosAdicionales.length?JSON.stringify(p.tecnicosAdicionales):null,comentario_firma_calidad:p.comentarioFirmaCalidad||null,comentario_firma_prod:p.comentarioFirmaProd||null,comentario_firma_admin:p.comentarioFirmaAdmin||null,
   semanas_vencidas:p.semanasVencidas&&p.semanasVencidas.length?JSON.stringify(p.semanasVencidas):undefined,
   motivo_recorrido:p.motivoRecorrido||undefined,
+  protocolo_snapshot:p.protocoloSnapshot?JSON.stringify(p.protocoloSnapshot):undefined,
   // fotos/firma_img_* ya no se sincronizan en bloque (viajan bajo demanda al abrir
   // el detalle) — si en este dispositivo nunca se cargaron (p.campo===undefined),
   // se omiten del payload para NO borrar en Supabase lo que otro dispositivo sí guardó.
@@ -20569,6 +20574,47 @@ function getProtocoloPM03(linea,equipo,actividad){
   return null;
 }
 
+// Protocolo "efectivo" de una PM03: si esa PM03 ya tiene congelada una copia del
+// protocolo (ver protocoloSnapshot, guardada en guardarProtocolo cuando se edita
+// un protocolo mientras ya hay una PM03 abierta y con avance de esa misma
+// actividad), se usa esa copia tal cual estaba — así una edición al protocolo
+// nunca le cambia los requisitos a algo que el técnico ya venía llenando, solo
+// aplica desde la siguiente vez que se genere esa actividad. Si no tiene
+// snapshot, se consulta el protocolo vigente normal.
+function _pm3ProtocoloEfectivo(p){
+  if(p&&p.protocoloSnapshot) return p.protocoloSnapshot;
+  return getProtocoloPM03(p.linea,p.componente,p.actividad);
+}
+
+// Al editar un protocolo (oldRow = cómo estaba ANTES de esta edición), congela esa
+// versión vieja en cualquier PM03 abierta de esa misma actividad que ya tenga
+// avance (al menos un punto del checklist con Estado Final) — así esa PM03 en
+// particular sigue viendo el protocolo tal como estaba cuando el técnico empezó,
+// y el cambio nuevo solo aplica desde la próxima vez que se genere esa actividad.
+// Una PM03 que ya esté congelada no se vuelve a tocar en ediciones futuras — se
+// queda con la primera versión que ya traía avance.
+function _pm3CongelarProtocoloSiAplica(oldRow){
+  if(!oldRow) return;
+  var nLinea=_normTxtAct(oldRow.linea), nEquipo=_normTxtAct(oldRow.equipo), nAct=_normTxtAct(oldRow.equipo_secundario);
+  var snapshot={equipo:oldRow.equipo,equipoSecundario:oldRow.equipo_secundario,codigo:oldRow.codigo||'REG-MTT-002.02',actividades:oldRow.actividades||[],firmasRequeridas:Array.isArray(oldRow.firmas_requeridas)?oldRow.firmas_requeridas:null};
+  var afectadas=(PM03_PLAN||[]).filter(function(p){
+    if(p.estado==='cerrada') return false;
+    if(p.protocoloSnapshot) return false;
+    if(_normTxtAct(p.linea)!==nLinea) return false;
+    if(_normTxtAct(p.componente||'')!==nEquipo) return false;
+    if(_normTxtAct(p.actividad||'')!==nAct) return false;
+    var ef=p.actividadesEstadoFinal;
+    return !!(ef && Object.keys(ef).length);
+  });
+  if(!afectadas.length) return;
+  afectadas.forEach(function(p){
+    p.protocoloSnapshot=snapshot;
+    p._editadoTs=Date.now();
+    savePM03Supa(p);
+  });
+  saveDB('pm03_plan',PM03_PLAN);
+}
+
 // Cargar protocolos de Supabase al iniciar
 function cargarProtocolosSupa(){
   supaFetch('protocolos_pm03','GET',null,'activo=eq.true&order=linea.asc').then(function(rows){
@@ -20691,7 +20737,7 @@ function rechazarLiberacionPM03(id){
 function showLiberacionDetalle(id){
   var p = PM03_PLAN.find(function(x){return x.id===id;});
   if(!p){ showAlert('PM03 no encontrada','error'); return; }
-  var proto = getProtocoloPM03(p.linea,p.componente,p.actividad);
+  var proto = _pm3ProtocoloEfectivo(p);
   var actHTML = '';
   if(proto && proto.actividades){
     actHTML = '<div class="card"><div class="card-title">📋 Actividades del Protocolo</div>'
@@ -20783,7 +20829,7 @@ function firmaCeldaImg(titulo, img, nombre, ts){
 function imprimirProtocoloPM03(id){
   var p = PM03_PLAN.find(function(x){return x.id===id;});
   if(!p){showAlert('PM03 no encontrada','error');return;}
-  var proto = getProtocoloPM03(p.linea,p.componente,p.actividad);
+  var proto = _pm3ProtocoloEfectivo(p);
   var win = window.open('','_blank');
   if(!win){showAlert('Activa ventanas emergentes para imprimir','error');return;}
 
@@ -21247,7 +21293,7 @@ function pm3ToggleComoSeHace(actId){
 function pm3CalcMedicion(pmId, actId){
   var p=PM03_PLAN.find(function(x){return x.id===pmId;});
   if(!p) return;
-  var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
+  var proto=_pm3ProtocoloEfectivo(p);
   var a=proto&&proto.actividades?proto.actividades.find(function(x){return String(x.id)===String(actId);}):null;
   if(!a||!a.medicion) return;
   var tol=a.medicion.tolerancia!=null?a.medicion.tolerancia:3;
@@ -21352,7 +21398,7 @@ function pm3ToggleHerrOut(val){
 function pm3SaveCache(pmId){
   var p=PM03_PLAN.find(function(x){return x.id===pmId;});
   if(!p) return;
-  var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
+  var proto=_pm3ProtocoloEfectivo(p);
   // Antes: si la PM03 no tenía protocolo se salía aquí y NO se guardaba nada
   // (ni el reporte general ni limpieza/desinfección/grasa/herramienta). Ahora
   // el bloque por actividad solo se salta cuando no hay protocolo, pero los
@@ -22468,6 +22514,10 @@ function guardarProtocolo(id){
 
   var payload={linea:linea,equipo:equipo,equipo_secundario:equipo2,codigo:codigo,actividades:acts,activo:true,firmas_requeridas:firmasRequeridas};
 
+  // Cómo estaba el protocolo ANTES de esta edición, para poder congelarlo en las
+  // PM03 que ya tengan avance (ver _pm3CongelarProtocoloSiAplica más abajo).
+  var _protoAntesDeEditar=id?(PROTOCOLOS_PM03_SUPA||[]).find(function(s){return s.id===id;}):null;
+
   var url=SUPA_URL+'/rest/v1/protocolos_pm03';
   var method='POST';
   var headers={'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=representation'};
@@ -22480,6 +22530,7 @@ function guardarProtocolo(id){
 
   fetch(url,{method:method,headers:headers,body:JSON.stringify(payload)}).then(function(r){
     if(r.ok){
+      _pm3CongelarProtocoloSiAplica(_protoAntesDeEditar);
       cargarProtocolosSupa();
       var m=document.getElementById('modal-editor-proto');if(m)m.remove();
       showAlert('✅ Protocolo guardado: '+linea);
@@ -37009,7 +37060,7 @@ function _pm3DesdeCorte(anio,semana){
 // que el corte no recorra estas PM03 de semana (cuentan como ejecutadas, solo
 // falta firmar) como para el aviso al admin/super en el botón PM03.
 function _pm3FirmasFaltantesInfo(p){
-  var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
+  var proto=_pm3ProtocoloEfectivo(p);
   var chk=_pm3ChecklistCompleto(p,proto);
   if(!chk.ok) return null;
   var faltan=pm3FirmasRequeridas(proto).filter(function(k){
