@@ -25636,6 +25636,27 @@ async function shoCerrarComentario(id){
   }catch(e){showAlert('Error al cerrar comentario','error');}
 }
 
+// Editar el texto de un comentario ya guardado (antes solo se podía agregar
+// y cerrar). Usa el prompt() nativo, igual que otras ediciones rápidas de la
+// app (motivo de rechazo, nota de cierre, etc.) — se guarda sobre el mismo
+// registro, sin tocar su autor/fecha original ni su estado de cerrado.
+async function shoEditarComentario(id){
+  var actual=((window._shoComentariosCache)||[]).find(function(c){return c.id===id;});
+  var nuevo=prompt('Editar comentario:',actual?actual.texto:'');
+  if(nuevo===null) return;
+  nuevo=nuevo.trim();
+  if(!nuevo){showAlert('El comentario no puede quedar vacío','error');return;}
+  try{
+    var res=await fetch(SUPA_URL+'/rest/v1/sho_comentarios?id=eq.'+id,{
+      method:'PATCH',
+      headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},
+      body:JSON.stringify({texto:nuevo})
+    });
+    if(res.ok){renderSHO();showAlert('✅ Comentario actualizado');}
+    else showAlert('Error al guardar el comentario','error');
+  }catch(e){showAlert('Error al guardar el comentario','error');}
+}
+
 // ---- Render principal ----
 async function showSHO(){
   var roles=['tecnico','admin','super'];
@@ -25663,6 +25684,7 @@ async function renderSHO(){
 
   // Cargar comentarios abiertos + del turno actual
   var comentarios=await shoCargarComentarios(f);
+  window._shoComentariosCache=comentarios;
 
   // Colores dinámicos
   var colAcc=dias<=7?'#dc2626':'#4a7c59';
@@ -25739,7 +25761,10 @@ async function renderSHO(){
         +'<div style="font-size:11px;opacity:.7;margin-bottom:2px">'+c.autor+' · '+shoFmtFecha(c.ts)+'</div>'
         +'<div style="font-size:12px;'+(cerrado?'text-decoration:line-through;opacity:.5':'')+'">'+c.texto+'</div>'
         +'</div>'
-        +(!cerrado?'<button onclick="shoCerrarComentario(\''+c.id+'\')" style="flex-shrink:0;background:rgba(255,255,255,.2);border:none;border-radius:6px;color:#fff;font-size:10px;font-weight:700;cursor:pointer;padding:3px 8px">✓ Cerrado</button>':'<span style="flex-shrink:0;font-size:10px;opacity:.5">✓</span>')
+        +'<div style="display:flex;gap:4px;flex-shrink:0">'
+        +'<button onclick="shoEditarComentario(\''+c.id+'\')" style="background:rgba(255,255,255,.2);border:none;border-radius:6px;color:#fff;font-size:10px;font-weight:700;cursor:pointer;padding:3px 7px">✏️</button>'
+        +(!cerrado?'<button onclick="shoCerrarComentario(\''+c.id+'\')" style="background:rgba(255,255,255,.2);border:none;border-radius:6px;color:#fff;font-size:10px;font-weight:700;cursor:pointer;padding:3px 8px">✓ Cerrado</button>':'<span style="font-size:10px;opacity:.5;align-self:center">✓</span>')
+        +'</div>'
         +'</div>';
     }).join('')
     +'</div>'
@@ -31316,6 +31341,7 @@ function dorRenderSeccionInline(wrap,tipo){
       +'<div style="display:flex;gap:4px;margin-left:8px;flex-shrink:0">'
       +'<button onclick="cambiarTipoPlanDOR(\''+p.id+'\')" style="padding:3px 8px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;font-size:11px;color:#4338ca;cursor:pointer">'+(p.tipo==='prioridad'?'🔁 A Plan':'🔁 A Prioridad')+'</button>'
       +'<button onclick="cerrarPlanDOR(\''+p.id+'\')" style="padding:3px 8px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;font-size:11px;color:#374151;cursor:pointer">Cerrar</button>'
+      +'<button onclick="abrirEditarPlan(\''+p.id+'\')" style="padding:3px 8px;background:#f9fafb;border:1px solid #d1d5db;border-radius:6px;font-size:11px;color:#374151;cursor:pointer">✏️</button>'
       +'</div>'
       +'</div>'
       +'<div style="font-size:11px;color:'+(esVencido?'#7f1d1d':'#6b7280')+'">📅 '+fechaStr+(esVencido?' ⚠️ Vencido':'')+'</div>'
@@ -31353,7 +31379,10 @@ function dorRenderHistorial(wrap){
         +'<div style="font-size:13px;font-weight:700;color:#374151">'+p.descripcion+'</div>'
         +'<div style="font-size:11px;color:#6b7280">Cerrado: '+fecha+' · '+(p.cerradoPor||'—')+'</div>'
         +'</div>'
-        +'<button onclick="reabrirPlanDOR(\''+p.id+'\')" style="padding:3px 8px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;font-size:11px;color:#374151;cursor:pointer;flex-shrink:0">Reabrir</button>'
+        +'<div style="display:flex;gap:4px;flex-shrink:0">'
+        +'<button onclick="reabrirPlanDOR(\''+p.id+'\')" style="padding:3px 8px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:6px;font-size:11px;color:#374151;cursor:pointer">Reabrir</button>'
+        +'<button onclick="abrirEditarPlan(\''+p.id+'\')" style="padding:3px 8px;background:#f9fafb;border:1px solid #d1d5db;border-radius:6px;font-size:11px;color:#374151;cursor:pointer">✏️</button>'
+        +'</div>'
         +'</div></div>';
     });
   }
@@ -31763,9 +31792,21 @@ function renderParoFabrica(){
   html+='<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px;margin-bottom:14px">'
     +'<textarea id="paro-nueva-act" class="form-control" rows="2" style="padding:8px;font-size:.85rem;margin-bottom:6px;resize:none" placeholder="Nueva actividad para el paro..."></textarea>'
     +'<div style="display:flex;gap:6px">'
+    +'<select id="paro-nuevo-prio" class="form-control" style="width:72px;flex-shrink:0;padding:7px;font-size:.82rem">'
+    +'<option value="A">🔴 A</option><option value="B" selected>🟠 B</option><option value="C">🟢 C</option>'
+    +'</select>'
     +'<select id="paro-nuevo-resp" class="form-control" style="flex:1;padding:7px;font-size:.82rem">'+respOpts+'</select>'
     +'<button onclick="_paroAgregarActividad()" style="flex-shrink:0;padding:8px 14px;background:#1a3c5e;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">+ Agregar</button>'
     +'</div></div>';
+
+  // Encabezado de columnas del pizarrón — mismo orden que pidió Jorge:
+  // Actividad (izq) · Prioridad (centro) · Responsable (der).
+  html+='<div style="display:flex;align-items:center;gap:8px;padding:0 12px 6px">'
+    +'<div style="flex:1;font-size:10px;font-weight:800;color:#6b7280;text-transform:uppercase;letter-spacing:.04em">Actividad</div>'
+    +'<div style="width:50px;flex-shrink:0;text-align:center;font-size:10px;font-weight:800;color:#6b7280;text-transform:uppercase">Prioridad</div>'
+    +'<div style="width:90px;flex-shrink:0;text-align:center;font-size:10px;font-weight:800;color:#6b7280;text-transform:uppercase">Responsable</div>'
+    +'<div style="width:62px;flex-shrink:0"></div>'
+    +'</div>';
 
   var items=PARO_ACTIVIDADES.filter(function(a){
     if(a.sesion_id!==activa.id) return false;
@@ -31781,20 +31822,74 @@ function renderParoFabrica(){
   cont.innerHTML=html;
 }
 
-// Fila del pizarrón: texto grande de la actividad a la izquierda, responsable
-// a la derecha, y botón cerrar/reabrir — igual idea que los comentarios del
-// botón SHO (tachado + opacidad al cerrar), pero aquí sí se puede reabrir.
+// Fila del pizarrón: actividad a la izquierda, prioridad (A/B/C, mismo color
+// que los Planes de DOR) al centro, responsable y botones de editar/cerrar a
+// la derecha — igual idea que los comentarios del botón SHO (tachado +
+// opacidad al cerrar), pero aquí sí se puede reabrir y editar.
 function _paroFilaHTML(a){
   var cerrada=!!a.cerrada;
+  var prio=a.prioridad||'B';
+  var colPrio=prio==='A'?'#dc2626':prio==='B'?'#d97706':'#16a34a';
   return '<div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;border-left:4px solid '+(cerrada?'#9ca3af':'#1a3c5e')+';border-radius:10px;padding:10px 12px;margin-bottom:8px">'
     +'<div style="flex:1;min-width:0">'
     +'<div style="font-size:13px;'+(cerrada?'text-decoration:line-through;opacity:.5':'')+'">'+(a.actividad||'')+'</div>'
     +'</div>'
+    +'<div style="width:50px;flex-shrink:0;text-align:center;'+(cerrada?'opacity:.5':'')+'"><span style="display:inline-block;background:'+colPrio+';color:#fff;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:800">'+prio+'</span></div>'
     +'<div style="width:90px;flex-shrink:0;text-align:center;font-size:11px;color:#374151;font-weight:700;'+(cerrada?'opacity:.5':'')+'">'+(a.responsable_nombre||'Sin asignar')+'</div>'
+    +'<button onclick="_paroAbrirEditor(\''+a.id+'\')" style="flex-shrink:0;padding:5px 8px;background:#eef2ff;border:none;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;color:#4338ca">✏️</button>'
     +(cerrada
       ?'<button onclick="_paroReabrirActividad(\''+a.id+'\')" style="flex-shrink:0;padding:5px 10px;background:#f3f4f6;border:none;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;color:#374151">↩️ Reabrir</button>'
       :'<button onclick="_paroCerrarActividad(\''+a.id+'\')" style="flex-shrink:0;padding:5px 10px;background:#14532d;color:#fff;border:none;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">✓ Cerrar</button>')
     +'</div>';
+}
+
+// Modal de edición — reutilizable tanto desde la lista activa como desde una
+// fila dentro del Historial (ver _paroRenderHistorialSesion).
+function _paroAbrirEditor(id){
+  var a=PARO_ACTIVIDADES.find(function(x){return x.id===id;});
+  if(!a) return;
+  var respOpts='<option value="">Sin asignar</option>'+getTecnicos().map(function(u){return '<option value="'+u.id+'"'+(a.responsable_id===u.id?' selected':'')+'>'+u.nombre+'</option>';}).join('');
+  var prio=a.prioridad||'B';
+  var m=document.createElement('div');
+  m.id='modal-paro-editar';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:10001;display:flex;align-items:flex-end;justify-content:center';
+  m.innerHTML='<div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;box-sizing:border-box">'
+    +'<div style="font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:12px">✏️ Editar actividad</div>'
+    +'<textarea id="paro-edit-act" class="form-control" rows="3" style="padding:8px;font-size:.9rem;margin-bottom:10px;resize:none">'+(a.actividad||'')+'</textarea>'
+    +'<div style="display:flex;gap:6px;margin-bottom:14px">'
+    +'<select id="paro-edit-prio" class="form-control" style="width:80px;flex-shrink:0;padding:8px;font-size:.85rem">'
+    +'<option value="A"'+(prio==='A'?' selected':'')+'>🔴 A</option>'
+    +'<option value="B"'+(prio==='B'?' selected':'')+'>🟠 B</option>'
+    +'<option value="C"'+(prio==='C'?' selected':'')+'>🟢 C</option>'
+    +'</select>'
+    +'<select id="paro-edit-resp" class="form-control" style="flex:1;padding:8px;font-size:.85rem">'+respOpts+'</select>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button onclick="document.getElementById(\'modal-paro-editar\').remove()" style="flex:1;padding:11px;background:#f3f4f6;border:none;border-radius:10px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="_paroGuardarEdicion(\''+id+'\')" style="flex:2;padding:11px;background:#1a3c5e;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">💾 Guardar</button>'
+    +'</div></div>';
+  document.body.appendChild(m);
+}
+
+async function _paroGuardarEdicion(id){
+  var a=PARO_ACTIVIDADES.find(function(x){return x.id===id;});
+  if(!a) return;
+  var txt=document.getElementById('paro-edit-act');
+  var sel=document.getElementById('paro-edit-resp');
+  var selPrio=document.getElementById('paro-edit-prio');
+  var actividad=txt?txt.value.trim():'';
+  if(!actividad){showAlert('La actividad no puede quedar vacía','error');return;}
+  var respId=sel?sel.value:'';
+  var resp=respId?getTecnicos().find(function(u){return u.id===respId;}):null;
+  var patch={id:id,actividad:actividad,prioridad:selPrio?selPrio.value:'B',responsable_id:resp?resp.id:null,responsable_nombre:resp?resp.nombre:null};
+  var r=await supaUpsert('paro_fabrica_actividades',patch);
+  if(r===null){showAlert('Error al guardar los cambios','error');return;}
+  a.actividad=patch.actividad;a.prioridad=patch.prioridad;a.responsable_id=patch.responsable_id;a.responsable_nombre=patch.responsable_nombre;
+  document.getElementById('modal-paro-editar')?.remove();
+  showAlert('✅ Actividad actualizada');
+  renderParoFabrica();
+  var modalHist=document.getElementById('modal-paro-historial');
+  if(modalHist&&modalHist.dataset.sesionId) _paroRenderHistorialSesion(modalHist.dataset.sesionId);
 }
 
 async function _paroNuevaSesion(){
@@ -31818,6 +31913,7 @@ async function _paroAgregarActividad(){
   if(!activa){showAlert('Primero inicia un paro','error');return;}
   var txt=document.getElementById('paro-nueva-act');
   var sel=document.getElementById('paro-nuevo-resp');
+  var selPrio=document.getElementById('paro-nuevo-prio');
   var actividad=txt?txt.value.trim():'';
   if(!actividad){showAlert('Escribe la actividad primero','error');return;}
   var respId=sel?sel.value:'';
@@ -31826,6 +31922,7 @@ async function _paroAgregarActividad(){
     id:'paroact_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
     sesion_id:activa.id,
     actividad:actividad,
+    prioridad:selPrio?selPrio.value:'B',
     responsable_id:resp?resp.id:null,
     responsable_nombre:resp?resp.nombre:null,
     cerrada:false,
@@ -31998,14 +32095,15 @@ function renderDORPlanesList(){
     return '<div style="border-left:4px solid '+colBorder+';background:'+(p.bloqueo?'#faf5ff':'#fff')+';border-radius:10px;padding:12px;margin-bottom:8px;box-shadow:0 1px 4px rgba(0,0,0,.06)">'
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">'
       +'<span style="font-size:11px;font-weight:700;color:#6b7280">Prio '+p.prioridad+bloqueoTag+(vencido?' · <span style="color:#dc2626">⚠️ VENCIDO</span>':'')+' · '+fecha+'</span>'
+      +'<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">'
       +(p.estado!=='cerrado'?
-        '<div style="display:flex;gap:4px;flex-wrap:wrap">'
-        +'<button onclick="cerrarPlanDOR(\''+p.id+'\')" style="padding:2px 8px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;font-size:10px;font-weight:700;color:#16a34a;cursor:pointer">✅ Cerrar</button>'
+        ('<button onclick="cerrarPlanDOR(\''+p.id+'\')" style="padding:2px 8px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;font-size:10px;font-weight:700;color:#16a34a;cursor:pointer">✅ Cerrar</button>'
         +'<button onclick="togglePlanBloqueo(\''+p.id+'\',\'refaccion\')" style="padding:2px 8px;background:'+(p.bloqueo==='refaccion'?'#fef3c7':'#f9fafb')+';border:1px solid '+(p.bloqueo==='refaccion'?'#f59e0b':'#d1d5db')+';border-radius:6px;font-size:10px;font-weight:700;color:'+(p.bloqueo==='refaccion'?'#92400e':'#6b7280')+';cursor:pointer">🔩</button>'
         +'<button onclick="togglePlanBloqueo(\''+p.id+'\',\'contratista\')" style="padding:2px 8px;background:'+(p.bloqueo==='contratista'?'#ede9fe':'#f9fafb')+';border:1px solid '+(p.bloqueo==='contratista'?'#7c3aed':'#d1d5db')+';border-radius:6px;font-size:10px;font-weight:700;color:'+(p.bloqueo==='contratista'?'#5b21b6':'#6b7280')+';cursor:pointer">👷</button>'
-        +'<button onclick="cambiarTipoPlanDOR(\''+p.id+'\')" style="padding:2px 8px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;font-size:10px;font-weight:700;color:#4338ca;cursor:pointer">'+(p.tipo==='prioridad'?'🔁 A Plan':'🔁 A Prioridad')+'</button>'
-        +'</div>'
+        +'<button onclick="cambiarTipoPlanDOR(\''+p.id+'\')" style="padding:2px 8px;background:#eef2ff;border:1px solid #c7d2fe;border-radius:6px;font-size:10px;font-weight:700;color:#4338ca;cursor:pointer">'+(p.tipo==='prioridad'?'🔁 A Plan':'🔁 A Prioridad')+'</button>')
         :'<span style="font-size:10px;color:#16a34a;font-weight:700">✅ Cerrado</span>')
+      +'<button onclick="abrirEditarPlan(\''+p.id+'\')" style="padding:2px 8px;background:#f9fafb;border:1px solid #d1d5db;border-radius:6px;font-size:10px;font-weight:700;color:#374151;cursor:pointer">✏️</button>'
+      +'</div>'
       +'</div>'
       +'<div style="font-size:13px;font-weight:700;color:#1a3c5e;margin-bottom:3px">'+p.descripcion+'</div>'
       +'<div style="font-size:11px;color:#6b7280">👤 '+p.responsable+'</div>'
@@ -32086,6 +32184,69 @@ function guardarNuevoPlan(){
   renderDOR();
   if(document.getElementById('wor-content')) renderWOR();
   if(document.getElementById('dor-planes-list')) renderDORPlanesList();
+}
+
+// Editar un Plan de Acción / Prioridad ya creado — mismo formulario de "Nuevo
+// Plan" pero prellenado, y guarda sobre el registro existente en vez de crear
+// uno nuevo. Como DOR y WOR comparten DOR_PLANES, queda resuelto en las dos
+// pantallas con este único cambio.
+function abrirEditarPlan(id){
+  var p=DOR_PLANES.find(function(x){return x.id===id;});
+  if(!p) return;
+  var responsables=['César Arreola','Anthon Chávez','Lisandro Torres','Ángel Muratalla','Eduardo Orozco','Marco Díaz','Uriel Navarrete','Alan Zurita','Jorge Martínez','Mauricio Rangel'];
+  if(p.responsable&&responsables.indexOf(p.responsable)<0) responsables=[p.responsable].concat(responsables);
+  var m=document.createElement('div');
+  m.id='modal-editar-plan';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  m.innerHTML='<div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto">'
+    +'<div style="font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:14px">✏️ Editar '+(p.tipo==='prioridad'?'Prioridad':'Plan de Acción')+'</div>'
+    +'<div class="form-group"><label class="form-label">Tipo</label>'
+    +'<select class="form-control" id="ep-tipo">'
+    +'<option value="plan"'+(p.tipo!=='prioridad'?' selected':'')+'>📋 Plan de Acción</option>'
+    +'<option value="prioridad"'+(p.tipo==='prioridad'?' selected':'')+'>🎯 Prioridad</option>'
+    +'</select></div>'
+    +'<div class="form-group"><label class="form-label">Descripción *</label><textarea class="form-control" id="ep-desc" rows="3">'+(p.descripcion||'')+'</textarea></div>'
+    +'<div class="form-group"><label class="form-label">Responsable *</label>'
+    +'<select class="form-control" id="ep-resp">'
+    +responsables.map(function(r){return '<option value="'+r+'"'+(p.responsable===r?' selected':'')+'>'+r+'</option>';}).join('')
+    +'</select></div>'
+    +'<div class="form-group"><label class="form-label">Prioridad</label>'
+    +'<select class="form-control" id="ep-prio"><option value="A"'+(p.prioridad==='A'?' selected':'')+'>🔴 A</option><option value="B"'+(p.prioridad==='B'?' selected':'')+'>🟠 B</option><option value="C"'+(p.prioridad==='C'?' selected':'')+'>🟢 C</option></select></div>'
+    +'<div class="form-group"><label class="form-label">Fecha de vencimiento</label><input type="date" class="form-control" id="ep-fecha" value="'+(p.fechaVencimiento||'')+'"></div>'
+    +'<div style="display:flex;gap:8px;margin-top:12px">'
+    +'<button type="button" class="btn btn-outline" style="flex:1" onclick="document.getElementById(\'modal-editar-plan\').remove()">Cancelar</button>'
+    +'<button type="button" class="btn btn-primary" style="flex:2" onclick="guardarEditarPlan(\''+id+'\')">💾 Guardar cambios</button>'
+    +'</div></div>';
+  document.body.appendChild(m);
+}
+
+function guardarEditarPlan(id){
+  var p=DOR_PLANES.find(function(x){return x.id===id;});
+  if(!p) return;
+  var desc=document.getElementById('ep-desc')?.value.trim();
+  var resp=document.getElementById('ep-resp')?.value;
+  var prio=document.getElementById('ep-prio')?.value||'B';
+  var fecha=document.getElementById('ep-fecha')?.value;
+  var tipo=document.getElementById('ep-tipo')?.value||'plan';
+  if(!desc){showAlert('Describe el plan de acción','error');return;}
+  if(!resp){showAlert('Selecciona un responsable','error');return;}
+  p.descripcion=desc;p.responsable=resp;p.prioridad=prio;p.fechaVencimiento=fecha||null;p.tipo=tipo;
+  saveDB('dor_planes',DOR_PLANES);
+  supaFetch('dor_planes','PATCH',{descripcion:desc,responsable:resp,prioridad:prio,fecha_vencimiento:fecha||null,tipo:tipo},'id=eq.'+id).catch(function(){});
+  document.getElementById('modal-editar-plan')?.remove();
+  showAlert('✅ Cambios guardados');
+  renderDORPlanesList();
+  // El historial de cerrados se refresca con su propia función (dorRenderHistorial),
+  // nunca con dorRenderSeccionInline — esa es solo para las secciones de
+  // Planes/Prioridades abiertos (ver dorToggleSeccion/worToggleSeccion).
+  var wrapD=document.getElementById('dor-seccion-wrap');
+  if(wrapD&&wrapD.dataset.tipo==='historial'){ dorRenderHistorial(wrapD); }
+  else if(wrapD&&wrapD.dataset.tipo){ dorRenderSeccionInline(wrapD,wrapD.dataset.tipo); }
+  else if(document.getElementById('dor-content')){ renderDOR(); }
+  var wrapW=document.getElementById('wor-seccion-wrap');
+  if(wrapW&&wrapW.dataset.tipo==='historial'){ dorRenderHistorial(wrapW); }
+  else if(wrapW&&wrapW.dataset.tipo){ dorRenderSeccionInline(wrapW,wrapW.dataset.tipo); }
+  else if(document.getElementById('wor-content')){ renderWOR(); }
 }
 
 
