@@ -22039,8 +22039,13 @@ function showProtocolosProximaSemana(){
   supaFetch('protocolos_pm03','GET',null,'activo=eq.true&order=linea.asc').then(function(rows){
     if(sem!==window._protoSemFiltro||anio!==window._protoAnioFiltro) return; // el usuario ya cambió de semana mientras cargaba
     PROTOCOLOS_PM03_SUPA=rows||[];
+    // Incluye también las ya cerradas (marcadas "Ejecutada") — editar/generar su
+    // protocolo es seguro aunque ya estén cerradas (nunca se les congela snapshot,
+    // ver _pm3CongelarProtocoloSiAplica), y así se pueden encontrar para dejar
+    // listo el protocolo de la siguiente vez que se genere esa actividad.
     var pm3s=PM03_PLAN.filter(function(p){
-      if(p.semana!==sem||p.año!==anio||p.estado!=='abierta') return false;
+      if(p.semana!==sem||p.año!==anio) return false;
+      if(p.estado!=='abierta'&&p.estado!=='cerrada') return false;
       if(areaFiltro && proto_areaFromLinea(p.linea)!==areaFiltro) return false;
       return true;
     }).sort(function(a,b){ return (a.linea||'').localeCompare(b.linea||'')||(a.componente||'').localeCompare(b.componente||''); });
@@ -22051,19 +22056,23 @@ function showProtocolosProximaSemana(){
     }
 
     lDiv.innerHTML=pm3s.map(function(p){
+      var cerrada=p.estado==='cerrada';
       var nivel=_protoNivelCobertura(p.linea,p.componente,p.actividad);
       var badge = nivel===3?{t:'✅ Específico',bg:'#dcfce7',c:'#16a34a'}
                 : nivel===2?{t:'⚠️ Genérico (equipo)',bg:'#fef3c7',c:'#92400e'}
                 : nivel===1?{t:'⚠️ Genérico (línea)',bg:'#fef3c7',c:'#92400e'}
                 : {t:'❌ Sin protocolo',bg:'#fee2e2',c:'#dc2626'};
-      return '<div class="ot-card pm03" onclick="_protoAccionesPM03(\''+p.id+'\')" style="border-left:4px solid '+badge.c+'">'
+      return '<div class="ot-card pm03" onclick="_protoAccionesPM03(\''+p.id+'\')" style="border-left:4px solid '+(cerrada?'#9ca3af':badge.c)+';'+(cerrada?'opacity:.65;background:#f9fafb':'')+'">'
         +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
         +'<span style="font-size:11px;color:#6b7280;font-weight:700">'+pm3FolioHTML(p)+'</span>'
+        +'<span style="display:flex;gap:4px">'
+        +(cerrada?'<span class="badge" style="background:#e5e7eb;color:#4b5563">Ejecutada</span>':'')
         +'<span class="badge" style="background:'+badge.bg+';color:'+badge.c+'">'+badge.t+'</span>'
+        +'</span>'
         +'</div>'
         +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+' — '+(p.componente||'—')+'</div>'
         +'<div style="font-size:12px;color:var(--txt2)">'+(p.actividad||'—')+'</div>'
-        +'<div style="font-size:11px;color:'+(p.tecnicoNombre?'#6b7280':'#dc2626')+';margin-top:4px;font-weight:'+(p.tecnicoNombre?'400':'700')+'">👨‍🔧 '+(p.tecnicoNombre||'Sin asignar')+'</div>'
+        +(cerrada?'':'<div style="font-size:11px;color:'+(p.tecnicoNombre?'#6b7280':'#dc2626')+';margin-top:4px;font-weight:'+(p.tecnicoNombre?'400':'700')+'">👨‍🔧 '+(p.tecnicoNombre||'Sin asignar')+'</div>')
         +'</div>';
     }).join('');
   });
@@ -22120,16 +22129,17 @@ function _protoAccionesPM03(pmId){
   var actEsc=String(p.actividad||'').replace(/'/g,"\\'").replace(/"/g,'&quot;');
 
   var esAdminOSuper=currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super');
+  var yaEjecutada=p.estado==='cerrada';
 
   var modal=document.createElement('div');
   modal.id='modal-proto-acciones-pm03';
   modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;overflow-y:auto;padding:12px;box-sizing:border-box';
   modal.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;max-width:440px;margin:auto">'
-    +'<div style="font-size:15px;font-weight:800;color:#1a3c5e;margin-bottom:4px">'+(p.linea||'—')+' — '+(p.componente||'—')+'</div>'
+    +'<div style="font-size:15px;font-weight:800;color:#1a3c5e;margin-bottom:4px">'+(p.linea||'—')+' — '+(p.componente||'—')+(yaEjecutada?' <span class="badge" style="background:#e5e7eb;color:#4b5563;font-size:10px">Ejecutada</span>':'')+'</div>'
     +'<div style="font-size:13px;color:#6b7280;margin-bottom:4px">'+(p.actividad||'—')+'</div>'
-    +'<div style="font-size:12px;color:'+(p.tecnicoNombre?'#6b7280':'#dc2626')+';font-weight:'+(p.tecnicoNombre?'400':'700')+';margin-bottom:16px">👨‍🔧 '+(p.tecnicoNombre||'Sin asignar')+'</div>'
+    +(yaEjecutada?'':'<div style="font-size:12px;color:'+(p.tecnicoNombre?'#6b7280':'#dc2626')+';font-weight:'+(p.tecnicoNombre?'400':'700')+';margin-bottom:16px">👨‍🔧 '+(p.tecnicoNombre||'Sin asignar')+'</div>')
     +'<div style="display:flex;flex-direction:column;gap:8px">'
-    +(esAdminOSuper?('<button onclick="window._protoVolverASemana=true;document.getElementById(\'modal-proto-acciones-pm03\').remove();abrirEditarPM03Admin(\''+p.id+'\')" style="padding:12px;background:#ede9fe;border:1px solid #c4b5fd;border-radius:10px;font-weight:700;color:#5b21b6;cursor:pointer;text-align:left">👷 Asignar / Editar técnico</button>'):'')
+    +(esAdminOSuper&&!yaEjecutada?('<button onclick="window._protoVolverASemana=true;document.getElementById(\'modal-proto-acciones-pm03\').remove();abrirEditarPM03Admin(\''+p.id+'\')" style="padding:12px;background:#ede9fe;border:1px solid #c4b5fd;border-radius:10px;font-weight:700;color:#5b21b6;cursor:pointer;text-align:left">👷 Asignar / Editar técnico</button>'):'')
     +'<button onclick="window._protoVolverASemana=true;document.getElementById(\'modal-proto-acciones-pm03\').remove();abrirEditorProtocolo(null,{linea:\''+lineaEsc+'\',equipo:\''+compEsc+'\',actividad:\''+actEsc+'\'})" style="padding:12px;background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;font-weight:700;color:#1d4ed8;cursor:pointer;text-align:left">🆕 Generar protocolo nuevo</button>'
     +(match?('<button onclick="window._protoVolverASemana=true;document.getElementById(\'modal-proto-acciones-pm03\').remove();abrirEditorProtocolo(\''+match.id+'\')" style="padding:12px;background:#f3f4f6;border:none;border-radius:10px;font-weight:700;color:#374151;cursor:pointer;text-align:left">✏️ Editar protocolo ('+(match.equipo||match.linea)+(match.equipo_secundario?' · '+match.equipo_secundario:'')+')</button>'):'')
     +(match?('<button onclick="_protoEliminarDesdeAccion(\''+match.id+'\')" style="padding:12px;background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;font-weight:700;color:#dc2626;cursor:pointer;text-align:left">🗑️ Eliminar protocolo</button>'):'')
