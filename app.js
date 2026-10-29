@@ -11908,11 +11908,65 @@ var _firmaLastX=0, _firmaLastY=0;
 var _firmaCampo=null;
 var _firmaOtId=null;
 
+// ── Validación de firmas: checklist completo + orden obligatorio ──────────
+// 1) No se puede firmar NINGÚN campo si todavía falta llenar algún punto del
+//    protocolo (Estado Final de cada actividad, comentario cuando el Estado
+//    Final no es "Bien", y los 3 puntos de medición cuando la actividad los
+//    requiere) — mismo criterio que ya validaba el botón final de Guardar en
+//    confirmarCierrePM03, solo que ahora también bloquea las firmas.
+// 2) Orden obligatorio entre las firmas que el protocolo SÍ requiere:
+//    1° Técnico Mantenimiento → 2°/3° Líder de Área y Calidad (en cualquier
+//    orden entre ellas) → 4° Coordinador de Mantenimiento (siempre al final).
+function _pm3ChecklistCompleto(p,proto){
+  if(!proto||!proto.actividades||!proto.actividades.length) return {ok:true};
+  var faltanEstado=[],faltanComentario=[],faltanMedicion=[];
+  proto.actividades.forEach(function(a){
+    var ef=(p.actividadesEstadoFinal||{})[a.id]||'';
+    if(!ef){faltanEstado.push(a.id);return;}
+    if(ef!=='B'&&!((p.comentariosActividades||{})[a.id]||'').trim()) faltanComentario.push(a.id);
+    if(a.medicion){
+      var mv=(p.medicionesActividades||{})[a.id]||[];
+      var completos=mv.length===3&&mv.every(function(v){return v&&v.referencia!=null&&v.medido!=null&&!isNaN(v.referencia)&&!isNaN(v.medido);});
+      if(!completos) faltanMedicion.push(a.id);
+    }
+  });
+  if(faltanEstado.length) return {ok:false,msg:'Selecciona Estado Final en actividades: '+faltanEstado.join(', ')};
+  if(faltanComentario.length) return {ok:false,msg:'Comentarios obligatorios en actividades: '+faltanComentario.join(', ')};
+  if(faltanMedicion.length) return {ok:false,msg:'Completa los 3 puntos de medición en: '+faltanMedicion.join(', ')};
+  return {ok:true};
+}
+
+var _PM3_FIRMA_RANGO={operador:1,lider:2,calidad:2,admin:3};
+var _PM3_FIRMA_LABEL={operador:'Técnico Mantenimiento',lider:'Líder Área',calidad:'Inspector Calidad',admin:'Coordinador de Mantenimiento'};
+
+// Devuelve el texto de cuál(es) firma(s) requeridas por el protocolo deben
+// quedar puestas ANTES de la que se está intentando firmar, o null si el
+// orden ya se cumple (o esa firma no tiene nada por delante).
+function _pm3FirmaPendienteAntes(p,proto,campo){
+  var reqs=pm3FirmasRequeridas(proto);
+  var rango=_PM3_FIRMA_RANGO[campo];
+  var pendientesAntes=reqs.filter(function(k){
+    if(k===campo) return false;
+    if(_PM3_FIRMA_RANGO[k]>=rango) return false; // solo cuentan las de rango anterior
+    var campoImg='firmaImg'+k.charAt(0).toUpperCase()+k.slice(1);
+    return !p[campoImg];
+  });
+  if(!pendientesAntes.length) return null;
+  return pendientesAntes.map(function(k){return _PM3_FIRMA_LABEL[k];}).join(' y ');
+}
+
 function abrirModalFirma(otId, campo){
+  var _pChk=PM03_PLAN.find(function(x){return x.id===otId;});
+  if(!_pChk) return;
+  var _protoChk=getProtocoloPM03(_pChk.linea,_pChk.componente,_pChk.actividad);
+  var _chk=_pm3ChecklistCompleto(_pChk,_protoChk);
+  if(!_chk.ok){showAlert('⚠️ '+_chk.msg,'error');return;}
+  var _faltaAntes=_pm3FirmaPendienteAntes(_pChk,_protoChk,campo);
+  if(_faltaAntes){showAlert('⚠️ Antes debe firmar: '+_faltaAntes,'error');return;}
   _firmaOtId=otId;
   _firmaCampo=campo;
   var labels={operador:'Técnico Mantenimiento',lider:'Líder Área',calidad:'Inspector Calidad',admin:'Coordinador de Mantenimiento'};
-  var p=PM03_PLAN.find(function(x){return x.id===otId;});
+  var p=_pChk;
   // Si esta PM03 ya se recorrió al menos una semana sin cerrarse (corte
   // automático), el Coordinador de Mantenimiento debe explicar el motivo al
   // firmar — las demás firmas (operador/líder/calidad) no lo piden.
