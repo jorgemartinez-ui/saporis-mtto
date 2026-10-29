@@ -2131,7 +2131,7 @@ function setFiltro(tipo,val,btn){filtrosConsulta[tipo]=val;const row=btn.closest
 // ================================================================
 // PM03
 // ================================================================
-function showPM03(){window._pm3FiltroTec='';window._pm3FiltroEstado='todas';window._pm3FiltroLinea='';_pm3FiltroSem=0;_pm3FiltroMes=0;_pm3PedirMotivosPendientes();renderPM03();showScreen('screen-pm03');}
+function showPM03(){window._pm3FiltroTec='';window._pm3FiltroEstado='todas';window._pm3FiltroLinea='';_pm3FiltroSem=0;_pm3FiltroMes=0;_pm3AvisarFirmasPendientes();_pm3PedirMotivosPendientes();renderPM03();showScreen('screen-pm03');}
 // Estado de filtros PM03
 var _pm3FiltroSem  = 0; // 0 = semana actual
 var _pm3FiltroMes  = 0;
@@ -37003,6 +37003,38 @@ function _pm3DesdeCorte(anio,semana){
   return semana>=PM3_CORTE_DESDE.semana;
 }
 
+// Checklist completo pero con firmas (requeridas por el protocolo) todavía
+// sin poner — devuelve {proto,faltan:[...]} o null si no aplica (checklist
+// incompleto todavía, o ya están todas las firmas puestas). Se usa tanto para
+// que el corte no recorra estas PM03 de semana (cuentan como ejecutadas, solo
+// falta firmar) como para el aviso al admin/super en el botón PM03.
+function _pm3FirmasFaltantesInfo(p){
+  var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
+  var chk=_pm3ChecklistCompleto(p,proto);
+  if(!chk.ok) return null;
+  var faltan=pm3FirmasRequeridas(proto).filter(function(k){
+    var campoImg='firmaImg'+k.charAt(0).toUpperCase()+k.slice(1);
+    return !p[campoImg];
+  });
+  if(!faltan.length) return null;
+  return {proto:proto,faltan:faltan};
+}
+
+// ¿Ya hay otra PM03 (distinto id) de la misma línea+componente+actividad,
+// todavía abierta, programada exactamente en la semana/año destino? Si sí, el
+// corte no debe recorrer la PM03 encima de esa — se quedaría parada en rojo.
+function _pm3ExisteColisionSemana(p,semanaObjetivo,anioObjetivo){
+  var compClave=p.componente||'General';
+  return PM03_PLAN.some(function(x){
+    if(x.id===p.id) return false;
+    if(x.estado==='cerrada') return false;
+    if(x.linea!==p.linea) return false;
+    if(_normTxtAct(x.componente||'General')!==_normTxtAct(compClave)) return false;
+    if(_normTxtAct(x.actividad)!==_normTxtAct(p.actividad)) return false;
+    return x.semana===semanaObjetivo && (x.año||x.anio)===anioObjetivo;
+  });
+}
+
 function _pm3AplicarCortes(){
   if(!Array.isArray(PM03_PLAN)||!PM03_PLAN.length) return;
   var ahora=new Date();
@@ -37010,7 +37042,11 @@ function _pm3AplicarCortes(){
     if(!p.semana||p.estado==='cerrada'||p.estado==='reprogramada'||p.estado==='afectada') return false;
     var anio=p.año||p.anio||currentYear();
     if(!_pm3DesdeCorte(anio,p.semana)) return false;
-    return ahora>_pm3CutoffCorte(anio,p.semana);
+    if(ahora<=_pm3CutoffCorte(anio,p.semana)) return false;
+    // Checklist lleno y solo faltan firmas: cuenta como ejecutada esa semana,
+    // no se recorre — se queda esperando a que la firmen.
+    if(_pm3FirmasFaltantesInfo(p)) return false;
+    return true;
   });
   if(!candidatos.length) return;
   if(candidatos.length>100){
@@ -37020,10 +37056,16 @@ function _pm3AplicarCortes(){
   candidatos.forEach(function(p){
     var vueltas=0;
     while(vueltas<60 && ahora>_pm3CutoffCorte(p.año||p.anio||currentYear(),p.semana)){
+      var anioActual=p.año||p.anio||currentYear();
       if(!p.semanasVencidas) p.semanasVencidas=[];
-      p.semanasVencidas.push({semana:p.semana,anio:p.año||p.anio||currentYear()});
-      var s=p.semana+1, a=p.año||p.anio||currentYear();
+      var yaMarcada=p.semanasVencidas.some(function(v){return v.semana===p.semana&&v.anio===anioActual;});
+      if(!yaMarcada) p.semanasVencidas.push({semana:p.semana,anio:anioActual});
+      var s=p.semana+1, a=anioActual;
       if(s>52){s-=52;a+=1;}
+      // La semana siguiente ya tiene programada esta misma actividad, todavía
+      // abierta: no nos movemos encima de ella — se queda parada en rojo en su
+      // semana actual y sigue su ciclo normal de pedir el comentario.
+      if(_pm3ExisteColisionSemana(p,s,a)) break;
       p.semana=s; p.año=a;
       vueltas++;
     }
@@ -37073,6 +37115,31 @@ function _pm3PedirMotivosPendientes(){
     }
   });
   if(hayCambios) saveDB('pm03_plan',PM03_PLAN);
+}
+
+// Aviso (solo admin/super, al abrir el botón PM03) de actividades con el
+// checklist ya lleno pero a las que todavía les faltan firmas y ya se pasó
+// su corte de semana — son las que el corte dejó de recorrer a propósito
+// (ver _pm3AplicarCortes) para que no se pierdan de vista hasta firmarse.
+function _pm3AvisarFirmasPendientes(){
+  if(!currentUser||(currentUser.rol!=='admin'&&currentUser.rol!=='super')) return;
+  var ahora=new Date();
+  var pendientes=[];
+  (PM03_PLAN||[]).forEach(function(p){
+    if(!p.semana||p.estado==='cerrada'||p.estado==='reprogramada'||p.estado==='afectada') return;
+    var anio=p.año||p.anio||currentYear();
+    if(!_pm3DesdeCorte(anio,p.semana)) return;
+    if(ahora<=_pm3CutoffCorte(anio,p.semana)) return;
+    var info=_pm3FirmasFaltantesInfo(p);
+    if(!info) return;
+    pendientes.push({p:p,anio:anio,faltan:info.faltan});
+  });
+  if(!pendientes.length) return;
+  var lista=pendientes.map(function(x){
+    var faltanTxt=x.faltan.map(function(k){return _PM3_FIRMA_LABEL[k]||k;}).join(', ');
+    return '• '+(x.p.componente||'General')+' — '+(x.p.actividad||'—')+' (Sem '+x.p.semana+'/'+x.anio+'): falta '+faltanTxt;
+  }).join('\n');
+  alert('✍️ PM03 ejecutadas, pendientes de firma:\n\n'+lista);
 }
 
 function abrirDetonarPM03Anticipada(actividadPlanId,semana,anio){
