@@ -31084,14 +31084,23 @@ function _renderDORInner(cont,dias,ultimoAcc){
     +'<div style="text-align:center;font-size:22px;font-weight:900;color:'+(refPend>0?'#78350f':'#14532d')+'">'+(refPend>0?refPend+' total':'✅ Al día')+'</div>'
     +'</div>';
 
+  // Antes esta celda del grid era solo "Reconocimiento" (tarjeta completa); ahora
+  // se divide en 2 mitades para dejar lugar al nuevo botón de Paro de Fábrica, sin
+  // tocar el ancho total que ya ocupaba dentro del grid de 3 columnas de arriba.
   var reconVig=_reconVigente();
-  html+='<div onclick="dorAbrirReconocimiento()" style="background:#fff;border:1px solid #d1d5db;border-radius:12px;padding:12px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">'
-    +'<div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:6px">RECONOCIMIENTO</div>'
-    +'<div style="font-size:24px;line-height:1">🏆</div>'
+  html+='<div style="display:flex;gap:6px">'
+    +'<div onclick="dorAbrirReconocimiento()" style="flex:1;min-width:0;background:#fff;border:1px solid #d1d5db;border-radius:12px;padding:8px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">'
+    +'<div style="font-size:9px;font-weight:700;color:#374151;margin-bottom:4px">RECONOCIMIENTO</div>'
+    +'<div style="font-size:20px;line-height:1">🏆</div>'
     +(reconVig
-      ?'<div style="font-size:10px;color:#92400e;font-weight:800;margin-top:4px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">'+_reconNombres(reconVig)+'</div>'
-      :'<div style="font-size:9px;color:#9ca3af;margin-top:4px">Sin reconocimiento</div>')
-    +'<div onclick="event.stopPropagation();_reconHistorialAbrir()" style="font-size:9px;color:#1a3c5e;font-weight:700;margin-top:6px;text-decoration:underline">📜 Historial</div>'
+      ?'<div style="font-size:9px;color:#92400e;font-weight:800;margin-top:3px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical">'+_reconNombres(reconVig)+'</div>'
+      :'<div style="font-size:8px;color:#9ca3af;margin-top:3px">Sin reconocimiento</div>')
+    +'<div onclick="event.stopPropagation();_reconHistorialAbrir()" style="font-size:8px;color:#1a3c5e;font-weight:700;margin-top:4px;text-decoration:underline">📜 Historial</div>'
+    +'</div>'
+    +'<div onclick="showParoFabrica()" style="flex:1;min-width:0;background:#fff;border:1px solid #d1d5db;border-radius:12px;padding:8px 6px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center">'
+    +'<div style="font-size:9px;font-weight:700;color:#374151;margin-bottom:4px;line-height:1.2">ACTIVIDADES PARA PARO DE FÁBRICA</div>'
+    +'<div style="font-size:20px;line-height:1">🏭</div>'
+    +'</div>'
     +'</div>';
 
   html+='</div>';
@@ -31698,6 +31707,201 @@ function _reconGuardar(){
     showAlert('⚠️ No se pudo guardar (red): '+e.message,'error');
     if(btn){btn.disabled=false;btn.textContent='💾 Guardar';}
   });
+}
+
+// ================================================================
+// Actividades Para Paro de Fábrica — pizarrón (tarjeta DOR)
+// ================================================================
+// Se carga/guarda aparte (no entra al syncSupabase general) para no tocar ese
+// flujo — mismo criterio que shoCargarComentarios/_pm3FetchFirmasPM03: se
+// trae solo cuando se abre esta pantalla. Cualquiera (técnico/admin/super)
+// puede agregar actividades y cerrarlas/reabrirlas. Cada "paro" es una sesión
+// con su propia fecha; al abrir uno nuevo, el anterior pasa al historial.
+var PARO_SESIONES=[];
+var PARO_ACTIVIDADES=[];
+
+async function showParoFabrica(){
+  showScreen('screen-paro-fabrica');
+  window._paroFiltroTec='';
+  var cont=document.getElementById('paro-content');
+  if(cont) cont.innerHTML='<p style="color:#6b7280;font-size:13px;text-align:center;padding:20px">Cargando...</p>';
+  var sesiones=await supaFetch('paro_fabrica_sesiones','GET',null,'order=creado_ts.desc');
+  var acts=await supaFetch('paro_fabrica_actividades','GET',null,'order=creado_ts.asc');
+  if(sesiones===null||acts===null){
+    if(cont) cont.innerHTML='<div class="card" style="padding:24px;text-align:center"><div style="font-size:40px">⚠️</div><div style="font-weight:700;margin-top:8px">Error al cargar</div></div>';
+    return;
+  }
+  PARO_SESIONES=sesiones;
+  PARO_ACTIVIDADES=acts;
+  renderParoFabrica();
+}
+
+function renderParoFabrica(){
+  var cont=document.getElementById('paro-content');
+  if(!cont) return;
+  var activa=PARO_SESIONES.find(function(s){return s.activa;});
+  var subEl=document.getElementById('paro-topbar-sub');
+  if(subEl) subEl.textContent=activa?(activa.nombre||('Paro '+fmtDate(activa.creado_ts))):'Sin paro activo';
+
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">'
+    +'<div style="font-size:13px;font-weight:800;color:#1a3c5e">'+(activa?('🏭 '+(activa.nombre||('Paro '+fmtDate(activa.creado_ts)))):'Sin paro activo')+'</div>'
+    +'<div style="display:flex;gap:6px">'
+    +'<button onclick="_paroNuevaSesion()" style="padding:6px 10px;background:#14532d;color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">🆕 Nuevo paro</button>'
+    +'<button onclick="_paroVerHistorial()" style="padding:6px 10px;background:#374151;color:#fff;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">📜 Historial</button>'
+    +'</div></div>';
+
+  if(!activa){
+    html+='<div style="text-align:center;color:#9ca3af;font-size:13px;padding:30px 10px">No hay un paro activo — da click en "🆕 Nuevo paro" para empezar el pizarrón.</div>';
+    cont.innerHTML=html;
+    return;
+  }
+
+  var tecOpts='<option value="">Todos los técnicos</option>'+getTecnicos().map(function(u){return '<option value="'+u.id+'"'+(window._paroFiltroTec===u.id?' selected':'')+'>'+u.nombre.split(' ')[0]+'</option>';}).join('');
+  html+='<div style="margin-bottom:12px"><select class="form-control" style="padding:7px;font-size:.82rem" onchange="window._paroFiltroTec=this.value;renderParoFabrica()">'+tecOpts+'</select></div>';
+
+  var respOpts='<option value="">Sin asignar</option>'+getTecnicos().map(function(u){return '<option value="'+u.id+'">'+u.nombre+'</option>';}).join('');
+  html+='<div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px;margin-bottom:14px">'
+    +'<textarea id="paro-nueva-act" class="form-control" rows="2" style="padding:8px;font-size:.85rem;margin-bottom:6px;resize:none" placeholder="Nueva actividad para el paro..."></textarea>'
+    +'<div style="display:flex;gap:6px">'
+    +'<select id="paro-nuevo-resp" class="form-control" style="flex:1;padding:7px;font-size:.82rem">'+respOpts+'</select>'
+    +'<button onclick="_paroAgregarActividad()" style="flex-shrink:0;padding:8px 14px;background:#1a3c5e;color:#fff;border:none;border-radius:8px;font-weight:700;font-size:12px;cursor:pointer">+ Agregar</button>'
+    +'</div></div>';
+
+  var items=PARO_ACTIVIDADES.filter(function(a){
+    if(a.sesion_id!==activa.id) return false;
+    if(window._paroFiltroTec && a.responsable_id!==window._paroFiltroTec) return false;
+    return true;
+  });
+  if(!items.length){
+    html+='<div style="text-align:center;color:#9ca3af;font-size:13px;padding:20px">Sin actividades'+(window._paroFiltroTec?' para este técnico':'')+' todavía</div>';
+  } else {
+    html+=items.map(function(a){ return _paroFilaHTML(a); }).join('');
+  }
+
+  cont.innerHTML=html;
+}
+
+// Fila del pizarrón: texto grande de la actividad a la izquierda, responsable
+// a la derecha, y botón cerrar/reabrir — igual idea que los comentarios del
+// botón SHO (tachado + opacidad al cerrar), pero aquí sí se puede reabrir.
+function _paroFilaHTML(a){
+  var cerrada=!!a.cerrada;
+  return '<div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;border-left:4px solid '+(cerrada?'#9ca3af':'#1a3c5e')+';border-radius:10px;padding:10px 12px;margin-bottom:8px">'
+    +'<div style="flex:1;min-width:0">'
+    +'<div style="font-size:13px;'+(cerrada?'text-decoration:line-through;opacity:.5':'')+'">'+(a.actividad||'')+'</div>'
+    +'</div>'
+    +'<div style="width:90px;flex-shrink:0;text-align:center;font-size:11px;color:#374151;font-weight:700;'+(cerrada?'opacity:.5':'')+'">'+(a.responsable_nombre||'Sin asignar')+'</div>'
+    +(cerrada
+      ?'<button onclick="_paroReabrirActividad(\''+a.id+'\')" style="flex-shrink:0;padding:5px 10px;background:#f3f4f6;border:none;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;color:#374151">↩️ Reabrir</button>'
+      :'<button onclick="_paroCerrarActividad(\''+a.id+'\')" style="flex-shrink:0;padding:5px 10px;background:#14532d;color:#fff;border:none;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer">✓ Cerrar</button>')
+    +'</div>';
+}
+
+async function _paroNuevaSesion(){
+  var nombre=prompt('Nombre del paro (opcional, ej. "Paro Enero 2027"):','')||'';
+  var anterior=PARO_SESIONES.find(function(s){return s.activa;});
+  if(anterior){
+    var rCierre=await supaUpsert('paro_fabrica_sesiones',{id:anterior.id,activa:false});
+    if(rCierre===null){showAlert('No se pudo cerrar el paro anterior — intenta de nuevo','error');return;}
+    anterior.activa=false;
+  }
+  var nueva={id:'paro_'+Date.now(),nombre:nombre.trim()||null,creado_ts:Date.now(),creado_por:currentUser.nombre,activa:true};
+  var r=await supaUpsert('paro_fabrica_sesiones',nueva);
+  if(r===null){showAlert('Error al crear el paro','error');return;}
+  PARO_SESIONES.unshift(nueva);
+  renderParoFabrica();
+  showAlert('✅ Nuevo paro iniciado');
+}
+
+async function _paroAgregarActividad(){
+  var activa=PARO_SESIONES.find(function(s){return s.activa;});
+  if(!activa){showAlert('Primero inicia un paro','error');return;}
+  var txt=document.getElementById('paro-nueva-act');
+  var sel=document.getElementById('paro-nuevo-resp');
+  var actividad=txt?txt.value.trim():'';
+  if(!actividad){showAlert('Escribe la actividad primero','error');return;}
+  var respId=sel?sel.value:'';
+  var resp=respId?getTecnicos().find(function(u){return u.id===respId;}):null;
+  var nueva={
+    id:'paroact_'+Date.now()+'_'+Math.random().toString(36).slice(2,7),
+    sesion_id:activa.id,
+    actividad:actividad,
+    responsable_id:resp?resp.id:null,
+    responsable_nombre:resp?resp.nombre:null,
+    cerrada:false,
+    creado_por:currentUser.nombre,
+    creado_ts:Date.now()
+  };
+  var r=await supaUpsert('paro_fabrica_actividades',nueva);
+  if(r===null){showAlert('Error al guardar la actividad','error');return;}
+  PARO_ACTIVIDADES.push(nueva);
+  renderParoFabrica();
+}
+
+async function _paroCerrarActividad(id){
+  var a=PARO_ACTIVIDADES.find(function(x){return x.id===id;});
+  if(!a) return;
+  var patch={id:id,cerrada:true,cerrada_por:currentUser.nombre,cerrada_ts:Date.now()};
+  var r=await supaUpsert('paro_fabrica_actividades',patch);
+  if(r===null){showAlert('Error al cerrar','error');return;}
+  a.cerrada=true;a.cerrada_por=patch.cerrada_por;a.cerrada_ts=patch.cerrada_ts;
+  renderParoFabrica();
+  var modal=document.getElementById('modal-paro-historial');
+  if(modal&&modal.dataset.sesionId) _paroRenderHistorialSesion(modal.dataset.sesionId);
+}
+
+async function _paroReabrirActividad(id){
+  var a=PARO_ACTIVIDADES.find(function(x){return x.id===id;});
+  if(!a) return;
+  var patch={id:id,cerrada:false,cerrada_por:null,cerrada_ts:null};
+  var r=await supaUpsert('paro_fabrica_actividades',patch);
+  if(r===null){showAlert('Error al reabrir','error');return;}
+  a.cerrada=false;a.cerrada_por=null;a.cerrada_ts=null;
+  renderParoFabrica();
+  var modal=document.getElementById('modal-paro-historial');
+  if(modal&&modal.dataset.sesionId) _paroRenderHistorialSesion(modal.dataset.sesionId);
+}
+
+function _paroVerHistorial(){
+  var pasadas=PARO_SESIONES.filter(function(s){return !s.activa;});
+  if(!pasadas.length){showAlert('Sin paros anteriores todavía');return;}
+  var modal=document.getElementById('modal-paro-historial')||document.createElement('div');
+  modal.id='modal-paro-historial';
+  modal.dataset.sesionId='';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;overflow-y:auto;padding:12px;box-sizing:border-box';
+  var rows=pasadas.map(function(s){
+    var n=PARO_ACTIVIDADES.filter(function(a){return a.sesion_id===s.id;}).length;
+    var cerradas=PARO_ACTIVIDADES.filter(function(a){return a.sesion_id===s.id&&a.cerrada;}).length;
+    return '<div onclick="_paroRenderHistorialSesion(\''+s.id+'\')" style="background:#fff;border-radius:8px;padding:10px 12px;margin-bottom:8px;cursor:pointer;border:1px solid #e5e7eb">'
+      +'<div style="font-size:13px;font-weight:700;color:#1a3c5e">'+(s.nombre||('Paro '+fmtDate(s.creado_ts)))+'</div>'
+      +'<div style="font-size:11px;color:#6b7280;margin-top:2px">'+fmtDate(s.creado_ts)+' · '+cerradas+'/'+n+' actividades cerradas</div>'
+      +'</div>';
+  }).join('');
+  modal.onclick=function(e){if(e.target===modal)modal.remove();};
+  modal.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;max-width:500px;margin:20px auto;box-sizing:border-box">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
+    +'<div style="font-size:15px;font-weight:800;color:#1a3c5e">📜 Paros anteriores</div>'
+    +'<button onclick="document.getElementById(\'modal-paro-historial\').remove()" style="padding:4px 10px;background:#f3f4f6;border:none;border-radius:8px;cursor:pointer;font-size:13px">✕</button>'
+    +'</div>'+rows+'</div>';
+  if(!document.body.contains(modal)) document.body.appendChild(modal);
+}
+
+function _paroRenderHistorialSesion(sesionId){
+  var modal=document.getElementById('modal-paro-historial');
+  if(!modal) return;
+  modal.dataset.sesionId=sesionId;
+  var s=PARO_SESIONES.find(function(x){return x.id===sesionId;});
+  if(!s) return;
+  var items=PARO_ACTIVIDADES.filter(function(a){return a.sesion_id===sesionId;});
+  var rows=items.length?items.map(function(a){ return _paroFilaHTML(a); }).join('')
+    :'<div style="text-align:center;color:#9ca3af;font-size:12px;padding:12px">Sin actividades</div>';
+  modal.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;max-width:500px;margin:20px auto;box-sizing:border-box">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">'
+    +'<div style="font-size:15px;font-weight:800;color:#1a3c5e">'+(s.nombre||('Paro '+fmtDate(s.creado_ts)))+'</div>'
+    +'<button onclick="document.getElementById(\'modal-paro-historial\').remove()" style="padding:4px 10px;background:#f3f4f6;border:none;border-radius:8px;cursor:pointer;font-size:13px">✕</button>'
+    +'</div>'
+    +'<button onclick="_paroVerHistorial()" style="margin-bottom:10px;padding:5px 10px;background:#f3f4f6;border:none;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer">← Lista de paros</button>'
+    +rows+'</div>';
 }
 
 function renderDORPlanesResumen(){
