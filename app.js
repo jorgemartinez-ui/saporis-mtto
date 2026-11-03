@@ -14799,6 +14799,15 @@ function syncSupabase(){
     // sincronizados — sin esto, quien entró antes de que terminara la sync veía
     // una lista incompleta hasta que tocaba un filtro manualmente.
     if(document.getElementById('screen-ordenes')&&document.getElementById('screen-ordenes').classList.contains('active')&&document.getElementById('fp-semana')) aplicarFiltrosPendientes();
+    // Mismo caso en "Consultar OT" (screen-consulta/filtrarOrdenes) — faltaba
+    // este refresco, así que quien entraba rápido se quedaba viendo la lista
+    // vieja hasta tocar un filtro a mano.
+    if(document.getElementById('screen-consulta')&&document.getElementById('screen-consulta').classList.contains('active')) filtrarOrdenes();
+    // Marca que ya llegó al menos una sincronización real de órdenes en esta
+    // sesión — usado por el tablero de DOR para no mostrar números de OTs/
+    // anormalidades calculados sobre un ORDENES todavía vacío o desactualizado.
+    window._dorSyncOrdenesListo=true;
+    if(document.getElementById('dor-content')) renderDOR();
   }).catch(function(){});
   supaFetch('pm03_plan','GET',null,'order=semana.asc&limit=999999&select=actividad,actividades_estado,actividades_estado_final,actividades_estado_inicial,anio,area,cerrada_por,cerrada_ts,comentarios_actividades,componente,desinf_produccion,dias_trabajo,draft_ts,es_inspeccion,estado,estado_calidad,estado_flujo,firma_nombre_admin,origen_ot,origen_pm02,firma_nombre_calidad,firma_nombre_lider,firma_nombre_operador,firma_tecnico,firma_tecnico_ts,firma_ts_admin,firma_ts_calidad,firma_ts_lider,firma_ts_operador,fuente_excel,generado_por,grasa_aceite,herramienta_ingresada,herramienta_salida,hora_fin,hora_inicio,horas_actividades,horas_cierre,id,liberado_admin_por,liberado_admin_ts,liberado_por,liberado_prod_por,liberado_prod_ts,liberado_ts,limpieza_mtto,comentario_desinfeccion,linea,mediciones_actividades,observaciones_cierre,personas_actividades,rechazo_calidad,refacciones_nuevas,refacciones_usadas,reporte_actividades,responsable_area_id,responsable_area_nombre,semana,tecnico_id,tecnico_nombre,ts,semanas_vencidas,motivo_recorrido,protocolo_snapshot,firmas_requeridas_override').then(function(rows){
     if(!rows)return;
@@ -14935,6 +14944,15 @@ function syncSupabase(){
     // mismo, refrescar para que las PM03 recién sincronizadas (incluido el botón
     // de filtro PM03) se vean sin que el usuario tenga que tocar un filtro.
     if(document.getElementById('screen-ordenes')&&document.getElementById('screen-ordenes').classList.contains('active')&&document.getElementById('fp-semana')) aplicarFiltrosPendientes();
+    // Mismo caso en el tablero principal de PM03 (screen-pm03/renderPM03) —
+    // faltaba este refresco: quien entraba rápido veía tarjetas en blanco o con
+    // el color/semana viejos hasta volver a entrar a la pantalla.
+    if(document.getElementById('screen-pm03')&&document.getElementById('screen-pm03').classList.contains('active')) renderPM03();
+    // Marca que ya llegó al menos una sincronización real de PM03 en esta
+    // sesión — usado por el tablero de DOR (ver abajo) para no mostrar el KPI
+    // "Avance PM" como 100% falso cuando en realidad todavía no se ha cargado.
+    window._dorSyncPM03Listo=true;
+    if(document.getElementById('dor-content')) renderDOR();
   }).catch(function(){});
   supaFetch('refacciones','GET',null,'order=codigo.asc').then(function(rows){if(rows&&rows.length){REFACCIONES=rows;saveDB('refacciones',REFACCIONES);}}).catch(function(){});
   supaFetch('mtbf_data','GET',null,'order=anio.desc,semana.desc').then(function(rows){if(rows&&rows.length){MTBF_DATA=rows;saveDB('mtbf_data',MTBF_DATA);}}).catch(function(){});
@@ -31202,6 +31220,14 @@ function _renderDORInner(cont,dias,ultimoAcc){
   var anomCal=shoAnomaliasCalidad();
   var colCal=anomCal===0?'#14532d':'#7f1d1d';
   var kpi1=shoKPI1({anio:currentYear(),sem:currentWeek()});
+  // Mientras no haya llegado al menos una sincronización real de 'ordenes'/
+  // 'pm03_plan' en esta sesión, ORDENES/PM03_PLAN pueden ser solo lo que había
+  // en caché (o estar vacíos, recién instalada la app) — mostrar números/semáforos
+  // calculados sobre eso puede verse como "100% / todo verde" sin serlo de
+  // verdad. Mientras no estén listos, esas tarjetas muestran "Cargando…" en vez
+  // de un número que podría ser falso.
+  var _ordenesListas=!!window._dorSyncOrdenesListo;
+  var _pm3Listas=!!window._dorSyncPM03Listo;
 
   var otsAbiertas=ORDENES.filter(function(o){return o.estado==='abierta'&&!o.fuenteBitacora;}).length;
   var otsTotal=ORDENES.filter(function(o){return !o.fuenteBitacora;}).length;
@@ -31227,42 +31253,65 @@ function _renderDORInner(cont,dias,ultimoAcc){
     +'<div style="font-size:9px;opacity:.7;margin-top:2px">Último: '+ultimoAcc+'</div>'
     +'</div>';
 
-  html+='<div onclick="shoMostrarListaAnom(shoGetAnomaliasSeg(),\'🚨 Seguridad Prio A\')" style="background:'+colAnom+';border-radius:12px;padding:12px;color:#fff;text-align:center;cursor:pointer">'
-    +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Anorm. Seguridad</div>'
-    +'<div style="font-size:28px;font-weight:900;line-height:1.1">'+anom+'</div>'
-    +'<div style="font-size:9px;opacity:.85;margin-top:2px">Prioridad A abiertas</div>'
-    +'</div>';
+  html+=_ordenesListas
+    ?('<div onclick="shoMostrarListaAnom(shoGetAnomaliasSeg(),\'🚨 Seguridad Prio A\')" style="background:'+colAnom+';border-radius:12px;padding:12px;color:#fff;text-align:center;cursor:pointer">'
+      +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Anorm. Seguridad</div>'
+      +'<div style="font-size:28px;font-weight:900;line-height:1.1">'+anom+'</div>'
+      +'<div style="font-size:9px;opacity:.85;margin-top:2px">Prioridad A abiertas</div>'
+      +'</div>')
+    :('<div style="background:#9ca3af;border-radius:12px;padding:12px;color:#fff;text-align:center">'
+      +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Anorm. Seguridad</div>'
+      +'<div style="font-size:15px;font-weight:900;line-height:1.1">Cargando…</div>'
+      +'<div style="font-size:9px;opacity:.85;margin-top:2px">Sincronizando datos</div>'
+      +'</div>');
 
-  html+='<div onclick="shoMostrarListaAnom(shoGetAnomaliasCalidad(),\'🔬 Calidad Prio A\')" style="background:'+colCal+';border-radius:12px;padding:12px;color:#fff;text-align:center;cursor:pointer">'
-    +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Anorm. Calidad</div>'
-    +'<div style="font-size:28px;font-weight:900;line-height:1.1">'+anomCal+'</div>'
-    +'<div style="font-size:9px;opacity:.85;margin-top:2px">Prioridad A abiertas</div>'
-    +'</div>';
+  html+=_ordenesListas
+    ?('<div onclick="shoMostrarListaAnom(shoGetAnomaliasCalidad(),\'🔬 Calidad Prio A\')" style="background:'+colCal+';border-radius:12px;padding:12px;color:#fff;text-align:center;cursor:pointer">'
+      +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Anorm. Calidad</div>'
+      +'<div style="font-size:28px;font-weight:900;line-height:1.1">'+anomCal+'</div>'
+      +'<div style="font-size:9px;opacity:.85;margin-top:2px">Prioridad A abiertas</div>'
+      +'</div>')
+    :('<div style="background:#9ca3af;border-radius:12px;padding:12px;color:#fff;text-align:center">'
+      +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Anorm. Calidad</div>'
+      +'<div style="font-size:15px;font-weight:900;line-height:1.1">Cargando…</div>'
+      +'<div style="font-size:9px;opacity:.85;margin-top:2px">Sincronizando datos</div>'
+      +'</div>');
 
   // Mismo semáforo de 3 niveles que ya se usa en la tarjeta "Cumplimiento Mtto
   // preventivo" de Cumplimiento (verde ≥90%, naranja ≥50%, rojo debajo) — antes
   // aquí se usaba una comparación distinta (ritmo del día), quedando inconsistente.
   var kpiCol=kpi1.color;
-  html+='<div onclick="dorMostrarPM03Pendientes()" style="background:'+kpiCol+';border-radius:12px;padding:12px;color:#fff;text-align:center;cursor:pointer">'
-    +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Avance PM Sem '+currentWeek()+'</div>'
-    +'<div style="font-size:28px;font-weight:900;line-height:1.1">'+kpi1.label+'</div>'
-    +'<div style="font-size:9px;opacity:.7;margin-top:2px">Mtto preventivo</div>'
-    +'<button onclick="event.stopPropagation();pm3MostrarHistorialKPI()" style="margin-top:2px;padding:2px 8px;background:rgba(255,255,255,.25);border:none;border-radius:6px;color:#fff;font-size:9px;font-weight:700;cursor:pointer">📊 Historial</button>'
-    +'</div>';
+  html+=_pm3Listas
+    ?('<div onclick="dorMostrarPM03Pendientes()" style="background:'+kpiCol+';border-radius:12px;padding:12px;color:#fff;text-align:center;cursor:pointer">'
+      +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Avance PM Sem '+currentWeek()+'</div>'
+      +'<div style="font-size:28px;font-weight:900;line-height:1.1">'+kpi1.label+'</div>'
+      +'<div style="font-size:9px;opacity:.7;margin-top:2px">Mtto preventivo</div>'
+      +'<button onclick="event.stopPropagation();pm3MostrarHistorialKPI()" style="margin-top:2px;padding:2px 8px;background:rgba(255,255,255,.25);border:none;border-radius:6px;color:#fff;font-size:9px;font-weight:700;cursor:pointer">📊 Historial</button>'
+      +'</div>')
+    :('<div style="background:#9ca3af;border-radius:12px;padding:12px;color:#fff;text-align:center">'
+      +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Avance PM Sem '+currentWeek()+'</div>'
+      +'<div style="font-size:15px;font-weight:900;line-height:1.1">Cargando…</div>'
+      +'<div style="font-size:9px;opacity:.7;margin-top:2px">Sincronizando datos</div>'
+      +'</div>');
   html+='</div>';
 
   // ── OTs + Refacciones ─────────────────────────────────────────
   html+='<div style="font-size:11px;font-weight:800;color:#374151;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">🔧 OTs & Refacciones</div>';
   html+='<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:16px">';
-  html+='<div style="background:#fff;border:1px solid #d1d5db;border-radius:12px;padding:12px">'
-    +'<div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:8px">ÓRDENES DE TRABAJO</div>'
-    +'<div style="display:flex;justify-content:space-around;margin-bottom:8px">'
-    +'<div style="text-align:center"><div style="font-size:22px;font-weight:900;color:#7f1d1d">'+otsAbiertas+'</div><div style="font-size:9px;color:#6b7280">ABIERTAS</div></div>'
-    +'<div style="text-align:center"><div style="font-size:22px;font-weight:900;color:#14532d">'+otsCerradas+'</div><div style="font-size:9px;color:#6b7280">CERRADAS</div></div>'
-    +'</div>'
-    +'<div style="text-align:center;font-size:18px;font-weight:900;color:'+colPct+'">'+pctCierre+'% cierre</div>'
-    +'<div style="background:#f3f4f6;border-radius:6px;height:6px;margin-top:6px;overflow:hidden"><div style="width:'+pctCierre+'%;height:100%;background:'+colPct+';border-radius:6px"></div></div>'
-    +'</div>';
+  html+=_ordenesListas
+    ?('<div style="background:#fff;border:1px solid #d1d5db;border-radius:12px;padding:12px">'
+      +'<div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:8px">ÓRDENES DE TRABAJO</div>'
+      +'<div style="display:flex;justify-content:space-around;margin-bottom:8px">'
+      +'<div style="text-align:center"><div style="font-size:22px;font-weight:900;color:#7f1d1d">'+otsAbiertas+'</div><div style="font-size:9px;color:#6b7280">ABIERTAS</div></div>'
+      +'<div style="text-align:center"><div style="font-size:22px;font-weight:900;color:#14532d">'+otsCerradas+'</div><div style="font-size:9px;color:#6b7280">CERRADAS</div></div>'
+      +'</div>'
+      +'<div style="text-align:center;font-size:18px;font-weight:900;color:'+colPct+'">'+pctCierre+'% cierre</div>'
+      +'<div style="background:#f3f4f6;border-radius:6px;height:6px;margin-top:6px;overflow:hidden"><div style="width:'+pctCierre+'%;height:100%;background:'+colPct+';border-radius:6px"></div></div>'
+      +'</div>')
+    :('<div style="background:#fff;border:1px solid #d1d5db;border-radius:12px;padding:12px">'
+      +'<div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:8px">ÓRDENES DE TRABAJO</div>'
+      +'<div style="text-align:center;color:#9ca3af;font-size:12px;padding:14px 0">Cargando…</div>'
+      +'</div>');
 
   var refA=(REF_FALTANTES||[]).filter(function(r){return r.estado!=='comprada'&&r.prioridad==='A';}).length;
   var refB=(REF_FALTANTES||[]).filter(function(r){return r.estado!=='comprada'&&r.prioridad==='B';}).length;
@@ -37236,6 +37285,12 @@ function _pm3AplicarCortes(){
   var ahora=new Date();
   var candidatos=PM03_PLAN.filter(function(p){
     if(!p.semana||p.estado==='cerrada'||p.estado==='reprogramada'||p.estado==='afectada') return false;
+    // Ya se completaron checklist + firmas por esta vía (firmaGuardar marca
+    // estado_flujo:'completado' en cuanto queda la última firma requerida),
+    // aunque todavía no se haya pasado por el cierre formal (horas/días de
+    // trabajo). Cuenta como ejecutada en su semana — nunca se vuelve a mover,
+    // ni aunque ya no le falten firmas para el siguiente corte.
+    if(p.estadoFlujo==='completado') return false;
     var anio=p.año||p.anio||currentYear();
     if(!_pm3DesdeCorte(anio,p.semana)) return false;
     if(ahora<=_pm3CutoffCorte(anio,p.semana)) return false;
