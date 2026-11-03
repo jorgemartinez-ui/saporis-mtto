@@ -2675,11 +2675,11 @@ function abrirCierrePM03(id){
         +'<strong>'+a.id+'.</strong> '+a.desc
         +'<span style="color:#9ca3af;font-size:.7rem;margin-left:4px">['+(a.tipo||a.esp)+']</span></div>'
 
-        // Cómo se hace (paso a paso, opcional) — colapsado por default, el técnico lo despliega si lo necesita
+        // Cómo se hace (paso a paso, opcional) — desplegado por default, el técnico lo puede retraer si no lo necesita
         +(a.comoSeHace?(
           '<div style="margin:-4px 0 8px">'
-          +'<span onclick="pm3ToggleComoSeHace('+a.id+')" id="pm3-como-lbl-'+a.id+'" style="font-size:.75rem;font-weight:700;color:#1d4ed8;cursor:pointer">📖 Cómo se hace ▾</span>'
-          +'<div id="pm3-como-'+a.id+'" style="display:none;background:#eff6ff;border-radius:8px;padding:8px;margin-top:6px;font-size:.78rem;color:#1e3a8a;white-space:pre-wrap;line-height:1.4">'+a.comoSeHace+'</div>'
+          +'<span onclick="pm3ToggleComoSeHace('+a.id+')" id="pm3-como-lbl-'+a.id+'" style="font-size:.75rem;font-weight:700;color:#1d4ed8;cursor:pointer">📖 Cómo se hace ▴</span>'
+          +'<div id="pm3-como-'+a.id+'" style="display:block;background:#eff6ff;border-radius:8px;padding:8px;margin-top:6px;font-size:.78rem;color:#1e3a8a;white-space:pre-wrap;line-height:1.4">'+a.comoSeHace+'</div>'
           +'</div>'
         ):'')
 
@@ -21911,8 +21911,8 @@ function verProtocoloFormato(id){
 
       +(a.comoSeHace?(
         '<div style="margin:-4px 0 8px">'
-        +'<span onclick="_verProtoToggleComo('+i+')" id="verproto-como-lbl-'+i+'" style="font-size:.72rem;font-weight:700;color:#1d4ed8;cursor:pointer">📖 Cómo se hace ▾</span>'
-        +'<div id="verproto-como-'+i+'" style="display:none;background:#eff6ff;border-radius:8px;padding:8px;margin-top:6px;font-size:.76rem;color:#1e3a8a;white-space:pre-wrap;line-height:1.4">'+esc(a.comoSeHace)+'</div>'
+        +'<span onclick="_verProtoToggleComo('+i+')" id="verproto-como-lbl-'+i+'" style="font-size:.72rem;font-weight:700;color:#1d4ed8;cursor:pointer">📖 Cómo se hace ▴</span>'
+        +'<div id="verproto-como-'+i+'" style="display:block;background:#eff6ff;border-radius:8px;padding:8px;margin-top:6px;font-size:.76rem;color:#1e3a8a;white-space:pre-wrap;line-height:1.4">'+esc(a.comoSeHace)+'</div>'
         +'</div>'
       ):'')
 
@@ -37648,11 +37648,17 @@ function showCalendarioCompleto(){
 
   var anio=currentYear();
   var semActual=currentWeek();
-  var SEM_INICIO=21;
+  // El mantenimiento planeado se migró de Excel a la app el 14-sep-2026 (semana 38).
+  // Para 2026, el calendario arranca ahí — antes de eso los datos vivían en el Excel
+  // y no son comparables/confiables dentro de la app. En años posteriores ya todo
+  // nace en la app, así que arranca desde la semana 1.
+  var SEM_INICIO=(anio===2026)?38:1;
 
-  // Get all Excel plan records grouped by linea+actividad
+  // Todas las PM03 del año, sin importar su origen (Plan Mtto, Excel, Sistema, etc.)
+  // — antes solo se incluían las de ciertos "generadoPor"/fuenteExcel, lo que dejaba
+  // fuera la mayoría de las actividades creadas desde Plan de Mantenimiento.
   var pm3All=PM03_PLAN.filter(function(p){
-    return p.año===anio&&p.semana>=SEM_INICIO&&(p.fuenteExcel===true||['Importacion Excel','Carga Excel REG-MTT-002.01','Sistema'].indexOf(p.generadoPor)>=0);
+    return p.año===anio&&p.semana>=SEM_INICIO;
   });
 
   // Group by linea - normalize case to avoid duplicates
