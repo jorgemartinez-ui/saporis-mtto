@@ -14800,7 +14800,7 @@ function syncSupabase(){
     // una lista incompleta hasta que tocaba un filtro manualmente.
     if(document.getElementById('screen-ordenes')&&document.getElementById('screen-ordenes').classList.contains('active')&&document.getElementById('fp-semana')) aplicarFiltrosPendientes();
   }).catch(function(){});
-  supaFetch('pm03_plan','GET',null,'order=semana.asc&limit=999999&select=actividad,actividades_estado,actividades_estado_final,actividades_estado_inicial,anio,area,cerrada_por,cerrada_ts,comentarios_actividades,componente,desinf_produccion,dias_trabajo,draft_ts,es_inspeccion,estado,estado_calidad,estado_flujo,firma_nombre_admin,origen_ot,origen_pm02,firma_nombre_calidad,firma_nombre_lider,firma_nombre_operador,firma_tecnico,firma_tecnico_ts,firma_ts_admin,firma_ts_calidad,firma_ts_lider,firma_ts_operador,fuente_excel,generado_por,grasa_aceite,herramienta_ingresada,herramienta_salida,hora_fin,hora_inicio,horas_actividades,horas_cierre,id,liberado_admin_por,liberado_admin_ts,liberado_por,liberado_prod_por,liberado_prod_ts,liberado_ts,limpieza_mtto,comentario_desinfeccion,linea,mediciones_actividades,observaciones_cierre,personas_actividades,rechazo_calidad,refacciones_nuevas,refacciones_usadas,reporte_actividades,responsable_area_id,responsable_area_nombre,semana,tecnico_id,tecnico_nombre,ts,semanas_vencidas,motivo_recorrido,protocolo_snapshot').then(function(rows){
+  supaFetch('pm03_plan','GET',null,'order=semana.asc&limit=999999&select=actividad,actividades_estado,actividades_estado_final,actividades_estado_inicial,anio,area,cerrada_por,cerrada_ts,comentarios_actividades,componente,desinf_produccion,dias_trabajo,draft_ts,es_inspeccion,estado,estado_calidad,estado_flujo,firma_nombre_admin,origen_ot,origen_pm02,firma_nombre_calidad,firma_nombre_lider,firma_nombre_operador,firma_tecnico,firma_tecnico_ts,firma_ts_admin,firma_ts_calidad,firma_ts_lider,firma_ts_operador,fuente_excel,generado_por,grasa_aceite,herramienta_ingresada,herramienta_salida,hora_fin,hora_inicio,horas_actividades,horas_cierre,id,liberado_admin_por,liberado_admin_ts,liberado_por,liberado_prod_por,liberado_prod_ts,liberado_ts,limpieza_mtto,comentario_desinfeccion,linea,mediciones_actividades,observaciones_cierre,personas_actividades,rechazo_calidad,refacciones_nuevas,refacciones_usadas,reporte_actividades,responsable_area_id,responsable_area_nombre,semana,tecnico_id,tecnico_nombre,ts,semanas_vencidas,motivo_recorrido,protocolo_snapshot,firmas_requeridas_override').then(function(rows){
     if(!rows)return;
     var localPM03=loadDB('pm03_plan',[]);
     PM03_PLAN=rows.map(function(r){
@@ -14918,6 +14918,7 @@ function syncSupabase(){
         // si esta PM03 ya tenía avance cuando se editó el protocolo, se queda viendo
         // esta copia en vez del protocolo vigente, hasta que se cierre.
         protocoloSnapshot:(function(){try{return r.protocolo_snapshot?JSON.parse(r.protocolo_snapshot):(local?local.protocoloSnapshot:null);}catch(e){return local?local.protocoloSnapshot:null;}})(),
+        firmasRequeridasOverride:(function(){try{return r.firmas_requeridas_override?JSON.parse(r.firmas_requeridas_override):(local?local.firmasRequeridasOverride:null);}catch(e){return local?local.firmasRequeridasOverride:null;}})(),
         tecnicosAdicionales:(function(){
           var sup=r.tecnicos_adicionales; var loc=local?local.tecnicosAdicionales:null;
           var supD=r.draft_ts||0, locD=local&&local._draftTs?local._draftTs:0;
@@ -15113,6 +15114,7 @@ function savePM03Supa(p){supaUpsert('pm03_plan',{id:p.id,linea:p.linea,component
   semanas_vencidas:p.semanasVencidas&&p.semanasVencidas.length?JSON.stringify(p.semanasVencidas):undefined,
   motivo_recorrido:p.motivoRecorrido||undefined,
   protocolo_snapshot:p.protocoloSnapshot?JSON.stringify(p.protocoloSnapshot):undefined,
+  firmas_requeridas_override:p.firmasRequeridasOverride&&p.firmasRequeridasOverride.length?JSON.stringify(p.firmasRequeridasOverride):undefined,
   // fotos/firma_img_* ya no se sincronizan en bloque (viajan bajo demanda al abrir
   // el detalle) — si en este dispositivo nunca se cargaron (p.campo===undefined),
   // se omiten del payload para NO borrar en Supabase lo que otro dispositivo sí guardó.
@@ -20583,7 +20585,15 @@ function getProtocoloPM03(linea,equipo,actividad){
 // snapshot, se consulta el protocolo vigente normal.
 function _pm3ProtocoloEfectivo(p){
   if(p&&p.protocoloSnapshot) return p.protocoloSnapshot;
-  return getProtocoloPM03(p.linea,p.componente,p.actividad);
+  var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
+  // PM03 sin protocolo definido (típicamente las que vienen de una PM02, de una sola
+  // vez, y nunca van a tener un checklist formal) pero con firmas requeridas elegidas
+  // a mano para esa PM03 en particular (ver _pm3AbrirEditorFirmasOverride) — se arma
+  // un protocolo "virtual" sin pasos, solo para que pm3FirmasRequeridas lo recoja.
+  if(!proto&&p&&Array.isArray(p.firmasRequeridasOverride)){
+    return {equipo:p.componente,equipoSecundario:p.actividad,codigo:'—',actividades:[],firmasRequeridas:p.firmasRequeridasOverride};
+  }
+  return proto;
 }
 
 // Al editar un protocolo (oldRow = cómo estaba ANTES de esta edición), congela esa
@@ -22143,6 +22153,7 @@ function _protoAccionesPM03(pmId){
     +'<button onclick="window._protoVolverASemana=true;document.getElementById(\'modal-proto-acciones-pm03\').remove();abrirEditorProtocolo(null,{linea:\''+lineaEsc+'\',equipo:\''+compEsc+'\',actividad:\''+actEsc+'\'})" style="padding:12px;background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;font-weight:700;color:#1d4ed8;cursor:pointer;text-align:left">🆕 Generar protocolo nuevo</button>'
     +(match?('<button onclick="window._protoVolverASemana=true;document.getElementById(\'modal-proto-acciones-pm03\').remove();abrirEditorProtocolo(\''+match.id+'\')" style="padding:12px;background:#f3f4f6;border:none;border-radius:10px;font-weight:700;color:#374151;cursor:pointer;text-align:left">✏️ Editar protocolo ('+(match.equipo||match.linea)+(match.equipo_secundario?' · '+match.equipo_secundario:'')+')</button>'):'')
     +(match?('<button onclick="_protoEliminarDesdeAccion(\''+match.id+'\')" style="padding:12px;background:#fef2f2;border:1px solid #fca5a5;border-radius:10px;font-weight:700;color:#dc2626;cursor:pointer;text-align:left">🗑️ Eliminar protocolo</button>'):'')
+    +(!match?('<button onclick="_pm3AbrirEditorFirmasOverride(\''+p.id+'\')" style="padding:12px;background:#fffbeb;border:1px solid #fcd34d;border-radius:10px;font-weight:700;color:#92400e;cursor:pointer;text-align:left">✍️ Editar firmas requeridas (sin protocolo)</button>'):'')
     +'<button onclick="document.getElementById(\'modal-proto-acciones-pm03\').remove()" style="padding:12px;background:#f3f4f6;border:none;border-radius:10px;cursor:pointer">Cancelar</button>'
     +'</div></div>';
   document.body.appendChild(modal);
@@ -22160,6 +22171,48 @@ function _protoEliminarDesdeAccion(protoId){
     showAlert('✅ Protocolo eliminado');
     if(typeof window._protoSemSig!=='undefined') showProtocolosProximaSemana();
   }).catch(function(){ showAlert('⚠️ Error de conexión al eliminar','error'); });
+}
+
+// Editor de firmas requeridas para una PM03 que NO tiene protocolo (típicamente las
+// que vienen de una PM02, de una sola vez) — guarda la elección solo en esa PM03
+// (firmasRequeridasOverride), sin crear ningún protocolo. Ver _pm3ProtocoloEfectivo,
+// que es quien realmente aplica este valor en el checklist/validación de firmas.
+var PROTO_FIRMA_ORDEN=['operador','lider','calidad','admin'];
+function _pm3AbrirEditorFirmasOverride(pmId){
+  var p=PM03_PLAN.find(function(x){return x.id===pmId;});
+  if(!p) return;
+  document.getElementById('modal-proto-acciones-pm03')?.remove();
+  var actuales=Array.isArray(p.firmasRequeridasOverride)?p.firmasRequeridasOverride:PROTO_FIRMA_ORDEN.slice();
+  var modal=document.createElement('div');
+  modal.id='modal-firmas-override';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;overflow-y:auto;padding:12px;box-sizing:border-box';
+  modal.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;max-width:420px;margin:auto">'
+    +'<div style="font-size:15px;font-weight:800;color:#1a3c5e;margin-bottom:4px">✍️ Firmas requeridas</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:14px">'+(p.linea||'—')+' — '+(p.componente||'—')+' · '+(p.actividad||'—')+'<br>Esta PM03 no tiene protocolo — elige qué firmas aplican solo para ella.</div>'
+    +'<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">'
+    +PROTO_FIRMA_ORDEN.map(function(k){
+      return '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:#374151;cursor:pointer"><input type="checkbox" id="fov-'+k+'" '+(actuales.indexOf(k)>=0?'checked':'')+'> '+_PM3_FIRMA_LABEL[k]+'</label>';
+    }).join('')
+    +'</div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button onclick="document.getElementById(\'modal-firmas-override\').remove()" style="flex:1;padding:12px;background:#f3f4f6;border:none;border-radius:10px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="_pm3GuardarFirmasOverride(\''+p.id+'\')" style="flex:2;padding:12px;background:#1a3c5e;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">💾 Guardar</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+function _pm3GuardarFirmasOverride(pmId){
+  var p=PM03_PLAN.find(function(x){return x.id===pmId;});
+  if(!p) return;
+  var seleccion=PROTO_FIRMA_ORDEN.filter(function(k){return document.getElementById('fov-'+k)?.checked;});
+  if(!seleccion.length){showAlert('Selecciona al menos una firma','error');return;}
+  p.firmasRequeridasOverride=seleccion;
+  p._editadoTs=Date.now();
+  saveDB('pm03_plan',PM03_PLAN);
+  savePM03Supa(p);
+  document.getElementById('modal-firmas-override')?.remove();
+  showAlert('✅ Firmas requeridas guardadas para esta PM03');
+  if(typeof window._protoSemSig!=='undefined') showProtocolosProximaSemana();
 }
 
 // Fila de una actividad del editor de protocolo — función global (además de usarse al
@@ -31945,9 +31998,11 @@ function _paroFilaHTML(a){
   var cerrada=!!a.cerrada;
   var prio=a.prioridad||'B';
   var colPrio=prio==='A'?'#dc2626':prio==='B'?'#d97706':'#16a34a';
+  var pasoSiguiente=!!a.paso_a_siguiente_paro&&!cerrada;
   return '<div style="display:flex;align-items:center;gap:8px;background:#fff;border:1px solid #e2e8f0;border-left:4px solid '+(cerrada?'#9ca3af':'#1a3c5e')+';border-radius:10px;padding:10px 12px;margin-bottom:8px">'
     +'<div style="flex:1;min-width:0">'
     +'<div style="font-size:13px;'+(cerrada?'text-decoration:line-through;opacity:.5':'')+'">'+(a.actividad||'')+'</div>'
+    +(pasoSiguiente?'<div style="font-size:10px;font-weight:700;color:#92400e;background:#fef3c7;display:inline-block;padding:1px 6px;border-radius:5px;margin-top:3px">⏭️ No se ejecutó — pasó al paro siguiente</div>':'')
     +'</div>'
     +'<div style="width:50px;flex-shrink:0;text-align:center;'+(cerrada?'opacity:.5':'')+'"><span style="display:inline-block;background:'+colPrio+';color:#fff;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:800">'+prio+'</span></div>'
     +'<div style="width:90px;flex-shrink:0;text-align:center;font-size:11px;color:#374151;font-weight:700;'+(cerrada?'opacity:.5':'')+'">'+(a.responsable_nombre||'Sin asignar')+'</div>'
@@ -32019,8 +32074,46 @@ async function _paroNuevaSesion(){
   var r=await supaUpsert('paro_fabrica_sesiones',nueva);
   if(r===null){showAlert('Error al crear el paro','error');return;}
   PARO_SESIONES.unshift(nueva);
+
+  // Actividades del paro anterior que quedaron sin ejecutar (no cerradas): se
+  // duplican hacia el paro nuevo (siguen vivas en el pizarrón de hoy) y en el
+  // paro anterior quedan marcadas con paso_a_siguiente_paro:true, como huella
+  // de que se programaron pero no se llegaron a ejecutar.
+  var pasadas=0;
+  if(anterior){
+    var pendientes=PARO_ACTIVIDADES.filter(function(a){return a.sesion_id===anterior.id&&!a.cerrada;});
+    if(pendientes.length){
+      var lote=[];
+      var nuevasCopias=[];
+      pendientes.forEach(function(a,i){
+        lote.push({id:a.id,paso_a_siguiente_paro:true});
+        var copia={
+          id:'paroact_'+Date.now()+'_'+i+'_'+Math.random().toString(36).slice(2,7),
+          sesion_id:nueva.id,
+          actividad:a.actividad,
+          prioridad:a.prioridad,
+          responsable_id:a.responsable_id||null,
+          responsable_nombre:a.responsable_nombre||null,
+          cerrada:false,
+          creado_por:a.creado_por,
+          creado_ts:Date.now()
+        };
+        lote.push(copia);
+        nuevasCopias.push(copia);
+      });
+      var rLote=await supaUpsert('paro_fabrica_actividades',lote);
+      if(rLote===null){
+        showAlert('⚠️ Nuevo paro iniciado, pero no se pudieron pasar las actividades sin ejecutar — hazlo a mano','error');
+      } else {
+        pendientes.forEach(function(a){ a.paso_a_siguiente_paro=true; });
+        PARO_ACTIVIDADES=PARO_ACTIVIDADES.concat(nuevasCopias);
+        pasadas=nuevasCopias.length;
+      }
+    }
+  }
+
   renderParoFabrica();
-  showAlert('✅ Nuevo paro iniciado');
+  showAlert('✅ Nuevo paro iniciado'+(pasadas?(' — '+pasadas+' actividad(es) sin ejecutar pasaron automáticamente'):''));
 }
 
 async function _paroAgregarActividad(){
@@ -36248,6 +36341,8 @@ function cmpEjecutarComparacion(areaIdA,lineaA){
       +'</div>'
       +'<div class="form-group"><label class="form-label" style="font-size:11px">📅 Fecha de arranque para las que se agreguen</label>'
       +'<input type="date" class="form-control" id="cmp-fecha-deton" value="'+todayStr()+'" style="padding:8px"></div>'
+      +'<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#374151;margin-bottom:8px;cursor:pointer">'
+      +'<input type="checkbox" id="cmp-copiar-protocolos"> 📋 Copiar también los protocolos (checklist/firmas) de "'+nombreGrande+'" cuando existan — no pisa un protocolo que "'+nombreChica+'" ya tenga para esa actividad</label>'
       +'<div style="display:flex;gap:8px;margin-top:8px">'
       +'<button onclick="cmpIgualarAMas()" style="flex:1;padding:11px;background:#14532d;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:12px">➕ Igualar a la que tiene más<br><span style="font-weight:400;font-size:10px">agrega a "'+nombreChica+'"</span></button>'
       +'<button onclick="cmpIgualarAMenos()" style="flex:1;padding:11px;background:#7f1d1d;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;font-size:12px">🗑️ Igualar a la que tiene menos<br><span style="font-weight:400;font-size:10px">quita de "'+nombreGrande+'"</span></button>'
@@ -36263,6 +36358,33 @@ function cmpEjecutarComparacion(areaIdA,lineaA){
   cont.innerHTML=html;
 }
 
+// Copia el protocolo estructurado (checklist/mediciones/firmas) de una actividad
+// exacta (línea+equipo+actividad, sin caer en uno genérico de respaldo) hacia otra
+// línea, solo si el origen tiene uno Y el destino todavía no tiene el suyo propio
+// para esa misma actividad (nunca lo pisa). Devuelve una Promise<boolean> (true si
+// copió algo) para poder esperar a que terminen todas antes de avisar.
+function _protoCopiarParaActividad(lineaOrigen,lineaDestino,componente,actividad){
+  function n(x){return (x||'').toString().trim().toLowerCase();}
+  var nEq=n(componente), nAct=n(actividad);
+  var origen=(PROTOCOLOS_PM03_SUPA||[]).find(function(s){
+    return n(s.linea)===n(lineaOrigen)&&n(s.equipo)===nEq&&n(s.equipo_secundario)===nAct;
+  });
+  if(!origen) return Promise.resolve(false);
+  var yaExiste=(PROTOCOLOS_PM03_SUPA||[]).some(function(s){
+    return n(s.linea)===n(lineaDestino)&&n(s.equipo)===nEq&&n(s.equipo_secundario)===nAct;
+  });
+  if(yaExiste) return Promise.resolve(false);
+  var payload={linea:lineaDestino,equipo:componente||null,equipo_secundario:actividad,codigo:origen.codigo||'REG-MTT-002.02',actividades:origen.actividades||[],activo:true,firmas_requeridas:Array.isArray(origen.firmas_requeridas)?origen.firmas_requeridas:null};
+  return fetch(SUPA_URL+'/rest/v1/protocolos_pm03',{
+    method:'POST',
+    headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'},
+    body:JSON.stringify(payload)
+  }).then(function(r){ return r.ok?r.json():null; }).then(function(rows){
+    if(rows&&rows[0]){ PROTOCOLOS_PM03_SUPA.push(rows[0]); return true; }
+    return false;
+  }).catch(function(){ return false; });
+}
+
 function cmpIgualarAMas(){
   var ctx=window._cmpCtx;
   if(!ctx) return;
@@ -36272,15 +36394,28 @@ function cmpIgualarAMas(){
   var checks=document.querySelectorAll('#cmp-lista-principal .cmp-chk:checked');
   if(!checks.length){showAlert('No marcaste ninguna actividad para agregar','error');return;}
   var seleccion=Array.prototype.map.call(checks,function(c){return ctx.diffPrincipal[parseInt(c.dataset.idx)];}).filter(Boolean);
-  if(!confirm('Se van a agregar '+seleccion.length+' actividad(es) a "'+ctx.lineaChica+'", cada una con su calendario de PM03 generado desde '+fechaVal+' (hasta 10 años). ¿Continuar?')) return;
+  var copiarProtocolos=document.getElementById('cmp-copiar-protocolos')?.checked||false;
+  var msgConfirm='Se van a agregar '+seleccion.length+' actividad(es) a "'+ctx.lineaChica+'", cada una con su calendario de PM03 generado desde '+fechaVal+' (hasta 10 años)'+(copiarProtocolos?', copiando también su protocolo (checklist/firmas) cuando exista y el destino no tenga ya uno propio':'')+'. ¿Continuar?';
+  if(!confirm(msgConfirm)) return;
   var totalPM03=0;
   seleccion.forEach(function(p){
     var r=_crearActividadPlanConSerie(ctx.areaChica,ctx.lineaChica,p.componente,p.descripcion,p.tipo,p.frecuencia_semanas,p.frecuencia_dias,p.protocolo,fechaDeton);
     totalPM03+=r.pm03Count;
   });
-  document.getElementById('modal-comparar-maquinas')?.remove();
-  showAlert('✅ '+seleccion.length+' actividad(es) agregada(s) a "'+ctx.lineaChica+'" — '+totalPM03+' PM03 generados');
-  showPlanDetalle(ctx.areaChica,ctx.lineaChica);
+  var finalizar=function(copiados){
+    document.getElementById('modal-comparar-maquinas')?.remove();
+    showAlert('✅ '+seleccion.length+' actividad(es) agregada(s) a "'+ctx.lineaChica+'" — '+totalPM03+' PM03 generados'+(copiarProtocolos?' — '+copiados+' protocolo(s) copiado(s)':''));
+    showPlanDetalle(ctx.areaChica,ctx.lineaChica);
+  };
+  if(copiarProtocolos){
+    Promise.all(seleccion.map(function(p){
+      return _protoCopiarParaActividad(ctx.lineaGrande,ctx.lineaChica,p.componente||'',p.descripcion);
+    })).then(function(resultados){
+      finalizar(resultados.filter(Boolean).length);
+    });
+  } else {
+    finalizar(0);
+  }
 }
 
 function cmpIgualarAMenos(){
