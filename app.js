@@ -4896,7 +4896,7 @@ function _bootstrapUsuariosSiFalta(){
   }).then(function(r){return r&&r.ok?r.json():null;}).then(function(rows){
     if(!rows||!rows.length) return;
     var superLocal=USERS.filter(function(u){return u.rol==='super';});
-    USERS=rows.filter(function(r){return r.rol!=='super';}).map(function(r){return{id:r.id,username:r.username,nombre:r.nombre,password:r.password_hash,rol:r.rol,email:r.email||''}});
+    USERS=rows.filter(function(r){return r.rol!=='super';}).map(function(r){return{id:r.id,username:r.username,nombre:r.nombre,password:r.password_hash,rol:r.rol,email:r.email||'',especialidad:r.especialidad||''}});
     USERS=USERS.concat(superLocal);
     saveDB('users',USERS);
   }).catch(function(){});
@@ -14742,7 +14742,7 @@ function syncSupabase(){
     if(!rows.length) return;
     // Filtrar super de los registros de Supabase para no sobreescribir
     var superLocal=USERS.filter(function(u){return u.rol==='super';});
-    USERS=rows.filter(function(r){return r.rol!=='super';}).map(function(r){return{id:r.id,username:r.username,nombre:r.nombre,password:r.password_hash,rol:r.rol,email:r.email||''}});
+    USERS=rows.filter(function(r){return r.rol!=='super';}).map(function(r){return{id:r.id,username:r.username,nombre:r.nombre,password:r.password_hash,rol:r.rol,email:r.email||'',especialidad:r.especialidad||''}});
     USERS=USERS.concat(superLocal);
     saveDB('users',USERS);
   }).catch(function(){});
@@ -23821,13 +23821,17 @@ function showGestionPersonal(){
     {id:'empleados',icon:'👤',label:'Mi Ficha'},
     {id:'horarios',icon:'📅',label:'Horarios'},
     {id:'vacaciones',icon:'🏖️',label:'Vacaciones'},
-    {id:'contrasenas',icon:'🔑',label:'Contraseñas'}
+    {id:'contrasenas',icon:'🔑',label:'Contraseñas'},
+    {id:'dir_montana',icon:'🗺️',label:'Direcciones Montaña'},
+    {id:'dir_prole',icon:'🗺️',label:'Direcciones Prole IT'}
   ]:[
     {id:'empleados',icon:'👤',label:'Empleados'},
     {id:'horarios',icon:'📅',label:'Horarios'},
     {id:'vacaciones',icon:'🏖️',label:'Vacaciones'},
     {id:'incidencias',icon:'📋',label:'Incidencias'},
-    {id:'contrasenas',icon:'🔑',label:'Contraseñas'}
+    {id:'contrasenas',icon:'🔑',label:'Contraseñas'},
+    {id:'dir_montana',icon:'🗺️',label:'Direcciones Montaña'},
+    {id:'dir_prole',icon:'🗺️',label:'Direcciones Prole IT'}
   ];
   tabsDiv.innerHTML=tabs.map(function(t){
     var sel=_gpTab===t.id;
@@ -23838,6 +23842,8 @@ function showGestionPersonal(){
   else if(_gpTab==='vacaciones') _renderVacaciones(cont);
   else if(_gpTab==='incidencias') _renderIncidencias(cont);
   else if(_gpTab==='contrasenas') _renderContrasenas(cont);
+  else if(_gpTab==='dir_montana') _renderDirecciones(cont,'montana','Direcciones Montaña');
+  else if(_gpTab==='dir_prole') _renderDirecciones(cont,'prole_it','Direcciones Prole IT');
 }
 
 // ── EMPLEADOS ────────────────────────────────────────────────────
@@ -26553,6 +26559,199 @@ async function eliminarContrasena(id){
   }
 }
 
+
+// ── DIRECCIONES (Montaña / Prole IT) ──────────────────────────────
+// Una sola tabla (direcciones_equipo) con campo "area" ('montana'|'prole_it')
+// que separa las 2 pestañas. Edición restringida: admin/super, técnico con
+// especialidad 'instrumentista', o quien esté en LISTAS.direcciones_editores_ids
+// (configurable desde el botón ⚙️, misma lista para ambas áreas).
+var DIRECCIONES_COMPONENTES=['Bomba positiva','Bomba centrífuga','Válvula','Sensor','Transmisor nivel','Transmisor Presión','Transmisor Temperatura'];
+
+function _dirPuedeEditar(){
+  if(!currentUser) return false;
+  if(currentUser.rol==='admin'||currentUser.rol==='super') return true;
+  if((currentUser.especialidad||'').toLowerCase()==='instrumentista') return true;
+  if((LISTAS.direcciones_editores_ids||[]).indexOf(currentUser.id)>=0) return true;
+  return false;
+}
+
+function _renderDirecciones(lDiv,area,areaLabel){
+  lDiv.innerHTML='<div style="text-align:center;padding:20px;color:#9ca3af">Cargando...</div>';
+  var puedeEditar=_dirPuedeEditar();
+  var esAdmin=currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super');
+  supaFetch('direcciones_equipo','GET',null,'area=eq.'+area+'&order=componente.asc').then(function(rows){
+    var lista=rows||[];
+    var html='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px">'
+      +(esAdmin?'<button onclick="abrirConfigDirecciones()" style="padding:8px 12px;background:#f3f4f6;border:none;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer">⚙️ Configuración</button>':'')
+      +(puedeEditar?'<button onclick="abrirDireccionModal(null,\''+area+'\',\''+areaLabel+'\')" style="padding:8px 14px;background:#0891b2;color:#fff;border:none;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer">+ Agregar</button>':'')
+      +'</div>';
+    if(!lista.length){
+      html+='<div class="card text-center" style="padding:32px"><div style="font-size:40px">🗺️</div><div style="font-weight:700;margin-top:8px">Sin direcciones registradas</div></div>';
+    } else {
+      html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'
+        +'<thead><tr style="background:#1a3c5e;color:#fff">'
+        +'<th style="padding:10px 12px;text-align:left;border-radius:8px 0 0 0">Componente</th>'
+        +'<th style="padding:10px 12px;text-align:left">Descripción</th>'
+        +'<th style="padding:10px 12px;text-align:left">TAG</th>'
+        +'<th style="padding:10px 12px;text-align:left">Dirección</th>'
+        +(puedeEditar?'<th style="padding:10px 12px;border-radius:0 8px 0 0"></th>':'')
+        +'</tr></thead><tbody>'
+        +lista.map(function(r,i){
+          return '<tr style="background:'+(i%2===0?'#fff':'#f9fafb')+';border-bottom:1px solid #e5e7eb">'
+            +'<td style="padding:10px 12px;font-weight:700">'+(r.componente||'')+'</td>'
+            +'<td style="padding:10px 12px">'+(r.descripcion||'')+'</td>'
+            +'<td style="padding:10px 12px;font-family:monospace">'+(r.tag||'')+'</td>'
+            +'<td style="padding:10px 12px;font-family:monospace">'+(r.direccion||'')+'</td>'
+            +(puedeEditar?('<td style="padding:8px;white-space:nowrap">'
+              +'<button onclick="abrirDireccionModal(\''+r.id+'\',\''+area+'\',\''+areaLabel+'\')" style="background:#f3f4f6;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:.8rem;margin-right:4px">✏️</button>'
+              +'<button onclick="eliminarDireccion(\''+r.id+'\')" style="background:#fef2f2;color:#7f1d1d;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:.78rem">🗑️</button>'
+              +'</td>'):'')
+            +'</tr>';
+        }).join('')
+        +'</tbody></table></div>';
+    }
+    lDiv.innerHTML=html;
+  }).catch(function(){
+    lDiv.innerHTML='<div class="card" style="padding:20px;color:#9ca3af;text-align:center">Crea la tabla direcciones_equipo en Supabase primero.</div>';
+  });
+}
+
+function abrirDireccionModal(id,area,areaLabel){
+  if(!_dirPuedeEditar()){showAlert('No tienes permiso para editar direcciones','error');return;}
+  var pintar=function(row){
+    var esLibre=row&&row.componente&&DIRECCIONES_COMPONENTES.indexOf(row.componente)<0;
+    var modal=document.createElement('div');
+    modal.id='modal-direccion';
+    modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end;justify-content:center;overflow-y:auto';
+    modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px 20px 32px;width:100%;max-width:480px">'
+      +'<div style="font-size:17px;font-weight:800;font-family:Nunito,sans-serif;color:#1a3c5e;margin-bottom:16px">🗺️ '+(row?'Editar':'Agregar')+' — '+areaLabel+'</div>'
+      +'<label style="font-size:.8rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Componente</label>'
+      +'<select id="dir-componente" class="form-control" onchange="_dirToggleComponenteLibre()" style="margin-bottom:6px">'
+      +'<option value="">-- Selecciona --</option>'
+      +DIRECCIONES_COMPONENTES.map(function(c){return '<option value="'+c+'"'+(row&&row.componente===c?' selected':'')+'>'+c+'</option>';}).join('')
+      +'<option value="__libre__"'+(esLibre?' selected':'')+'>Texto libre</option>'
+      +'</select>'
+      +'<input type="text" id="dir-componente-libre" class="form-control" placeholder="Escribe el componente..." value="'+(esLibre?String(row.componente).replace(/"/g,'&quot;'):'')+'" style="margin-bottom:10px;display:'+(esLibre?'block':'none')+'">'
+      +'<label style="font-size:.8rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Descripción</label>'
+      +'<input type="text" id="dir-descripcion" class="form-control" value="'+(row?String(row.descripcion||'').replace(/"/g,'&quot;'):'')+'" style="margin-bottom:10px">'
+      +'<label style="font-size:.8rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">TAG</label>'
+      +'<input type="text" id="dir-tag" class="form-control" value="'+(row?String(row.tag||'').replace(/"/g,'&quot;'):'')+'" style="margin-bottom:10px;font-family:monospace">'
+      +'<label style="font-size:.8rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Dirección</label>'
+      +'<input type="text" id="dir-direccion" class="form-control" value="'+(row?String(row.direccion||'').replace(/"/g,'&quot;'):'')+'" style="margin-bottom:16px;font-family:monospace">'
+      +'<div style="display:flex;gap:10px">'
+      +'<button onclick="var m=document.getElementById(\'modal-direccion\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
+      +'<button onclick="guardarDireccion('+(id?('\''+id+'\''):'null')+',\''+area+'\')" style="flex:2;padding:13px;background:#0891b2;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar</button>'
+      +'</div></div>';
+    document.body.appendChild(modal);
+  };
+  if(id){
+    supaFetch('direcciones_equipo','GET',null,'id=eq.'+id).then(function(rows){pintar(rows&&rows[0]);});
+  } else {
+    pintar(null);
+  }
+}
+
+function _dirToggleComponenteLibre(){
+  var sel=document.getElementById('dir-componente');
+  var libre=document.getElementById('dir-componente-libre');
+  if(!sel||!libre) return;
+  libre.style.display=sel.value==='__libre__'?'block':'none';
+}
+
+function guardarDireccion(id,area){
+  var sel=document.getElementById('dir-componente');
+  var selVal=sel?sel.value:'';
+  var componente=selVal==='__libre__'?(document.getElementById('dir-componente-libre').value||'').trim():selVal;
+  if(!componente){showAlert('Selecciona o escribe un componente','error');return;}
+  var payload={
+    area:area,
+    componente:componente,
+    descripcion:(document.getElementById('dir-descripcion').value||'').trim(),
+    tag:(document.getElementById('dir-tag').value||'').trim(),
+    direccion:(document.getElementById('dir-direccion').value||'').trim(),
+    updated_by:currentUser?currentUser.nombre:''
+  };
+  var hacer;
+  if(id){
+    hacer=fetch(SUPA_URL+'/rest/v1/direcciones_equipo?id=eq.'+id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(payload)});
+  } else {
+    payload.id=gen_id();
+    hacer=fetch(SUPA_URL+'/rest/v1/direcciones_equipo',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(payload)});
+  }
+  hacer.then(function(r){
+    if(r.ok||r.status===201||r.status===204){
+      var m=document.getElementById('modal-direccion');if(m)m.remove();
+      showAlert('✅ Guardado');
+      showGestionPersonal();
+    } else {
+      r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});
+    }
+  });
+}
+
+function eliminarDireccion(id){
+  if(!_dirPuedeEditar()){showAlert('No tienes permiso para eliminar direcciones','error');return;}
+  if(!confirm('¿Eliminar esta dirección?'))return;
+  fetch(SUPA_URL+'/rest/v1/direcciones_equipo?id=eq.'+id,{method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Prefer':'return=minimal'}}).then(function(r){
+    if(r.ok||r.status===204){
+      showAlert('Eliminada');
+      showGestionPersonal();
+    } else {
+      showAlert('Error al eliminar','error');
+    }
+  });
+}
+
+function abrirConfigDirecciones(){
+  var esAdmin=currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super');
+  if(!esAdmin){showAlert('Solo administradores pueden configurar esto','error');return;}
+  var candidatos=USERS.filter(function(u){return u.rol==='tecnico'||u.rol==='admin';});
+  var actuales=LISTAS.direcciones_editores_ids||[];
+  var opciones=candidatos.filter(function(u){return actuales.indexOf(u.id)<0;}).map(function(u){return '<option value="'+u.id+'">'+u.nombre+'</option>';}).join('');
+  var listaHtml=actuales.map(function(id){
+    var u=USERS.find(function(x){return x.id===id;});
+    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#f9fafb;border-radius:8px;margin-bottom:6px">'
+      +'<span>'+(u?u.nombre:id)+'</span>'
+      +'<button onclick="_dirQuitarEditor(\''+id+'\')" style="background:#fef2f2;color:#7f1d1d;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:.78rem">Quitar</button>'
+      +'</div>';
+  }).join('')||'<div style="color:#9ca3af;font-size:.85rem;margin-bottom:8px">Nadie agregado todavía.</div>';
+  var modal=document.createElement('div');
+  modal.id='modal-config-direcciones';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end;justify-content:center;overflow-y:auto';
+  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px 20px 32px;width:100%;max-width:480px">'
+    +'<div style="font-size:17px;font-weight:800;font-family:Nunito,sans-serif;color:#1a3c5e;margin-bottom:6px">⚙️ Quién puede editar Direcciones</div>'
+    +'<div style="font-size:.78rem;color:#6b7280;margin-bottom:14px">Administradores y técnicos con especialidad Instrumentista ya pueden editar siempre. Aquí agregas a alguien más (aplica a Montaña y Prole IT).</div>'
+    +listaHtml
+    +'<div style="display:flex;gap:8px;margin-top:12px">'
+    +'<select id="dir-config-select" class="form-control" style="flex:1">'
+    +'<option value="">-- Selecciona técnico/admin --</option>'+opciones+'</select>'
+    +'<button onclick="_dirAgregarEditor()" style="padding:10px 14px;background:#0891b2;color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer">+ Agregar</button>'
+    +'</div>'
+    +'<button onclick="var m=document.getElementById(\'modal-config-direcciones\');if(m)m.remove()" style="width:100%;margin-top:16px;padding:12px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cerrar</button>'
+    +'</div>';
+  document.body.appendChild(modal);
+}
+
+function _dirAgregarEditor(){
+  var sel=document.getElementById('dir-config-select');
+  var id=sel?sel.value:'';
+  if(!id){showAlert('Selecciona a alguien','error');return;}
+  if(!LISTAS.direcciones_editores_ids) LISTAS.direcciones_editores_ids=[];
+  if(LISTAS.direcciones_editores_ids.indexOf(id)>=0){showAlert('Ya está incluido','error');return;}
+  LISTAS.direcciones_editores_ids.push(id);
+  saveListas();
+  var m=document.getElementById('modal-config-direcciones');if(m)m.remove();
+  showAlert('✅ Agregado');
+  abrirConfigDirecciones();
+}
+
+function _dirQuitarEditor(id){
+  if(!confirm('¿Quitar a esta persona de la lista de editores?'))return;
+  LISTAS.direcciones_editores_ids=(LISTAS.direcciones_editores_ids||[]).filter(function(x){return x!==id;});
+  saveListas();
+  var m=document.getElementById('modal-config-direcciones');if(m)m.remove();
+  abrirConfigDirecciones();
+}
 // ================================================================
 // FOTOS PM03 — Múltiples imágenes desde cámara o galería
 // ================================================================
