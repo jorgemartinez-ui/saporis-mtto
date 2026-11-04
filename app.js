@@ -2961,24 +2961,17 @@ function confirmarCierrePM03(id){
   }
 
   // Leer y validar comentarios + estados por actividad
-  var comentariosActs={}, horasActs={}, personasActs={}, estadosFinal={};
+  // (El tiempo por actividad individual se quitó — las horas se capturan a nivel
+  // de "días de trabajo", que es lo único que usa el PDF/REG-MTT y el KPI.)
+  var comentariosActs={}, personasActs={}, estadosFinal={};
   var faltanComentarios=[], faltanEstadoFinal=[], faltanMediciones=[];
   var pm02GeneradasIds=[];
 
   if(proto&&proto.actividades){
     proto.actividades.forEach(function(a){
       var com=document.getElementById('pm3-com-'+a.id);
-      var hrs=document.getElementById('pm3-hrs-'+a.id);
       var pers=document.getElementById('pm3-pers-'+a.id);
       comentariosActs[a.id]=com?com.value.trim():'';
-      var hrsVal=hrs?parseFloat(hrs.value)||0:0;
-      var hrsUnit=document.getElementById('pm3-hrsunit-'+a.id);
-      var hrsUnitVal=hrsUnit?hrsUnit.value:'h';
-      // Convertir a horas para KPI
-      var hrsEnHoras = hrsUnitVal==='min' ? hrsVal/60 : hrsVal;
-      horasActs[a.id]=hrsVal+(hrsUnitVal==='min'?' min':' h');
-      p.horasActividades=p.horasActividades||{};
-      p.horasActividades[a.id+'_h']=hrsEnHoras; // guardar en horas para KPI
       personasActs[a.id]=pers?parseInt(pers.value)||1:1;
 
       // Medición (referencia vs medido): re-leer y validar que los 3 puntos estén completos
@@ -3078,7 +3071,6 @@ function confirmarCierrePM03(id){
   var totalHrs=p.diasTrabajo.reduce(function(s,d){return s+parseFloat((diffMin(d.horaInicio,d.horaFin)/60).toFixed(2));},0);
   p.horasCierre=Math.round(totalHrs*100)/100;
   p.comentariosActividades=comentariosActs;
-  p.horasActividades=horasActs;
   p.personasActividades=personasActs;
   p.actividadesEstadoFinal=estadosFinal;
   p.pm02GeneradasActividades=pm02GeneradasIds;
@@ -20861,10 +20853,43 @@ function imprimirProtocoloPM03(id){
   var win = window.open('','_blank');
   if(!win){showAlert('Activa ventanas emergentes para imprimir','error');return;}
 
-  // Fecha formateada
-  var fechaInicio = p.cerradaTs ? new Date(p.cerradaTs).toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'}) : '___/___/______';
-  var horaInicio  = p.horaInicio || '___:___';
-  var horaFin     = p.horaFin    || '___:___';
+  // Días de trabajo — reemplaza el viejo "Fecha inicio/Fecha término" (que mostraba
+  // la misma fecha dos veces y nunca mostraba horas). Usa p.diasTrabajo (fecha +
+  // hora inicio + hora fin de cada día), la misma fuente que ya usa la pantalla de
+  // detalle y de donde sale p.horasCierre. El tiempo ya no se captura por actividad
+  // individual — solo a nivel de día — así que este es el único lugar con horas.
+  var diasTrabajoRows = '';
+  var totalHrsDias = 0;
+  if(p.diasTrabajo && p.diasTrabajo.length){
+    p.diasTrabajo.forEach(function(d,i){
+      var mins = diffMin(d.horaInicio,d.horaFin);
+      var hrsDia = mins!=null ? (mins/60) : 0;
+      totalHrsDias += hrsDia;
+      var fechaFmt = d.fecha ? new Date(d.fecha+'T12:00:00').toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
+      diasTrabajoRows += '<tr>'
+        +'<td style="text-align:center;width:45px">Día '+(i+1)+'</td>'
+        +'<td style="text-align:center">'+fechaFmt+'</td>'
+        +'<td style="text-align:center">'+(d.horaInicio||'—')+' — '+(d.horaFin||'—')+'</td>'
+        +'<td style="text-align:center;font-weight:700">'+hrsDia.toFixed(2)+' h</td>'
+        +'</tr>';
+    });
+    totalHrsDias = Math.round(totalHrsDias*100)/100;
+  } else {
+    // Legado: PM03 cerrada antes de que existiera diasTrabajo — se arma con lo que haya.
+    var fechaLegado = p.cerradaTs ? new Date(p.cerradaTs).toLocaleDateString('es-MX',{day:'2-digit',month:'2-digit',year:'numeric'}) : '—';
+    diasTrabajoRows = '<tr>'
+      +'<td style="text-align:center;width:45px">Día 1</td>'
+      +'<td style="text-align:center">'+fechaLegado+'</td>'
+      +'<td style="text-align:center">'+(p.horaInicio||'—')+' — '+(p.horaFin||'—')+'</td>'
+      +'<td style="text-align:center;font-weight:700">'+(p.horasCierre||0)+' h</td>'
+      +'</tr>';
+    totalHrsDias = p.horasCierre||0;
+  }
+
+  // Técnicos de apoyo, si se agregó alguno
+  var tecAdicNombres = (p.tecnicosAdicionales&&p.tecnicosAdicionales.length)
+    ? p.tecnicosAdicionales.map(function(t){return t.nombre+(t.horas?' ('+t.horas+'h)':'');}).join(', ')
+    : '';
 
   // Actividades del protocolo
   var actRows = '';
@@ -20873,7 +20898,6 @@ function imprimirProtocoloPM03(id){
       var estI = (p.actividadesEstadoInicial||{})[a.id] || '';
       var estF = (p.actividadesEstadoFinal||p.actividadesEstado||{})[a.id] || '';
       var com  = (p.comentariosActividades||{})[a.id] || '';
-      var hrs  = (p.horasActividades||{})[a.id] || '';
       // Colores estado
       function estCell(e){
         var col=e==='B'?'#16a34a':e==='R'?'#d97706':e==='C'?'#dc2626':'#000';
@@ -20885,37 +20909,56 @@ function imprimirProtocoloPM03(id){
         +'<td style="text-align:center;width:35px;font-size:10px">'+(a.tipo||a.esp)+'</td>'
         +'<td style="text-align:center;width:28px">'+estCell(estI)+'</td>'
         +'<td style="text-align:center;width:28px">'+estCell(estF)+'</td>'
-        +'<td style="text-align:center;width:25px;font-size:10px">'+(hrs||'')+'</td>'
         +'<td style="font-size:9px;padding:3px 4px">'+com+'</td>'
         +'</tr>';
       if(a.comoSeHace){
-        actRows += '<tr><td colspan="7" style="font-size:8.5px;padding:3px 6px;background:#f8fafc;color:#374151;text-align:left">'
+        actRows += '<tr><td colspan="6" style="font-size:8.5px;padding:3px 6px;background:#f8fafc;color:#374151;text-align:left">'
           +'<strong>📖 Cómo se hace:</strong> '+String(a.comoSeHace).replace(/\n/g,'<br>')
           +'</td></tr>';
       }
+      // Medición (referencia vs medido), si la actividad la requiere y se capturó
+      var med = (p.medicionesActividades||{})[a.id];
+      if(med && med.length){
+        var ptsConDatos = med.filter(function(m){return m&&(m.referencia!=null||m.medido!=null);});
+        if(ptsConDatos.length){
+          var uni = a.medicion&&a.medicion.unidad?a.medicion.unidad:'';
+          var medTxt = ptsConDatos.map(function(m,mi){
+            var errTxt = m.error!=null?' (error '+m.error.toFixed(1)+'%)':'';
+            return 'P'+(mi+1)+': ref '+(m.referencia!=null?m.referencia:'—')+' / medido '+(m.medido!=null?m.medido:'—')+(uni?' '+uni:'')+errTxt;
+          }).join(' · ');
+          actRows += '<tr><td colspan="6" style="font-size:8.5px;padding:3px 6px;background:#fffbeb;color:#92400e;text-align:left">'
+            +'<strong>🔢 Medición:</strong> '+medTxt
+            +'</td></tr>';
+        }
+      }
+      // Indicador de foto adjunta — la imagen no se incluye en el PDF, solo se avisa
+      // que existe (consultable en la app) para no inflar/complicar el formato impreso.
+      if((p.fotosActividades||{})[a.id]){
+        actRows += '<tr><td colspan="6" style="font-size:8.5px;padding:2px 6px;background:#f0fdf4;color:#166534;text-align:left">📷 Esta actividad tiene una foto adjunta — disponible en la app</td></tr>';
+      }
     });
     for(var i=(proto.actividades.length+1);i<=10;i++){
-      actRows+='<tr><td style="text-align:center;font-size:10px">'+i+'</td><td></td><td></td><td></td><td></td><td></td><td></td></tr>';
+      actRows+='<tr><td style="text-align:center;font-size:10px">'+i+'</td><td></td><td></td><td></td><td></td><td></td></tr>';
     }
   }
 
-  // Totales
-  // Calcular totales reales
-  var totalHrs = 0;
-  if(proto && proto.actividades){
-    proto.actividades.forEach(function(a){
-      var h=(p.horasActividades||{})[a.id]||'';
-      var hNum=parseFloat(h)||0;
-      if(h.indexOf('min')>=0) hNum=hNum/60;
-      totalHrs+=hNum;
-    });
-    totalHrs=Math.round(totalHrs*10)/10||p.horasCierre||0;
+  // Liberación (Calidad / Producción / Admin) — solo se muestra si se usó ese flujo
+  var tieneLiberacion = p.liberadoPor || p.liberadoProdPor || p.liberadoAdminPor;
+  var liberacionHTML = '';
+  if(tieneLiberacion){
+    liberacionHTML = '<div class="seccion" style="margin-bottom:0">Liberación</div>'
+      +'<table style="margin-bottom:6px"><tr>'
+      +'<td style="font-weight:700;width:110px">Calidad</td><td>'+(p.liberadoPor?(p.liberadoPor+(p.liberadoTs?' — '+new Date(p.liberadoTs).toLocaleDateString('es-MX'):'')):'Pendiente')+'</td>'
+      +'<td style="font-weight:700;width:110px">Producción</td><td>'+(p.liberadoProdPor?(p.liberadoProdPor+(p.liberadoProdTs?' — '+new Date(p.liberadoProdTs).toLocaleDateString('es-MX'):'')):'Pendiente')+'</td>'
+      +'</tr><tr>'
+      +'<td style="font-weight:700">Admin / Mtto</td><td colspan="3">'+(p.liberadoAdminPor?(p.liberadoAdminPor+(p.liberadoAdminTs?' — '+new Date(p.liberadoAdminTs).toLocaleDateString('es-MX'):'')):'Pendiente')+'</td>'
+      +'</tr>'
+      +(p.rechazoCalidad?('<tr><td style="font-weight:700;color:#dc2626">Rechazo Calidad</td><td colspan="3" style="color:#dc2626">'+p.rechazoCalidad+'</td></tr>'):'')
+      +'</table>';
   }
 
-  // Estado liberación
-  var liberadoNombre = p.liberadoPor || '';
-  var liberadoFecha  = p.liberadoTs  ? new Date(p.liberadoTs).toLocaleDateString('es-MX') : '';
-  var rechazoNota    = p.rechazoCalidad ? '<div style="color:#dc2626;font-size:10px;margin-top:4px">⚠️ '+p.rechazoCalidad+'</div>' : '';
+  // Nota de fotos generales (no ligadas a una actividad en particular)
+  var notaFotosGenerales = (p.fotos&&p.fotos.length) ? ('<div style="font-size:9px;color:#166534;margin-top:4px">📷 '+p.fotos.length+' foto(s) adicionales adjuntas en la app (no incluidas en este PDF)</div>') : '';
 
   var html = '<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">'
     +'<title>'+( proto?proto.codigo:'REG-MTT')+' — '+p.linea+'</title>'
@@ -20950,18 +20993,22 @@ function imprimirProtocoloPM03(id){
     +'<td style="border:1px solid #000;padding:3px">'+(proto&&proto.equipoSecundario?proto.equipoSecundario:(p.actividad||p.componente||'—'))+'</td>'
     +'</tr></table>'
 
-    // Fechas y responsable
+    // Semana y responsable
     +'<table style="margin-bottom:6px"><tr>'
-    +'<td style="width:80px;font-weight:700;border:1px solid #000;padding:3px">Fecha inicio</td>'
-    +'<td style="border:1px solid #000;padding:3px">'+fechaInicio+'</td>'
-    +'<td style="width:80px;font-weight:700;border:1px solid #000;padding:3px">Fecha término</td>'
-    +'<td style="border:1px solid #000;padding:3px">'+fechaInicio+'</td>'
-    +'<td style="width:50px;font-weight:700;border:1px solid #000;padding:3px">Semana</td>'
-    +'<td style="border:1px solid #000;padding:3px">'+p.semana+'</td>'
-    +'</tr><tr>'
-    +'<td style="font-weight:700;border:1px solid #000;padding:3px">Responsable</td>'
-    +'<td colspan="5" style="border:1px solid #000;padding:3px">'+(p.tecnicoNombre||'—')+'</td>'
+    +'<td style="width:80px;font-weight:700;border:1px solid #000;padding:3px">Semana</td>'
+    +'<td style="border:1px solid #000;padding:3px">'+p.semana+'/'+p.año+'</td>'
+    +'<td style="width:80px;font-weight:700;border:1px solid #000;padding:3px">Responsable</td>'
+    +'<td colspan="3" style="border:1px solid #000;padding:3px">'+(p.tecnicoNombre||'—')+(tecAdicNombres?' · Apoyo: '+tecAdicNombres:'')+'</td>'
     +'</tr></table>'
+
+    // Días de trabajo (fecha + horario + horas de cada día)
+    +'<div class="seccion" style="margin-bottom:0">Días de Trabajo</div>'
+    +'<table style="margin-bottom:6px">'
+    +'<tr style="background:#e8e8e8"><th>#</th><th>Fecha</th><th>Horario</th><th>Horas</th></tr>'
+    +diasTrabajoRows
+    +'<tr style="background:#e8e8e8"><td colspan="3" style="font-weight:700;text-align:right;font-size:10px">TOTAL HORAS</td>'
+    +'<td style="text-align:center;font-weight:800">'+totalHrsDias.toFixed(2)+' h</td></tr>'
+    +'</table>'
 
     // Tabla de actividades
     +'<div class="seccion" style="margin-bottom:0">Actividades de Mantenimiento a Realizar</div>'
@@ -20969,18 +21016,16 @@ function imprimirProtocoloPM03(id){
     +'<tr style="background:#e8e8e8">'
     +'<th>#</th><th>Descripción</th><th>Tipo</th>'
     +'<th>Est. Inicial</th><th>Est. Final</th>'
-    +'<th>Hrs</th><th>Comentarios</th>'
+    +'<th>Comentarios</th>'
     +'</tr>'
     +actRows
-    +'<tr style="background:#e8e8e8"><td colspan="5" style="font-weight:700;text-align:right;font-size:10px">TOTAL HRS</td>'
-    +'<td style="text-align:center;font-weight:800">'+totalHrs+'</td><td></td></tr>'
     +'</table>'
 
     // Reporte de actividades
     +'<div class="seccion" style="margin-bottom:0">Reporte de Actividades</div>'
     +'<table style="margin-bottom:6px"><tr>'
     +'<td style="font-weight:700;width:130px">Refacciones Usadas</td><td>'+(p.refaccionesUsadas||'Ninguna')+'</td>'
-    +'<td style="font-weight:700;width:130px">Refacciones Nuevas</td><td></td>'
+    +'<td style="font-weight:700;width:130px">Refacciones Nuevas</td><td>'+(p.refaccionesNuevas||'Ninguna')+'</td>'
     +'</tr><tr>'
     +'<td style="font-weight:700">Herramienta Ingresada</td><td>'+(p.herramientaIngresada||'—')+'</td>'
     +'<td style="font-weight:700">Herramienta Salida</td><td>'+(p.herramientaSalida||'—')+'</td>'
@@ -21003,6 +21048,9 @@ function imprimirProtocoloPM03(id){
     +'<td colspan="7">'+(p.observacionesCierre||'')+'</td>'
     +'</tr></table>'
 
+    // Liberación (solo si se usó ese flujo)
+    +liberacionHTML
+
     // Firmas
     +'<div class="seccion" style="margin-bottom:0">Firmas de Autorización</div>'
      +'<table><tr>'
@@ -21011,6 +21059,8 @@ function imprimirProtocoloPM03(id){
      +firmaCeldaImg('INSPECTOR CALIDAD', p.firmaImgCalidad, p.firmaNombreCalidad, p.firmaTsCalidad)
      +firmaCeldaImg('COORDINADOR DE MANTENIMIENTO', p.firmaImgAdmin, p.firmaNombreAdmin, p.firmaTsAdmin)
      +'</tr></table>'
+
+    +notaFotosGenerales
 
     // Pie
     +'<div style="text-align:center;font-size:9px;color:#777;margin-top:8px">'
@@ -21434,10 +21484,7 @@ function pm3SaveCache(pmId){
   if(proto&&proto.actividades){
     proto.actividades.forEach(function(a){
       var com=document.getElementById('pm3-com-'+a.id);
-      var hrs=document.getElementById('pm3-hrs-'+a.id);
-      var hrsUnit=document.getElementById('pm3-hrsunit-'+a.id);
       if(com) { if(!p.comentariosActividades) p.comentariosActividades={}; p.comentariosActividades[a.id]=com.value; }
-      if(hrs) { if(!p.horasActividades) p.horasActividades={}; p.horasActividades[a.id]=hrs.value+(hrsUnit?hrsUnit.value:'h'); }
     });
   }
   // Guardar campos generales
@@ -26683,6 +26730,7 @@ function _buildRefCards(rows){
       +'<button onclick="abrirDescuentoRef(\''+r.id+'\',\''+r.nombre.replace(/'/g,'')+'\','+r.cantidad+')" style="flex:1;padding:9px;background:#5D4037;color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">📤 Descontar</button>'
       +'<button onclick="abrirEntradaRef(\''+r.id+'\',\''+r.nombre.replace(/'/g,'')+'\','+r.cantidad+')" style="flex:1;padding:9px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-size:.82rem;font-weight:700;cursor:pointer">📥 Entrada</button>'
       +'<button onclick="mostrarQR(\''+r.codigo+'\',\''+r.nombre.replace(/'/g,'')+'\',\''+r.id+'\')" style="padding:9px 12px;background:#f3f4f6;border:none;border-radius:8px;font-size:.82rem;cursor:pointer">📲 QR</button>'
+      +'<button onclick="verUbicacionRefaccion(\''+r.id+'\',\''+r.nombre.replace(/'/g,'')+'\')" style="padding:9px 12px;background:#f3f4f6;border:none;border-radius:8px;font-size:.82rem;cursor:pointer">📍</button>'
       +(isAdmin?'<button onclick="editarRef(\''+r.id+'\')" style="padding:9px 12px;background:#f3f4f6;border:none;border-radius:8px;font-size:.82rem;cursor:pointer">✏️</button>':'')
       +'</div></div>';
   }).join('');
@@ -27170,7 +27218,7 @@ function guardarRefaccion(id){
   var provSel=document.getElementById('rn-proveedor');
   var payload={
     nombre:nombre,
-    descripcion:document.getElementById('rn-desc').value.trim()||null,
+    descripcion:document.getElementById('rn-desc').value.trim()||nombre,
     cantidad:parseInt(document.getElementById('rn-cant').value)||0,
     cantidad_minima:parseInt(document.getElementById('rn-min').value)||1,
     ubicacion:document.getElementById('rn-ubic').value.trim()||null,
@@ -27244,6 +27292,19 @@ var _ubicNivelActual=1;
 var _ubicPathActual=[]; // breadcrumb: [{id,nombre,codigo,nivel}, ...]
 var _ubicListaActual=[];
 
+// Anaquel/Nivel/Columna se numeran siempre con 2 dígitos (01 a 99) para
+// mantener el estándar en los códigos y en el resumen de ubicación.
+function _pad2(n){n=parseInt(n,10);return (n<10?'0':'')+n;}
+// Extrae el número de posición de este nodo a partir de su propio código
+// (el último tramo, ej. "AN03"->3, "N2"->2). Funciona igual con códigos
+// viejos sin cero a la izquierda.
+function _ubicNumeroPosicion(nodo){
+  if(!nodo||!nodo.codigo) return null;
+  var ultimo=String(nodo.codigo).split('-').pop();
+  var m=/(\d+)$/.exec(ultimo);
+  return m?parseInt(m[1],10):null;
+}
+
 function showAlmacenUbicaciones(){
   showScreen('screen-almacen-ubicaciones');
   _ubicPathActual=[];
@@ -27296,9 +27357,10 @@ function _dibujarUbicNivel(cont){
       var onclickCall=esCaja
         ? ("_ubicAbrirCaja('"+u.id+"')")
         : ("_ubicEntrar('"+u.id+"','"+nombreEsc+"','"+(u.codigo||'')+"',"+u.nivel+")");
+      var editBtn=(!esCaja&&isAdmin)?('<button onclick="event.stopPropagation();_ubicAbrirEditarNodo(\''+u.id+'\','+u.nivel+')" style="background:none;border:none;font-size:15px;cursor:pointer;padding:4px 8px">✏️</button>'):'';
       return '<div class="card" style="margin-bottom:8px;padding:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center" onclick="'+onclickCall+'">'
         +'<div><div style="font-family:Nunito,sans-serif;font-weight:800;font-size:14px">'+(esCaja?'📦 ':'📁 ')+u.nombre+'</div><div style="font-size:11px;color:#6b7280">'+sub+'</div></div>'
-        +'<div style="color:#9ca3af">›</div></div>';
+        +'<div style="display:flex;align-items:center;gap:2px">'+editBtn+'<span style="color:#9ca3af">›</span></div></div>';
     }).join('')+'</div>';
   } else {
     html+='<div class="card text-center" style="padding:30px;color:#9ca3af">Sin '+(_ubicNivelNombres[nivel]||'elementos').toLowerCase()+'s registrados aquí</div>';
@@ -27330,8 +27392,8 @@ function _ubicAbrirAlta(){
   var nivel=_ubicNivelActual;
   var padreId=_ubicPadreId();
   if(nivel>=5){ _ubicAbrirAltaCaja(padreId,nivel); return; }
-  if(nivel===3||nivel===4){ _ubicAbrirAltaNivelColumna(nivel,padreId); return; }
-  var ejemplos=['','Almacén 1','Anaquel 1'];
+  if(nivel===2||nivel===3||nivel===4){ _ubicAbrirAltaNivelColumna(nivel,padreId); return; }
+  var ejemplos=['','Almacén 1'];
   var m=document.createElement('div');
   m.id='modal-ubic-alta';
   m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
@@ -27355,7 +27417,7 @@ function _ubicGuardarAlta(nivel){
   var filtroHermanos=(padreId?('padre_id=eq.'+padreId):'padre_id=is.null')+'&nivel=eq.'+nivel;
   supaFetch('almacen_ubicaciones','GET',null,filtroHermanos).then(function(hermanos){
     var n=(hermanos||[]).length+1;
-    var codigo=(padreCodigo?padreCodigo+'-':'')+prefijos[nivel]+n;
+    var codigo=(padreCodigo?padreCodigo+'-':'')+prefijos[nivel]+_pad2(n);
     _ubicSiguienteNumero('almacen_ubicaciones','numero').then(function(numero){
       var payload={id:gen_id(),nivel:nivel,nombre:nombre,padre_id:padreId||null,codigo:codigo,numero:numero};
       fetch(SUPA_URL+'/rest/v1/almacen_ubicaciones',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
@@ -27367,16 +27429,16 @@ function _ubicGuardarAlta(nivel){
   });
 }
 
-// ── ALTA: Nivel / Columna (estandarizado — solo el número, el nombre y el
-// código se arman solos, igual que el código de una refacción) ───────────
+// ── ALTA: Anaquel / Nivel / Columna (estandarizado — solo el número de
+// 2 dígitos, 01 a 99; el nombre y el código se arman solos) ───────────────
 function _ubicAbrirAltaNivelColumna(nivel,padreId){
-  var esNivel=nivel===3;
+  var etiqueta=_ubicNivelNombres[nivel].toLowerCase();
   var m=document.createElement('div');
   m.id='modal-ubic-alta';
   m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
   m.innerHTML='<div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px">'
-    +'<div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800;color:#0e7490;margin-bottom:14px">➕ Nuevo '+(esNivel?'Nivel':'Columna')+'</div>'
-    +'<div class="form-group"><label class="form-label">Número de '+(esNivel?'nivel':'columna')+'</label><input type="number" class="form-control" id="ubic-alta-numnivcol" min="1" placeholder="Ej: '+(esNivel?'2':'5')+'"></div>'
+    +'<div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800;color:#0e7490;margin-bottom:14px">➕ Nuevo '+_ubicNivelNombres[nivel]+'</div>'
+    +'<div class="form-group"><label class="form-label">Número de '+etiqueta+' (01 a 99)</label><input type="number" class="form-control" id="ubic-alta-numnivcol" min="1" max="99" placeholder="Ej: 03"></div>'
     +'<div style="display:flex;gap:8px;margin-top:12px">'
     +'<button class="btn btn-outline" style="flex:1" onclick="document.getElementById(\'modal-ubic-alta\').remove()">Cancelar</button>'
     +'<button class="btn btn-primary" style="flex:2" onclick="_ubicGuardarAltaNivelColumna('+nivel+')">💾 Guardar</button>'
@@ -27387,17 +27449,16 @@ function _ubicAbrirAltaNivelColumna(nivel,padreId){
 
 function _ubicGuardarAltaNivelColumna(nivel){
   var num=parseInt(document.getElementById('ubic-alta-numnivcol').value,10);
-  if(!num||num<1){showAlert('Escribe un número válido','error');return;}
-  var esNivel=nivel===3;
-  var nombre=(esNivel?'Nivel ':'Columna ')+num;
+  if(!num||num<1||num>99){showAlert('Escribe un número del 1 al 99','error');return;}
+  var nombre=_ubicNivelNombres[nivel]+' '+_pad2(num);
   var padreId=_ubicPadreId();
   var padreCodigo=_ubicPathActual.length ? (_ubicPathActual[_ubicPathActual.length-1].codigo||'') : '';
-  var prefijo=esNivel?'N':'CL';
-  var codigo=(padreCodigo?padreCodigo+'-':'')+prefijo+num;
+  var prefijos=['','ALM','AN','N','CL'];
+  var codigo=(padreCodigo?padreCodigo+'-':'')+prefijos[nivel]+_pad2(num);
   var filtroHermanos=(padreId?('padre_id=eq.'+padreId):'padre_id=is.null')+'&nivel=eq.'+nivel;
   supaFetch('almacen_ubicaciones','GET',null,filtroHermanos).then(function(hermanos){
     if((hermanos||[]).some(function(h){return h.codigo===codigo;})){
-      showAlert('Ya existe un '+(esNivel?'nivel':'columna')+' con ese número aquí','error');return;
+      showAlert('Ya existe un '+_ubicNivelNombres[nivel].toLowerCase()+' con ese número aquí','error');return;
     }
     _ubicSiguienteNumero('almacen_ubicaciones','numero').then(function(numero){
       var payload={id:gen_id(),nivel:nivel,nombre:nombre,padre_id:padreId||null,codigo:codigo,numero:numero};
@@ -27406,6 +27467,81 @@ function _ubicGuardarAltaNivelColumna(nivel){
           if(r.ok){var m=document.getElementById('modal-ubic-alta');if(m)m.remove();showAlert('✅ '+nombre+' agregado ('+codigo+')');_renderUbicNivel();}
           else r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});
         });
+    });
+  });
+}
+
+// ── EDITAR: Almacén / Anaquel / Nivel / Columna ───────────────────────────
+function _ubicAbrirEditarNodo(id,nivel){
+  var nodo=(_ubicListaActual||[]).find(function(x){return x.id===id;});
+  if(!nodo) return;
+  var m=document.createElement('div');
+  m.id='modal-ubic-alta';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:flex-end;justify-content:center';
+  if(nivel===1){
+    var nombreEsc=String(nodo.nombre||'').replace(/"/g,'&quot;');
+    m.innerHTML='<div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px">'
+      +'<div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800;color:#0e7490;margin-bottom:14px">✏️ Editar '+_ubicNivelNombres[nivel]+'</div>'
+      +'<div class="form-group"><label class="form-label">Nombre</label><input type="text" class="form-control" id="ubic-edit-nombre" value="'+nombreEsc+'"></div>'
+      +'<div style="display:flex;gap:8px;margin-top:12px">'
+      +'<button class="btn btn-outline" style="flex:1" onclick="document.getElementById(\'modal-ubic-alta\').remove()">Cancelar</button>'
+      +'<button class="btn btn-primary" style="flex:2" onclick="_ubicGuardarEditarNombre(\''+id+'\')">💾 Guardar</button>'
+      +'</div></div>';
+  } else {
+    var numActual=_ubicNumeroPosicion(nodo);
+    var etiqueta=_ubicNivelNombres[nivel].toLowerCase();
+    m.innerHTML='<div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:480px">'
+      +'<div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800;color:#0e7490;margin-bottom:14px">✏️ Editar '+_ubicNivelNombres[nivel]+'</div>'
+      +'<div class="form-group"><label class="form-label">Número de '+etiqueta+' (01 a 99)</label><input type="number" class="form-control" id="ubic-edit-num" min="1" max="99" value="'+(numActual||'')+'"></div>'
+      +'<div style="display:flex;gap:8px;margin-top:12px">'
+      +'<button class="btn btn-outline" style="flex:1" onclick="document.getElementById(\'modal-ubic-alta\').remove()">Cancelar</button>'
+      +'<button class="btn btn-primary" style="flex:2" onclick="_ubicGuardarEditarNumero(\''+id+'\','+nivel+')">💾 Guardar</button>'
+      +'</div></div>';
+  }
+  document.body.appendChild(m);
+}
+
+function _ubicGuardarEditarNombre(id){
+  var nombre=(document.getElementById('ubic-edit-nombre').value||'').trim();
+  if(!nombre){showAlert('Escribe un nombre','error');return;}
+  fetch(SUPA_URL+'/rest/v1/almacen_ubicaciones?id=eq.'+id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},body:JSON.stringify({nombre:nombre})})
+    .then(function(r){
+      if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});return;}
+      var m=document.getElementById('modal-ubic-alta');if(m)m.remove();
+      showAlert('✅ Actualizado');
+      _renderUbicNivel();
+    });
+}
+
+function _ubicGuardarEditarNumero(id,nivel){
+  var num=parseInt(document.getElementById('ubic-edit-num').value,10);
+  if(!num||num<1||num>99){showAlert('Escribe un número del 1 al 99','error');return;}
+  var nodo=(_ubicListaActual||[]).find(function(x){return x.id===id;});
+  if(!nodo) return;
+  var padreId=nodo.padre_id||null;
+  var padreCodigo=_ubicPathActual.length ? (_ubicPathActual[_ubicPathActual.length-1].codigo||'') : '';
+  var prefijos=['','ALM','AN','N','CL'];
+  var nombre=_ubicNivelNombres[nivel]+' '+_pad2(num);
+  var codigo=(padreCodigo?padreCodigo+'-':'')+prefijos[nivel]+_pad2(num);
+  var filtroHermanos=(padreId?('padre_id=eq.'+padreId):'padre_id=is.null')+'&nivel=eq.'+nivel;
+  supaFetch('almacen_ubicaciones','GET',null,filtroHermanos).then(function(hermanos){
+    if((hermanos||[]).some(function(h){return h.id!==id&&h.codigo===codigo;})){
+      showAlert('Ya existe un '+_ubicNivelNombres[nivel].toLowerCase()+' con ese número aquí','error');return;
+    }
+    var guardar=function(){
+      fetch(SUPA_URL+'/rest/v1/almacen_ubicaciones?id=eq.'+id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},body:JSON.stringify({nombre:nombre,codigo:codigo})})
+        .then(function(r){
+          if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});return;}
+          var m=document.getElementById('modal-ubic-alta');if(m)m.remove();
+          showAlert('✅ Actualizado a '+nombre);
+          _renderUbicNivel();
+        });
+    };
+    supaFetch('almacen_ubicaciones','GET',null,'padre_id=eq.'+id).then(function(hijos){
+      if((hijos||[]).length){
+        if(!confirm('Este '+_ubicNivelNombres[nivel].toLowerCase()+' ya tiene elementos debajo. Sus códigos no se actualizan solos — revísalos o reimprime sus QR después. ¿Continuar?')) return;
+      }
+      guardar();
     });
   });
 }
@@ -28353,13 +28489,59 @@ function _ubicBuscarDirecto(){
           if(!contenidos||!contenidos.length){res.innerHTML='<div class="card text-center" style="padding:16px;color:#dc2626">❌ Esa refacción no está asignada a ninguna caja todavía.</div>';return;}
           var cajaIds=contenidos.map(function(c){return c.caja_id;}).filter(function(v,i,a){return a.indexOf(v)===i;});
           supaFetch('almacen_ubicaciones','GET',null,'id=in.('+cajaIds.join(',')+')').then(function(cajas2){
-            res.innerHTML='<div class="card-title mb8">Encontrada en '+(cajas2||[]).length+' caja(s):</div>'+(cajas2||[]).map(function(c){
-              return '<div class="card" style="padding:12px;margin-bottom:8px;cursor:pointer" onclick="_ubicAbrirCaja(\''+c.id+'\')"><div style="font-weight:700">📦 '+c.nombre+'</div><div style="font-size:12px;color:#6b7280">'+c.codigo+'</div></div>';
-            }).join('');
+            Promise.all((cajas2||[]).map(function(c){return _ubicCadenaAscendente(c.id).then(_ubicResumenPosicion);})).then(function(resumenes){
+              res.innerHTML='<div class="card-title mb8">Encontrada en '+(cajas2||[]).length+' caja(s):</div>'+(cajas2||[]).map(function(c,i){
+                return '<div class="card" style="padding:12px;margin-bottom:8px;cursor:pointer" onclick="_ubicAbrirCaja(\''+c.id+'\')"><div style="font-weight:700">📦 '+c.nombre+'</div><div style="font-size:12px;color:#6b7280">'+c.codigo+' · 📍 '+resumenes[i]+'</div></div>';
+              }).join('');
+            });
           });
         });
       });
     });
+  });
+}
+
+// ── RESUMEN DE UBICACIÓN (Anaquel-Nivel-Columna, ej. "3-2-4") ────────
+// Sube por padre_id desde una caja hasta la raíz para armar la cadena de
+// ubicaciones, y de ahí extrae el número de Anaquel/Nivel/Columna.
+function _ubicCadenaAscendente(id){
+  var cadena=[];
+  function subir(curId){
+    if(!curId) return Promise.resolve();
+    return supaFetch('almacen_ubicaciones','GET',null,'id=eq.'+curId).then(function(rows){
+      var n=rows&&rows[0];
+      if(!n) return;
+      cadena.unshift(n);
+      return subir(n.padre_id);
+    });
+  }
+  return subir(id).then(function(){return cadena;});
+}
+
+function _ubicResumenPosicion(cadena){
+  var porNivel={};
+  (cadena||[]).forEach(function(n){porNivel[n.nivel]=n;});
+  var al=porNivel[1],an=porNivel[2],ni=porNivel[3],co=porNivel[4];
+  if(al&&an&&ni&&co){
+    var nal=_ubicNumeroPosicion(al),na=_ubicNumeroPosicion(an),nn=_ubicNumeroPosicion(ni),nc=_ubicNumeroPosicion(co);
+    if(nal!=null&&na!=null&&nn!=null&&nc!=null) return 'Alm'+_pad2(nal)+'-'+_pad2(na)+'-'+_pad2(nn)+'-'+_pad2(nc);
+  }
+  // Estructura antigua u otra jerarquía (ej. 4 niveles Posición→Caja) — mostramos los nombres
+  return (cadena||[]).filter(function(n){return n.nivel>1;}).map(function(n){return n.nombre;}).join(' › ');
+}
+
+function _ubicResumenesDeRefaccion(refaccionId){
+  return supaFetch('almacen_caja_contenido','GET',null,'refaccion_id=eq.'+refaccionId).then(function(items){
+    var cajaIds=(items||[]).map(function(c){return c.caja_id;}).filter(function(v,i,a){return a.indexOf(v)===i;});
+    if(!cajaIds.length) return [];
+    return Promise.all(cajaIds.map(function(cid){return _ubicCadenaAscendente(cid).then(_ubicResumenPosicion);}));
+  });
+}
+
+function verUbicacionRefaccion(id,nombre){
+  _ubicResumenesDeRefaccion(id).then(function(resumenes){
+    if(!resumenes||!resumenes.length){showAlert('📍 '+nombre+' no está asignada a ninguna caja todavía','error');return;}
+    showAlert('📍 '+nombre+' — Ubicación: '+resumenes.join(' y '));
   });
 }
 // ── FIN MÓDULO ALMACÉN — UBICACIONES (Fase 1) ─────────────────────
@@ -37657,7 +37839,12 @@ function showCalendarioCompleto(){
   // Todas las PM03 del año, sin importar su origen (Plan Mtto, Excel, Sistema, etc.)
   // — antes solo se incluían las de ciertos "generadoPor"/fuenteExcel, lo que dejaba
   // fuera la mayoría de las actividades creadas desde Plan de Mantenimiento.
+  // Se excluyen 'reprogramada'/'afectada': esas filas son el rastro histórico de una
+  // PM03 que ya se movió a otra semana (su ejecución real vive en una fila nueva,
+  // ligada por reprogramada_a) — contarlas como "programado" en su semana vieja las
+  // pintaba como vencidas aunque sí se hayan hecho, solo que en otra semana.
   var pm3All=PM03_PLAN.filter(function(p){
+    if(p.estado==='reprogramada'||p.estado==='afectada') return false;
     return p.año===anio&&p.semana>=SEM_INICIO;
   });
 
@@ -37674,14 +37861,18 @@ function showCalendarioCompleto(){
     lineaMap[l].programado[p.semana]=true;
     if(p.estado==='cerrada'){
       var enTiempo=true;
-      if(p.fechaCierre){
-        var d=new Date(p.fechaCierre);
+      // p.fechaCierre nunca se guarda al cerrar una PM03 — el campo real es
+      // p.cerradaTs (ver nota existente más abajo en el archivo, línea ~36580).
+      if(p.cerradaTs){
+        var d=new Date(p.cerradaTs);
         var soy=new Date(d.getFullYear(),0,1);
         var wc=Math.ceil(((d-soy)/86400000+soy.getDay()+1)/7);
         enTiempo=wc<=p.semana;
       }
-      if(!lineaMap[l].realizado[p.semana]||enTiempo)
-        lineaMap[l].realizado[p.semana]={enTiempo:enTiempo,id:p.id};
+      // Varias actividades pueden cerrar la misma línea/semana (ej. un equipo con
+      // dos puntos de mantenimiento distintos) — se guardan todas, no solo la última.
+      if(!lineaMap[l].realizado[p.semana]) lineaMap[l].realizado[p.semana]=[];
+      lineaMap[l].realizado[p.semana].push({id:p.id,enTiempo:enTiempo,componente:p.componente||'',actividad:p.actividad||'',tecnicoNombre:p.tecnicoNombre||'',cerradaTs:p.cerradaTs||null});
     }
   });
 
@@ -37721,6 +37912,11 @@ function showCalendarioCompleto(){
 
   var _lastArea='';
   var _lastArea='';
+  // Mapa temporal para el modal de "varias actividades cerradas en la misma
+  // línea/semana" — se reconstruye en cada render, consultado por su key corta
+  // (evita meter el nombre de la línea, con acentos/comillas, dentro del onclick).
+  window._calActCerradasMap={};
+  var _calCounter=0;
   lineas.forEach(function(linea,idx){
     var data=lineaMap[linea];
     var rowBg=idx%2===0?'#fff':'#f8fafc';
@@ -37748,14 +37944,21 @@ function showCalendarioCompleto(){
       +'<td style="position:sticky;left:0;background:'+rowBg+'">&nbsp;</td>'
       +'<td style="padding:2px 2px;text-align:center;font-size:8px;color:#6b7280;font-weight:700;position:sticky;left:'+COL_W+'px;background:'+rowBg+';border-right:1px solid #e2e8f0">Real</td>';
     for(var s=SEM_INICIO;s<=52;s++){
-      var real=data.realizado[s];
+      var realArr=data.realizado[s];
       var prog=data.programado[s];
       var isCur=s===semActual;
       var isPast=s<semActual;
       var cell;
-      if(real){
-        var col=real.enTiempo?'#14532d':'#d97706';
-        cell='<td style="background:'+col+';text-align:center;cursor:pointer" onclick="showDetallePM03(\''+real.id+'\')" title="Ver protocolo ejecutado"><span style="color:#fff;font-size:8px">✓</span></td>';
+      if(realArr&&realArr.length){
+        var todasEnTiempo=realArr.every(function(r){return r.enTiempo;});
+        var col=todasEnTiempo?'#14532d':'#d97706';
+        if(realArr.length===1){
+          cell='<td style="background:'+col+';text-align:center;cursor:pointer" onclick="showDetallePM03(\''+realArr[0].id+'\')" title="Ver protocolo ejecutado"><span style="color:#fff;font-size:8px">✓</span></td>';
+        } else {
+          var _calKey='k'+(_calCounter++);
+          window._calActCerradasMap[_calKey]=realArr;
+          cell='<td style="background:'+col+';text-align:center;cursor:pointer" onclick="_calVerActividadesCerradas(\''+_calKey+'\')" title="Ver '+realArr.length+' protocolos ejecutados"><span style="color:#fff;font-size:7px;font-weight:700">✓×'+realArr.length+'</span></td>';
+        }
       } else if(prog&&isPast&&!isCur){
         var sv=semActual-s;
         cell='<td style="background:'+(sv>=4?'#7f1d1d':sv>=2?'#b91c1c':'#ef4444')+';text-align:center"><span style="color:#fff;font-size:8px">✗</span></td>';
@@ -37771,5 +37974,34 @@ function showCalendarioCompleto(){
 
   html+='</tbody></table></div>';
   cont.innerHTML=html;
+}
+
+// Lista de actividades cerradas que comparten línea+semana en el Calendario
+// Completo (celda "✓×N") — deja elegir cuál protocolo abrir con showDetallePM03.
+function _calVerActividadesCerradas(key){
+  var lista=(window._calActCerradasMap||{})[key];
+  if(!lista||!lista.length) return;
+  var modal=document.createElement('div');
+  modal.id='modal-cal-actividades';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;overflow-y:auto;padding:16px;box-sizing:border-box';
+  modal.onclick=function(e){ if(e.target===modal) modal.remove(); };
+  var rows=lista.map(function(r){
+    var fecha=r.cerradaTs?new Date(r.cerradaTs).toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'}):'—';
+    return '<div style="background:#f8fafc;border:1px solid #e5e7eb;border-radius:8px;padding:10px;margin-bottom:8px">'
+      +'<div style="font-size:12px;font-weight:700;color:#1a3c5e;margin-bottom:2px">'+(r.componente||'—')+'</div>'
+      +'<div style="font-size:11px;color:#374151;margin-bottom:6px">'+(r.actividad||'—')+'</div>'
+      +'<div style="display:flex;justify-content:space-between;align-items:center;gap:8px">'
+      +'<div style="font-size:10px;color:#6b7280">👨‍🔧 '+(r.tecnicoNombre||'Sin asignar')+' · 📅 '+fecha+(r.enTiempo?'':' · <span style="color:#d97706;font-weight:700">Tarde</span>')+'</div>'
+      +'<button onclick="document.getElementById(\'modal-cal-actividades\').remove();showDetallePM03(\''+r.id+'\')" style="padding:4px 10px;background:#1e3a8a;color:#fff;border:none;border-radius:6px;font-size:10px;font-weight:700;cursor:pointer;flex-shrink:0">Ver protocolo</button>'
+      +'</div></div>';
+  }).join('');
+  modal.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;max-width:480px;margin:auto;box-sizing:border-box">'
+    +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;color:#1a3c5e">✅ '+lista.length+' actividades cerradas</div>'
+    +'<button onclick="document.getElementById(\'modal-cal-actividades\').remove()" style="background:none;border:none;font-size:1.3rem;cursor:pointer;color:#9ca3af">✕</button>'
+    +'</div>'
+    +rows
+    +'</div>';
+  document.body.appendChild(modal);
 }
 // ── FIN CALENDARIO COMPLETO ───────────────────────────────────────
