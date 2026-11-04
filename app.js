@@ -27301,7 +27301,9 @@ function _pad2(n){n=parseInt(n,10);return (n<10?'0':'')+n;}
 function _ubicNumeroPosicion(nodo){
   if(!nodo||!nodo.codigo) return null;
   var ultimo=String(nodo.codigo).split('-').pop();
-  var m=/(\d+)$/.exec(ultimo);
+  // Tolera un sufijo de letra al final (b,c,d...) usado para desambiguar códigos
+  // repetidos cuando se permite más de una posición con el mismo número.
+  var m=/(\d+)[a-zA-Z]*$/.exec(ultimo);
   return m?parseInt(m[1],10):null;
 }
 
@@ -27338,7 +27340,10 @@ function _renderUbicNivel(){
 function _dibujarUbicNivel(cont){
   var nivel=_ubicNivelActual;
   var isAdmin=currentUser.rol==='admin'||currentUser.rol==='super';
-  var breadcrumb='<div style="font-size:12px;color:#6b7280;margin-bottom:10px">'
+  var botonRegresar=_ubicPathActual.length
+    ? '<button onclick="_ubicRegresarUnNivel()" style="background:none;border:none;color:#0e7490;font-weight:800;font-size:13px;cursor:pointer;padding:0 0 8px 0;display:flex;align-items:center;gap:4px">‹ Regresar</button>'
+    : '';
+  var breadcrumb=botonRegresar+'<div style="font-size:12px;color:#6b7280;margin-bottom:10px">'
     +'<span style="cursor:pointer;color:#0e7490;font-weight:700" onclick="_ubicIrRaiz()">📦 Almacenes</span>'
     +_ubicPathActual.map(function(p,i){return ' › <span style="cursor:pointer;color:#0e7490;font-weight:700" onclick="_ubicIrNivel('+i+')">'+p.nombre+'</span>';}).join('')
     +'</div>';
@@ -27381,6 +27386,13 @@ function _dibujarUbicNivel(cont){
 
 function _ubicIrRaiz(){_ubicPathActual=[];_ubicNivelActual=1;_renderUbicNivel();}
 function _ubicIrNivel(i){_ubicPathActual=_ubicPathActual.slice(0,i+1);_ubicNivelActual=_ubicPathActual[i].nivel+1;_renderUbicNivel();}
+function _ubicRegresarUnNivel(){
+  if(_ubicPathActual.length){
+    _ubicPathActual=_ubicPathActual.slice(0,-1);
+    _ubicNivelActual=_ubicPathActual.length ? _ubicPathActual[_ubicPathActual.length-1].nivel+1 : 1;
+    _renderUbicNivel();
+  }
+}
 function _ubicEntrar(id,nombre,codigo,nivel){
   _ubicPathActual.push({id:id,nombre:nombre,codigo:codigo,nivel:nivel});
   _ubicNivelActual=nivel+1;
@@ -27454,31 +27466,50 @@ function _ubicGuardarAltaNivelColumna(nivel){
   var padreId=_ubicPadreId();
   var padreCodigo=_ubicPathActual.length ? (_ubicPathActual[_ubicPathActual.length-1].codigo||'') : '';
   var prefijos=['','ALM','AN','N','CL'];
-  var codigo=(padreCodigo?padreCodigo+'-':'')+prefijos[nivel]+_pad2(num);
+  var codigoBase=(padreCodigo?padreCodigo+'-':'')+prefijos[nivel]+_pad2(num);
   var filtroHermanos=(padreId?('padre_id=eq.'+padreId):'padre_id=is.null')+'&nivel=eq.'+nivel;
-  var guardar=function(){
+  // La tabla tiene restricción de código único en la base de datos, así que cuando se
+  // permite repetir el mismo número hay que desambiguar el código interno (b,c,d...)
+  // para que el guardado no choque con esa restricción — el número que ve el usuario
+  // (en el nombre) se mantiene igual.
+  var sufijosDup=['','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p'];
+  var codigoLibre=function(hermanos){
+    for(var i=0;i<sufijosDup.length;i++){
+      var candidato=codigoBase+sufijosDup[i];
+      if(!(hermanos||[]).some(function(h){return h.codigo===candidato;})) return candidato;
+    }
+    return codigoBase+'-'+Date.now();
+  };
+  var guardar=function(codigoFinal){
     _ubicSiguienteNumero('almacen_ubicaciones','numero').then(function(numero){
-      var payload={id:gen_id(),nivel:nivel,nombre:nombre,padre_id:padreId||null,codigo:codigo,numero:numero};
+      var payload={id:gen_id(),nivel:nivel,nombre:nombre,padre_id:padreId||null,codigo:codigoFinal,numero:numero};
       fetch(SUPA_URL+'/rest/v1/almacen_ubicaciones',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
         .then(function(r){
-          if(r.ok){var m=document.getElementById('modal-ubic-alta');if(m)m.remove();showAlert('✅ '+nombre+' agregado ('+codigo+')');_renderUbicNivel();}
+          if(r.ok){var m=document.getElementById('modal-ubic-alta');if(m)m.remove();showAlert('✅ '+nombre+' agregado ('+codigoFinal+')');_renderUbicNivel();}
           else r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});
         });
     });
   };
-  // Nivel: se permiten varias posiciones con el mismo número (sin validación de duplicado).
-  if(nivel===3){ guardar(); return; }
+  // Nivel: se permiten varias posiciones con el mismo número, sin aviso.
+  if(nivel===3){
+    supaFetch('almacen_ubicaciones','GET',null,filtroHermanos).then(function(hermanos){
+      guardar(codigoLibre(hermanos));
+    });
+    return;
+  }
   supaFetch('almacen_ubicaciones','GET',null,filtroHermanos).then(function(hermanos){
-    var existe=(hermanos||[]).some(function(h){return h.codigo===codigo;});
+    var existe=(hermanos||[]).some(function(h){return h.codigo===codigoBase;});
     if(existe){
       // Columna: avisa que ya hay algo ocupando esa posición, pero deja confirmar y continuar.
       if(nivel===4){
         if(!confirm('Ya existe una Columna con el número '+_pad2(num)+' aquí. ¿Agregar otra de todas formas?')) return;
+        guardar(codigoLibre(hermanos));
+        return;
       } else {
         showAlert('Ya existe un '+_ubicNivelNombres[nivel].toLowerCase()+' con ese número aquí','error');return;
       }
     }
-    guardar();
+    guardar(codigoBase);
   });
 }
 
@@ -27533,14 +27564,30 @@ function _ubicGuardarEditarNumero(id,nivel){
   var padreCodigo=_ubicPathActual.length ? (_ubicPathActual[_ubicPathActual.length-1].codigo||'') : '';
   var prefijos=['','ALM','AN','N','CL'];
   var nombre=_ubicNivelNombres[nivel]+' '+_pad2(num);
-  var codigo=(padreCodigo?padreCodigo+'-':'')+prefijos[nivel]+_pad2(num);
+  var codigoBase=(padreCodigo?padreCodigo+'-':'')+prefijos[nivel]+_pad2(num);
   var filtroHermanos=(padreId?('padre_id=eq.'+padreId):'padre_id=is.null')+'&nivel=eq.'+nivel;
+  // Igual que al crear: Nivel permite repetir número; el código interno se
+  // desambigua solo (b,c,d...) para no chocar con la restricción única de la base.
+  var sufijosDup=['','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p'];
+  var codigoLibre=function(hermanos){
+    for(var i=0;i<sufijosDup.length;i++){
+      var candidato=codigoBase+sufijosDup[i];
+      if(!(hermanos||[]).some(function(h){return h.id!==id&&h.codigo===candidato;})) return candidato;
+    }
+    return codigoBase+'-'+Date.now();
+  };
   supaFetch('almacen_ubicaciones','GET',null,filtroHermanos).then(function(hermanos){
-    if((hermanos||[]).some(function(h){return h.id!==id&&h.codigo===codigo;})){
-      showAlert('Ya existe un '+_ubicNivelNombres[nivel].toLowerCase()+' con ese número aquí','error');return;
+    var codigoFinal;
+    if(nivel===3){
+      codigoFinal=codigoLibre(hermanos);
+    } else {
+      if((hermanos||[]).some(function(h){return h.id!==id&&h.codigo===codigoBase;})){
+        showAlert('Ya existe un '+_ubicNivelNombres[nivel].toLowerCase()+' con ese número aquí','error');return;
+      }
+      codigoFinal=codigoBase;
     }
     var guardar=function(){
-      fetch(SUPA_URL+'/rest/v1/almacen_ubicaciones?id=eq.'+id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},body:JSON.stringify({nombre:nombre,codigo:codigo})})
+      fetch(SUPA_URL+'/rest/v1/almacen_ubicaciones?id=eq.'+id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},body:JSON.stringify({nombre:nombre,codigo:codigoFinal})})
         .then(function(r){
           if(!r.ok){r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});return;}
           var m=document.getElementById('modal-ubic-alta');if(m)m.remove();
