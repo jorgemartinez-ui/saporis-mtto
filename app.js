@@ -27456,10 +27456,7 @@ function _ubicGuardarAltaNivelColumna(nivel){
   var prefijos=['','ALM','AN','N','CL'];
   var codigo=(padreCodigo?padreCodigo+'-':'')+prefijos[nivel]+_pad2(num);
   var filtroHermanos=(padreId?('padre_id=eq.'+padreId):'padre_id=is.null')+'&nivel=eq.'+nivel;
-  supaFetch('almacen_ubicaciones','GET',null,filtroHermanos).then(function(hermanos){
-    if((hermanos||[]).some(function(h){return h.codigo===codigo;})){
-      showAlert('Ya existe un '+_ubicNivelNombres[nivel].toLowerCase()+' con ese número aquí','error');return;
-    }
+  var guardar=function(){
     _ubicSiguienteNumero('almacen_ubicaciones','numero').then(function(numero){
       var payload={id:gen_id(),nivel:nivel,nombre:nombre,padre_id:padreId||null,codigo:codigo,numero:numero};
       fetch(SUPA_URL+'/rest/v1/almacen_ubicaciones',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=representation'},body:JSON.stringify(payload)})
@@ -27468,6 +27465,20 @@ function _ubicGuardarAltaNivelColumna(nivel){
           else r.text().then(function(t){showAlert('⚠️ '+t.substring(0,300),'error');});
         });
     });
+  };
+  // Nivel: se permiten varias posiciones con el mismo número (sin validación de duplicado).
+  if(nivel===3){ guardar(); return; }
+  supaFetch('almacen_ubicaciones','GET',null,filtroHermanos).then(function(hermanos){
+    var existe=(hermanos||[]).some(function(h){return h.codigo===codigo;});
+    if(existe){
+      // Columna: avisa que ya hay algo ocupando esa posición, pero deja confirmar y continuar.
+      if(nivel===4){
+        if(!confirm('Ya existe una Columna con el número '+_pad2(num)+' aquí. ¿Agregar otra de todas formas?')) return;
+      } else {
+        showAlert('Ya existe un '+_ubicNivelNombres[nivel].toLowerCase()+' con ese número aquí','error');return;
+      }
+    }
+    guardar();
   });
 }
 
