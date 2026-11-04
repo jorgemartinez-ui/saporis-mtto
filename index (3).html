@@ -1,0 +1,1310 @@
+<!DOCTYPE html>
+<!--
+  Desarrollado por: Jorge Martínez Zamora
+  Autor y propietario del código fuente de esta aplicación.
+  Este software fue creado de forma independiente por el autor;
+  no es propiedad de Saporis Comercial ni de ningún tercero.
+  Queda prohibida su copia, redistribución o uso sin autorización
+  expresa del autor.
+-->
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<!-- v5.1 -->
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no">
+<title>Saporis — Mantenimiento v5</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Nunito+Sans:wght@400;600;700&family=Dancing+Script:wght@700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0/dist/chartjs-plugin-datalabels.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --verde:#00B4A0;--verde2:#00D4BD;--verde3:#E0F7F5;--verde4:#007A6E;
+  --mo:#3D2F8F;--mo2:#5246B8;--mo3:#EEF0FB;--mo4:#2A1F6E;
+  --az:#1565C0;--az2:#1976D2;--az3:#E3F2FD;--az4:#0D47A1;
+  --vd:#2E7D32;--vd2:#43A047;--vd3:#E8F5E9;
+  --am:#E65100;--am2:#F57C00;--am3:#FFF3E0;
+  --rj:#C62828;--rj2:#E53935;--rj3:#FFEBEE;
+  --gr:#37474F;--gr3:#ECEFF1;--gr4:#CFD8DC;
+  --bg:#F4F6F9;--card:#FFF;
+  --txt:#1A1A2E;--txt2:#4A5568;--txt3:#8896A5;
+  --shadow:0 2px 12px rgba(0,0,0,.08);--r:14px;--rsm:10px;
+}
+body{font-family:'Nunito Sans',sans-serif;background:var(--bg);color:var(--txt);min-height:100vh;font-size:15px}
+.hidden{display:none!important}
+.screen{display:none;min-height:100vh;flex-direction:column}
+.screen.active{display:flex}
+/* LOGIN */
+#screen-login{background:linear-gradient(160deg,var(--mo4) 0%,var(--mo) 50%,var(--verde4) 100%);align-items:center;justify-content:center;padding:24px}
+.login-card{background:#fff;border-radius:24px;padding:32px 24px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.login-logo-wrap{text-align:center;background:#12161c;margin:-32px -24px 24px;padding:28px 24px 20px;border-radius:24px 24px 0 0}
+/* LOGO SVG styled */
+.saporis-logo-svg{margin:0 auto 8px;display:block}
+.logo-brand{font-family:'Nunito',sans-serif;font-size:30px;font-weight:900;color:var(--mo);letter-spacing:-1px}
+.logo-brand span{color:var(--verde)}
+.logo-sub{font-size:11px;color:var(--txt3);letter-spacing:.08em;text-transform:uppercase;margin-top:2px}
+/* FORMS */
+.form-label{font-size:13px;font-weight:700;color:var(--txt2);margin-bottom:5px;display:block}
+.form-control{width:100%;padding:12px 14px;border:2px solid var(--gr4);border-radius:var(--rsm);font-size:15px;font-family:inherit;color:var(--txt);background:#fff;transition:border-color .2s}
+.form-control:focus{outline:none;border-color:var(--verde)}
+select.form-control{cursor:pointer}
+textarea.form-control{min-height:80px;resize:vertical}
+.form-group{margin-bottom:16px}
+.err{background:var(--rj3);color:var(--rj);border-radius:var(--rsm);padding:10px 14px;font-size:13px;font-weight:600;margin-bottom:14px}
+/* BUTTONS */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:13px 20px;border-radius:var(--rsm);border:none;font-size:15px;font-family:'Nunito',sans-serif;font-weight:700;cursor:pointer;transition:all .15s;width:100%;text-align:center}
+.btn:active{opacity:.85}
+.btn-primary{background:var(--mo);color:#fff}
+.btn-verde{background:var(--verde);color:#fff}
+.btn-success{background:var(--vd);color:#fff}
+.btn-warning{background:var(--am);color:#fff}
+.btn-danger{background:var(--rj);color:#fff}
+.btn-outline{background:#fff;color:var(--mo);border:2px solid var(--mo)}
+.btn-gray{background:var(--gr3);color:var(--gr);border:2px solid var(--gr4)}
+.btn-sm{padding:9px 14px;font-size:13px}
+.btn-row{display:flex;gap:10px;margin-top:8px}
+.btn-row .btn{flex:1}
+.btn-azul-ot{background:var(--az);color:#fff}
+.btn-rojo-ot{background:var(--rj);color:#000}
+/* TOPBAR */
+.topbar{background:var(--mo);color:#fff;padding:14px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.topbar-back{background:rgba(255,255,255,.2);border:none;color:#fff;width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:18px;flex-shrink:0}
+.topbar-title{font-family:'Nunito',sans-serif;font-size:17px;font-weight:800;flex:1}
+.topbar-sub{font-size:11px;opacity:.8;margin-top:1px}
+.topbar-badge{background:rgba(255,255,255,.2);padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.btn-refresh-header{background:radial-gradient(circle at 35% 28%,#a5e8a5 0%,#4caf50 40%,#2e7d32 100%);border:none;border-radius:50%;width:52px;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;cursor:pointer;flex-shrink:0;padding:0;box-shadow:0 3px 8px rgba(0,0,0,.35),inset 0 2px 3px rgba(255,255,255,.55),inset 0 -3px 4px rgba(0,0,0,.25)}
+.btn-refresh-header:active{transform:scale(.94)}
+.btn-refresh-header svg{filter:drop-shadow(0 1px 1px rgba(0,0,0,.2))}
+.btn-refresh-label{color:#fff;font-size:7px;font-weight:800;letter-spacing:.2px;text-transform:uppercase;line-height:1}
+/* CARDS */
+.card{background:var(--card);border-radius:var(--r);padding:16px;box-shadow:var(--shadow);margin-bottom:12px}
+.card-title{font-family:'Nunito',sans-serif;font-size:16px;font-weight:800;color:var(--txt);margin-bottom:8px}
+/* MENU */
+.app-header{color:#fff;text-align:center}
+.user-pill{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.18);padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;margin-top:8px}
+.menu-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:16px}
+.menu-btn{background:var(--card);border-radius:var(--r);padding:18px 12px;box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;border:2px solid transparent;transition:all .15s;text-align:center}
+.menu-btn:active{transform:scale(.97)}
+.menu-btn.pm01{border-color:#E53935;background:linear-gradient(135deg,#fff 60%,#FFEBEE)}
+.menu-btn.pm02{border-color:#F57C00;background:linear-gradient(135deg,#fff 60%,#FFF3E0)}
+.menu-btn.pm03{border-color:#43A047;background:linear-gradient(135deg,#fff 60%,#E8F5E9)}
+.menu-btn.pm04{border-color:#1976D2;background:linear-gradient(135deg,#fff 60%,#E3F2FD)}
+.menu-btn.atencion{border-color:var(--mo);background:linear-gradient(135deg,#fff 60%,var(--mo3));grid-column:auto!important;}
+.menu-btn.pendientes{border-color:var(--verde);background:linear-gradient(135deg,#fff 60%,var(--verde3))}
+.menu-btn.kpis{border-color:var(--mo);background:linear-gradient(135deg,#fff 60%,var(--mo3))}
+.menu-btn.almacen{border-color:#5D4037;background:linear-gradient(135deg,#fff 60%,#EFEBE9)}
+.menu-btn.admin{border-color:#37474F;background:linear-gradient(135deg,#fff 60%,#ECEFF1)}
+.menu-btn.desempeno{border-color:var(--mo);background:linear-gradient(135deg,#fff 60%,var(--mo3))}
+.menu-btn.inspeccion{border-color:var(--verde);background:linear-gradient(135deg,#fff 60%,var(--verde3))}
+.menu-btn.gestion{border-color:var(--az);background:linear-gradient(135deg,#fff 60%,var(--az3))}
+.menu-icon{font-size:30px}
+.menu-label{font-family:'Nunito',sans-serif;font-size:13px;font-weight:800;color:var(--txt)}
+.menu-desc{font-size:11px;color:var(--txt3)}
+/* BADGES */
+.badge{display:inline-flex;align-items:center;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700}
+.badge-pm01{background:var(--rj3);color:var(--rj)}
+.badge-pm02{background:var(--am3);color:var(--am)}
+.badge-pm03{background:var(--vd3);color:var(--vd)}
+.badge-pm04{background:var(--az3);color:var(--az4)}
+.badge-abierta{background:#FFF9C4;color:#F57F17}
+.badge-cerrada{background:var(--vd3);color:var(--vd)}
+.badge-pA{background:var(--rj3);color:var(--rj)}
+.badge-pB{background:var(--am3);color:var(--am)}
+.badge-pC{background:var(--vd3);color:var(--vd)}
+.badge-admin{background:#EDE7F6;color:#4527A0}
+.badge-tecnico{background:var(--az3);color:var(--az4)}
+.badge-operador{background:var(--gr3);color:var(--gr)}
+.badge-lider{background:var(--verde3);color:var(--verde4)}
+.badge-azul{background:var(--az3);color:var(--az4)}
+.badge-rojo{background:var(--rj3);color:var(--rj)}
+/* WIZARD */
+.wizard-step{padding:16px;padding-bottom:90px}
+.wizard-title{font-family:'Nunito',sans-serif;font-size:20px;font-weight:800;color:var(--txt);margin-bottom:6px}
+.wizard-sub{font-size:14px;color:var(--txt2);margin-bottom:20px}
+.option-list{display:flex;flex-direction:column;gap:8px}
+.option-btn{background:#fff;border:2px solid var(--gr4);border-radius:var(--rsm);padding:14px 16px;cursor:pointer;font-size:15px;font-family:'Nunito',sans-serif;font-weight:600;color:var(--txt);text-align:left;transition:all .15s;display:flex;align-items:center;gap:10px;width:100%}
+.option-btn.selected{border-color:var(--mo);background:var(--mo3);color:var(--mo4)}
+.opt-icon{font-size:22px;flex-shrink:0}
+.fixed-bar{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--gr4);padding:12px 16px;z-index:40;box-shadow:0 -2px 10px rgba(0,0,0,.07)}
+/* OT CARDS */
+.ot-card{background:#fff;border-radius:var(--r);padding:14px 16px;box-shadow:var(--shadow);margin-bottom:10px;border-left:4px solid var(--gr4)}
+.ot-card.pm01{border-left-color:var(--rj2)}
+.ot-card.pm02{border-left-color:var(--am2)}
+.ot-card.pm03{border-left-color:var(--vd2)}
+.ot-card.pm04{border-left-color:var(--az2)}
+.ot-card.color-azul{border-left-color:var(--az)}
+.ot-card.color-rojo{border-left-color:var(--rj)}
+/* KPI */
+.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.kpi-card{background:#fff;border-radius:var(--r);padding:14px;box-shadow:var(--shadow);text-align:center}
+.kpi-num{font-family:'Nunito',sans-serif;font-size:26px;font-weight:800;line-height:1}
+.kpi-label{font-size:11px;color:var(--txt3);margin-top:4px;font-weight:600}
+.chart-wrap{background:#fff;border-radius:var(--r);padding:16px;box-shadow:var(--shadow);margin-bottom:12px}
+.chart-title{font-family:'Nunito',sans-serif;font-size:15px;font-weight:800;margin-bottom:12px;color:var(--txt)}
+/* TABS */
+.tabs{display:flex;overflow-x:auto;background:#fff;border-bottom:2px solid var(--gr4);scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tab-btn{padding:12px 16px;border:none;background:none;font-family:'Nunito',sans-serif;font-size:13px;font-weight:700;color:var(--txt3);cursor:pointer;white-space:nowrap;border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .15s}
+.tab-btn.active{color:var(--mo);border-bottom-color:var(--mo)}
+/* ALERTS */
+.alert{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:100000;padding:12px 20px;border-radius:var(--rsm);font-size:14px;font-weight:700;box-shadow:0 4px 20px rgba(0,0,0,.2);min-width:260px;text-align:center}
+.alert-success{background:var(--vd);color:#fff}
+.alert-error{background:var(--rj);color:#fff}
+.alert-warning{background:var(--am2);color:#fff}
+.alert-info{background:var(--mo);color:#fff}
+/* CHECKLIST */
+.chk-btn{width:100%;border:2px solid var(--gr4);border-radius:var(--rsm);padding:14px 16px;cursor:pointer;font-size:14px;font-family:'Nunito',sans-serif;font-weight:700;text-align:left;display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:8px;background:#fff;transition:all .2s}
+.chk-btn.no_aplica{background:#607D8B!important;border-color:#455A64!important;color:#fff!important}
+.chk-btn.verde{background:var(--vd3);border-color:var(--vd);color:var(--vd)}
+.chk-btn.rojo{background:var(--rj3);border-color:var(--rj);color:var(--rj)}
+.chk-status{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;background:var(--gr3)}
+.chk-status.verde{background:var(--vd);color:#fff}
+.chk-status.rojo{background:var(--rj);color:#fff}
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;display:flex;align-items:flex-end}
+.modal-sheet{background:#fff;border-radius:20px 20px 0 0;width:100%;max-height:90vh;overflow-y:auto;padding:20px 16px 32px}
+.modal-handle{width:40px;height:4px;background:var(--gr4);border-radius:2px;margin:0 auto 16px}
+/* MISC */
+.divider{height:1px;background:var(--gr4);margin:12px 0}
+.scroll-content{flex:1;overflow-y:auto;padding-bottom:20px}
+.traza-box{background:#FFF9C4;border:1px solid #F9A825;border-radius:8px;padding:10px 12px;font-size:12px;color:#5D4037;margin-top:8px}
+.dup-warn{background:#FFF9C4;border:2px solid #F9A825;border-radius:var(--rsm);padding:12px;margin-bottom:12px;font-size:13px;color:#F57F17;font-weight:700}
+.filter-row{display:flex;overflow-x:auto;gap:6px;padding-bottom:6px;margin-bottom:8px;scrollbar-width:none}
+.filter-row::-webkit-scrollbar{display:none}
+.filter-chip{white-space:nowrap;padding:6px 14px;border-radius:20px;border:2px solid var(--gr4);font-size:12px;font-weight:700;cursor:pointer;background:#fff;color:var(--txt3)}
+.filter-chip.active{background:var(--mo);color:#fff;border-color:var(--mo)}
+.timer-btn{background:var(--mo);color:#fff;border:none;border-radius:var(--r);padding:20px;width:100%;font-family:'Nunito',sans-serif;font-size:16px;font-weight:800;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:12px}
+.timer-btn.recorded{background:var(--vd)}
+.foto-btn{background:var(--mo3);border:2px dashed var(--mo);border-radius:var(--rsm);padding:14px;text-align:center;cursor:pointer;color:var(--mo);font-weight:700;font-size:14px}
+.foto-preview{width:100%;border-radius:var(--rsm);margin-top:8px;max-height:200px;object-fit:cover}
+.perf-bar-wrap{background:var(--gr3);border-radius:4px;height:10px;margin-top:4px;overflow:hidden}
+.perf-bar{height:100%;border-radius:4px;transition:width .4s}
+.tec-perf-card{background:#fff;border-radius:var(--r);padding:16px;box-shadow:var(--shadow);margin-bottom:12px;border-top:4px solid var(--mo)}
+.table-wrap{overflow-x:auto;margin-bottom:12px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th{background:var(--mo3);color:var(--mo4);padding:8px 10px;text-align:left;font-weight:700;white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid var(--gr4);vertical-align:top}
+tr:last-child td{border-bottom:none}
+tr:nth-child(even) td{background:#F8FAFC}
+.search-box{background:#fff;border:2px solid var(--gr4);border-radius:var(--rsm);padding:12px 14px;font-size:15px;font-family:inherit;width:100%;margin-bottom:12px}
+.search-box:focus{outline:none;border-color:var(--verde)}
+.resumen-card{background:linear-gradient(135deg,var(--mo3),var(--verde3));border-radius:var(--r);padding:16px;margin-bottom:16px;border:1px solid var(--gr4)}
+@media(max-width:360px){.menu-grid{gap:8px}.menu-btn{padding:14px 8px}.menu-icon{font-size:26px}.menu-label{font-size:12px}}
+</style>
+<!-- Firebase SDK for FCM -->
+<script type="module">
+  import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+  import { getMessaging, getToken, onMessage } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-messaging.js';
+
+  const firebaseConfig = {
+    apiKey: "AIzaSyBKKy3ZXGNPwbek-66MUqRc7XBxPgqnfNw",
+    authDomain: "saporis-12c9f.firebaseapp.com",
+    projectId: "saporis-12c9f",
+    storageBucket: "saporis-12c9f.firebasestorage.app",
+    messagingSenderId: "787748519692",
+    appId: "1:787748519692:web:00b4812ef46dab61899329"
+  };
+
+  const app = initializeApp(firebaseConfig);
+  const messaging = getMessaging(app);
+
+  window._initFCM = async function(tecnicoId) {
+    Notification.requestPermission().then(async function(perm) {
+      if (perm !== 'granted') return;
+      getToken(messaging, {
+        vapidKey: 'mp4SE5rjxBr6DW96xjl6NnH-cKztbP4qzdBHs2MnU7M',
+        serviceWorkerRegistration: await navigator.serviceWorker.getRegistration('/')
+      }).then(function(token) {
+        if (!token) return;
+        console.log('[FCM] Token:', token);
+        window._fcmToken = token;
+        // Save token to Supabase
+        if (window._supaUpsert) {
+          window._supaUpsert('config', {
+            key: 'fcm_' + tecnicoId,
+            value: JSON.stringify({ token: token, ts: Date.now() })
+          });
+        }
+      }).catch(function(e) { console.warn('[FCM] getToken error:', e); });
+    });
+
+    onMessage(messaging, function(payload) {
+      console.log('[FCM] Foreground message:', payload);
+    });
+  };
+</script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="app.js?v=20261104c" defer></script>
+
+<style id="lup-css">
+.lup-doc{background:#fff;border:2px solid #1a3c5e;border-radius:10px;overflow:hidden;margin:12px;font-family:Arial,sans-serif}
+.lup-header{display:flex;border-bottom:2px solid #1a3c5e}
+.lup-logo-cell{padding:8px;border-right:1.5px solid #1a3c5e;display:flex;align-items:center;justify-content:center;min-width:72px}
+.lup-logo-img{width:54px;height:54px;object-fit:contain;border-radius:50%}
+.lup-title-cell{flex:1;padding:8px 12px;border-right:1.5px solid #1a3c5e}
+.lup-main-title{font-size:1rem;font-weight:700;color:#1a3c5e}
+.lup-sub-title{font-size:.78rem;color:#374151;margin-top:3px}
+.lup-folio-cell{padding:8px 10px;min-width:110px}
+.lup-folio-label{font-size:.65rem;font-weight:700;color:#6b7280;text-transform:uppercase}
+.lup-folio-value{font-size:.85rem;font-weight:700;color:#1a3c5e;margin-bottom:3px}
+.lup-fecha-label{font-size:.72rem;color:#374151}
+.lup-datos{border-bottom:1.5px solid #1a3c5e;padding:7px 12px;background:#f0f4ff;display:flex;flex-direction:column;gap:5px}
+.lup-dato-row{display:flex;gap:14px;flex-wrap:wrap}
+.lup-dato{font-size:.82rem;color:#111827;flex:1;min-width:140px}
+.lup-lbl{font-weight:700;color:#1a3c5e}
+.lup-body{display:flex;min-height:240px;border-bottom:1.5px solid #1a3c5e}
+.lup-col{flex:1;display:flex;flex-direction:column}
+.lup-col:first-child{border-right:1.5px solid #1a3c5e}
+.lup-col-hdr{padding:7px;font-weight:700;font-size:.85rem;text-align:center;color:#fff;letter-spacing:.05em}
+.lup-col-hdr.antes{background:#dc2626}
+.lup-col-hdr.despues{background:#16a34a}
+.lup-foto-wrap{flex:1;display:flex;align-items:center;justify-content:center;padding:8px}
+.lup-foto{width:100%;max-height:200px;object-fit:cover;border-radius:6px}
+.lup-foto-ph{color:#9ca3af;font-size:.82rem}
+.lup-footer{padding:5px 12px;font-size:.68rem;color:#9ca3af;text-align:center}
+.mej-field{display:flex;flex-direction:column;gap:4px;margin-bottom:12px}
+.mej-field label{font-size:.75rem;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.03em}
+.mej-field .req{color:#ef4444}
+.mej-input{padding:10px 12px;border:1.5px solid #d1d5db;border-radius:10px;font-size:.92rem;background:#fff;color:#111827;width:100%;box-sizing:border-box;-webkit-appearance:none}
+.mej-input.ro{background:#f3f4f6;color:#6b7280}
+.mej-foto-area{background:#fff;border:2px dashed #d1d5db;border-radius:10px;padding:10px;display:flex;flex-direction:column;align-items:center;gap:8px;min-height:100px}
+.mej-foto-btns{display:flex;gap:8px}
+.mej-foto-btn{padding:9px 16px;background:#1a3c5e;color:#fff;border:none;border-radius:9px;font-size:.88rem;cursor:pointer;font-weight:600}
+.mej-foto-prev{width:100%;max-height:200px;object-fit:cover;border-radius:8px}
+.mej-foto-del{background:#fee2e2;color:#dc2626;border:none;border-radius:7px;padding:6px 12px;font-size:.8rem;cursor:pointer;font-weight:600}
+.mej-card{background:#fff;border-radius:11px;padding:13px;box-shadow:0 2px 7px rgba(0,0,0,.07);border-left:4px solid #16a34a;margin-bottom:10px;cursor:pointer}
+.mej-card-folio{font-size:.75rem;font-weight:700;color:#16a34a;letter-spacing:.04em;margin-bottom:3px}
+.mej-card-info{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px}
+.mej-badge-area{background:#dbeafe;color:#1d4ed8;border-radius:5px;padding:2px 7px;font-size:.72rem;font-weight:600}
+.mej-badge-linea{background:#f3f4f6;color:#374151;border-radius:5px;padding:2px 7px;font-size:.72rem}
+.mej-card-equipo{font-size:.92rem;font-weight:600;color:#111827;margin-bottom:2px}
+.mej-card-meta{font-size:.78rem;color:#6b7280}
+.mej-guardar-btn{width:100%;padding:15px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:none;border-radius:11px;font-size:1rem;font-weight:700;cursor:pointer;margin-top:8px;box-shadow:0 4px 12px rgba(22,163,74,.28)}
+.mej-menu-btn{display:flex;align-items:center;gap:12px;width:100%;padding:18px 20px;border:none;border-radius:13px;font-size:1rem;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.1);margin-bottom:14px}
+.mej-menu-btn.consultar{background:linear-gradient(135deg,#1a3c5e,#2563eb);color:#fff}
+.mej-menu-btn.registrar{background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff}
+@media print{
+  body>*:not(#screen-lup-detalle){display:none!important}
+  #screen-lup-detalle{display:block!important;position:static!important}
+  .topbar,.fixed-bar{display:none!important}
+  .lup-doc{border-radius:0;margin:0}
+}
+</style>
+</head>
+<body>
+<div id="global-alert" class="alert hidden"></div>
+
+<!-- ===== LOGIN ===== -->
+<div id="screen-login" class="screen active">
+  <div class="login-card">
+    <div class="login-logo-wrap">
+      <img src="data:image/png;base64,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" alt="DigitalApp" style="width:140px;height:auto;margin:0 auto 8px;display:block;border-radius:16px">
+      <div class="logo-sub">Software Management Maintenance System</div>
+    </div>
+    <div id="login-error" class="err hidden"></div>
+    <div class="form-group"><label class="form-label">Usuario</label><input type="text" id="inp-user" class="form-control" placeholder="Ingresa tu usuario" autocomplete="username"></div>
+    <div class="form-group"><label class="form-label">Contraseña</label><input type="password" id="inp-pass" class="form-control" placeholder="Ingresa tu contraseña" autocomplete="current-password"></div>
+    <button class="btn btn-primary" onclick="doLogin()">🔐 Ingresar</button>
+    <p style="font-size:10px;color:var(--txt3);text-align:center;margin-top:16px;opacity:.25">Desarrollado por Jorge Martínez Zamora</p>
+  </div>
+</div>
+
+<!-- ===== MENÚ ===== -->
+<div id="screen-menu" class="screen">
+  <div class="app-header" style="background:linear-gradient(160deg,#0f2540 0%,#1a3c5e 60%,#2a5a8f 100%);padding:24px 16px 20px;text-align:center">
+    <!-- Logo SVG Mantenimiento -->
+    <div style="width:88px;height:88px;background:#fff;border-radius:20px;margin:0 auto 12px;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 24px rgba(0,0,0,.3)">
+      <svg width="64" height="64" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M32 6 L54 16 L54 34 C54 46 44 56 32 60 C20 56 10 46 10 34 L10 16 Z" fill="#1a3c5e" opacity=".08"/>
+        <path d="M32 10 L50 19 L50 34 C50 44 42 52 32 56 C22 52 14 44 14 34 L14 19 Z" fill="none" stroke="#1a3c5e" stroke-width="2"/>
+        <circle cx="32" cy="33" r="8" fill="none" stroke="#1a3c5e" stroke-width="2.5"/>
+        <circle cx="32" cy="33" r="3.5" fill="#1a3c5e"/>
+        <path d="M32 22v-3M32 47v-3M43 33h3M18 33h-3M39.8 25.2l2.1-2.1M20.1 43.9l-2.1 2.1M39.8 40.8l2.1 2.1M20.1 25.1l-2.1-2.1" stroke="#1a3c5e" stroke-width="2" stroke-linecap="round"/>
+        <path d="M38 20 L44 14" stroke="#d97706" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="44" cy="14" r="3" fill="#d97706" opacity=".8"/>
+      </svg>
+    </div>
+    <div style="font-family:Nunito,sans-serif;font-size:22px;font-weight:900;color:#fff;letter-spacing:.5px;margin-bottom:2px">Saporis MTTO</div>
+    <div style="font-size:11px;color:rgba(255,255,255,.6);margin-bottom:16px">Gestión de Mantenimiento</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;width:100%">
+      <div style="text-align:left">
+        <div class="user-pill" id="user-pill">👤 Usuario</div>
+        <div style="font-size:10px;opacity:.5;color:#fff;margin-top:4px;letter-spacing:.3px">Saporis MTTO · REG-MTT-01.01-CMMS</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
+      <button onclick="actualizarManual()" class="btn-refresh-header" id="btn-actualizar-global" title="Actualizar">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 7.75 10h-2.08A6 6 0 1 1 12 6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" fill="#fff"/>
+        </svg>
+        <span class="btn-refresh-label">Actualizar</span>
+      </button>
+      <button onclick="showBuzon()" style="position:relative;background:rgba(255,255,255,.18);border:none;border-radius:14px;padding:10px 14px;cursor:pointer;flex-shrink:0;box-shadow:0 2px 8px rgba(0,0,0,.2)" id="btn-buzon">
+      <svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="7" width="28" height="20" rx="3" fill="white" opacity="0.95"/>
+        <path d="M2 10 L16 19 L30 10" stroke="#1a3c5e" stroke-width="2" stroke-linecap="round"/>
+        <path d="M2 7 L16 17 L30 7" fill="white" opacity="0.95"/>
+      </svg>
+      <span id="badge-buzon" style="display:none;position:absolute;top:-6px;right:-6px;background:#dc2626;color:#fff;border-radius:50%;min-width:22px;height:22px;font-size:12px;font-weight:800;line-height:22px;text-align:center;padding:0 4px;box-shadow:0 2px 4px rgba(0,0,0,.3)"></span>
+    </button>
+    </div>
+    </div>
+  </div>
+  <div style="background:linear-gradient(90deg,var(--mo4),var(--mo),var(--verde4));padding:10px 16px;overflow:hidden">
+    <div style="display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px">
+      <div style="flex-shrink:0;background:rgba(255,255,255,.12);border-radius:10px;padding:8px 14px;text-align:center;min-width:90px"><div style="font-size:18px">🍅</div><div style="color:#fff;font-size:10px;font-weight:700;margin-top:2px">Catsup<br>Nuestro Campo</div></div>
+      <div style="flex-shrink:0;background:rgba(255,255,255,.12);border-radius:10px;padding:8px 14px;text-align:center;min-width:90px"><div style="font-size:18px">🥫</div><div style="color:#fff;font-size:10px;font-weight:700;margin-top:2px">Catsup<br>Bachi & L&K</div></div>
+      <div style="flex-shrink:0;background:rgba(255,255,255,.12);border-radius:10px;padding:8px 14px;text-align:center;min-width:90px"><div style="font-size:18px">🧴</div><div style="color:#fff;font-size:10px;font-weight:700;margin-top:2px">Mayonesa<br>Bachi</div></div>
+      <div style="flex-shrink:0;background:rgba(255,255,255,.12);border-radius:10px;padding:8px 14px;text-align:center;min-width:90px"><div style="font-size:18px">🌭</div><div style="color:#fff;font-size:10px;font-weight:700;margin-top:2px">Mostaza<br>Bachi</div></div>
+      <div style="flex-shrink:0;background:rgba(255,255,255,.12);border-radius:10px;padding:8px 14px;text-align:center;min-width:90px"><div style="font-size:18px">🔥</div><div style="color:#fff;font-size:10px;font-weight:700;margin-top:2px">BBQ<br>Nuestro Campo</div></div>
+      <div style="flex-shrink:0;background:rgba(255,255,255,.12);border-radius:10px;padding:8px 14px;text-align:center;min-width:90px"><div style="font-size:18px">🥵</div><div style="color:#fff;font-size:10px;font-weight:700;margin-top:2px">Mango<br>Habanero</div></div>
+      <div style="flex-shrink:0;background:rgba(255,255,255,.12);border-radius:10px;padding:8px 14px;text-align:center;min-width:90px"><div style="font-size:18px">🥑</div><div style="color:#fff;font-size:10px;font-weight:700;margin-top:2px">Aceite Aguacate<br>Simple</div></div>
+      <div style="flex-shrink:0;background:rgba(255,255,255,.12);border-radius:10px;padding:8px 14px;text-align:center;min-width:90px"><div style="font-size:18px">🍾</div><div style="color:#fff;font-size:10px;font-weight:700;margin-top:2px">Vinagres<br>Bachi</div></div>
+      <div style="flex-shrink:0;background:rgba(255,255,255,.12);border-radius:10px;padding:8px 14px;text-align:center;min-width:90px"><div style="font-size:18px">🫙</div><div style="color:#fff;font-size:10px;font-weight:700;margin-top:2px">Salsa Negra<br>L&K</div></div>
+      <div style="flex-shrink:0;background:rgba(255,255,255,.12);border-radius:10px;padding:8px 14px;text-align:center;min-width:90px"><div style="font-size:18px">🥔</div><div style="color:#fff;font-size:10px;font-weight:700;margin-top:2px">Hojuela de Papa<br>Members</div></div>
+      <div style="flex-shrink:0;background:rgba(255,255,255,.12);border-radius:10px;padding:8px 14px;text-align:center;min-width:90px"><div style="font-size:18px">🌶️</div><div style="color:#fff;font-size:10px;font-weight:700;margin-top:2px">Salsa BBQ<br>Picante</div></div>
+      <div style="flex-shrink:0;background:rgba(255,255,255,.12);border-radius:10px;padding:8px 14px;text-align:center;min-width:90px"><div style="font-size:18px">🫙</div><div style="color:#fff;font-size:10px;font-weight:700;margin-top:2px">Salsa Inglesa<br>L&K</div></div>
+      <div style="flex-shrink:0;background:rgba(255,255,255,.12);border-radius:10px;padding:8px 14px;text-align:center;min-width:90px"><div style="font-size:18px">🧂</div><div style="color:#fff;font-size:10px;font-weight:700;margin-top:2px">Jugo<br>Sazonador</div></div>
+    </div>
+  </div>
+  <div class="scroll-content">
+    <div id="banner-vac-alerta" style="display:none;margin-top:12px"></div>
+    <!-- OPERADOR -->
+    <div id="menu-operador"><p style="padding:16px 16px 4px;font-size:13px;font-weight:700;color:var(--txt2)">¿Qué deseas hacer?</p>
+      <div class="menu-grid">
+        <div class="menu-btn" style="border-color:#1565C0;background:linear-gradient(135deg,#fff 60%,#E3F2FD);display:none" onclick="mostrarTecnicosEnTurno(null,'Consulta','')"><div class="menu-icon">👷</div><div class="menu-label btn-tecnicos-turno">Técnicos en Turno (0)</div><div class="menu-desc">Ver quién está en fábrica</div></div>
+        <div class="menu-btn pm02" onclick="iniciarPM('PM02')"><div class="menu-icon">⚠️</div><div class="menu-label">Generar Anormalidad</div><div class="menu-desc"></div></div>
+        <div class="menu-btn pendientes" onclick="showMisOrdenes()"><div class="menu-icon">📌</div><div class="menu-label">Mis Pendientes</div><div class="menu-desc">Mis avisos abiertos</div></div>
+        <div class="menu-btn" style="border-color:#C62828;background:linear-gradient(135deg,#fff 60%,#ffebee)" onclick="showKPIAnormalidades()"><div class="menu-icon">📊</div><div class="menu-label">KPI Anormalidades</div><div class="menu-desc">Indicadores operador/lider</div></div>
+      </div>
+    </div>
+    <!-- LÍDER -->
+    <div id="menu-lider" class="hidden"><p style="padding:16px 16px 4px;font-size:13px;font-weight:700;color:var(--txt2)">Líder de Área</p>
+      <div class="menu-grid">
+        <div class="menu-btn" style="border-color:#1565C0;background:linear-gradient(135deg,#fff 60%,#E3F2FD);display:none" onclick="mostrarTecnicosEnTurno(null,'Consulta','')"><div class="menu-icon">👷</div><div class="menu-label btn-tecnicos-turno">Técnicos en Turno (0)</div><div class="menu-desc">Ver quién está en fábrica</div></div>
+        <div class="menu-btn pm02" onclick="iniciarPM('PM02')"><div class="menu-icon">⚠️</div><div class="menu-label">Generar Anormalidad</div><div class="menu-desc"></div></div>
+        <div class="menu-btn pendientes" onclick="showMisOrdenes()"><div class="menu-icon">📌</div><div class="menu-label">Pendientes</div><div class="menu-desc">Filtrar órdenes</div></div>
+        <div class="menu-btn" style="border-color:#C62828;background:linear-gradient(135deg,#fff 60%,#ffebee)" onclick="showKPIAnormalidades()"><div class="menu-icon">📊</div><div class="menu-label">KPI Anormalidades</div><div class="menu-desc">Azules y rojas</div></div>
+      </div>
+    </div>
+    <!-- TÉCNICO -->
+    <div id="menu-tecnico" class="hidden"><p style="padding:16px 16px 4px;font-size:13px;font-weight:700;color:var(--txt2)">Gestión de Mantenimiento</p>
+        <div id="turno-status" style="display:none"></div>
+        <div class="menu-grid">
+        <div class="menu-btn" style="border-color:#d97706;background:linear-gradient(135deg,#fff 60%,#fffbeb)" onclick="showSHO()"><div class="menu-icon">🔄</div><div class="menu-label" style="font-size:16px;font-weight:900;color:#d97706">Bitácora / SHO</div><div class="menu-desc">Entrega de turno</div></div>
+        <div class="menu-btn" style="border-color:#1a3c5e;background:linear-gradient(135deg,#fff 60%,#e0f2fe)" onclick="showDORWOR()"><div class="menu-icon">📊</div><div class="menu-label" style="font-size:16px;font-weight:900;color:#1a3c5e">DOR / WOR</div><div class="menu-desc">Daily · Weekly Review</div></div>
+        <div class="menu-btn pm01" onclick="iniciarPM('PM01')"><div class="menu-icon">🚨</div><div class="menu-label">PM01</div><div class="menu-desc">Avería</div></div>
+        <div class="menu-btn pm02" onclick="iniciarPM('PM02')"><div class="menu-icon">📋</div><div class="menu-label">PM02</div><div class="menu-desc">Anormalidad</div></div>
+        <div class="menu-btn pm03" onclick="showPM03()" id="btn-pm03-menu"><div class="menu-icon">📅</div><div class="menu-label">PM03</div><div class="menu-desc" id="pm03-menu-desc">Mtto Planeado</div></div>
+        <div class="menu-btn pm04" onclick="iniciarPM('PM04')"><div class="menu-icon">🤝</div><div class="menu-label">PM04</div><div class="menu-desc">Apoyo Producción</div></div>
+        <!-- 3 botones Atención a Línea -->
+        <div style="grid-column:1/-1;display:flex;gap:8px">
+          <button class="menu-btn atencion" onclick="abrirSlot(1)" style="flex:1;min-width:0;flex-direction:column;align-items:center;padding:12px 4px;margin:0;border:none;cursor:pointer"><div style="font-size:24px;margin-bottom:4px">⚡</div><div style="font-size:12px;font-weight:800">Atención 1</div><div id="slot-desc-1" style="font-size:10px;color:#777;margin-top:2px">Disponible</div></button>
+          <button class="menu-btn atencion" onclick="abrirSlot(2)" style="flex:1;min-width:0;flex-direction:column;align-items:center;padding:12px 4px;margin:0;border:none;cursor:pointer"><div style="font-size:24px;margin-bottom:4px">⚡</div><div style="font-size:12px;font-weight:800">Atención 2</div><div id="slot-desc-2" style="font-size:10px;color:#777;margin-top:2px">Disponible</div></button>
+          <button class="menu-btn atencion" onclick="abrirSlot(3)" style="flex:1;min-width:0;flex-direction:column;align-items:center;padding:12px 4px;margin:0;border:none;cursor:pointer"><div style="font-size:24px;margin-bottom:4px">⚡</div><div style="font-size:12px;font-weight:800">Atención 3</div><div id="slot-desc-3" style="font-size:10px;color:#777;margin-top:2px">Disponible</div></button>
+        </div>
+        <!-- Mis Pendientes + Check List de Turno -->
+        <div class="menu-btn pendientes" onclick="showMisOrdenes()"><div class="menu-icon">📌</div><div class="menu-label">Mis Pendientes</div><div class="menu-desc">Órdenes asignadas</div></div>
+        <div class="menu-btn inspeccion" onclick="showChecklistMenu()"><div class="menu-icon">✅</div><div class="menu-label">Check List de Turno</div><div class="menu-desc">Inspecciones y paros</div></div>
+        <div class="menu-btn kpis" onclick="showKPIs()"><div class="menu-icon">📊</div><div class="menu-label">KPI's</div><div class="menu-desc">Indicadores</div></div>
+        <div class="menu-btn almacen" onclick="showAlmacen()" style="position:relative"><div class="menu-icon" style="position:relative">🔧<span id="badge-almacen" style="display:none;position:absolute;top:-6px;right:-8px;background:#dc2626;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:11px;font-weight:800;line-height:18px;text-align:center;padding:0 3px"></span></div><div class="menu-label">Almacén</div><div class="menu-desc">Refacciones</div></div>
+        <div class="menu-btn" style="border-color:#546E7A;background:linear-gradient(135deg,#fff 60%,#ECEFF1)" onclick="showConsultaOT()"><div class="menu-icon">🔍</div><div class="menu-label">Consultar OT</div><div class="menu-desc">Ver todas las órdenes</div></div>
+        <div class="menu-btn" style="border-color:#546E7A;background:linear-gradient(135deg,#fff 60%,#ECEFF1)" onclick="showHistorial()"><div class="menu-icon">🏭</div><div class="menu-label">Historial Máquinas</div><div class="menu-desc">Historial por línea</div></div>
+        <div class="menu-btn" style="border-color:#1565C0;background:linear-gradient(135deg,#fff 60%,#E3F2FD)" onclick="showActivos()"><div class="menu-icon">⚙️</div><div class="menu-label">Activos</div><div class="menu-desc">Inventario de equipos</div></div>
+        <div class="menu-btn" style="border-color:#E65100;background:linear-gradient(135deg,#fff 60%,#FFF3E0)" onclick="showManuales()"><div class="menu-icon">📚</div><div class="menu-label">Manuales</div><div class="menu-desc">Documentos y entrenamiento</div></div>
+        <div class="menu-btn" style="border-color:#00695C;background:linear-gradient(135deg,#fff 60%,#E0F2F1)" onclick="showServicios()"><div class="menu-icon">🏭</div><div class="menu-label">Servicios</div><div class="menu-desc">Gas, Agua, Elec.</div></div>
+        <div class="menu-btn" style="border-color:#0891b2;background:linear-gradient(135deg,#fff 60%,#e0f7fa)" onclick="showGestionPersonal()"><div class="menu-icon">👥</div><div class="menu-label">Gestión de Personal</div><div class="menu-desc">Horarios, vacaciones, incidencias</div></div>
+
+
+      </div>
+      <div id="menu-admin-extra" class="hidden"><p style="padding:4px 16px;font-size:13px;font-weight:700;color:var(--txt2)">Administración</p>
+        <div class="menu-grid">
+          <div class="menu-btn" style="border-color:#1565C0;background:linear-gradient(135deg,#fff 60%,#E3F2FD);display:none" onclick="mostrarTecnicosEnTurno(null,'Consulta','')"><div class="menu-icon">👷</div><div class="menu-label btn-tecnicos-turno">Técnicos en Turno (0)</div><div class="menu-desc">Ver quién está en fábrica</div></div>
+          <div class="menu-btn admin" onclick="showAdmin()"><div class="menu-icon">⚙️</div><div class="menu-label">Administrar</div><div class="menu-desc">Usuarios, listas, app</div></div>
+          <div class="menu-btn desempeno" onclick="showDesempeno()"><div class="menu-icon">🏆</div><div class="menu-label">Desempeño</div><div class="menu-desc">Indicadores por técnico</div></div>
+          <div class="menu-btn" style="border-color:#1a3c5e;background:linear-gradient(135deg,#fff 60%,#e8edf5)" onclick="showMenuProtocolosPM03()"><div class="menu-icon">🗂️</div><div class="menu-label">Protocolos PM03</div><div class="menu-desc">Gestionar formatos</div></div>
+          <div class="menu-btn" style="border-color:#C62828;background:linear-gradient(135deg,#fff 60%,#ffebee)" onclick="showKPIAnormalidades()"><div class="menu-icon">📊</div><div class="menu-label">KPI Anormalidades</div><div class="menu-desc">Indicadores operador/lider</div></div>
+          <div class="menu-btn" style="border-color:#7c3aed;background:linear-gradient(135deg,#fff 60%,#ede9fe);position:relative" onclick="showPM02PorAsignar()"><div class="menu-icon" id="icon-pm02-asignar" style="position:relative">📋<span id="badge-pm02-asignar" style="display:none;position:absolute;top:-8px;right:-10px;background:#dc2626;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:11px;font-weight:800;line-height:18px;text-align:center;padding:0 3px"></span></div><div class="menu-label">PM02 por Asignar</div><div class="menu-desc" id="desc-pm02-asignar">Anormalidades sin técnico</div></div>
+          <div class="menu-btn" style="border-color:#dc2626;background:linear-gradient(135deg,#fff 60%,#fee2e2);position:relative" onclick="showPM03PorReprogramar()"><div class="menu-icon" id="icon-pm3-reprogram" style="position:relative">📅<span id="badge-pm03-reprog" style="display:none;position:absolute;top:-8px;right:-10px;background:#7c3aed;color:#fff;border-radius:50%;min-width:18px;height:18px;font-size:11px;font-weight:800;line-height:18px;text-align:center;padding:0 3px"></span></div><div class="menu-label">PM03 x Reprogramar</div><div class="menu-desc" id="desc-pm3-reprogram">PM03 vencidas</div></div>
+        <div class="menu-btn" style="border-color:#374151;background:linear-gradient(135deg,#fff 60%,#f3f4f6)" onclick="showProveedores()"><div class="menu-icon">🏢</div><div class="menu-label">Proveedores</div><div class="menu-desc">Directorio de proveedores</div></div>
+          <div class="menu-btn" style="border-color:#14532d;background:linear-gradient(135deg,#fff 60%,#dcfce7)" onclick="showPlanMantenimiento()"><div class="menu-icon">📋</div><div class="menu-label">Plan Mtto</div><div class="menu-desc">Actividades y historial</div></div>
+          <div class="menu-btn" style="border-color:#00695C;background:linear-gradient(135deg,#fff 60%,#E0F2F1)" onclick="showServicios()"><div class="menu-icon">🏭</div><div class="menu-label">Servicios</div><div class="menu-desc">Gas, Agua, Elec.</div></div>
+        <div class="menu-btn" style="border-color:#0891b2;background:linear-gradient(135deg,#fff 60%,#e0f7fa)" onclick="showGestionPersonal()"><div class="menu-icon">👥</div><div class="menu-label">Gestión de Personal</div><div class="menu-desc">Horarios, vacaciones, incidencias</div></div>
+        </div>
+      </div>
+    </div>
+      <!-- MENU ADMINISTRATIVO -->
+      <div id="menu-administrativo" class="hidden">
+        <p style="padding:16px 16px 4px;font-size:13px;font-weight:700;color:var(--txt2)">¿Qué deseas hacer?</p>
+        <div class="menu-grid">
+          <div class="menu-btn pm02" onclick="iniciarPM('PM02')"><div class="menu-icon">⚠️</div><div class="menu-label">Generar Anormalidad</div><div class="menu-desc">Levantar PM02</div></div>
+          <div class="menu-btn pendientes" onclick="showMisOrdenes()"><div class="menu-icon">📌</div><div class="menu-label">Mis Pendientes</div><div class="menu-desc" id="desc-pend-admin2">Por aprobar y en proceso</div></div>
+          <div class="menu-btn" style="border-color:#546E7A;background:linear-gradient(135deg,#fff 60%,#ECEFF1)" onclick="showConsultaOT()"><div class="menu-icon">🔍</div><div class="menu-label">Consultar OT</div><div class="menu-desc">Ver órdenes</div></div>
+        </div>
+      </div>
+      <!-- MENU SUPPLY -->
+      <div id="menu-supply" class="hidden">
+        <p style="padding:16px 16px 4px;font-size:13px;font-weight:700;color:var(--txt2)">¿Qué deseas hacer?</p>
+        <div class="menu-grid">
+          <div class="menu-btn pm02" onclick="iniciarPM('PM02')"><div class="menu-icon">⚠️</div><div class="menu-label">Generar Anormalidad</div><div class="menu-desc">Levantar PM02</div></div>
+          <div class="menu-btn pendientes" onclick="showMisOrdenes()"><div class="menu-icon">📌</div><div class="menu-label">Mis Pendientes</div><div class="menu-desc" id="desc-pend-supply">Por aprobar y en proceso</div></div>
+          <div class="menu-btn" style="border-color:#546E7A;background:linear-gradient(135deg,#fff 60%,#ECEFF1)" onclick="showConsultaOT()"><div class="menu-icon">🔍</div><div class="menu-label">Consultar OT</div><div class="menu-desc">Ver órdenes</div></div>
+        </div>
+      </div>
+      <!-- MENU ROL PERSONALIZADO (ej. Gerente) -->
+      <div id="menu-gerente-custom" class="hidden">
+        <p style="padding:16px 16px 4px;font-size:13px;font-weight:700;color:var(--txt2)">¿Qué deseas hacer?</p>
+        <div class="menu-grid" id="menu-gerente-custom-grid"></div>
+      </div>
+
+    <div style="text-align:center;padding:16px"><button class="btn btn-gray btn-sm" style="width:auto;padding:8px 24px" onclick="doLogout()">🚪 Cerrar sesión</button></div>
+  </div>
+</div>
+
+<!-- ===== SHO — ENTREGA DE TURNO ===== -->
+<div id="screen-dorwor" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">📊 DOR / WOR Mtto</div></div></div>
+  <div class="content" style="padding:16px">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:8px">
+      <div onclick="showDOR()" style="background:linear-gradient(135deg,#1a3c5e,#2a5a8f);border-radius:16px;padding:24px 12px;text-align:center;cursor:pointer;box-shadow:0 4px 12px rgba(26,60,94,.3)">
+        <div style="font-size:32px;margin-bottom:8px">📋</div>
+        <div style="font-size:18px;font-weight:900;color:#fff">DOR</div>
+        <div style="font-size:11px;color:#93c5fd;margin-top:4px">Daily Operations Review</div>
+      </div>
+      <div onclick="showWOR()" style="background:linear-gradient(135deg,#374151,#4b5563);border-radius:16px;padding:24px 12px;text-align:center;cursor:pointer;box-shadow:0 4px 12px rgba(55,65,81,.3)">
+        <div style="font-size:32px;margin-bottom:8px">📈</div>
+        <div style="font-size:18px;font-weight:900;color:#fff">WOR</div>
+        <div style="font-size:11px;color:#d1d5db;margin-top:4px">Weekly Operations Review</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="screen-dor" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showDORWOR()">←</button><div><div class="topbar-title">📋 DOR — Mtto</div><div class="topbar-sub" id="dor-sub"></div></div></div>
+  <div class="content" id="dor-content" style="padding:12px"></div>
+</div>
+
+<div id="screen-wor" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showDORWOR()">←</button><div><div class="topbar-title">📈 WOR — Mtto</div><div class="topbar-sub" id="wor-sub"></div></div></div>
+  <div class="content" id="wor-content" style="padding:12px"></div>
+</div>
+
+<div id="screen-dor-planes" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showDOR()">←</button><div><div class="topbar-title">✅ Planes de Acción</div></div></div>
+  <div id="dor-planes-filtros" style="padding:10px"></div>
+  <div id="dor-planes-list" style="padding:0 10px 16px"></div>
+</div>
+
+<div id="screen-sho" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="goMenu()">←</button>
+    <div><div class="topbar-title">🔄 Bitácora / SHO</div><div class="topbar-sub" id="sho-topbar-sub">Entrega de Turno · REG-MTT-001.03</div></div>
+  </div>
+  <div class="scroll-content">
+    <!-- Filtros -->
+    <div style="display:flex;gap:6px;padding:12px 16px 4px;flex-wrap:wrap">
+      <select id="sho-f-anio" class="form-control" style="flex:1;min-width:70px;padding:7px;font-size:.8rem" onchange="renderSHO()"></select>
+      <select id="sho-f-mes" class="form-control" style="flex:1;min-width:80px;padding:7px;font-size:.8rem" onchange="renderSHO()">
+        <option value="">Todos</option>
+        <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
+        <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
+        <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
+        <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+      </select>
+      <select id="sho-f-dia" class="form-control" style="flex:1;min-width:70px;padding:7px;font-size:.8rem" onchange="renderSHO()">
+        <option value="">Todos</option>
+      </select>
+      <select id="sho-f-turno" class="form-control" style="flex:1;min-width:70px;padding:7px;font-size:.8rem" onchange="renderSHO()">
+        <option value="">Turnos</option>
+        <option value="T1">T1</option><option value="T2">T2</option><option value="T3">T3</option>
+      </select>
+    </div>
+    <div id="sho-dashboard" style="padding:8px 16px 24px"></div>
+  </div>
+</div>
+<div id="screen-sho-historial" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showSHO()">←</button><div><div class="topbar-title">📋 Historial SHO</div><div class="topbar-sub">Todas las entregas</div></div></div>
+  <div class="scroll-content"><div id="sho-historial-content" style="padding:16px"></div></div>
+</div>
+
+<div id="screen-paro-fabrica" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showDOR()">←</button>
+    <div><div class="topbar-title">🏭 Actividades Para Paro de Fábrica</div><div class="topbar-sub" id="paro-topbar-sub"></div></div>
+  </div>
+  <div class="scroll-content"><div id="paro-content" style="padding:12px 16px 24px"></div></div>
+</div>
+<div id="screen-sho-detalle" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showSHOHistorial()">←</button><div><div class="topbar-title">📄 Detalle SHO</div><div class="topbar-sub" id="sho-detalle-sub"></div></div></div>
+  <div class="scroll-content"><div id="sho-detalle-content" style="padding:16px"></div></div>
+</div>
+
+<!-- ===== FORMULARIO ÚNICO ANORMALIDAD OPERADOR/LIDER ===== -->
+<div id="screen-pm-anom" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="backFromAnomUnico()">←</button>
+    <div><div class="topbar-title">⚠️ Nueva Anormalidad</div><div class="topbar-sub" id="pm-anom-sub"></div></div>
+  </div>
+  <div class="scroll-content"><div id="pm-anom-content" style="padding:16px 16px 32px"></div></div>
+</div>
+
+<!-- ===== WIZARD PM ===== -->
+<div id="screen-pm" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="backFromPM()">←</button><div><div class="topbar-title" id="pm-topbar-title">Nueva Orden</div><div class="topbar-sub" id="pm-topbar-sub"></div></div><div class="topbar-badge" id="pm-step-badge">1/7</div></div>
+  <div class="scroll-content"><div id="pm-wizard-container" class="wizard-step"></div></div>
+  <div class="fixed-bar"><div class="btn-row"><button class="btn btn-gray" id="pm-btn-back" onclick="pmStep(-1)">← Regresar</button><button class="btn btn-primary" id="pm-btn-next" onclick="pmStep(1)">Siguiente →</button></div></div>
+</div>
+
+<!-- ===== ATENCIÓN A LÍNEA ===== -->
+<div id="screen-atencion" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title" id="atc-topbar-title">⚡ Atención a Línea</div><div class="topbar-sub">Respuesta rápida</div></div></div>
+  <div class="scroll-content" id="atencion-content" style="padding:16px;padding-bottom:90px"></div>
+  <div class="fixed-bar" id="atc-fixed-bar"><div class="btn-row"><button class="btn btn-gray" onclick="atencionStep(-1)">← Regresar</button><button class="btn btn-primary" id="atc-btn-next" onclick="atencionStep(1)">Siguiente →</button></div></div>
+</div>
+
+<!-- ===== MIS ÓRDENES ===== -->
+<div id="screen-ordenes" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="goBack()">←</button><div><div class="topbar-title">📌 Mis Pendientes</div></div></div>
+  <div class="scroll-content" style="padding:16px"><div id="ordenes-filtros"></div>
+    <div id="pend-chart-wrap" style="display:none;background:#fff;border-radius:16px;padding:14px;margin-bottom:12px;box-shadow:0 2px 12px rgba(0,0,0,.08)">
+      <div style="font-size:13px;font-weight:700;color:#3D2F8F;margin-bottom:10px">📊 Cumplimiento PM</div>
+      <div style="display:flex;align-items:center;gap:16px">
+        <div style="position:relative;width:110px;height:110px;flex-shrink:0">
+          <canvas id="chart-pend-cumpl" width="110" height="110"></canvas>
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center">
+            <div id="pend-chart-pct" style="font-size:18px;font-weight:900;line-height:1"></div>
+            <div id="pend-chart-emoji" style="font-size:20px"></div>
+          </div>
+        </div>
+        <div id="pend-chart-legend" style="font-size:12px;line-height:1.8"></div>
+      </div>
+    </div>
+    <div id="mis-ordenes-list"></div></div>
+</div>
+
+<!-- ===== CONSULTA OT ===== -->
+<div id="screen-consulta" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">🔍 Consultar Órdenes</div></div><button onclick="syncSupabase();filtrarOrdenes();showAlert('🔄 Actualizando...')" style="background:none;border:none;color:#fff;font-size:1.2rem;padding:8px;cursor:pointer" title="Actualizar">🔄</button></div>
+  <div class="scroll-content" style="padding:16px">
+    <div id="consulta-resumen" class="resumen-card"></div>
+    <div id="resumen-tecnicos-ot" style="margin-bottom:12px"></div>
+    <input type="text" class="search-box" id="consulta-search" placeholder="🔍 Buscar por ID, área, técnico, descripción..." oninput="filtrarOrdenes()">
+    <div class="filter-row" id="ft-tipo"><div class="filter-chip active" onclick="setFiltro('tipo','todas',this)">Todas</div><div class="filter-chip" onclick="setFiltro('tipo','PM01',this)">PM01</div><div class="filter-chip" onclick="setFiltro('tipo','PM02',this)">PM02</div><div class="filter-chip" onclick="setFiltro('tipo','PM03',this)">PM03</div><div class="filter-chip" onclick="setFiltro('tipo','PM04',this)">PM04</div><div class="filter-chip" onclick="setFiltro('tipo','temporal',this)" style="border-color:#F59E0B;color:#B45309">⚡ Temp</div><div class="filter-chip" onclick="setFiltro('tipo','bitacora',this)" style="border-color:#6d28d9;color:#6d28d9">📒 Bitácora</div></div>
+    <div class="filter-row" id="ft-estado"><div class="filter-chip active" onclick="setFiltro('estado','todos',this)">Todos estados</div><div class="filter-chip" onclick="setFiltro('estado','abierta',this)">Abiertas</div><div class="filter-chip" onclick="setFiltro('estado','cerrada',this)">Cerradas</div></div>
+    <div class="filter-row" id="ft-area"><div class="filter-chip active" onclick="setFiltro('areaGroup','todas',this)">Todas las áreas</div><div class="filter-chip" onclick="setFiltro('areaGroup','fabricacion',this)">⚗️ Fabricación</div><div class="filter-chip" onclick="setFiltro('areaGroup','envasado',this)">📦 Envasado</div><div class="filter-chip" onclick="setFiltro('areaGroup','servicios',this)">🔧 Servicios / Instalaciones</div></div>
+    <div class="filter-row" id="ft-color"><div class="filter-chip active" onclick="setFiltro('color','todos',this)">Todos colores</div><div class="filter-chip" onclick="setFiltro('color','azul',this)" style="border-color:var(--az)">🔵 Azul</div><div class="filter-chip" onclick="setFiltro('color','rojo',this)" style="border-color:var(--rj)">🔴 Rojo</div></div>
+    <div class="filter-row" id="ft-prio"><div class="filter-chip active" onclick="setFiltro('prio','todas',this)">Prio: Todas</div><div class="filter-chip" onclick="setFiltro('prio','A',this)">Prio A</div><div class="filter-chip" onclick="setFiltro('prio','B',this)">Prio B</div><div class="filter-chip" onclick="setFiltro('prio','C',this)">Prio C</div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">
+      <div style="flex:1;min-width:130px"><label class="form-label">Por técnico</label><select class="form-control" id="filtro-tecnico" onchange="filtrarOrdenes()"><option value="">Todos</option></select></div>
+      <div style="flex:1;min-width:130px"><label class="form-label">Levantó la orden</label><select class="form-control" id="filtro-levantado" onchange="filtrarOrdenes()"><option value="">Todos</option></select></div>
+    </div>
+    <div style="margin-bottom:8px"><label class="form-label">Tipo de anormalidad</label>
+      <select class="form-control" id="filtro-anom-consulta" onchange="filtrosConsulta.anom=this.value;filtrarOrdenes()"><option value="todas">Todas</option></select>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+      <button onclick="limpiarFiltrosConsulta()" style="padding:7px 14px;background:#f3f4f6;border:1px solid #d1d5db;border-radius:8px;font-size:13px;font-weight:700;color:#374151;cursor:pointer">🔄 Limpiar filtros</button>
+      <button class="btn btn-outline btn-sm" style="width:auto;padding:8px 14px" onclick="descargarOTExcel()">📥 Descargar Excel</button>
+    </div>
+    <div id="consulta-list" style="margin-top:8px"></div>
+  </div>
+</div>
+
+<!-- ===== PM03 ===== -->
+<div id="screen-pm03" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">📅 PM03 — Mantenimiento Planeado</div></div><button onclick="syncSupabase();setTimeout(renderPM03,800);showAlert('🔄 Actualizando...')" style="background:none;border:none;color:#fff;font-size:1.2rem;padding:8px;cursor:pointer" title="Actualizar">🔄</button></div>
+  <div class="scroll-content" style="padding:16px" id="pm03-content"></div>
+</div>
+
+<!-- ===== KPIs ===== -->
+<div id="screen-kpis" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">📊 KPI's de Mantenimiento</div></div></div>
+  <div style="background:#3D2F8F;padding:10px 16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <span style="color:rgba(255,255,255,.8);font-size:12px;font-weight:700">Mes:</span>
+    <select id="kpi-mes-sel" class="form-control" style="flex:1;min-width:80px;padding:6px 10px;font-size:13px" onchange="reloadKPIs()">
+      <option value="">Todos</option>
+      <option value="1">Ene</option><option value="2">Feb</option><option value="3">Mar</option>
+      <option value="4">Abr</option><option value="5">May</option><option value="6">Jun</option>
+      <option value="7">Jul</option><option value="8">Ago</option><option value="9">Sep</option>
+      <option value="10">Oct</option><option value="11">Nov</option><option value="12">Dic</option>
+    </select>
+    <span style="color:rgba(255,255,255,.8);font-size:12px;font-weight:700">Sem:</span>
+    <select id="kpi-sem-sel" class="form-control" style="flex:1;min-width:80px;padding:6px 10px;font-size:13px" onchange="reloadKPIs()">
+      <option value="">Actual</option>
+    </select>
+    <select id="kpi-año-sel" class="form-control" style="width:85px;padding:6px 10px;font-size:13px" onchange="reloadKPIs()">
+    </select>
+  </div>
+  <div class="scroll-content" style="padding:16px" id="kpis-content"></div>
+</div>
+
+<!-- ===== ALMACÉN ===== -->
+<div id="screen-almacen" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">🔧 Almacén de Refacciones</div></div></div>
+  <div class="scroll-content" style="padding:16px">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px">
+    <button onclick="showAlmacenUbicaciones()" style="padding:16px 8px;background:#0e7490;color:#fff;border:none;border-radius:12px;font-family:Nunito,sans-serif;font-size:.86rem;font-weight:700;cursor:pointer;line-height:1.3">🗺️ Ubicaciones de Almacén</button>
+    <button onclick="showRefConsumidas()" style="padding:16px 8px;background:#065f46;color:#fff;border:none;border-radius:12px;font-family:Nunito,sans-serif;font-size:.86rem;font-weight:700;cursor:pointer;line-height:1.3;position:relative" id="btn-ref-consumidas">🔩 Refacciones Consumidas <span id="badge-ref-consumidas" style="display:none;position:absolute;top:4px;right:4px;background:#dc2626;color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center"></span></button>
+    <button onclick="showOrdenesRefaccion()" style="padding:16px 8px;background:#1a3c5e;color:#fff;border:none;border-radius:12px;font-family:Nunito,sans-serif;font-size:.86rem;font-weight:700;cursor:pointer;line-height:1.3">🔩 Órdenes con Gasto de Refacción</button>
+    <button onclick="showRefacciones()" style="padding:16px 8px;background:#5D4037;color:#fff;border:none;border-radius:12px;font-family:Nunito,sans-serif;font-size:.86rem;font-weight:700;cursor:pointer;line-height:1.3">📦 Inventario de Refacciones</button>
+    <button onclick="showRefFaltantes()" style="padding:16px 8px;background:#b45309;color:#fff;border:none;border-radius:12px;font-family:Nunito,sans-serif;font-size:.86rem;font-weight:700;cursor:pointer;line-height:1.3;position:relative" id="btn-ref-faltantes">🛒 Refacciones Faltantes <span id="badge-ref-faltantes" style="display:none;position:absolute;top:4px;right:4px;background:#dc2626;color:#fff;border-radius:50%;width:18px;height:18px;font-size:11px;font-weight:800;display:inline-flex;align-items:center;justify-content:center"></span></button>
+    <button onclick="showAlmacenEscanearBuscar()" style="padding:16px 8px;background:#6d28d9;color:#fff;border:none;border-radius:12px;font-family:Nunito,sans-serif;font-size:.86rem;font-weight:700;cursor:pointer;line-height:1.3">🔍 Escanear / Buscar</button>
+    </div>
+    <div id="almacen-content"></div>
+  </div>
+</div>
+
+<!-- ===== ALMACÉN - ESCANEAR / BUSCAR ===== -->
+<div id="screen-almacen-escanear-buscar" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showScreen('screen-almacen')">←</button><div><div class="topbar-title">🔍 Escanear / Buscar</div></div></div>
+  <div class="scroll-content" style="padding:16px">
+    <div id="aeb-content"></div>
+  </div>
+</div>
+
+<!-- ===== ALMACÉN - UBICACIONES (Fase 1) ===== -->
+<div id="screen-almacen-ubicaciones" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showScreen('screen-almacen')">←</button><div><div class="topbar-title">🗺️ Ubicaciones de Almacén</div></div></div>
+  <div class="scroll-content" style="padding:16px" id="almacen-ubic-content"></div>
+</div>
+
+<!-- ===== INSPECCIONES ===== -->
+<div id="screen-inspeccion" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">✅ Inspecciones Cada Turno — Servicios</div></div></div>
+  <div class="scroll-content" style="padding:16px;padding-bottom:90px" id="inspeccion-content"></div>
+  <div class="fixed-bar" id="inspeccion-bar"><div class="btn-row"><button class="btn btn-gray" id="insp-btn-pause" onclick="pausarInspeccion()">⏸️ Pausar</button><button class="btn btn-success" id="insp-btn-save" onclick="guardarInspeccion()">💾 Guardar y Cerrar</button></div></div>
+</div>
+
+<!-- ===== DESEMPEÑO ===== -->
+<div id="screen-desempeno" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">🏆 Desempeño por Técnico</div></div></div>
+  <div class="scroll-content" style="padding:16px" id="desempeno-content"></div>
+</div>
+
+<!-- ===== GESTIÓN DE LÍNEA ===== -->
+<div id="screen-gestion" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">📡 Adm. Gestión de Línea</div></div></div>
+  <div class="scroll-content" style="padding:16px" id="gestion-content"></div>
+</div>
+
+<!-- ===== ADMIN ===== -->
+<div id="screen-admin" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">⚙️ Administración</div></div></div>
+  <div class="tabs" id="admin-tabs">
+    <button class="tab-btn active" onclick="setAdminTab('usuarios',this)">Usuarios</button>
+    <button class="tab-btn" onclick="setAdminTab('pm03carga',this)">Plan PM03</button>
+    <button class="tab-btn" onclick="setAdminTab('mtbf',this)">MTBF</button>
+    <button class="tab-btn" onclick="setAdminTab('gasto',this)">Gasto</button>
+    <button class="tab-btn" onclick="setAdminTab('listas',this)">Listas</button>
+    <button class="tab-btn" onclick="setAdminTab('roles',this)">🔑 Roles</button>
+    <button class="tab-btn" id="tab-importar-btn" onclick="setAdminTab('importar',this)" style="display:none;border-color:#6d28d9;color:#6d28d9">📒 Importar</button>
+  </div>
+  <div class="scroll-content" style="padding:16px" id="admin-content"></div>
+</div>
+
+<!-- ===== DETALLE OT ===== -->
+<div id="screen-detalle" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="goBack()">←</button><div><div class="topbar-title" id="detalle-topbar">Detalle OT</div></div></div>
+  <div class="scroll-content" style="padding:16px" id="detalle-content"></div>
+</div>
+
+<!-- MODAL CIERRE OT -->
+<div id="modal-cierre" class="modal-overlay hidden">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <h3 style="font-family:'Nunito',sans-serif;font-weight:800;margin-bottom:16px">✅ Cerrar Orden de Trabajo</h3>
+    <div class="form-group"><label class="form-label">Observaciones del cierre</label><div style="display:flex;gap:6px"><textarea class="form-control" id="cierre-obs" placeholder="Describe el trabajo realizado..." style="flex:1"></textarea><button type="button" id="mic-btn-cierre-obs" onclick="activarMic('cierre-obs')" style="padding:8px 10px;background:#f0f4ff;border:1px solid #bfdbfe;border-radius:8px;font-size:16px;cursor:pointer;align-self:flex-start;flex-shrink:0" title="Dictado por voz">🎤</button></div></div>
+    <div id="cierre-tiempo-wrap" class="hidden">
+      <div style="background:var(--az3);border-radius:10px;padding:12px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--az4);margin-bottom:8px">⏱️ Tiempo invertido (formato 24h)</div>
+        <div style="margin-bottom:10px"><label class="form-label" style="font-size:11px">Fecha del trabajo</label><input type="date" class="form-control" id="cierre-fecha-trabajo"></div>
+        <div style="display:flex;gap:10px">
+          <div style="flex:1"><label class="form-label" style="font-size:11px">Hora inicio</label><input type="time" lang="en-GB" class="form-control" id="cierre-hora-inicio" onchange="calcularTiempoCierre()"></div>
+          <div style="flex:1"><label class="form-label" style="font-size:11px">Hora fin</label><input type="time" lang="en-GB" class="form-control" id="cierre-hora-fin" onchange="calcularTiempoCierre()"></div>
+        </div>
+        <div id="cierre-tiempo-calc" style="font-size:13px;font-weight:700;color:var(--mo);margin-top:8px;text-align:center"></div>
+      </div>
+    </div>
+    <div id="precierre-dias-wrap" class="hidden">
+      <div style="background:var(--az3);border-radius:10px;padding:12px;margin-bottom:12px">
+        <div style="font-size:13px;font-weight:700;color:var(--az4);margin-bottom:8px">📅 Día(s) de trabajo</div>
+        <div id="precierre-dias-container"></div>
+        <button type="button" onclick="precierreAddDia()" style="width:100%;padding:8px;background:#f0f4ff;border:1px dashed #2563eb;border-radius:8px;font-size:12px;font-weight:700;color:#2563eb;cursor:pointer;margin-top:4px">+ Agregar día</button>
+        <div id="precierre-horas-total" style="font-size:13px;font-weight:700;color:var(--mo);margin-top:8px;text-align:center"></div>
+      </div>
+    </div>
+    <div id="cierre-horas-wrap" class="form-group"><label class="form-label">⏱️ Horas de trabajo *</label><input type="number" class="form-control" id="cierre-horas" placeholder="Ej: 1.5" step="0.5" min="0.5" required style="border:2px solid #f97316"></div>
+    <div class="form-group">
+      <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:700;color:#374151">
+        <input type="checkbox" id="cierre-uso-refacciones" onchange="toggleCierreRefacciones(this.checked)" style="width:18px;height:18px;cursor:pointer">
+        🔩 Usé refacciones / materiales
+      </label>
+      <div id="cierre-ref-standby" style="margin-top:6px"></div>
+      <div id="cierre-ref-wrap" class="hidden" style="margin-top:8px">
+        <div id="cierre-ref-lista" style="display:flex;flex-direction:column;gap:6px;margin-bottom:6px">
+          <div class="cierre-ref-row" style="display:flex;gap:6px">
+            <input type="text" class="form-control cierre-ref-input" placeholder="Ej: Balero 6205, O-ring 2&quot;..." style="flex:1;font-size:13px">
+            <input type="text" class="form-control cierre-ref-input" placeholder="Ej: Balero 6205, O-ring 2&quot;..." style="flex:1;font-size:13px">
+            <input type="number" class="form-control cierre-ref-cant" placeholder="Cant." min="1" style="width:64px;font-size:13px">
+          </div>
+        </div>
+        <button type="button" onclick="cierreRefAgregar()" style="width:100%;padding:8px;background:#f0f4ff;border:1px dashed #2563eb;border-radius:8px;font-size:12px;font-weight:700;color:#2563eb;cursor:pointer">+ Agregar refacción</button>
+        <div style="font-size:10px;color:#9ca3af;margin-top:4px">Una refacción por línea</div>
+      </div>
+    </div>
+    <div id="cierre-tec-adic-wrap" class="hidden" style="margin-bottom:12px">
+      <div style="font-size:.78rem;font-weight:700;color:#374151;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Técnicos adicionales (opcional)</div>
+      <div id="cierre-extra-tecs-container"></div>
+      <button type="button" onclick="cierreAddExtraTec()" style="width:100%;padding:10px;background:#f0f4ff;border:1px dashed #2563eb;border-radius:10px;font-size:.88rem;font-weight:600;color:#2563eb;cursor:pointer;margin-top:4px">+ Agregar técnico de apoyo</button>
+    </div>
+    <!-- LIMPIEZA -->
+    <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:10px;padding:12px;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:700;color:#856404;margin-bottom:10px">🧹 ¿Se requiere limpieza por el usuario después de la intervención?</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <button id="btn-limpieza-si" type="button" onclick="toggleLimpieza(true)" style="flex:1;padding:9px;border-radius:8px;border:2px solid #e5e7eb;background:#fff;font-weight:700;font-size:.85rem;cursor:pointer">✅ Sí</button>
+        <button id="btn-limpieza-no" type="button" onclick="toggleLimpieza(false)" style="flex:1;padding:9px;border-radius:8px;border:2px solid #e5e7eb;background:#fff;font-weight:700;font-size:.85rem;cursor:pointer">❌ No</button>
+      </div>
+      <div id="limpieza-aviso-wrap" style="display:none">
+        <label class="form-label" style="font-size:12px">¿A quién se le avisó de la limpieza?</label>
+        <input type="text" class="form-control" id="limpieza-aviso" placeholder="Nombre del usuario avisado..." style="padding:9px">
+        <label class="form-label" style="font-size:12px;margin-top:8px">Firma de quien recibe el aviso</label>
+        <canvas id="limpieza-firma-canvas" width="300" height="110" style="width:100%;max-width:300px;border:2px solid #e5e7eb;border-radius:8px;background:#fff;touch-action:none;display:block"></canvas>
+        <button type="button" onclick="limpFirmaLimpiar('limpieza-firma-canvas')" style="margin-top:6px;padding:6px 12px;font-size:11px;background:#f3f4f6;border:none;border-radius:8px;cursor:pointer">🗑️ Borrar firma</button>
+      </div>
+    </div>
+    <div class="btn-row"><button class="btn btn-gray" onclick="_cancelarModalCierre()">Cancelar</button><button class="btn btn-success" onclick="confirmarCierre()">✅ Confirmar</button></div>
+  </div>
+</div>
+
+<!-- MODAL REASIGNAR -->
+<div id="modal-reasignar" class="modal-overlay hidden">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <h3 style="font-family:'Nunito',sans-serif;font-weight:800;margin-bottom:16px">🔄 Reasignar Técnico</h3>
+    <div class="form-group"><label class="form-label">Nuevo técnico</label><select class="form-control" id="reasig-sel"></select></div>
+    <div class="form-group"><label class="form-label">Motivo</label><textarea class="form-control" id="reasig-motivo" placeholder="¿Por qué se reasigna?"></textarea></div>
+    <div class="btn-row"><button class="btn btn-gray" onclick="cerrarModal('modal-reasignar')">Cancelar</button><button class="btn btn-primary" onclick="confirmarReasignacion()">💾 Guardar</button></div>
+  </div>
+</div>
+
+<!-- MODAL COMENTARIO ROJO -->
+<div id="modal-comentario-rojo" class="modal-overlay hidden">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <h3 style="font-family:'Nunito',sans-serif;font-weight:800;margin-bottom:8px;color:var(--rj)">🔴 Punto en Rojo — Comentario requerido</h3>
+    <p style="font-size:14px;color:var(--txt2);margin-bottom:16px" id="modal-punto-nombre"></p>
+    <div class="form-group"><label class="form-label">¿Qué anormalidad encontraste?</label><textarea class="form-control" id="modal-comentario-input" placeholder="Describe el problema encontrado..." style="min-height:100px"></textarea></div>
+    <div class="btn-row"><button class="btn btn-gray" onclick="cancelarComentarioRojo()">Cancelar</button><button class="btn btn-danger" onclick="confirmarComentarioRojo()">🔴 Confirmar en rojo</button><button class="btn btn-gray" onclick="marcarNoAplica()" style="background:#455A64;color:#fff;margin-top:8px">⬛ No aplica</button></div>
+  </div>
+</div>
+<!-- ===== HISTORIAL MÁQUINAS ===== -->
+<div id="screen-historial" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">🏭 Historial de Máquinas</div></div></div>
+  <div class="scroll-content" style="padding:16px">
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap">
+      <div style="flex:1;min-width:80px">
+        <label class="form-label">Semana</label>
+        <select class="form-control" id="hist-sem">
+          <option value="">Todas</option>
+        </select>
+      </div>
+      <div style="flex:1;min-width:80px">
+        <label class="form-label">Mes</label>
+        <select class="form-control" id="hist-mes">
+          <option value="">Todos</option>
+          <option value="1">Enero</option><option value="2">Febrero</option><option value="3">Marzo</option>
+          <option value="4">Abril</option><option value="5">Mayo</option><option value="6">Junio</option>
+          <option value="7">Julio</option><option value="8">Agosto</option><option value="9">Septiembre</option>
+          <option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option>
+        </select>
+      </div>
+      <div style="flex:1;min-width:80px">
+        <label class="form-label">Año</label>
+        <select class="form-control" id="hist-año">
+          <option value="2025">2025</option><option value="2026" selected>2026</option><option value="2027">2027</option>
+        </select>
+      </div>
+    </div>
+    <div class="filter-row" id="hist-ft-estado">
+      <div class="filter-chip active" onclick="setHistFiltro('estado','todas',this)">Todas</div>
+      <div class="filter-chip" onclick="setHistFiltro('estado','abierta',this)">Abiertas</div>
+      <div class="filter-chip" onclick="setHistFiltro('estado','cerrada',this)">Cerradas</div>
+    </div>
+    <div class="filter-row" id="hist-ft-tipo">
+      <div class="filter-chip active" onclick="setHistFiltro('tipo','todas',this)">Todos tipos</div>
+      <div class="filter-chip" onclick="setHistFiltro('tipo','PM01',this)">PM01</div>
+      <div class="filter-chip" onclick="setHistFiltro('tipo','PM02',this)">PM02</div>
+      <div class="filter-chip" onclick="setHistFiltro('tipo','PM03',this)">PM03</div>
+      <div class="filter-chip" onclick="setHistFiltro('tipo','PM04',this)">PM04</div>
+    </div>
+    <div class="filter-row" id="hist-ft-prio">
+      <div class="filter-chip active" onclick="setHistFiltro('prio','todas',this)">Todas prio</div>
+      <div class="filter-chip" onclick="setHistFiltro('prio','A',this)">Prio A</div>
+      <div class="filter-chip" onclick="setHistFiltro('prio','B',this)">Prio B</div>
+      <div class="filter-chip" onclick="setHistFiltro('prio','C',this)">Prio C</div>
+    </div>
+    <div class="filter-row" id="hist-ft-color">
+      <div class="filter-chip active" onclick="setHistFiltro('color','todos',this)">Todos colores</div>
+      <div class="filter-chip" onclick="setHistFiltro('color','azul',this)">🔵 Azul</div>
+      <div class="filter-chip" onclick="setHistFiltro('color','rojo',this)">🔴 Rojo</div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">Línea / Máquina</label>
+      <select class="form-control" id="hist-linea" onchange="buscarHistorial()">
+        <option value="">-- Selecciona una línea --</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin-bottom:12px">
+      <label class="form-label">Búsqueda libre</label>
+      <input type="text" class="form-control" id="hist-busqueda" placeholder="Folio, componente, descripción o técnico..." oninput="if(document.getElementById('hist-linea').value) buscarHistorial()">
+    </div>
+    <button class="btn btn-primary" onclick="buscarHistorial()" style="margin-bottom:12px">🔍 Buscar historial</button>
+    <div id="hist-results"></div>
+  </div>
+</div>
+
+<!-- ===== ACTIVOS ===== -->
+<div id="screen-activos" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">⚙️ Activos</div></div></div>
+  <div class="scroll-content" style="padding:16px">
+    <div class="card" style="padding:16px;cursor:pointer;display:flex;align-items:center;gap:14px;margin-bottom:16px" onclick="showRegistroActivos()">
+      <div style="font-size:32px">📋</div>
+      <div style="flex:1"><div style="font-weight:800;font-size:15px">Registro de Activos</div>
+      <div style="font-size:12px;color:var(--txt2)">Equipos principales por línea</div></div>
+      <div style="color:var(--txt3);font-size:20px">›</div>
+    </div>
+    <div class="card" style="padding:16px;cursor:pointer;display:flex;align-items:center;gap:14px;margin-bottom:16px" onclick="showCementerio()">
+      <div style="font-size:32px">🪦</div>
+      <div style="flex:1"><div style="font-weight:800;font-size:15px">Cementerio de Equipos</div>
+      <div style="font-size:12px;color:var(--txt2)">Equipos fuera de operación</div></div>
+      <div style="color:var(--txt3);font-size:20px">›</div>
+    </div>
+    <div class="card" style="padding:16px;cursor:pointer;display:flex;align-items:center;gap:14px;margin-bottom:16px" onclick="showPriorizacionLineas()">
+      <div style="font-size:32px">🎯</div>
+      <div style="flex:1"><div style="font-weight:800;font-size:15px">Priorización de Líneas</div>
+      <div style="font-size:12px;color:var(--txt2)">Ocupación y prioridad por línea</div></div>
+      <div style="color:var(--txt3);font-size:20px">›</div>
+    </div>
+    <div class="card" style="text-align:center;padding:40px 20px">
+      <div style="font-size:56px;margin-bottom:12px">⚙️</div>
+      <div style="font-family:Nunito,sans-serif;font-size:20px;font-weight:800;color:var(--mo);margin-bottom:8px">Módulo de Activos</div>
+      <div style="font-size:14px;color:var(--txt2);margin-bottom:20px">Próximamente podrás cargar tu inventario de equipos desde Excel y gestionar todos los activos de la fábrica.</div>
+      <div style="background:var(--az3);border-radius:12px;padding:16px;text-align:left;font-size:13px;color:var(--txt2)">
+        <div style="font-weight:700;color:var(--az4);margin-bottom:8px">📋 Lo que incluirá este módulo:</div>
+        <div>• Inventario completo de equipos</div>
+        <div>• Ficha técnica por equipo</div>
+        <div>• Historial de mantenimientos</div>
+        <div>• Vida útil y reemplazos</div>
+        <div>• Carga masiva desde Excel</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===== CEMENTERIO DE EQUIPOS ===== -->
+<div id="screen-cementerio" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showActivos()">←</button><div><div class="topbar-title">🪦 Cementerio de Equipos</div></div></div>
+  <div class="scroll-content" style="padding:16px">
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button id="btn-cem-nuevo" class="btn btn-primary" style="display:none;flex:1;margin:0" onclick="abrirFormCementerio()">➕ Registrar equipo</button>
+      <button id="btn-cem-historial" class="btn btn-outline" style="display:none;flex:1;margin:0" onclick="showCementerioHistorial()">🗂️ Historial de bajas</button>
+    </div>
+    <input type="text" class="form-control mb12" id="cem-buscar" placeholder="🔍 Buscar por nombre, modelo, serie o estado..." oninput="renderCementerioLista()">
+    <div id="cementerio-form-wrap" class="card hidden" style="margin-bottom:16px">
+      <div class="card-title mb8" id="cem-form-titulo">➕ Registrar equipo</div>
+      <div class="form-group"><label class="form-label">Nombre del equipo</label><input type="text" class="form-control" id="cem-nombre" placeholder="Ej: Bomba centrífuga 5HP"></div>
+      <div class="form-group"><label class="form-label">Modelo</label><input type="text" class="form-control" id="cem-modelo" placeholder="Modelo"></div>
+      <div class="form-group"><label class="form-label">Serie</label><input type="text" class="form-control" id="cem-serie" placeholder="Número de serie"></div>
+      <div class="form-group"><label class="form-label">Estado</label>
+        <select class="form-control" id="cem-estado">
+          <option value="">-- Selecciona --</option>
+          <option value="Nuevo">Nuevo</option>
+          <option value="Usado">Usado</option>
+          <option value="Dañado">Dañado</option>
+          <option value="Operable">Operable</option>
+          <option value="Para venta">Para venta</option>
+        </select>
+      </div>
+      <button class="btn btn-success" onclick="guardarEquipoCementerio()">✅ Guardar</button>
+      <button class="btn btn-gray mt8" onclick="cerrarFormCementerio()">Cancelar</button>
+    </div>
+    <div id="cementerio-lista"></div>
+  </div>
+</div>
+
+<!-- ===== CEMENTERIO DE EQUIPOS — HISTORIAL DE BAJAS ===== -->
+<div id="screen-cementerio-historial" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showCementerio()">←</button><div><div class="topbar-title">🗂️ Historial de bajas</div></div></div>
+  <div class="scroll-content" style="padding:16px">
+    <input type="text" class="form-control mb12" id="cem-hist-buscar" placeholder="🔍 Buscar por nombre, modelo, serie o motivo..." oninput="renderCementerioHistorial()">
+    <div id="cementerio-historial-lista"></div>
+  </div>
+</div>
+
+<!-- ===== REGISTRO DE ACTIVOS ===== -->
+<div id="screen-registro-activos" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showActivos()">←</button><div><div class="topbar-title">📋 Registro de Activos</div></div></div>
+  <div class="scroll-content" style="padding:16px">
+    <button id="btn-act-ver-todos" class="btn btn-outline mb12" onclick="toggleActVerTodos()">📊 Ver todos</button>
+    <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+      <div class="filter-chip active" onclick="filtActCriticidad('',this)">Todas</div>
+      <div class="filter-chip" onclick="filtActCriticidad('A',this)">Criticidad A</div>
+      <div class="filter-chip" onclick="filtActCriticidad('B',this)">Criticidad B</div>
+      <div class="filter-chip" onclick="filtActCriticidad('C',this)">Criticidad C</div>
+    </div>
+    <div class="form-group"><label class="form-label">Área</label>
+      <select class="form-control" id="act-area" onchange="onChangeActArea()">
+        <option value="">-- Selecciona área --</option>
+      </select>
+    </div>
+    <div class="form-group"><label class="form-label">Línea</label>
+      <select class="form-control" id="act-linea" onchange="onChangeActLinea()" disabled>
+        <option value="">-- Primero selecciona área --</option>
+      </select>
+    </div>
+    <button id="btn-act-nuevo" class="btn btn-primary mb12" style="display:none" onclick="abrirFormActivo()">➕ Registrar activo</button>
+    <div id="activo-form-wrap" class="card hidden" style="margin-bottom:16px">
+      <div class="card-title mb8" id="act-form-titulo">➕ Registrar activo</div>
+      <div class="form-group"><label class="form-label">Nombre del activo</label><input type="text" class="form-control" id="act-nombre" placeholder="Ej: Llenadora 1"></div>
+      <div class="form-group"><label class="form-label">Marca</label><input type="text" class="form-control" id="act-marca" placeholder="Marca"></div>
+      <div class="form-group"><label class="form-label">Modelo</label><input type="text" class="form-control" id="act-modelo" placeholder="Modelo"></div>
+      <div class="form-group"><label class="form-label">Serie</label><input type="text" class="form-control" id="act-serie" placeholder="Número de serie"></div>
+      <div class="form-group"><label class="form-label">Año de instalación</label><input type="text" class="form-control" id="act-anio" placeholder="Ej: 2019"></div>
+      <div class="form-group"><label class="form-label">Estado operativo</label>
+        <select class="form-control" id="act-estado">
+          <option value="Operando">Operando</option>
+          <option value="En mantenimiento">En mantenimiento</option>
+          <option value="Fuera de servicio">Fuera de servicio</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Nivel de criticidad</label>
+        <select class="form-control" id="act-criticidad">
+          <option value="">-- Selecciona --</option>
+          <option value="A">A</option>
+          <option value="B">B</option>
+          <option value="C">C</option>
+        </select>
+      </div>
+      <button class="btn btn-success" onclick="guardarActivo()">✅ Guardar</button>
+      <button class="btn btn-gray mt8" onclick="cerrarFormActivo()">Cancelar</button>
+    </div>
+    <div id="registro-activos-lista"></div>
+  </div>
+</div>
+
+<!-- ===== PRIORIZACIÓN DE LÍNEAS ===== -->
+<div id="screen-priorizacion-lineas" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showActivos()">←</button><div><div class="topbar-title">🎯 Priorización de Líneas</div></div></div>
+  <div class="scroll-content" style="padding:16px">
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <button id="btn-prio-nuevo" class="btn btn-primary" style="display:none;flex:1;margin:0" onclick="abrirFormPriorizacion()">➕ Agregar línea</button>
+      <button class="btn btn-outline" style="flex:1;margin:0" onclick="descargarPriorizacionExcel()">📥 Descargar Excel</button>
+    </div>
+    <div id="prio-filtro-area-wrap" style="display:flex;gap:6px;margin-bottom:8px;flex-wrap:wrap"></div>
+    <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">
+      <div class="filter-chip active" onclick="filtPrioPrioridad('',this)">Todas las prioridades</div>
+      <div class="filter-chip" onclick="filtPrioPrioridad('A',this)">Prioridad A</div>
+      <div class="filter-chip" onclick="filtPrioPrioridad('B',this)">Prioridad B</div>
+      <div class="filter-chip" onclick="filtPrioPrioridad('C',this)">Prioridad C</div>
+    </div>
+    <div id="prio-form-wrap" class="card hidden" style="margin-bottom:16px">
+      <div class="card-title mb8" id="prio-form-titulo">➕ Agregar línea</div>
+      <div class="form-group"><label class="form-label">Área</label>
+        <select class="form-control" id="prio-area" onchange="onChangePrioArea()">
+          <option value="">-- Selecciona área --</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Línea</label>
+        <select class="form-control" id="prio-linea" disabled>
+          <option value="">-- Primero selecciona área --</option>
+        </select>
+      </div>
+      <div class="form-group"><label class="form-label">Descripción</label><textarea class="form-control" id="prio-descripcion" placeholder="Descripción de la línea..." rows="2"></textarea></div>
+      <div class="form-group"><label class="form-label">% de ocupación</label><input type="number" class="form-control" id="prio-ocupacion" min="0" max="100" step="1" placeholder="Ej: 85"></div>
+      <div class="form-group"><label class="form-label">Prioridad</label>
+        <select class="form-control" id="prio-prioridad">
+          <option value="">-- Selecciona --</option>
+          <option value="A">A</option>
+          <option value="B">B</option>
+          <option value="C">C</option>
+        </select>
+      </div>
+      <button class="btn btn-success" onclick="guardarPriorizacionLinea()">✅ Guardar</button>
+      <button class="btn btn-gray mt8" onclick="cerrarFormPriorizacion()">Cancelar</button>
+    </div>
+    <div id="priorizacion-lista"></div>
+  </div>
+</div>
+
+<!-- ===== MANUALES ===== -->
+<div id="screen-manuales" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">📚 Manuales y Entrenamiento</div></div></div>
+  <div class="scroll-content" style="padding:16px" id="manuales-content">
+  </div>
+</div>
+
+<!-- ===== MANUAL CATEGORIA ===== -->
+<div id="screen-manual-cat" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="showScreen('screen-manuales')">←</button><div><div class="topbar-title" id="manual-cat-title">📄 Documentos</div></div></div>
+  <div class="scroll-content" style="padding:16px">
+    <div id="manual-cat-list"></div>
+    <div id="manual-upload-wrap" class="hidden" style="margin-top:12px">
+      <div class="card">
+        <div class="card-title mb8">📤 Agregar documento</div>
+        <div class="form-group"><label class="form-label">Título</label><input type="text" class="form-control" id="manual-titulo" placeholder="Nombre del documento"></div>
+        <div class="form-group"><label class="form-label">Descripción (opcional)</label><textarea class="form-control" id="manual-desc" rows="2" placeholder="Descripción breve..."></textarea></div>
+        <div class="form-group"><label class="form-label">Archivo (PDF, imagen, video)</label>
+          <input type="file" class="form-control" id="manual-file" accept=".pdf,.jpg,.jpeg,.png,.mp4,.mov" style="padding:8px">
+        </div>
+        <button class="btn btn-success" onclick="subirManual()">📤 Subir documento</button>
+        <button class="btn btn-gray mt8" onclick="document.getElementById('manual-upload-wrap').classList.add('hidden')">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ===== IA ASISTENTE MODAL ===== -->
+<div id="modal-ia" class="modal-overlay hidden">
+  <div class="modal-sheet" style="max-height:85vh;display:flex;flex-direction:column">
+    <div class="modal-handle"></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <h3 style="font-family:Nunito,sans-serif;font-weight:800;margin:0">🤖 Asistente Saporis</h3>
+      <button onclick="cerrarModal('modal-ia')" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--txt3)">×</button>
+    </div>
+    <div id="ia-messages" style="flex:1;overflow-y:auto;min-height:200px;max-height:50vh;padding:8px;background:var(--gr3);border-radius:12px;margin-bottom:12px;display:flex;flex-direction:column;gap:8px">
+      <div style="background:#fff;border-radius:12px;padding:10px 14px;font-size:13px;max-width:85%;align-self:flex-start;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+        👋 Hola, soy el asistente de Saporis. Puedo ayudarte con preguntas sobre la app, mantenimiento industrial, o cualquier duda técnica. ¿En qué te ayudo?
+      </div>
+    </div>
+    <div style="display:flex;gap:8px">
+      <input type="text" class="form-control" id="ia-input" placeholder="Escribe tu pregunta..." style="flex:1" onkeydown="if(event.key==='Enter')enviarMensajeIA()">
+      <button class="btn btn-primary" onclick="enviarMensajeIA()" style="width:auto;padding:10px 16px">➤</button>
+    </div>
+    <div style="font-size:10px;color:var(--txt3);text-align:center;margin-top:6px">Powered by Claude AI</div>
+  </div>
+</div>
+
+
+<!-- ===== MODAL AYUDA ===== -->
+<div id="modal-ayuda" class="modal-overlay hidden">
+  <div class="modal-sheet">
+    <div class="modal-handle"></div>
+    <h3 style="font-family:Nunito,sans-serif;font-weight:800;color:var(--rj);margin-bottom:8px">🚨 Solicitar Ayuda</h3>
+    <p style="font-size:14px;color:var(--txt2);margin-bottom:16px">Describe dónde y qué necesitas. Se alertará al técnico de turno.</p>
+    <div class="form-group">
+      <label class="form-label">Área / Ubicación</label>
+      <input type="text" class="form-control" id="ayuda-area" placeholder="Ej: Cocedor 2, Línea Envasado...">
+    </div>
+    <div class="form-group">
+      <label class="form-label">¿Qué necesitas?</label>
+      <textarea class="form-control" id="ayuda-desc" rows="3" placeholder="Describe brevemente el problema..."></textarea>
+    </div>
+    <div id="ayuda-tecnico-info" style="background:var(--gr3);border-radius:10px;padding:10px;font-size:13px;margin-bottom:12px;display:none">
+      <div style="font-weight:700;color:var(--mo)">Técnico de turno:</div>
+      <div id="ayuda-tecnico-nombre" style="font-size:15px;font-weight:800"></div>
+    </div>
+    <button class="btn btn-danger" style="font-size:16px;padding:14px" onclick="enviarAyuda()">🚨 Enviar Alerta al Técnico</button>
+    <button class="btn btn-gray mt8" onclick="cerrarModal('modal-ayuda')">Cancelar</button>
+  </div>
+</div>
+
+
+<!-- ===== MEJORAS (LUP) ===== -->
+<div id="screen-mejoras" class="screen" style="display:none!important">
+  <div class="topbar">
+    <button class="topbar-back" onclick="goMenu()">←</button>
+    <div><div class="topbar-title">Mejoras</div><div class="topbar-sub">Lección de Un Punto</div></div>
+  </div>
+  <div class="scroll-content" id="mejoras-root"></div>
+</div>
+
+<!-- DETALLE LUP -->
+<div id="screen-lup-detalle" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" id="lup-back-btn" onclick="showScreen('screen-mejoras-consultar')">←</button>
+    <div><div class="topbar-title">Detalle Mejora</div></div>
+    <button class="topbar-badge" style="background:#16a34a;color:#fff;border:none;border-radius:8px;padding:4px 10px;font-size:12px;cursor:pointer" onclick="window.print()">📄 PDF</button>
+  </div>
+  <div class="scroll-content" id="lup-detalle-content"></div>
+</div>
+
+<!-- CONSULTAR MEJORAS -->
+<div id="screen-mejoras-consultar" class="screen" style="display:none!important">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showScreen('screen-mejoras')">←</button>
+    <div><div class="topbar-title">Consultar Mejoras</div></div>
+  </div>
+  <div class="scroll-content" id="mejoras-consultar-content"></div>
+</div>
+
+<!-- REGISTRAR MEJORA -->
+<div id="screen-mejoras-form" class="screen" style="display:none!important">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showScreen('screen-mejoras')">←</button>
+    <div><div class="topbar-title">Registrar Mejora</div></div>
+  </div>
+  <div class="scroll-content" id="mejoras-form-content"></div>
+</div>
+
+<!-- MEJORAS KPI -->
+<div id="screen-mejoras-kpi" class="screen" style="display:none!important">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showMejoras()">←</button>
+    <div><div class="topbar-title">KPI Mejoras</div><div class="topbar-sub">Indicadores LUP</div></div>
+  </div>
+  <div class="scroll-content" id="mejoras-kpi-content"></div>
+</div>
+
+<!-- DETALLE INSPECCIONES -->
+<div id="screen-insp-detalle" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showKPIs()">←</button>
+    <div><div class="topbar-title">Detalle Inspecciones</div><div class="topbar-sub">Puntos por turno</div></div>
+  </div>
+  <div class="scroll-content" id="insp-detalle-content"></div>
+</div>
+
+<!-- MENÚ CHECKLISTS -->
+<div id="screen-checklist-menu" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">✅ Check List de Turno</div></div></div>
+  <div class="scroll-content" id="checklist-menu-content"></div>
+</div>
+<!-- CHECKLIST GENÉRICO -->
+<div id="screen-checklist" class="screen">
+  <div class="topbar"><button class="topbar-back" onclick="salirChecklist()">←</button><div><div class="topbar-title" id="chk-topbar-title">Check List</div></div></div>
+  <div class="scroll-content" id="checklist-content"></div>
+  <div class="fixed-bar"><button class="btn btn-success" onclick="guardarChecklist()" style="width:100%">💾 Guardar Check List</button></div>
+</div>
+<div id="screen-personal" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="goMenu()">←</button>
+    <div><div class="topbar-title">👥 Gestión de Personal</div></div>
+  </div>
+  <div class="scroll-content" style="padding:0">
+    <div id="personal-tabs" style="display:flex;gap:6px;padding:12px 16px 0;flex-wrap:wrap"></div>
+    <div id="personal-content" style="padding:12px 16px 16px"></div>
+  </div>
+</div>
+<div id="screen-refacciones" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showScreen('screen-almacen')">←</button>
+    <div><div class="topbar-title">📦 Inventario de Refacciones</div></div>
+    <button onclick="abrirEscanerQR()" style="background:none;border:none;color:#fff;font-size:1.4rem;padding:8px;cursor:pointer">📷</button>
+  </div>
+  <div class="scroll-content" style="padding:0">
+    <div id="ref-tabs" style="display:flex;gap:6px;padding:12px 16px 0;flex-wrap:wrap"></div>
+    <div id="ref-content" style="padding:12px 16px 16px"></div>
+  </div>
+</div>
+
+
+
+<div id="screen-servicios" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="goMenu()">←</button>
+    <div><div class="topbar-title">🏭 Servicios</div></div>
+  </div>
+  <div class="scroll-content" style="padding:16px">
+    <div class="menu-grid">
+      <div class="menu-btn" style="border-color:#F44336;background:linear-gradient(135deg,#fff 60%,#FFEBEE)" onclick="showGas()">
+        <div class="menu-icon">🔥</div><div class="menu-label">Gas</div><div class="menu-desc">Consumo mensual</div>
+      </div>
+      <div class="menu-btn" style="border-color:#1e3a8a;background:linear-gradient(135deg,#fff 60%,#dbeafe)" onclick="showAgua()">
+        <div class="menu-icon">💧</div><div class="menu-label">Agua</div><div class="menu-desc">Consumo diario</div>
+      </div>
+      <div class="menu-btn" style="border-color:#FFC107;background:linear-gradient(135deg,#fff 60%,#FFFDE7)" onclick="showElectricidad()">
+        <div class="menu-icon">⚡</div><div class="menu-label">Electricidad</div><div class="menu-desc">Consumo mensual</div>
+      </div>
+      <div class="menu-btn" style="border-color:#6d28d9;background:linear-gradient(135deg,#fff 60%,#ede9fe)" onclick="showKPIServicios()">
+        <div class="menu-icon">📊</div><div class="menu-label">KPI Servicios</div><div class="menu-desc">Gas, Electricidad y Agua</div>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="screen-kpi-servicios" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showServicios()">←</button>
+    <div><div class="topbar-title">📊 KPI Servicios</div></div>
+  </div>
+  <div class="scroll-content" style="padding:16px">
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-primary" style="flex:1;padding:16px" onclick="showKPIDinero()">💰 Consumos dinero</button>
+      <button class="btn btn-gray" style="flex:1;padding:16px" onclick="showKPICantidad()">📦 Consumos cantidad</button>
+    </div>
+  </div>
+</div>
+<div id="screen-kpi-dinero" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showKPIServicios()">←</button>
+    <div><div class="topbar-title">💰 Consumos dinero</div><div class="topbar-sub">Gas, Electricidad y Agua</div></div>
+  </div>
+  <div class="scroll-content" style="padding:14px" id="kpi-dinero-content"></div>
+</div>
+<div id="screen-kpi-cantidad" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showKPIServicios()">←</button>
+    <div><div class="topbar-title">📦 Consumos cantidad</div><div class="topbar-sub">Gas, Electricidad y Agua</div></div>
+  </div>
+  <div class="scroll-content" style="padding:14px" id="kpi-cantidad-content"></div>
+</div>
+<div id="screen-agua" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showServicios()">←</button>
+    <div><div class="topbar-title">💧 Agua</div></div>
+  </div>
+  <div class="scroll-content" style="padding:16px">
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-primary" style="flex:1;padding:16px" onclick="showAguaDiario()">📅 Consumo diario</button>
+      <button class="btn btn-gray" style="flex:1;padding:16px" onclick="showAguaMensual()">📊 Consumo mensual</button>
+    </div>
+  </div>
+</div>
+<div id="screen-agua-diario" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showAgua()">←</button>
+    <div><div class="topbar-title">💧 Agua</div><div class="topbar-sub" id="agua-topbar-sub">Consumo diario</div></div>
+  </div>
+  <div class="scroll-content" style="padding:14px" id="agua-content"></div>
+</div>
+<div id="screen-agua-mensual" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showAgua()">←</button>
+    <div><div class="topbar-title">💧 Agua</div><div class="topbar-sub">Consumo mensual</div></div>
+  </div>
+  <div class="scroll-content" style="padding:14px" id="agua-mensual-content"></div>
+</div>
+<div id="screen-gas" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showServicios()">←</button>
+    <div><div class="topbar-title">🔥 Gas</div><div class="topbar-sub">Consumo mensual</div></div>
+  </div>
+  <div class="scroll-content" style="padding:14px" id="gas-content"></div>
+</div>
+<div id="screen-electricidad" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showServicios()">←</button>
+    <div><div class="topbar-title">⚡ Electricidad</div><div class="topbar-sub">Consumo mensual</div></div>
+  </div>
+  <div class="scroll-content" style="padding:14px" id="electricidad-content"></div>
+</div>
+
+<div id="screen-plan" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="goBack()">←</button>
+    <div><div class="topbar-title">📋 Plan de Mantenimiento</div><div class="topbar-sub" id="plan-topbar-sub">Gestión de actividades</div></div>
+  </div>
+  <div class="scroll-content" style="padding:14px" id="plan-content"></div>
+</div>
+
+<div id="screen-plan-historial" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="goBack()">←</button>
+    <div><div class="topbar-title">📊 Historial de Equipo</div><div class="topbar-sub" id="plan-hist-sub"></div></div>
+  </div>
+  <div class="scroll-content" style="padding:14px" id="plan-hist-content"></div>
+</div>
+
+</body>
+</html>
