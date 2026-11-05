@@ -2253,6 +2253,7 @@ function renderPM03(){
         +'<span class="badge badge-'+(p.estado||'abierta')+'">'+(p.estado||'abierta')+'</span>'
         +(liberada?'<span class="badge" style="background:#16a34a;color:#fff;font-size:10px">✅ Liberada</span>':'')
         +(p.estado==='afectada'?'<span class="badge" style="background:#7f1d1d;color:#fff;font-size:10px">🔒 Bloqueada</span>':'')
+        +pm3HorasBadgeHTML(p)
         +'</div></div>'
         +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+'</div>'
         +'<div style="font-size:12px;color:var(--txt2)">'+(p.componente||'')+' — '+(p.actividad||'')+'</div>'
@@ -2400,7 +2401,7 @@ function _renderDetallePM03(id,p){
     bannerRepro='<div style="background:#fef2f2;border:2px solid #dc2626;border-radius:14px;padding:12px;margin-bottom:12px;font-size:13px;color:#7f1d1d;font-weight:700">🔒 Semana '+p.semana+' no ejecutada a tiempo — esta PM03 quedó bloqueada (se movió una copia con sus datos a la semana actual). Solo el superusuario puede modificarla.</div>';
   }
 
-  document.getElementById('detalle-content').innerHTML=bannerRepro+`<div class="card"><div class="card-title">${p.esInspeccion?'✅ Inspección de Turno':'📅 '+p.linea}</div>${row('🔩 Componente',p.componente)}${row('🔧 Actividad',p.actividad)}${row('📅 Semana',p.semana?p.semana+' / '+p.año:'Sin programar')}${row('👤 Responsable de ejecutar',p.tecnicoNombre||'Sin asignar')}${row('🧑‍💼 Responsable de área',p.responsableAreaNombre||'Sin asignar')}${row('📋 Estado',p.estado||'abierta')}${p.reprogramadaPor?row('🔁 Reprogramada por',p.reprogramadaPor+(p.reprogramadaTs?' — '+fmtDateTime(p.reprogramadaTs):'')):''}${p.notaReprogramacion?row('📝 Motivo reprogramación',p.notaReprogramacion):''}${p.reprogramadaDe?row('⬅️ Generada al reprogramar',p.reprogramadaDe):''}${p.reprogramadaA?row('➡️ Reprogramada a',p.reprogramadaA):''}${p.horaInicio?row('🕐 Inicio',p.horaInicio):''}${p.horaFin?row('🕐 Fin',p.horaFin):''}${p.horaInicio&&p.horaFin?row('⏱️ Tiempo',diffMin(p.horaInicio,p.horaFin)+' min'):''}</div>
+  document.getElementById('detalle-content').innerHTML=bannerRepro+`<div class="card"><div class="card-title">${p.esInspeccion?'✅ Inspección de Turno':'📅 '+p.linea}</div>${row('🔩 Componente',p.componente)}${row('🔧 Actividad',p.actividad)}${(function(){var _h=pm3HorasEstimadas(p);return row('⏱ Tiempo estimado de paro',_h!=null?_h+' h':'Sin tiempo (el protocolo no tiene horas)');})()}${row('📅 Semana',p.semana?p.semana+' / '+p.año:'Sin programar')}${row('👤 Responsable de ejecutar',p.tecnicoNombre||'Sin asignar')}${row('🧑‍💼 Responsable de área',p.responsableAreaNombre||'Sin asignar')}${row('📋 Estado',p.estado||'abierta')}${p.reprogramadaPor?row('🔁 Reprogramada por',p.reprogramadaPor+(p.reprogramadaTs?' — '+fmtDateTime(p.reprogramadaTs):'')):''}${p.notaReprogramacion?row('📝 Motivo reprogramación',p.notaReprogramacion):''}${p.reprogramadaDe?row('⬅️ Generada al reprogramar',p.reprogramadaDe):''}${p.reprogramadaA?row('➡️ Reprogramada a',p.reprogramadaA):''}${p.horaInicio?row('🕐 Inicio',p.horaInicio):''}${p.horaFin?row('🕐 Fin',p.horaFin):''}${p.horaInicio&&p.horaFin?row('⏱️ Tiempo',diffMin(p.horaInicio,p.horaFin)+' min'):''}</div>
   ${(p.origenPM02||p.origenOT||_pm3OrigenIdDesdeTexto(p.actividad))?(function(){
     var origenId=p.origenPM02||p.origenOT||_pm3OrigenIdDesdeTexto(p.actividad);
     var o2=ORDENES.find(function(x){return x.id===origenId;});
@@ -2647,7 +2648,9 @@ function abrirCierrePM03(id){
   var actHTML = '';
   if(proto && proto.actividades){
     actHTML = '<div style="margin-bottom:16px">'
-      +'<div style="font-size:.82rem;font-weight:800;color:#1a3c5e;text-transform:uppercase;margin-bottom:6px">📋 '+proto.codigo+' — Actividades</div>';
+      +'<div style="font-size:.82rem;font-weight:800;color:#1a3c5e;text-transform:uppercase;margin-bottom:6px">📋 '+proto.codigo+' — Actividades'
+      +(function(){var _h=pm3HorasProtocolo(proto);return '<span style="margin-left:8px;font-size:.75rem;font-weight:700;text-transform:none;color:'+(_h!=null?'#0369a1':'#9ca3af')+'">⏱ '+(_h!=null?('Tiempo estimado de paro: '+_h+' h'):'Sin tiempo')+'</span>';})()
+      +'</div>';
 
     proto.actividades.forEach(function(a){
       var curA = p.actividadesEstado[a.id]||'';
@@ -2679,7 +2682,7 @@ function abrirCierrePM03(id){
         +(a.comoSeHace?(
           '<div style="margin:-4px 0 8px">'
           +'<span onclick="pm3ToggleComoSeHace('+a.id+')" id="pm3-como-lbl-'+a.id+'" style="font-size:.75rem;font-weight:700;color:#1d4ed8;cursor:pointer">📖 Cómo se hace ▴</span>'
-          +'<div id="pm3-como-'+a.id+'" style="display:block;background:#eff6ff;border-radius:8px;padding:8px;margin-top:6px;font-size:.78rem;color:#1e3a8a;white-space:pre-wrap;line-height:1.4">'+a.comoSeHace+'</div>'
+          +'<div id="pm3-como-'+a.id+'" style="display:block;background:#eff6ff;border-radius:8px;padding:8px;margin-top:6px;font-size:.78rem;color:#1e3a8a;white-space:pre-wrap;line-height:1.4">'+htmlMiniaturasImg(a.comoSeHace)+'</div>'
           +'</div>'
         ):'')
 
@@ -5507,6 +5510,7 @@ function aplicarFiltrosPendientes(){updatePendChart();
           <span class="badge badge-${p.estado||'abierta'}">${p.estado||'abierta'}</span>
           ${!p.tecnicoId?'<span class="badge" style="background:#FFF9C4;color:#F57F17">⚠️ Sin asignar</span>':''}
           ${p.estado==='afectada'?'<span class="badge" style="background:#7f1d1d;color:#fff">🔒 Bloqueada</span>':''}
+          ${pm3HorasBadgeHTML(p)}
         </div>
       </div>
       <div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">${p.linea}</div>
@@ -5755,7 +5759,7 @@ function renderMisOrdenes(){
         return '<div class="ot-card pm03" onclick="showDetallePM03(\''+p.id+'\')" style="border-left:4px solid '+col+'">'
           +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
           +'<span style="font-size:11px;font-weight:700;color:'+col+'">'+pm3FolioHTML(p)+'</span>'
-          +'<span class="badge" style="background:'+col+';color:#fff">'+flujoLabel+'</span></div>'
+          +'<div style="display:flex;gap:4px;flex-wrap:wrap"><span class="badge" style="background:'+col+';color:#fff">'+flujoLabel+'</span>'+pm3HorasBadgeHTML(p)+'</div></div>'
           +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+'</div>'
           +'<div style="font-size:12px;color:var(--txt2)">Sem '+p.semana+' · '+(p.tecnicoNombre||'—')+'</div>'
           +'<div style="margin-top:8px;display:flex;gap:6px">'
@@ -20593,6 +20597,41 @@ function getProtocoloPM03(linea,equipo,actividad){
 // nunca le cambia los requisitos a algo que el técnico ya venía llenando, solo
 // aplica desde la siguiente vez que se genere esa actividad. Si no tiene
 // snapshot, se consulta el protocolo vigente normal.
+// ================================================================
+// TIEMPO ESTIMADO DE PARO (suma de horas del protocolo) y MINIATURAS de imágenes
+// ================================================================
+// Suma las horas ("hrs") de los puntos de un protocolo. Devuelve null si el protocolo
+// no existe o ninguno de sus puntos tiene horas capturadas (se muestra "Sin tiempo").
+function pm3HorasProtocolo(proto){
+  if(!proto||!Array.isArray(proto.actividades)||!proto.actividades.length) return null;
+  var tot=0,con=0;
+  proto.actividades.forEach(function(a){
+    var h=parseFloat(a&&a.hrs);
+    if(!isNaN(h)&&h>0){tot+=h;con++;}
+  });
+  if(!con) return null;
+  return Math.round(tot*100)/100;
+}
+function pm3HorasEstimadas(p){
+  try{ return pm3HorasProtocolo(_pm3ProtocoloEfectivo(p)); }catch(e){ return null; }
+}
+// Badge "⏱ X h" para tarjetas de PM03 (o "⏱ Sin tiempo" si el protocolo no tiene horas)
+function pm3HorasBadgeHTML(p){
+  var h=pm3HorasEstimadas(p);
+  return h!=null
+    ?'<span class="badge" style="background:#e0f2fe;color:#0369a1" title="Tiempo estimado de paro (suma del protocolo)">⏱ '+h+' h</span>'
+    :'<span class="badge" style="background:#f3f4f6;color:#9ca3af" title="El protocolo no tiene horas capturadas — edítalo en Admin → Protocolos PM03">⏱ Sin tiempo</span>';
+}
+// Convierte los links de imagen (jpg/png/gif/webp) de un texto ya listo para HTML en
+// miniaturas que abren la imagen completa en otra pestaña. El texto alrededor no se toca.
+function htmlMiniaturasImg(html){
+  if(!html) return html;
+  return String(html).replace(/(?:📷\s*)?(https?:\/\/[^\s<>"']+?\.(?:jpe?g|png|gif|webp))(?=[\s<]|$)/gi,function(m,url){
+    return '<a href="'+url+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:inline-block;margin:4px 6px 4px 0;vertical-align:top">'
+      +'<img src="'+url+'" loading="lazy" alt="📷 Imagen" style="width:96px;height:96px;object-fit:cover;border-radius:8px;border:1px solid #cbd5e1;background:#fff;display:block"></a>';
+  });
+}
+
 function _pm3ProtocoloEfectivo(p){
   if(p&&p.protocoloSnapshot) return p.protocoloSnapshot;
   var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
@@ -21870,7 +21909,7 @@ function _protoFiltrarLista(){
       +'<div>'
       +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800">'+p.linea+'</div>'
       +'<div style="font-size:12px;color:var(--txt2);margin-top:2px">🔧 '+( p.equipo||'—')+' · 📝 '+(p.equipo_secundario||'—')+'</div>'
-      +'<div style="font-size:11px;color:var(--txt3);margin-top:2px">'+( p.codigo||'REG-MTT-002.02')+' · <strong>'+(p.actividades?p.actividades.length:0)+'</strong> actividades'+(p.activo===false?' · <span style="color:#dc2626;font-weight:700">Inactivo</span>':'')+'</div>'
+      +'<div style="font-size:11px;color:var(--txt3);margin-top:2px">'+( p.codigo||'REG-MTT-002.02')+' · <strong>'+(p.actividades?p.actividades.length:0)+'</strong> actividades'+(function(){var _h=pm3HorasProtocolo(p);return ' · <strong style="color:'+(_h!=null?'#0369a1':'#dc2626')+'">⏱ '+(_h!=null?(_h+' h'):'Sin tiempo')+'</strong>';})()+(p.activo===false?' · <span style="color:#dc2626;font-weight:700">Inactivo</span>':'')+'</div>'
       +'</div>'
       +'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
       +'<button onclick="verProtocoloFormato(\''+p.id+'\')" style="padding:6px 12px;background:#eff6ff;border:none;border-radius:7px;font-size:.8rem;color:#1d4ed8;cursor:pointer">👁️ Ver</button>'
@@ -21959,7 +21998,7 @@ function verProtocoloFormato(id){
       +(a.comoSeHace?(
         '<div style="margin:-4px 0 8px">'
         +'<span onclick="_verProtoToggleComo('+i+')" id="verproto-como-lbl-'+i+'" style="font-size:.72rem;font-weight:700;color:#1d4ed8;cursor:pointer">📖 Cómo se hace ▴</span>'
-        +'<div id="verproto-como-'+i+'" style="display:block;background:#eff6ff;border-radius:8px;padding:8px;margin-top:6px;font-size:.76rem;color:#1e3a8a;white-space:pre-wrap;line-height:1.4">'+esc(a.comoSeHace)+'</div>'
+        +'<div id="verproto-como-'+i+'" style="display:block;background:#eff6ff;border-radius:8px;padding:8px;margin-top:6px;font-size:.76rem;color:#1e3a8a;white-space:pre-wrap;line-height:1.4">'+htmlMiniaturasImg(esc(a.comoSeHace))+'</div>'
         +'</div>'
       ):'')
 
@@ -22293,7 +22332,7 @@ function proto_actRowHTML(a,i){
     +'<select id="proto-act-esp-'+i+'" class="form-control" style="width:90px;padding:6px;font-size:.82rem">'
     +((LISTAS.tipos_actividad&&LISTAS.tipos_actividad.length)?LISTAS.tipos_actividad:DEFAULT_LISTAS.tipos_actividad).map(function(e){return '<option value="'+e+'"'+((a.tipo||a.esp)===e?' selected':'')+'>'+e+'</option>';}).join('')
     +'</select>'
-    +'<input type="number" id="proto-act-hrs-'+i+'" class="form-control" placeholder="Hrs" value="'+(a.hrs||1)+'" style="width:55px;padding:6px;font-size:.82rem" min="0.5" step="0.5">'
+    +'<input type="number" id="proto-act-hrs-'+i+'" class="form-control" placeholder="Hrs" value="'+(a.hrs||1)+'" style="width:62px;padding:6px;font-size:.82rem" min="0" step="0.05">'
     +'<button onclick="proto_removeAct('+i+')" style="padding:4px 8px;background:#fee2e2;border:none;border-radius:6px;color:#dc2626;cursor:pointer;font-size:.8rem">✕</button>'
     +'</div>'
     +'<textarea id="proto-act-como-'+i+'" class="form-control" placeholder="📖 Cómo se hace (paso a paso, opcional) — el técnico la verá al ejecutar" rows="2" style="margin:4px 0 4px 26px;width:calc(100% - 26px);padding:6px;font-size:.78rem">'+(a.comoSeHace||'')+'</textarea>'
@@ -22457,9 +22496,10 @@ function abrirEditorProtocolo(id, prefill){
       +'<div style="font-size:.8rem;font-weight:800;color:#1a3c5e;text-transform:uppercase">Actividades</div>'
       +'<button onclick="proto_addAct()" style="padding:5px 12px;background:#1a3c5e;color:#fff;border:none;border-radius:6px;font-size:.8rem;cursor:pointer">+ Agregar</button>'
       +'</div>'
-      +'<div id="proto-acts-list">'
+      +'<div id="proto-acts-list" oninput="proto_actualizarTotalHrs()">'
       +acts.map(function(a,i){return actRow(a,i);}).join('')
       +'</div>'
+      +'<div id="proto-total-hrs" style="margin-top:8px;font-size:.82rem;font-weight:800;color:#0369a1"></div>'
       +'<div style="display:flex;gap:10px;margin-top:16px">'
       +'<button onclick="var m=document.getElementById(\'modal-editor-proto\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
       +'<button onclick="guardarProtocolo(\''+( id||'')+'\')" style="flex:2;padding:13px;background:#1a3c5e;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar Protocolo</button>'
@@ -22467,7 +22507,26 @@ function abrirEditorProtocolo(id, prefill){
       +'</div>';
     document.body.appendChild(modal);
     window._protoActCount = acts.length;
+    proto_actualizarTotalHrs();
   });
+}
+
+// Total en vivo de horas del protocolo que se está editando (solo cuenta los renglones
+// con descripción, igual que guardarProtocolo).
+function proto_actualizarTotalHrs(){
+  var out=document.getElementById('proto-total-hrs');
+  var list=document.getElementById('proto-acts-list');
+  if(!out||!list) return;
+  var tot=0,n=0;
+  list.querySelectorAll('input[id^="proto-act-hrs-"]').forEach(function(inp){
+    var idx=inp.id.replace('proto-act-hrs-','');
+    var desc=document.getElementById('proto-act-desc-'+idx);
+    if(!desc||!desc.value.trim()) return;
+    var h=parseFloat(inp.value);
+    if(!isNaN(h)&&h>0){tot+=h;n++;}
+  });
+  tot=Math.round(tot*100)/100;
+  out.textContent='⏱ Tiempo de paro total: '+tot+' h'+(n?' ('+n+' puntos)':'');
 }
 
 function proto_addAct(){
@@ -22483,7 +22542,7 @@ function proto_addAct(){
     +'<select id="proto-act-esp-'+i+'" class="form-control" style="width:90px;padding:6px;font-size:.82rem">'
     +((LISTAS.tipos_actividad&&LISTAS.tipos_actividad.length)?LISTAS.tipos_actividad:DEFAULT_LISTAS.tipos_actividad).map(function(e){return '<option>'+e+'</option>';}).join('')
     +'</select>'
-    +'<input type="number" id="proto-act-hrs-'+i+'" class="form-control" placeholder="Hrs" value="1" style="width:55px;padding:6px;font-size:.82rem" min="0.5" step="0.5">'
+    +'<input type="number" id="proto-act-hrs-'+i+'" class="form-control" placeholder="Hrs" value="1" style="width:62px;padding:6px;font-size:.82rem" min="0" step="0.05">'
     +'<button onclick="proto_removeAct('+i+')" style="padding:4px 8px;background:#fee2e2;border:none;border-radius:6px;color:#dc2626;cursor:pointer;font-size:.8rem">✕</button>'
     +'</div>'
     +'<textarea id="proto-act-como-'+i+'" class="form-control" placeholder="📖 Cómo se hace (paso a paso, opcional) — el técnico la verá al ejecutar" rows="2" style="margin:4px 0 4px 26px;width:calc(100% - 26px);padding:6px;font-size:.78rem"></textarea>'
@@ -22504,11 +22563,13 @@ function proto_addAct(){
     +'</div>';
   list.appendChild(div);
   window._protoActCount=(window._protoActCount||0)+1;
+  if(typeof proto_actualizarTotalHrs==='function') proto_actualizarTotalHrs();
 }
 
 function proto_removeAct(i){
   var div=document.getElementById('proto-act-'+i);
   if(div) div.remove();
+  if(typeof proto_actualizarTotalHrs==='function') proto_actualizarTotalHrs();
 }
 
 function proto_toggleMedicion(i){
@@ -36699,7 +36760,7 @@ function verDetalleActividad(id){
     }
   } else {
     protoHtml=p.protocolo
-      ?escHtml(p.protocolo)
+      ?htmlMiniaturasImg(escHtml(p.protocolo))
       :'<span style="color:#9ca3af;font-style:italic">Sin protocolo definido</span>';
   }
   var tieneProc=actsMedicion.some(function(a){return a.medicion&&a.medicion.procedimiento;})||(!actsMedicion.length&&!esDetallado&&!!p.protocolo);
@@ -36712,6 +36773,7 @@ function verDetalleActividad(id){
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">'
     +'<span style="background:#f1f5f9;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;color:#374151">'+(tiposLabel[p.tipo]||p.tipo||'General')+'</span>'
     +'<span style="background:#1e3a8a;color:#fff;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700">⏱️ '+freqLbl+'</span>'
+    +(function(){var _h=pm3HorasProtocolo(getProtocoloPM03(p.linea,p.componente,p.descripcion));return '<span style="background:'+(_h!=null?'#e0f2fe':'#f3f4f6')+';color:'+(_h!=null?'#0369a1':'#9ca3af')+';border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700">⏱ '+(_h!=null?('Paro: '+_h+' h'):'Sin tiempo')+'</span>';})()
     +'</div>'
     +'<div class="form-group"><label class="form-label">📄 Protocolo / Pasos</label>'
     +'<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;font-size:13px;color:#374151;white-space:pre-wrap;min-height:60px">'+protoHtml+'</div></div>'
