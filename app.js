@@ -26593,7 +26593,7 @@ function _renderDirecciones(lDiv,area,areaLabel){
     _dirEstado={listaCompleta:rows||[],area:area,areaLabel:areaLabel,puedeEditar:puedeEditar,esAdmin:esAdmin,esProleIT:esProleIT,filtro:''};
     var html='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px">'
       +(esAdmin?'<button onclick="abrirConfigDirecciones()" style="padding:8px 12px;background:#f3f4f6;border:none;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer">⚙️ Configuración</button>':'')
-      +(esProleIT&&currentUser&&currentUser.rol==='super'?'<button onclick="importarDireccionesProleIT()" style="padding:8px 12px;background:#6d28d9;color:#fff;border:none;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer">⬆️ Importar válvulas</button>':'')
+      +(esProleIT&&esAdmin?'<button onclick="importarDireccionesProleIT()" style="padding:8px 12px;background:#6d28d9;color:#fff;border:none;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer">⬆️ Importar válvulas</button>':'')
       +(puedeEditar?'<button onclick="abrirDireccionModal(null,\''+area+'\',\''+areaLabel+'\')" style="padding:8px 14px;background:#0891b2;color:#fff;border:none;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer">+ Agregar</button>':'')
       +'</div>'
       +'<div style="margin-bottom:10px">'
@@ -26868,7 +26868,7 @@ function getDireccionesProleITImportData(){
 }
 
 async function importarDireccionesProleIT(){
-  if(!currentUser||currentUser.rol!=='super'){showAlert('Sin permisos','error');return;}
+  if(!currentUser||(currentUser.rol!=='admin'&&currentUser.rol!=='super')){showAlert('Sin permisos','error');return;}
   var datos=getDireccionesProleITImportData();
   var existentes=await supaFetch('direcciones_equipo','GET',null,'area=eq.prole_it&select=id,tag');
   var porTag={};
