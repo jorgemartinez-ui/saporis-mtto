@@ -26566,6 +26566,15 @@ async function eliminarContrasena(id){
 // especialidad 'instrumentista', o quien esté en LISTAS.direcciones_editores_ids
 // (configurable desde el botón ⚙️, misma lista para ambas áreas).
 var DIRECCIONES_COMPONENTES=['Bomba positiva','Bomba centrífuga','Válvula','Sensor','Transmisor nivel','Transmisor Presión','Transmisor Temperatura'];
+var _dirEstado=null;
+
+function _dirNormalizar(s){
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+}
+
+function _dirEscapar(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
 
 function _dirPuedeEditar(){
   if(!currentUser) return false;
@@ -26579,66 +26588,153 @@ function _renderDirecciones(lDiv,area,areaLabel){
   lDiv.innerHTML='<div style="text-align:center;padding:20px;color:#9ca3af">Cargando...</div>';
   var puedeEditar=_dirPuedeEditar();
   var esAdmin=currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super');
+  var esProleIT=area==='prole_it';
   supaFetch('direcciones_equipo','GET',null,'area=eq.'+area+'&order=componente.asc').then(function(rows){
-    var lista=rows||[];
+    _dirEstado={listaCompleta:rows||[],area:area,areaLabel:areaLabel,puedeEditar:puedeEditar,esAdmin:esAdmin,esProleIT:esProleIT,filtro:''};
     var html='<div style="display:flex;justify-content:flex-end;gap:8px;margin-bottom:10px">'
       +(esAdmin?'<button onclick="abrirConfigDirecciones()" style="padding:8px 12px;background:#f3f4f6;border:none;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer">⚙️ Configuración</button>':'')
+      +(esProleIT&&currentUser&&currentUser.rol==='super'?'<button onclick="importarDireccionesProleIT()" style="padding:8px 12px;background:#6d28d9;color:#fff;border:none;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer">⬆️ Importar válvulas</button>':'')
       +(puedeEditar?'<button onclick="abrirDireccionModal(null,\''+area+'\',\''+areaLabel+'\')" style="padding:8px 14px;background:#0891b2;color:#fff;border:none;border-radius:8px;font-size:.85rem;font-weight:700;cursor:pointer">+ Agregar</button>':'')
-      +'</div>';
-    if(!lista.length){
-      html+='<div class="card text-center" style="padding:32px"><div style="font-size:40px">🗺️</div><div style="font-weight:700;margin-top:8px">Sin direcciones registradas</div></div>';
-    } else {
-      html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'
-        +'<thead><tr style="background:#1a3c5e;color:#fff">'
-        +'<th style="padding:10px 12px;text-align:left;border-radius:8px 0 0 0">Componente</th>'
-        +'<th style="padding:10px 12px;text-align:left">Descripción</th>'
-        +'<th style="padding:10px 12px;text-align:left">TAG</th>'
-        +'<th style="padding:10px 12px;text-align:left">Dirección</th>'
-        +(puedeEditar?'<th style="padding:10px 12px;border-radius:0 8px 0 0"></th>':'')
-        +'</tr></thead><tbody>'
-        +lista.map(function(r,i){
-          return '<tr style="background:'+(i%2===0?'#fff':'#f9fafb')+';border-bottom:1px solid #e5e7eb">'
-            +'<td style="padding:10px 12px;font-weight:700">'+(r.componente||'')+'</td>'
-            +'<td style="padding:10px 12px">'+(r.descripcion||'')+'</td>'
-            +'<td style="padding:10px 12px;font-family:monospace">'+(r.tag||'')+'</td>'
-            +'<td style="padding:10px 12px;font-family:monospace">'+(r.direccion||'')+'</td>'
-            +(puedeEditar?('<td style="padding:8px;white-space:nowrap">'
-              +'<button onclick="abrirDireccionModal(\''+r.id+'\',\''+area+'\',\''+areaLabel+'\')" style="background:#f3f4f6;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:.8rem;margin-right:4px">✏️</button>'
-              +'<button onclick="eliminarDireccion(\''+r.id+'\')" style="background:#fef2f2;color:#7f1d1d;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:.78rem">🗑️</button>'
-              +'</td>'):'')
-            +'</tr>';
-        }).join('')
-        +'</tbody></table></div>';
-    }
+      +'</div>'
+      +'<div style="margin-bottom:10px">'
+      +'<input type="text" id="dir-busqueda" class="form-control" placeholder="🔍 Buscar..." oninput="_dirFiltrar(this.value)" style="width:100%">'
+      +'</div>'
+      +'<div id="dir-tabla-body"></div>';
     lDiv.innerHTML=html;
+    _dirPintarTabla();
   }).catch(function(){
     lDiv.innerHTML='<div class="card" style="padding:20px;color:#9ca3af;text-align:center">Crea la tabla direcciones_equipo en Supabase primero.</div>';
   });
 }
 
+function _dirFiltrar(valor){
+  if(!_dirEstado) return;
+  _dirEstado.filtro=valor||'';
+  _dirPintarTabla();
+}
+
+function _dirPintarTabla(){
+  var e=_dirEstado;
+  if(!e) return;
+  var cont=document.getElementById('dir-tabla-body');
+  if(!cont) return;
+  var puedeEditar=e.puedeEditar,area=e.area,areaLabel=e.areaLabel,esProleIT=e.esProleIT;
+  var filtroNorm=_dirNormalizar(e.filtro);
+  var lista=!filtroNorm?e.listaCompleta:e.listaCompleta.filter(function(r){
+    var campos=esProleIT
+      ?[r.seccion,r.tag,r.old_tag,r.componente,r.tipo_detallado,r.descripcion,r.senal,r.bus,r.estatus]
+      :[r.componente,r.descripcion,r.tag,r.direccion];
+    return campos.some(function(c){return _dirNormalizar(c).indexOf(filtroNorm)>=0;});
+  });
+  var html;
+  if(!e.listaCompleta.length){
+    html='<div class="card text-center" style="padding:32px"><div style="font-size:40px">🗺️</div><div style="font-weight:700;margin-top:8px">Sin direcciones registradas</div></div>';
+  } else if(!lista.length){
+    html='<div class="card text-center" style="padding:24px;color:#9ca3af">Sin resultados para "'+_dirEscapar(e.filtro)+'"</div>';
+  } else if(esProleIT){
+    html='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'
+      +'<thead><tr style="background:#1a3c5e;color:#fff">'
+      +'<th style="padding:10px 12px;text-align:left;border-radius:8px 0 0 0">Sección</th>'
+      +'<th style="padding:10px 12px;text-align:left">Tag IPL</th>'
+      +'<th style="padding:10px 12px;text-align:left">Old Tag</th>'
+      +'<th style="padding:10px 12px;text-align:left">Componente</th>'
+      +'<th style="padding:10px 12px;text-align:left">Tipo</th>'
+      +'<th style="padding:10px 12px;text-align:left">Descripción</th>'
+      +'<th style="padding:10px 12px;text-align:left">Señal</th>'
+      +'<th style="padding:10px 12px;text-align:left">Bus</th>'
+      +'<th style="padding:10px 12px;text-align:left">Estatus</th>'
+      +(puedeEditar?'<th style="padding:10px 12px;border-radius:0 8px 0 0"></th>':'')
+      +'</tr></thead><tbody>'
+      +lista.map(function(r,i){
+        return '<tr style="background:'+(i%2===0?'#fff':'#f9fafb')+';border-bottom:1px solid #e5e7eb">'
+          +'<td style="padding:10px 12px">'+(r.seccion||'')+'</td>'
+          +'<td style="padding:10px 12px;font-family:monospace;font-weight:700">'+(r.tag||'')+'</td>'
+          +'<td style="padding:10px 12px;font-family:monospace">'+(r.old_tag||'')+'</td>'
+          +'<td style="padding:10px 12px">'+(r.componente||'')+'</td>'
+          +'<td style="padding:10px 12px">'+(r.tipo_detallado||'')+'</td>'
+          +'<td style="padding:10px 12px">'+(r.descripcion||'')+'</td>'
+          +'<td style="padding:10px 12px">'+(r.senal||'')+'</td>'
+          +'<td style="padding:10px 12px">'+(r.bus||'')+'</td>'
+          +'<td style="padding:10px 12px">'+(r.estatus||'')+'</td>'
+          +(puedeEditar?('<td style="padding:8px;white-space:nowrap">'
+            +'<button onclick="abrirDireccionModal(\''+r.id+'\',\''+area+'\',\''+areaLabel+'\')" style="background:#f3f4f6;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:.8rem;margin-right:4px">✏️</button>'
+            +'<button onclick="eliminarDireccion(\''+r.id+'\')" style="background:#fef2f2;color:#7f1d1d;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:.78rem">🗑️</button>'
+            +'</td>'):'')
+          +'</tr>';
+      }).join('')
+      +'</tbody></table></div>';
+  } else {
+    html='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">'
+      +'<thead><tr style="background:#1a3c5e;color:#fff">'
+      +'<th style="padding:10px 12px;text-align:left;border-radius:8px 0 0 0">Componente</th>'
+      +'<th style="padding:10px 12px;text-align:left">Descripción</th>'
+      +'<th style="padding:10px 12px;text-align:left">TAG</th>'
+      +'<th style="padding:10px 12px;text-align:left">Dirección</th>'
+      +(puedeEditar?'<th style="padding:10px 12px;border-radius:0 8px 0 0"></th>':'')
+      +'</tr></thead><tbody>'
+      +lista.map(function(r,i){
+        return '<tr style="background:'+(i%2===0?'#fff':'#f9fafb')+';border-bottom:1px solid #e5e7eb">'
+          +'<td style="padding:10px 12px;font-weight:700">'+(r.componente||'')+'</td>'
+          +'<td style="padding:10px 12px">'+(r.descripcion||'')+'</td>'
+          +'<td style="padding:10px 12px;font-family:monospace">'+(r.tag||'')+'</td>'
+          +'<td style="padding:10px 12px;font-family:monospace">'+(r.direccion||'')+'</td>'
+          +(puedeEditar?('<td style="padding:8px;white-space:nowrap">'
+            +'<button onclick="abrirDireccionModal(\''+r.id+'\',\''+area+'\',\''+areaLabel+'\')" style="background:#f3f4f6;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:.8rem;margin-right:4px">✏️</button>'
+            +'<button onclick="eliminarDireccion(\''+r.id+'\')" style="background:#fef2f2;color:#7f1d1d;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:.78rem">🗑️</button>'
+            +'</td>'):'')
+          +'</tr>';
+      }).join('')
+      +'</tbody></table></div>';
+  }
+  cont.innerHTML=html;
+}
+
 function abrirDireccionModal(id,area,areaLabel){
   if(!_dirPuedeEditar()){showAlert('No tienes permiso para editar direcciones','error');return;}
+  var esProleIT=area==='prole_it';
   var pintar=function(row){
     var esLibre=row&&row.componente&&DIRECCIONES_COMPONENTES.indexOf(row.componente)<0;
-    var modal=document.createElement('div');
-    modal.id='modal-direccion';
-    modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end;justify-content:center;overflow-y:auto';
-    modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px 20px 32px;width:100%;max-width:480px">'
-      +'<div style="font-size:17px;font-weight:800;font-family:Nunito,sans-serif;color:#1a3c5e;margin-bottom:16px">🗺️ '+(row?'Editar':'Agregar')+' — '+areaLabel+'</div>'
-      +'<label style="font-size:.8rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Componente</label>'
+    var campoSelect=function(id,label,opciones,actual){
+      return '<label style="font-size:.8rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">'+label+'</label>'
+        +'<select id="'+id+'" class="form-control" style="margin-bottom:10px">'
+        +opciones.map(function(o){return '<option value="'+o.v+'"'+(actual===o.v?' selected':'')+'>'+o.t+'</option>';}).join('')
+        +'</select>';
+    };
+    var campoTexto=function(id,label,valor,mono){
+      return '<label style="font-size:.8rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">'+label+'</label>'
+        +'<input type="text" id="'+id+'" class="form-control" value="'+String(valor||'').replace(/"/g,'&quot;')+'" style="margin-bottom:10px'+(mono?';font-family:monospace':'')+'">';
+    };
+    var componenteHtml='<label style="font-size:.8rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Componente</label>'
       +'<select id="dir-componente" class="form-control" onchange="_dirToggleComponenteLibre()" style="margin-bottom:6px">'
       +'<option value="">-- Selecciona --</option>'
       +DIRECCIONES_COMPONENTES.map(function(c){return '<option value="'+c+'"'+(row&&row.componente===c?' selected':'')+'>'+c+'</option>';}).join('')
       +'<option value="__libre__"'+(esLibre?' selected':'')+'>Texto libre</option>'
       +'</select>'
-      +'<input type="text" id="dir-componente-libre" class="form-control" placeholder="Escribe el componente..." value="'+(esLibre?String(row.componente).replace(/"/g,'&quot;'):'')+'" style="margin-bottom:10px;display:'+(esLibre?'block':'none')+'">'
-      +'<label style="font-size:.8rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Descripción</label>'
-      +'<input type="text" id="dir-descripcion" class="form-control" value="'+(row?String(row.descripcion||'').replace(/"/g,'&quot;'):'')+'" style="margin-bottom:10px">'
-      +'<label style="font-size:.8rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">TAG</label>'
-      +'<input type="text" id="dir-tag" class="form-control" value="'+(row?String(row.tag||'').replace(/"/g,'&quot;'):'')+'" style="margin-bottom:10px;font-family:monospace">'
-      +'<label style="font-size:.8rem;font-weight:700;color:#374151;display:block;margin-bottom:4px">Dirección</label>'
-      +'<input type="text" id="dir-direccion" class="form-control" value="'+(row?String(row.direccion||'').replace(/"/g,'&quot;'):'')+'" style="margin-bottom:16px;font-family:monospace">'
-      +'<div style="display:flex;gap:10px">'
+      +'<input type="text" id="dir-componente-libre" class="form-control" placeholder="Escribe el componente..." value="'+(esLibre?String(row.componente).replace(/"/g,'&quot;'):'')+'" style="margin-bottom:10px;display:'+(esLibre?'block':'none')+'">';
+    var camposHtml;
+    if(esProleIT){
+      camposHtml=campoTexto('dir-seccion','Sección',row?row.seccion:'')
+        +campoTexto('dir-tag','Tag IPL',row?row.tag:'',true)
+        +campoTexto('dir-old-tag','Old Tag',row?row.old_tag:'',true)
+        +componenteHtml
+        +campoTexto('dir-tipo-detallado','Tipo detallado',row?row.tipo_detallado:'')
+        +campoTexto('dir-descripcion','Descripción',row?row.descripcion:'')
+        +campoSelect('dir-senal','Señal',[{v:'',t:'-- Ninguna --'},{v:'DI',t:'DI'},{v:'DO',t:'DO'},{v:'AI',t:'AI'},{v:'AO',t:'AO'}],row?row.senal||'':'')
+        +campoSelect('dir-bus','Bus',[{v:'',t:'-- Ninguno --'},{v:'Profinet',t:'Profinet'},{v:'ASi',t:'ASi'}],row?row.bus||'':'')
+        +campoSelect('dir-estatus','Estatus',[{v:'Existente',t:'Existente'},{v:'Nuevo',t:'Nuevo'},{v:'Baja',t:'Baja'}],row?row.estatus||'Existente':'Existente');
+    } else {
+      camposHtml=componenteHtml
+        +campoTexto('dir-descripcion','Descripción',row?row.descripcion:'')
+        +campoTexto('dir-tag','TAG',row?row.tag:'',true)
+        +campoTexto('dir-direccion','Dirección',row?row.direccion:'',true);
+    }
+    var modal=document.createElement('div');
+    modal.id='modal-direccion';
+    modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end;justify-content:center;overflow-y:auto';
+    modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px 20px 32px;width:100%;max-width:480px">'
+      +'<div style="font-size:17px;font-weight:800;font-family:Nunito,sans-serif;color:#1a3c5e;margin-bottom:16px">🗺️ '+(row?'Editar':'Agregar')+' — '+areaLabel+'</div>'
+      +camposHtml
+      +'<div style="display:flex;gap:10px;margin-top:6px">'
       +'<button onclick="var m=document.getElementById(\'modal-direccion\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
       +'<button onclick="guardarDireccion('+(id?('\''+id+'\''):'null')+',\''+area+'\')" style="flex:2;padding:13px;background:#0891b2;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar</button>'
       +'</div></div>';
@@ -26668,9 +26764,18 @@ function guardarDireccion(id,area){
     componente:componente,
     descripcion:(document.getElementById('dir-descripcion').value||'').trim(),
     tag:(document.getElementById('dir-tag').value||'').trim(),
-    direccion:(document.getElementById('dir-direccion').value||'').trim(),
     updated_by:currentUser?currentUser.nombre:''
   };
+  if(area==='prole_it'){
+    payload.seccion=(document.getElementById('dir-seccion').value||'').trim();
+    payload.old_tag=(document.getElementById('dir-old-tag').value||'').trim();
+    payload.tipo_detallado=(document.getElementById('dir-tipo-detallado').value||'').trim();
+    payload.senal=document.getElementById('dir-senal').value||'';
+    payload.bus=document.getElementById('dir-bus').value||'';
+    payload.estatus=document.getElementById('dir-estatus').value||'Existente';
+  } else {
+    payload.direccion=(document.getElementById('dir-direccion').value||'').trim();
+  }
   var hacer;
   if(id){
     hacer=fetch(SUPA_URL+'/rest/v1/direcciones_equipo?id=eq.'+id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(payload)});
@@ -26751,6 +26856,39 @@ function _dirQuitarEditor(id){
   saveListas();
   var m=document.getElementById('modal-config-direcciones');if(m)m.remove();
   abrirConfigDirecciones();
+}
+
+// ── Importación puntual: listado de válvulas GEMINIS + Cocedor 1 ──
+// (archivo "Conteo_Valvulas_SAP_G__C1.xlsx" que Jorge compartió 2026-11-05).
+// Carga única — por eso solo super, igual que importarEmpleadosArchivo. Si ya
+// existe un registro con el mismo Tag IPL en Prole IT, lo actualiza en vez de
+// duplicarlo, para poder correr este botón más de una vez sin problema.
+function getDireccionesProleITImportData(){
+  return [{"seccion":"GEMINIS","old_tag":"SV02701","tag":"101-CV-04","componente":"Válvula","tipo_detallado":"Valvula Mariposa Automatica","descripcion":"Acido Acetico","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"GEMINIS","old_tag":"SV02201","tag":"101-CV-05","componente":"Válvula","tipo_detallado":"Valvula Mariposa Automatica","descripcion":"Acido Acetico","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"GEMINIS","old_tag":"SV-04801","tag":"102-CV-10","componente":"Válvula","tipo_detallado":"Valvula Mariposa Automatica","descripcion":"Válvula Mariposa de bloqueo para suministro de fructuosa a TQ. M1C-Gemelo","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"GEMINIS","old_tag":"SV-02104","tag":"201-CV-01","componente":"Válvula","tipo_detallado":"Valvula Mariposa Automatica","descripcion":"Válvula Mariposa de bloqueo de línea de descarga TQ M1C hacia cluster","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"GEMINIS","old_tag":"XV02202","tag":"301-CV-01","componente":"Válvula","tipo_detallado":"Valvula Mariposa Automatica","descripcion":"Triblender-SalidaTQ. Ingredientes Liquidos","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"GEMINIS","old_tag":"SV02204","tag":"301-CV-02","componente":"Válvula","tipo_detallado":"Valvula Mariposa Automatica","descripcion":"Triblender-SalidaTQ. Ingredientes Liquidos","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"GEMINIS","old_tag":"SV02205","tag":"301-CV-03","componente":"Válvula","tipo_detallado":"Valvula Tres Vias","descripcion":"Envio Triblender","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"GEMINIS","old_tag":"SV09203","tag":"301-CV-04","componente":"Válvula","tipo_detallado":"Valvula Tres Vias","descripcion":"Distribucion R. Mezclas","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"GEMINIS","old_tag":"SV02103","tag":"301-CV-05","componente":"Válvula","tipo_detallado":"Valvula Tres Vias","descripcion":"Cocedores a Placa Entrada. TQ. MC1","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"GEMINIS","old_tag":"SV09204","tag":"301-CV-06","componente":"Válvula","tipo_detallado":"Valvula Tres Vias","descripcion":"Cocedores a Placa Entrada. TQ. MC1 Gemelo","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"GEMINIS","old_tag":"SV-02301","tag":"601-CV-01","componente":"Válvula","tipo_detallado":"Valvula Mariposa Automatica","descripcion":"Válvula Mariposa de bloqueo Línea de distribución de agua","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"GEMINIS","old_tag":"SV-02305","tag":"601-CV-02","componente":"Válvula","tipo_detallado":"Valvula Mariposa Automatica","descripcion":"Válvula Mariposa de bloqueo Línea de agua hacia linea envio de Triblender","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"GEMINIS","old_tag":"PRV-02301","tag":"601-PSV-01","componente":"Válvula","tipo_detallado":"Valvula Reguladora de Presión","descripcion":"Válvula Reguladora de presión de agua hacia triblender","senal":"AO","bus":"","estatus":"Existente"},{"seccion":"GEMINIS","old_tag":"SV-02801","tag":"901-CV-01","componente":"Válvula","tipo_detallado":"Valvula Tres Vias","descripcion":"Válvula Mariposa 3 vías de bloqueo Línea suministro CIP a SprayBalls TQ. M1C","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"GEMINIS","old_tag":"SV02906","tag":"901-CV-02","componente":"Válvula","tipo_detallado":"Valvula Mariposa Automatica","descripcion":"Válvula Mariposa de bloqueo Línea hacia retorno de CIP","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"GEMINIS","old_tag":"SV-09201","tag":"901-CV-03","componente":"Válvula","tipo_detallado":"Valvula Tres Vias","descripcion":"Válvula Mariposa 3 vías de bloqueo Línea suministro CIP a SprayBalls TQ. M1C-Gemelo","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"GEMINIS","old_tag":"SV-09202","tag":"901-CV-06","componente":"Válvula","tipo_detallado":"Valvula Tres Vias","descripcion":"Válvula Mariposa de bloqueo Línea de ditribución CIP a lÍneas de cluster","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"GEMINIS","old_tag":"SV-02102","tag":"901-CV-07","componente":"Válvula","tipo_detallado":"Valvula Mariposa Automatica","descripcion":"Válvula Mariposa de bloqueo Línea de CIP a placa intercambiadora de TQ M1C","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"GEMINIS","old_tag":"SV-09208","tag":"901-CV-09","componente":"Válvula","tipo_detallado":"Valvula Mariposa Automatica","descripcion":"Válvula Mariposa de bloqueo CIP Línea de clustes zona de válvulas 201 envio a Triblender","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"GEMINIS","old_tag":"SV-09103","tag":"901-CV-10","componente":"Válvula","tipo_detallado":"Valvula Mariposa Automatica","descripcion":"Válvula Mariposa de bloqueo CIP Línea de clustes zona de válvulas 202 envio a TQ. Balance cocedor 1","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"GEMINIS","old_tag":"","tag":"901-CV-14","componente":"Válvula","tipo_detallado":"Valvula Mariposa Automatica","descripcion":"Válvula Mariposa de bloqueo Línea de CIP","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"Cocedor 1","old_tag":"SV03101","tag":"401-CV-01","componente":"Válvula","tipo_detallado":"Modulante","descripcion":"Válvula Mariposa de bloqueo Línea de Envio cocedor 1","senal":"AO","bus":"ASi","estatus":"Existente"},{"seccion":"Cocedor 1","old_tag":"SV03102","tag":"401-CV-02","componente":"Válvula","tipo_detallado":"Valvula Automatica Mariposa","descripcion":"Válvula Mariposa de bloqueo Línea Ramificada de envio de cocedor 1 a TQ. De balance 1500Lt","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"Cocedor 1","old_tag":"SV03103","tag":"401-CV-03","componente":"Válvula","tipo_detallado":"Valvula Tres Vias","descripcion":"Válvula Mariposa doble asiento bloqueo linea de retorno a TQ Blance 1500 Lt o continuacion a conexión placa","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"Cocedor 1","old_tag":"SV03104","tag":"401-CV-04","componente":"Válvula","tipo_detallado":"Valvula Tres Vias","descripcion":"Válvula Mariposa doble asiento bloqueo a entrada de linea de retorno a TQ Balance 1500Lt o a Placa Intercabiadora","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"Cocedor 1","old_tag":"SV03105","tag":"401-CV-05","componente":"Válvula","tipo_detallado":"Valvula Automatica Mariposa","descripcion":"Válvula Mariposa de bloqueo Línea entrada de agua a TQ. De Balance 1500Lt","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"Cocedor 1","old_tag":"SV03106","tag":"401-CV-06","componente":"Válvula","tipo_detallado":"Valvula Tres Vias","descripcion":"Válvula Mariposa doble asiento bloqueo Línea y liberacion de purga a boquilla de TQ. Balance 1500Lt","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"Cocedor 1","old_tag":"SV03107","tag":"401-CV-07","componente":"Válvula","tipo_detallado":"Valvula Automatica Mariposa","descripcion":"Válvula Mariposa de bloqueo Línea de placa intercabiadora a TQ Balance 1500Lt","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"Cocedor 1","old_tag":"SV03108","tag":"401-CV-08","componente":"Válvula","tipo_detallado":"Valvula AutomaticaMixproof","descripcion":"Válvula Mariposa de bloqueo Línea de descarga TQ.","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"Cocedor 1","old_tag":"SV03109","tag":"401-CV-09","componente":"Válvula","tipo_detallado":"Valvula Automatica Mariposa","descripcion":"Válvula Mariposa de bloqueo Línea entrada a línea de succion bomba centrifuga ByPass 001","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"Cocedor 1","old_tag":"SV03110","tag":"401-CV-10","componente":"Válvula","tipo_detallado":"Valvula Automatica Mariposa","descripcion":"Válvula Mariposa de bloqueo Línea de envio de bomba centrifuga ByPass 001","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"Cocedor 1","old_tag":"SV03111","tag":"401-CV-11","componente":"Válvula","tipo_detallado":"Valvula Tres Vias","descripcion":"Válvula Mariposa de bloqueo entrada a placa intercabiadora de línea de envio","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"Cocedor 1","old_tag":"SV03201","tag":"602-CV-01","componente":"Válvula","tipo_detallado":"Valvula Automatica Mariposa","descripcion":"Válvula Mariposa de bloqueo Línea de vapor a sistema de agua caliente","senal":"","bus":"ASi","estatus":"Existente"},{"seccion":"Cocedor 1","old_tag":"TCV03202","tag":"602-PSV-01","componente":"Válvula","tipo_detallado":"Valvula Reguladora Presion","descripcion":"Valvula Reguladora Presion de vapor a sistema de agua caliente","senal":"AO","bus":"ASi","estatus":"Existente"},{"seccion":"Cocedor 1","old_tag":"SV03501","tag":"605-CV-01","componente":"Válvula","tipo_detallado":"Valvula Automatica Mariposa","descripcion":"Válvula Mariposal Línea agua de torre a sección de calentamiento cocedor 1","senal":"AO","bus":"ASi","estatus":"Existente"},{"seccion":"Cocedor 1","old_tag":"SV03601","tag":"902-CV-01","componente":"Válvula","tipo_detallado":"Valvula Tres Vias","descripcion":"Válvula Mariposa de bloqueo Línea CIP cocedor 1","senal":"","bus":"ASi","estatus":"Existente"}];
+}
+
+async function importarDireccionesProleIT(){
+  if(!currentUser||currentUser.rol!=='super'){showAlert('Sin permisos','error');return;}
+  var datos=getDireccionesProleITImportData();
+  var existentes=await supaFetch('direcciones_equipo','GET',null,'area=eq.prole_it&select=id,tag');
+  var porTag={};
+  (existentes||[]).forEach(function(e){if(e.tag) porTag[e.tag]=e.id;});
+  var ok=0,fail=0;
+  for(var i=0;i<datos.length;i++){
+    var d=datos[i];
+    var payload={area:'prole_it',seccion:d.seccion,old_tag:d.old_tag,tag:d.tag,componente:d.componente,tipo_detallado:d.tipo_detallado,descripcion:d.descripcion,senal:d.senal,bus:d.bus,estatus:d.estatus,updated_by:currentUser.nombre};
+    var r;
+    if(porTag[d.tag]){
+      r=await fetch(SUPA_URL+'/rest/v1/direcciones_equipo?id=eq.'+porTag[d.tag],{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(payload)});
+    } else {
+      payload.id=gen_id();
+      r=await fetch(SUPA_URL+'/rest/v1/direcciones_equipo',{method:'POST',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json','Prefer':'return=minimal'},body:JSON.stringify(payload)});
+    }
+    if(r.ok||r.status===201||r.status===204){ok++;}else{fail++;}
+    await new Promise(function(res){setTimeout(res,60);});
+  }
+  showAlert('✅ Válvulas importadas: '+ok+(fail?' — '+fail+' errores':''));
+  showGestionPersonal();
 }
 // ================================================================
 // FOTOS PM03 — Múltiples imágenes desde cámara o galería
