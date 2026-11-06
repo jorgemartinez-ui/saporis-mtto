@@ -14583,12 +14583,6 @@ function syncSupabase(){
   supaFetch('agua_lecturas','GET',null,'fecha=gte.'+fechaMin+'&order=fecha.desc').then(function(rows){
     if(rows&&rows.length){AGUA_LECTURAS=rows;saveDB('agua_lecturas',AGUA_LECTURAS);}
   }).catch(function(){});
-  // Sync agua_pozo_lecturas (completo -- historico chico, una lectura por
-  // dia desde que arranco el seguimiento; la grafica anual necesita ver todo
-  // el ano, no solo los ultimos 90 dias)
-  supaFetch('agua_pozo_lecturas','GET',null,'order=fecha.asc').then(function(rows){
-    if(rows&&rows.length){AGUA_POZO_LECTURAS=rows;saveDB('agua_pozo_lecturas',AGUA_POZO_LECTURAS);}
-  }).catch(function(){});
   // Sync listas_config desde Supabase
   supaFetch('listas_config','GET',null,'').then(function(rows){
     if(rows&&rows.length){
@@ -15102,7 +15096,6 @@ function reintentarOrdenesSync(){
   var localPM03 = loadDB('pm03_plan',[]);
   var localInsp = loadDB('inspecciones',[]);
   var localAgua = loadDB('agua_lecturas',[]);
-  var localAguaPozo = loadDB('agua_pozo_lecturas',[]);
   var SIETE_DIAS = 7*24*60*60*1000;
   pendientes.forEach(function(item){
     if((Date.now()-item.ts) >= SIETE_DIAS) return; // máximo 7 días
@@ -15118,9 +15111,6 @@ function reintentarOrdenesSync(){
     } else if(item.table==='agua_lecturas'){
       var row = localAgua.find(function(x){return x.id===item.id;});
       if(row) syncAguaSupa(row);
-    } else if(item.table==='agua_pozo_lecturas'){
-      var rowPozo = localAguaPozo.find(function(x){return x.id===item.id;});
-      if(rowPozo) syncAguaPozoSupa(rowPozo);
     } else {
       var o = local.find(function(x){return x.id===item.id;});
       if(o) saveOrdenSupa(o);
@@ -15221,20 +15211,6 @@ function syncAguaSupa(row){
           showAlert('⚠️ Error al sincronizar registro de agua '+row.fecha,'error');
           var q=loadDB('supa_retry_queue',[]);
           q.push({table:'agua_lecturas',id:row.id,ts:Date.now()});
-          saveDB('supa_retry_queue',q);
-        }
-      });
-    }
-  });
-}
-function syncAguaPozoSupa(row){
-  supaFetch('agua_pozo_lecturas','POST',row,'').then(function(data){
-    if(data===null){
-      supaFetch('agua_pozo_lecturas','PATCH',row,'id=eq.'+row.id).then(function(data2){
-        if(data2===null){
-          showAlert('⚠️ Error al sincronizar lectura del pozo '+row.fecha,'error');
-          var q=loadDB('supa_retry_queue',[]);
-          q.push({table:'agua_pozo_lecturas',id:row.id,ts:Date.now()});
           saveDB('supa_retry_queue',q);
         }
       });
@@ -33866,12 +33842,6 @@ var AGUA_MEDIDORES=loadDB('agua_medidores',[]);
 var PLAN_ACTIVIDADES=loadDB('plan_actividades',[]);
 var COMPONENTES_EQUIPO=loadDB('componentes_equipo',[]);
 var AGUA_LECTURAS=loadDB('agua_lecturas',[]);
-// Lecturas del medidor del Pozo — tabla y arreglo totalmente aparte de
-// AGUA_LECTURAS/agua_lecturas a propósito: el pozo no entra al balance
-// entrada/proceso/CIP/red fábrica que ya existía y funcionaba, así que vive en
-// su propio mundo (su propia tabla en Supabase, su propio candado de "no debe
-// bajar", su propio reparto de huecos) para no arriesgar esos cálculos.
-var AGUA_POZO_LECTURAS=loadDB('agua_pozo_lecturas',[]);
 
 function showAgua(){
   detalleBackScreen='screen-servicios';
@@ -33967,9 +33937,18 @@ function renderAgua(){
 // pintarlos en gris. Calcula siempre contra la última lectura real anterior
 // (nunca contra 0), así que ni el primer registro histórico ni un hueco
 // inflan el número.
+// Los campos de ENTRADA a sumar son dinámicos según AGUA_MEDIDORES (no fijos a
+// 4) — así el Pozo, al ser el 5to medidor de entrada, entra solo a este total
+// sin tocar esta función cada vez que cambie la cantidad de medidores.
+function _aguaEntradaKeys(){
+  var keys=AGUA_MEDIDORES.filter(function(m){return m.tipo==='entrada'&&m.activo!==false;})
+    .map(function(m,i){return 'lectura_e'+(i+1);});
+  return keys.length?keys:['lectura_e1','lectura_e2','lectura_e3','lectura_e4'];
+}
 function _aguaValoresPorDia(){
   var ordenadas=AGUA_LECTURAS.filter(function(l){return l&&l.fecha;})
     .slice().sort(function(a,b){return a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0;});
+  var entradaKeys=_aguaEntradaKeys();
   var mapa={};
   for(var i=0;i<ordenadas.length-1;i++){
     var prev=ordenadas[i],next=ordenadas[i+1];
@@ -33977,7 +33956,11 @@ function _aguaValoresPorDia(){
     var gapDias=Math.round((d1-d0)/86400000);
     if(gapDias<=0) continue;
     var dEntrada=0;
-    ['lectura_e1','lectura_e2','lectura_e3','lectura_e4'].forEach(function(k){
+    entradaKeys.forEach(function(k){
+      // Si el campo no existía en la lectura anterior (ej. lectura_e5 del Pozo
+      // antes de agregarse como medidor), no hay punto de comparación — no
+      // inflar el consumo con el valor crudo completo del medidor nuevo.
+      if(prev[k]==null) return;
       dEntrada+=Math.max(0,(next[k]||0)-(prev[k]||0));
     });
     var cs1=Math.max(0,(next.lectura_s1||0)-(prev.lectura_s1||0)); // CIP
@@ -34053,11 +34036,6 @@ function abrirCapturaDiariaAgua(fecha){
     .sort(function(a,b){return a.orden-b.orden;});
   var salidas=AGUA_MEDIDORES.filter(function(m){return m.tipo==='salida'&&m.activo!==false;})
     .sort(function(a,b){return a.orden-b.orden;});
-  // Pozo: lectura aparte, su propia "lectura anterior" (no la del balance de red)
-  var anterioresPozo=AGUA_POZO_LECTURAS.filter(function(l){return l.fecha&&l.fecha<fecha;})
-    .sort(function(a,b){return a.fecha<b.fecha?1:-1;});
-  var lectAyerPozo=anterioresPozo[0]||null;
-  var lectHoyPozo=AGUA_POZO_LECTURAS.find(function(l){return l.fecha===fecha;})||{};
 
   var modal=document.createElement('div');
   modal.id='modal-agua-captura';
@@ -34086,14 +34064,6 @@ function abrirCapturaDiariaAgua(fecha){
       +'</div>';
   }).join('');
 
-  var valPozo=draft.pozo||lectHoyPozo.lectura||'';
-  var prevPozo=lectAyerPozo?(lectAyerPozo.lectura||0):0;
-  var campo_pozo='<div class="form-group"><label class="form-label">Medidor del Pozo</label>'
-    +'<div style="font-size:11px;color:#6b7280;margin-bottom:4px">Lectura anterior: '+prevPozo+' m³'+(lectAyerPozo?' (del '+lectAyerPozo.fecha+')':' (sin lecturas previas)')+'</div>'
-    +'<input type="number" class="form-control" id="agua-pozo" step="0.01" min="0" value="'+valPozo+'" placeholder="Lectura actual m³" style="padding:10px" oninput="_aguaGuardarBorradorActual()">'
-    +'<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#92400e;margin-top:4px;cursor:pointer"><input type="checkbox" id="agua-pozo-reset" style="margin:0"> ⚠️ Medidor reiniciado/reemplazado hoy (permite un valor menor)</label>'
-    +'</div>';
-
   modal.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;max-width:500px;margin:auto">'
     +'<div style="font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:14px">💧 Lectura de Agua — '+fecha+'</div>'
     +(hayHueco?'<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:#92400e">⚠️ No hay lectura de ayer ('+ayerStr+') — se compara contra la última real, del '+lectAyer.fecha+'.</div>':'')
@@ -34101,8 +34071,6 @@ function abrirCapturaDiariaAgua(fecha){
     +campos_e
     +'<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:10px;background:#f1f5f9;padding:6px 10px;border-radius:6px;margin-top:4px">📤 SALIDAS (Medidores)</div>'
     +campos_s
-    +'<div style="font-size:12px;font-weight:700;color:#0c4a6e;margin-bottom:10px;background:#f0f9ff;padding:6px 10px;border-radius:6px;margin-top:4px">💧 POZO (lectura exclusiva — no afecta el balance de arriba)</div>'
-    +campo_pozo
     +'<div class="form-group"><label class="form-label">Notas</label>'
     +'<input type="text" class="form-control" id="agua-notas" value="'+(lectHoy.notas||'')+'" placeholder="Observaciones opcionales..." style="padding:10px"></div>'
     +'<div style="display:flex;gap:8px;margin-top:8px">'
@@ -34117,10 +34085,10 @@ var _aguaCaptureFecha='';
 function _aguaGuardarBorradorActual(){_aguaGuardarBorrador(_aguaCaptureFecha);}
 function _aguaGuardarBorrador(fecha){
   var draft={};
-  ['e1','e2','e3','e4','s1','s2','s3','s4','pozo'].forEach(function(k){
-    var el=document.getElementById('agua-'+k);
-    if(el) draft[k]=el.value;
-  });
+  var nEnt=AGUA_MEDIDORES.filter(function(m){return m.tipo==='entrada'&&m.activo!==false;}).length;
+  var nSal=AGUA_MEDIDORES.filter(function(m){return m.tipo==='salida'&&m.activo!==false;}).length;
+  for(var i=1;i<=nEnt;i++){ var elE=document.getElementById('agua-e'+i); if(elE) draft['e'+i]=elE.value; }
+  for(var j=1;j<=nSal;j++){ var elS=document.getElementById('agua-s'+j); if(elS) draft['s'+j]=elS.value; }
   var notas=document.getElementById('agua-notas');
   if(notas) draft.notas=notas.value;
   saveDB('agua_borrador_'+fecha, draft);
@@ -34181,10 +34149,12 @@ function guardarLecturaAgua(fecha){
     if(gapDias<1) gapDias=1;
   }
 
-  var e1=parseFloat(document.getElementById('agua-e1')?.value)||0;
-  var e2=parseFloat(document.getElementById('agua-e2')?.value)||0;
-  var e3=parseFloat(document.getElementById('agua-e3')?.value)||0;
-  var e4=parseFloat(document.getElementById('agua-e4')?.value)||0;
+  // Entradas: dinámico según AGUA_MEDIDORES (mismo orden que usa el formulario
+  // en abrirCapturaDiariaAgua) — así el Pozo, al ser un medidor de ENTRADA más
+  // (el 5to), queda incluido automáticamente en las sumas/restas sin caso especial.
+  var entradas=AGUA_MEDIDORES.filter(function(m){return m.tipo==='entrada'&&m.activo!==false;})
+    .sort(function(a,b){return a.orden-b.orden;});
+  var eVals=entradas.map(function(m,i){return parseFloat(document.getElementById('agua-e'+(i+1))?.value)||0;});
   var s1=parseFloat(document.getElementById('agua-s1')?.value)||0;
   var s2=parseFloat(document.getElementById('agua-s2')?.value)||0;
   var s3=parseFloat(document.getElementById('agua-s3')?.value)||0;
@@ -34198,9 +34168,9 @@ function guardarLecturaAgua(fecha){
   var _reiniciados=[];
   if(lectAyer.fecha){
     var _bajos=[];
-    [['E1','e1',e1,lectAyer.lectura_e1],['E2','e2',e2,lectAyer.lectura_e2],['E3','e3',e3,lectAyer.lectura_e3],['E4','e4',e4,lectAyer.lectura_e4],
-     ['S1','s1',s1,lectAyer.lectura_s1],['S2','s2',s2,lectAyer.lectura_s2],['S3','s3',s3,lectAyer.lectura_s3],['S4','s4',s4,lectAyer.lectura_s4]
-    ].forEach(function(c){
+    var _checks=entradas.map(function(m,i){return ['E'+(i+1),'e'+(i+1),eVals[i],lectAyer['lectura_e'+(i+1)]];});
+    _checks=_checks.concat([['S1','s1',s1,lectAyer.lectura_s1],['S2','s2',s2,lectAyer.lectura_s2],['S3','s3',s3,lectAyer.lectura_s3],['S4','s4',s4,lectAyer.lectura_s4]]);
+    _checks.forEach(function(c){
       if(c[3]!=null && c[2]<c[3]){
         var resetChk=document.getElementById('agua-'+c[1]+'-reset');
         if(resetChk&&resetChk.checked){
@@ -34221,11 +34191,17 @@ function guardarLecturaAgua(fecha){
 
   // Calcular consumos del día (lectura actual - última lectura real, repartido
   // entre los días transcurridos si hubo hueco)
-  var ce1=Math.max(0,e1-(lectAyer.lectura_e1||0))/gapDias;
-  var ce2=Math.max(0,e2-(lectAyer.lectura_e2||0))/gapDias;
-  var ce3=Math.max(0,e3-(lectAyer.lectura_e3||0))/gapDias;
-  var ce4=Math.max(0,e4-(lectAyer.lectura_e4||0))/gapDias;
-  var totalEntrada=Math.round((ce1+ce2+ce3+ce4)*100)/100;
+  // Si un medidor es nuevo (ej. el Pozo el día que se agrega) y la lectura de
+  // ayer no tiene valor previo para ESE campo (undefined, no 0), no hay punto
+  // de comparación — su aporte al consumo del día es 0, no "valor_actual - 0"
+  // (eso inflaría el balance con el valor crudo completo del medidor el día
+  // que arranca a capturarse).
+  var ceVals=entradas.map(function(m,i){
+    var prevVal=lectAyer['lectura_e'+(i+1)];
+    if(prevVal==null) return 0;
+    return Math.max(0,eVals[i]-prevVal)/gapDias;
+  });
+  var totalEntrada=Math.round(ceVals.reduce(function(a,b){return a+b;},0)*100)/100;
 
   var cs1=Math.max(0,s1-(lectAyer.lectura_s1||0))/gapDias; // CIP
   var cs2=Math.max(0,s2-(lectAyer.lectura_s2||0))/gapDias; // M2
@@ -34271,7 +34247,6 @@ function guardarLecturaAgua(fecha){
   var id='AGUA-'+fecha;
   var row={
     id:id, fecha:fecha,
-    lectura_e1:e1, lectura_e2:e2, lectura_e3:e3, lectura_e4:e4,
     lectura_s1:s1, lectura_s2:s2, lectura_s3:s3, lectura_s4:s4,
     consumo_cip:consumoCIP, consumo_proceso:consumoProceso,
     consumo_red_fabrica:consumoRedFab, consumo_total_entrada:totalEntrada,
@@ -34279,6 +34254,7 @@ function guardarLecturaAgua(fecha){
     capturado_por:currentUser.nombre, capturado_ts:Date.now(),
     tiempo_llenado_hrs: parseFloat(tiempoLlenadoHrs.toFixed(2))
   };
+  entradas.forEach(function(m,i){ row['lectura_e'+(i+1)]=eVals[i]; });
 
   var esLecturaNueva=AGUA_LECTURAS.findIndex(function(l){return l.fecha===fecha;})<0;
   var idx=AGUA_LECTURAS.findIndex(function(l){return l.fecha===fecha;});
@@ -34287,40 +34263,6 @@ function guardarLecturaAgua(fecha){
 
   // Save to Supabase (avisa y encola reintento si falla — ver syncAguaSupa)
   syncAguaSupa(row);
-
-  // ── POZO: lectura y guardado totalmente aparte del balance de arriba ──
-  // Campo opcional: si se deja vacío, simplemente no se toca nada del pozo
-  // ese día (no bloquea ni afecta el guardado de las lecturas de red).
-  // Si el candado del pozo rechaza el valor, se guarda aviso aquí en vez de
-  // llamar showAlert ya mismo — si no, el "✅ Lectura guardada" de un par de
-  // líneas más abajo lo pisa en el mismo instante y nadie llega a leerlo.
-  var pozoAvisoFinal='';
-  var pozoStr=document.getElementById('agua-pozo')?.value;
-  if(pozoStr!==undefined && pozoStr!==null && String(pozoStr).trim()!==''){
-    var pozoVal=parseFloat(pozoStr)||0;
-    var anterioresPozo=AGUA_POZO_LECTURAS.filter(function(l){return l.fecha&&l.fecha<fecha;})
-      .sort(function(a,b){return a.fecha<b.fecha?1:-1;});
-    var lectAyerPozo=anterioresPozo[0]||null;
-    var pozoResetChk=document.getElementById('agua-pozo-reset');
-    if(lectAyerPozo && pozoVal<(lectAyerPozo.lectura||0) && !(pozoResetChk&&pozoResetChk.checked)){
-      pozoAvisoFinal=' — ⚠️ Pozo NO se guardó: '+pozoVal+' es menor a la lectura del '+lectAyerPozo.fecha+' ('+lectAyerPozo.lectura+'). Si el medidor se averió o se reemplazó, marca su casilla de reinicio.';
-    } else {
-      var gapDiasPozo=1;
-      if(lectAyerPozo&&lectAyerPozo.fecha){
-        gapDiasPozo=Math.round((new Date(fecha+'T12:00:00')-new Date(lectAyerPozo.fecha+'T12:00:00'))/86400000)||1;
-        if(gapDiasPozo<1) gapDiasPozo=1;
-      }
-      var notaPozo=(pozoResetChk&&pozoResetChk.checked)?'🔧 Medidor reiniciado/reemplazado (de '+(lectAyerPozo?lectAyerPozo.lectura:0)+' a '+pozoVal+')':null;
-      var pozoRow={
-        id:'AGUAPOZO-'+fecha, fecha:fecha, lectura:pozoVal, nota:notaPozo,
-        capturado_por:currentUser.nombre, capturado_ts:Date.now()
-      };
-      var idxPozo=AGUA_POZO_LECTURAS.findIndex(function(l){return l.fecha===fecha;});
-      if(idxPozo>=0) AGUA_POZO_LECTURAS[idxPozo]=pozoRow; else AGUA_POZO_LECTURAS.push(pozoRow);
-      saveDB('agua_pozo_lecturas',AGUA_POZO_LECTURAS);
-      syncAguaPozoSupa(pozoRow);
-    }
-  }
 
   // Generar una PM02 genérica "Toma de lecturas de agua del día", ya cerrada, con
   // las horas desde que se abrió el formulario (abrirCapturaDiariaAgua) hasta este
@@ -34334,7 +34276,7 @@ function guardarLecturaAgua(fecha){
   saveDB('agua_inicio_'+fecha, null); // ya se guardó, limpiar la marca de inicio
   _aguaLimpiarBorrador(fecha);
   document.getElementById('modal-agua-captura')?.remove();
-  showAlert('✅ Lectura guardada — Balance: '+(balance>0?'+':'')+balance+' m³'+pozoAvisoFinal,pozoAvisoFinal?'error':'success');
+  showAlert('✅ Lectura guardada — Balance: '+(balance>0?'+':'')+balance+' m³','success');
   renderAgua();
 }
 
@@ -34544,11 +34486,25 @@ function showAguaConsulta(tipo,filtroAnio,filtroMes,filtroSem,filtroDia,ultimos3
 // gráfica es aparte y tan directa: año → mes → día, con línea de meta/
 // promedio necesario en cada nivel, para ver de un vistazo si se va al ritmo.
 var AGUA_POZO_META_ANUAL=25000;
+// El Pozo ahora es el 5to medidor de ENTRADA (lectura_e5 en agua_lecturas,
+// junto a los de red) — ya no vive en una tabla aparte. Pero el seguimiento
+// contra el contrato (25,000 m³/año) arranca a mitad de año y sin una
+// captura real del 1-ene-2026 en este nuevo esquema, así que esa lectura de
+// arranque queda fija aquí (dato que dio Jorge) en vez de salir de una fila.
+// NTP de Jorge: el valor de "hoy" (6-nov-2026 = 126,561) define el punto de
+// partida de la contabilización diaria/mensual honesta, y de ahí a fin de año
+// se reparte lo que falta; el acumulado del año SIEMPRE se calcula como
+// (última lectura_e5 real del año) − AGUA_POZO_INICIO_ANIO, nunca sumando los
+// repartos día a día, para que nunca diga "0" solo por faltar capturas viejas
+// que ya no se van a meter.
+var AGUA_POZO_INICIO_ANIO=119220; // Lectura del pozo al 1-ene-2026
+var AGUA_POZO_ANIO_BASE=2026;
 
-// Mismo reparto de huecos que _aguaValoresPorDia(), pero solo para el pozo
-// (una sola lectura acumulada por día, no 8 campos de entrada/salida).
+// Mismo reparto de huecos que _aguaValoresPorDia(), pero solo con la columna
+// del pozo (lectura_e5) de AGUA_LECTURAS — honesto: si no hay captura real de
+// un período (ej. antes de que arrancara el seguimiento), no se inventa nada.
 function _aguaPozoValoresPorDia(){
-  var ordenadas=AGUA_POZO_LECTURAS.filter(function(l){return l&&l.fecha;})
+  var ordenadas=AGUA_LECTURAS.filter(function(l){return l&&l.fecha&&l.lectura_e5!=null;})
     .slice().sort(function(a,b){return a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0;});
   var mapa={};
   for(var i=0;i<ordenadas.length-1;i++){
@@ -34556,7 +34512,7 @@ function _aguaPozoValoresPorDia(){
     var d0=new Date(prev.fecha+'T12:00:00'),d1=new Date(next.fecha+'T12:00:00');
     var gapDias=Math.round((d1-d0)/86400000);
     if(gapDias<=0) continue;
-    var delta=Math.max(0,(next.lectura||0)-(prev.lectura||0));
+    var delta=Math.max(0,(next.lectura_e5||0)-(prev.lectura_e5||0));
     var estimado=gapDias>1;
     for(var k=0;k<gapDias;k++){
       var f=new Date(d0.getTime()+k*86400000).toISOString().slice(0,10);
@@ -34566,28 +34522,46 @@ function _aguaPozoValoresPorDia(){
   return mapa;
 }
 
+// Última lectura real del pozo (lectura_e5) capturada dentro de un año dado.
+function _aguaPozoUltimaLecturaAnio(anio){
+  var delAnio=AGUA_LECTURAS.filter(function(l){return l.fecha&&l.fecha.slice(0,4)===String(anio)&&l.lectura_e5!=null;})
+    .sort(function(a,b){return a.fecha<b.fecha?1:-1;});
+  return delAnio[0]||null;
+}
+
+// Acumulado del año contra la meta de 25,000 m³. Para el año base (2026, sin
+// captura real del 1-ene en este esquema) se usa última_lectura_e5 − 119220.
+// Para años futuros, que sí arrancarán con su propia captura real, se usa el
+// reparto normal por día (equivalente, pero no necesita una constante fija).
+function _aguaPozoAcumuladoAnio(anio){
+  if(anio===AGUA_POZO_ANIO_BASE){
+    var ultima=_aguaPozoUltimaLecturaAnio(anio);
+    return ultima?Math.round((ultima.lectura_e5-AGUA_POZO_INICIO_ANIO)*100)/100:0;
+  }
+  var porDia=_aguaPozoValoresPorDia(),total=0;
+  Object.keys(porDia).forEach(function(f){ if(f.slice(0,4)===String(anio)) total+=porDia[f].consumo; });
+  return Math.round(total*100)/100;
+}
+
 function renderAguaPozo(){
   var cont=document.getElementById('agua-pozo-content');
   if(!cont) return;
-  var isAdmin=currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super'||currentUser.rol==='tecnico');
-  var hoy=new Date().toISOString().slice(0,10);
-  var lecturaHoy=AGUA_POZO_LECTURAS.find(function(l){return l.fecha===hoy;});
 
   // Resumen del año actual contra la meta — siempre visible, sin importar
   // en qué nivel de la gráfica (año/mes/día) se esté navegando.
-  var porDia=_aguaPozoValoresPorDia();
   var añoActual=new Date().getFullYear();
-  var acumulado=0;
-  Object.keys(porDia).forEach(function(f){
-    if(new Date(f+'T12:00:00').getFullYear()===añoActual) acumulado+=porDia[f].consumo;
-  });
-  acumulado=Math.round(acumulado*100)/100;
+  var acumulado=_aguaPozoAcumuladoAnio(añoActual);
   var faltante=Math.round((AGUA_POZO_META_ANUAL-acumulado)*100)/100;
+  // El ritmo/días restantes se cuentan a partir de MAÑANA de la última
+  // captura real del pozo (NTP de Jorge: "que se comience a contabilizar a
+  // partir de mañana"), no desde la fecha de hoy en el calendario.
+  var ultimaCaptura=_aguaPozoUltimaLecturaAnio(añoActual);
+  var fechaBase=ultimaCaptura?ultimaCaptura.fecha:new Date().toISOString().slice(0,10);
   var inicioAño=new Date(añoActual,0,1),finAño=new Date(añoActual,11,31);
-  var diaDelAño=Math.round((new Date()-inicioAño)/86400000)+1;
+  var diaBaseDelAño=Math.round((new Date(fechaBase+'T12:00:00')-inicioAño)/86400000)+1;
   var diasAño=Math.round((finAño-inicioAño)/86400000)+1;
-  var diasRestantes=Math.max(1,diasAño-diaDelAño+1);
-  var metaEsperadaHoy=AGUA_POZO_META_ANUAL/diasAño*diaDelAño;
+  var diasRestantes=Math.max(1,diasAño-diaBaseDelAño);
+  var metaEsperadaHoy=AGUA_POZO_META_ANUAL/diasAño*diaBaseDelAño;
   var vaBien=acumulado>=metaEsperadaHoy;
   var ritmoNecesario=Math.round((faltante>0?faltante/diasRestantes:0)*100)/100;
 
@@ -34598,9 +34572,6 @@ function renderAguaPozo(){
     +(faltante>0?'<div style="font-size:12px;opacity:.9;margin-top:4px">Faltan '+faltante.toLocaleString('es-MX')+' m³ — se necesitan ~'+ritmoNecesario.toLocaleString('es-MX')+' m³/día el resto del año ('+diasRestantes+' días)</div>':'<div style="font-size:12px;opacity:.9;margin-top:4px">🎉 Meta anual ya cumplida</div>')
     +'</div>';
 
-  if(isAdmin){
-    html+='<button onclick="abrirCapturaDiariaAgua(\''+hoy+'\')" style="width:100%;padding:10px;background:#0c4a6e;color:#fff;border:none;border-radius:8px;font-weight:700;margin-bottom:14px;cursor:pointer">'+(lecturaHoy?'✏️ Editar':'📋 Registrar')+' lectura de hoy del pozo (mismo formulario de Agua)</button>';
-  }
   html+='<div id="agua-pozo-wrap"></div>';
   cont.innerHTML=html;
   showAguaPozoGrafica(null,null);
@@ -34615,7 +34586,9 @@ function showAguaPozoGrafica(filtroAnio,filtroMes){
   var METAS={'año':AGUA_POZO_META_ANUAL,'mes':AGUA_POZO_META_ANUAL/12,'dia':AGUA_POZO_META_ANUAL/365};
 
   var porDia=_aguaPozoValoresPorDia();
-  var años=[...new Set(AGUA_POZO_LECTURAS.map(function(l){return new Date(l.fecha+'T12:00:00').getFullYear();}))].sort();
+  var añosSet=new Set(AGUA_LECTURAS.filter(function(l){return l.lectura_e5!=null;}).map(function(l){return new Date(l.fecha+'T12:00:00').getFullYear();}));
+  añosSet.add(AGUA_POZO_ANIO_BASE); // siempre visible, aunque todavía no haya captura real
+  var años=[...añosSet].sort();
   var selSt='padding:4px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:11px;background:#fff;color:#374151;cursor:pointer';
   var añoOpts='<option value="">Todos los años</option>'+años.map(function(a){return'<option value="'+a+'"'+(filtroAnio===a?' selected':'')+'>'+a+'</option>';}).join('');
   var mesOpts='<option value="">Todos los meses</option>'+MESES_LABEL.map(function(m,i){return'<option value="'+(i+1)+'"'+(filtroMes===(i+1)?' selected':'')+'>'+m+'</option>';}).join('');
@@ -34627,13 +34600,11 @@ function showAguaPozoGrafica(filtroAnio,filtroMes){
 
   var arr=[];
   if(grupoPor==='año'){
-    var agrupadoA={};
-    Object.keys(porDia).forEach(function(f){
-      var key=String(new Date(f+'T12:00:00').getFullYear());
-      if(!agrupadoA[key]) agrupadoA[key]={label:key,sortKey:key,key:+key,consumo:0};
-      agrupadoA[key].consumo+=porDia[f].consumo;
-    });
-    arr=Object.values(agrupadoA).sort(function(a,b){return a.sortKey.localeCompare(b.sortKey);});
+    // Nivel año: siempre el acumulado "oficial" (última lectura_e5 del año −
+    // arranque), no la suma de los repartos por día — así nunca contradice
+    // la tarjeta de resumen de arriba.
+    arr=años.map(function(a){return {label:String(a),sortKey:String(a),key:a,consumo:_aguaPozoAcumuladoAnio(a)};})
+      .sort(function(a,b){return a.sortKey.localeCompare(b.sortKey);});
   } else if(grupoPor==='mes'){
     var agrupadoM={};
     Object.keys(porDia).forEach(function(f){
