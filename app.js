@@ -14582,6 +14582,21 @@ function syncSupabase(){
   var fechaMin=new Date(Date.now()-90*86400000).toISOString().slice(0,10);
   supaFetch('agua_lecturas','GET',null,'fecha=gte.'+fechaMin+'&order=fecha.desc').then(function(rows){
     if(rows&&rows.length){AGUA_LECTURAS=rows;saveDB('agua_lecturas',AGUA_LECTURAS);}
+    // La ventana de 90 días de arriba alcanza para el balance diario normal,
+    // pero la gráfica del Pozo necesita ver TODO el año (ene-dic) para repartir
+    // bien los trimestres -- así que aparte se trae, fusionado (sin pisar lo ya
+    // cargado), el histórico completo de filas que sí tengan lectura_e5 (son
+    // pocas: una por captura/trimestre del pozo, no una por día).
+    supaFetch('agua_lecturas','GET',null,'lectura_e5=not.is.null&order=fecha.asc').then(function(rowsPozo){
+      if(rowsPozo&&rowsPozo.length){
+        rowsPozo.forEach(function(r){
+          var idx=AGUA_LECTURAS.findIndex(function(l){return l.id===r.id;});
+          if(idx>=0) AGUA_LECTURAS[idx]=r; else AGUA_LECTURAS.push(r);
+        });
+        AGUA_LECTURAS.sort(function(a,b){return a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0;});
+        saveDB('agua_lecturas',AGUA_LECTURAS);
+      }
+    }).catch(function(){});
   }).catch(function(){});
   // Sync listas_config desde Supabase
   supaFetch('listas_config','GET',null,'').then(function(rows){
