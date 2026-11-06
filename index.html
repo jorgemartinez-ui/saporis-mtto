@@ -236,7 +236,7 @@ tr:nth-child(even) td{background:#F8FAFC}
 </script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="app.js?v=20261105a" defer></script>
+<script src="app.js?v=20261104k" defer></script>
 
 <style id="lup-css">
 .lup-doc{background:#fff;border:2px solid #1a3c5e;border-radius:10px;overflow:hidden;margin:12px;font-family:Arial,sans-serif}
@@ -1259,6 +1259,9 @@ tr:nth-child(even) td{background:#F8FAFC}
       <button class="btn btn-primary" style="flex:1;padding:16px" onclick="showAguaDiario()">📅 Consumo diario</button>
       <button class="btn btn-gray" style="flex:1;padding:16px" onclick="showAguaMensual()">📊 Consumo mensual</button>
     </div>
+    <div style="display:flex;gap:10px;margin-top:10px">
+      <button class="btn" style="flex:1;padding:16px;background:#0c4a6e;color:#fff" onclick="showAguaPozo()">🚰 Pozo</button>
+    </div>
   </div>
 </div>
 <div id="screen-agua-diario" class="screen">
@@ -1274,6 +1277,13 @@ tr:nth-child(even) td{background:#F8FAFC}
     <div><div class="topbar-title">💧 Agua</div><div class="topbar-sub">Consumo mensual</div></div>
   </div>
   <div class="scroll-content" style="padding:14px" id="agua-mensual-content"></div>
+</div>
+<div id="screen-agua-pozo" class="screen">
+  <div class="topbar">
+    <button class="topbar-back" onclick="showAgua()">←</button>
+    <div><div class="topbar-title">🚰 Pozo</div><div class="topbar-sub">Consumo vs. contrato (25,000 m³/año)</div></div>
+  </div>
+  <div class="scroll-content" style="padding:14px" id="agua-pozo-content"></div>
 </div>
 <div id="screen-gas" class="screen">
   <div class="topbar">

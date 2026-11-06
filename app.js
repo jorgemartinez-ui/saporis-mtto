@@ -2253,7 +2253,6 @@ function renderPM03(){
         +'<span class="badge badge-'+(p.estado||'abierta')+'">'+(p.estado||'abierta')+'</span>'
         +(liberada?'<span class="badge" style="background:#16a34a;color:#fff;font-size:10px">✅ Liberada</span>':'')
         +(p.estado==='afectada'?'<span class="badge" style="background:#7f1d1d;color:#fff;font-size:10px">🔒 Bloqueada</span>':'')
-        +pm3HorasBadgeHTML(p)
         +'</div></div>'
         +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+'</div>'
         +'<div style="font-size:12px;color:var(--txt2)">'+(p.componente||'')+' — '+(p.actividad||'')+'</div>'
@@ -2401,7 +2400,7 @@ function _renderDetallePM03(id,p){
     bannerRepro='<div style="background:#fef2f2;border:2px solid #dc2626;border-radius:14px;padding:12px;margin-bottom:12px;font-size:13px;color:#7f1d1d;font-weight:700">🔒 Semana '+p.semana+' no ejecutada a tiempo — esta PM03 quedó bloqueada (se movió una copia con sus datos a la semana actual). Solo el superusuario puede modificarla.</div>';
   }
 
-  document.getElementById('detalle-content').innerHTML=bannerRepro+`<div class="card"><div class="card-title">${p.esInspeccion?'✅ Inspección de Turno':'📅 '+p.linea}</div>${row('🔩 Componente',p.componente)}${row('🔧 Actividad',p.actividad)}${(function(){var _h=pm3HorasEstimadas(p);return row('⏱ Tiempo estimado de paro',_h!=null?_h+' h':'Sin tiempo (el protocolo no tiene horas)');})()}${row('📅 Semana',p.semana?p.semana+' / '+p.año:'Sin programar')}${row('👤 Responsable de ejecutar',p.tecnicoNombre||'Sin asignar')}${row('🧑‍💼 Responsable de área',p.responsableAreaNombre||'Sin asignar')}${row('📋 Estado',p.estado||'abierta')}${p.reprogramadaPor?row('🔁 Reprogramada por',p.reprogramadaPor+(p.reprogramadaTs?' — '+fmtDateTime(p.reprogramadaTs):'')):''}${p.notaReprogramacion?row('📝 Motivo reprogramación',p.notaReprogramacion):''}${p.reprogramadaDe?row('⬅️ Generada al reprogramar',p.reprogramadaDe):''}${p.reprogramadaA?row('➡️ Reprogramada a',p.reprogramadaA):''}${p.horaInicio?row('🕐 Inicio',p.horaInicio):''}${p.horaFin?row('🕐 Fin',p.horaFin):''}${p.horaInicio&&p.horaFin?row('⏱️ Tiempo',diffMin(p.horaInicio,p.horaFin)+' min'):''}</div>
+  document.getElementById('detalle-content').innerHTML=bannerRepro+`<div class="card"><div class="card-title">${p.esInspeccion?'✅ Inspección de Turno':'📅 '+p.linea}</div>${row('🔩 Componente',p.componente)}${row('🔧 Actividad',p.actividad)}${row('📅 Semana',p.semana?p.semana+' / '+p.año:'Sin programar')}${row('👤 Responsable de ejecutar',p.tecnicoNombre||'Sin asignar')}${row('🧑‍💼 Responsable de área',p.responsableAreaNombre||'Sin asignar')}${row('📋 Estado',p.estado||'abierta')}${p.reprogramadaPor?row('🔁 Reprogramada por',p.reprogramadaPor+(p.reprogramadaTs?' — '+fmtDateTime(p.reprogramadaTs):'')):''}${p.notaReprogramacion?row('📝 Motivo reprogramación',p.notaReprogramacion):''}${p.reprogramadaDe?row('⬅️ Generada al reprogramar',p.reprogramadaDe):''}${p.reprogramadaA?row('➡️ Reprogramada a',p.reprogramadaA):''}${p.horaInicio?row('🕐 Inicio',p.horaInicio):''}${p.horaFin?row('🕐 Fin',p.horaFin):''}${p.horaInicio&&p.horaFin?row('⏱️ Tiempo',diffMin(p.horaInicio,p.horaFin)+' min'):''}</div>
   ${(p.origenPM02||p.origenOT||_pm3OrigenIdDesdeTexto(p.actividad))?(function(){
     var origenId=p.origenPM02||p.origenOT||_pm3OrigenIdDesdeTexto(p.actividad);
     var o2=ORDENES.find(function(x){return x.id===origenId;});
@@ -2599,7 +2598,7 @@ function confirmarReprogramarDesdeDetalle(id){
   fetch(SUPA_URL+'/rest/v1/pm03_plan?id=eq.'+id,{
     method:'PATCH',
     headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},
-    body:JSON.stringify({semana:p.semana,estado:'abierta',nota_reprogramacion:nota,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null})
+    body:JSON.stringify({semana:p.semana,estado:'abierta',estado_flujo:p.estadoFlujo,nota_reprogramacion:nota,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null})
   }).catch(function(){savePM03Supa(p);});
   // Cerrar modal y regresar a la lista
   var m=document.querySelector('.modal-sheet');if(m)m.remove();
@@ -2648,9 +2647,7 @@ function abrirCierrePM03(id){
   var actHTML = '';
   if(proto && proto.actividades){
     actHTML = '<div style="margin-bottom:16px">'
-      +'<div style="font-size:.82rem;font-weight:800;color:#1a3c5e;text-transform:uppercase;margin-bottom:6px">📋 '+proto.codigo+' — Actividades'
-      +(function(){var _h=pm3HorasProtocolo(proto);return '<span style="margin-left:8px;font-size:.75rem;font-weight:700;text-transform:none;color:'+(_h!=null?'#0369a1':'#9ca3af')+'">⏱ '+(_h!=null?('Tiempo estimado de paro: '+_h+' h'):'Sin tiempo')+'</span>';})()
-      +'</div>';
+      +'<div style="font-size:.82rem;font-weight:800;color:#1a3c5e;text-transform:uppercase;margin-bottom:6px">📋 '+proto.codigo+' — Actividades</div>';
 
     proto.actividades.forEach(function(a){
       var curA = p.actividadesEstado[a.id]||'';
@@ -2682,7 +2679,7 @@ function abrirCierrePM03(id){
         +(a.comoSeHace?(
           '<div style="margin:-4px 0 8px">'
           +'<span onclick="pm3ToggleComoSeHace('+a.id+')" id="pm3-como-lbl-'+a.id+'" style="font-size:.75rem;font-weight:700;color:#1d4ed8;cursor:pointer">📖 Cómo se hace ▴</span>'
-          +'<div id="pm3-como-'+a.id+'" style="display:block;background:#eff6ff;border-radius:8px;padding:8px;margin-top:6px;font-size:.78rem;color:#1e3a8a;white-space:pre-wrap;line-height:1.4">'+htmlMiniaturasImg(a.comoSeHace)+'</div>'
+          +'<div id="pm3-como-'+a.id+'" style="display:block;background:#eff6ff;border-radius:8px;padding:8px;margin-top:6px;font-size:.78rem;color:#1e3a8a;white-space:pre-wrap;line-height:1.4">'+a.comoSeHace+'</div>'
           +'</div>'
         ):'')
 
@@ -5510,7 +5507,6 @@ function aplicarFiltrosPendientes(){updatePendChart();
           <span class="badge badge-${p.estado||'abierta'}">${p.estado||'abierta'}</span>
           ${!p.tecnicoId?'<span class="badge" style="background:#FFF9C4;color:#F57F17">⚠️ Sin asignar</span>':''}
           ${p.estado==='afectada'?'<span class="badge" style="background:#7f1d1d;color:#fff">🔒 Bloqueada</span>':''}
-          ${pm3HorasBadgeHTML(p)}
         </div>
       </div>
       <div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">${p.linea}</div>
@@ -5759,7 +5755,7 @@ function renderMisOrdenes(){
         return '<div class="ot-card pm03" onclick="showDetallePM03(\''+p.id+'\')" style="border-left:4px solid '+col+'">'
           +'<div style="display:flex;justify-content:space-between;margin-bottom:4px">'
           +'<span style="font-size:11px;font-weight:700;color:'+col+'">'+pm3FolioHTML(p)+'</span>'
-          +'<div style="display:flex;gap:4px;flex-wrap:wrap"><span class="badge" style="background:'+col+';color:#fff">'+flujoLabel+'</span>'+pm3HorasBadgeHTML(p)+'</div></div>'
+          +'<span class="badge" style="background:'+col+';color:#fff">'+flujoLabel+'</span></div>'
           +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800;margin:2px 0 4px">'+p.linea+'</div>'
           +'<div style="font-size:12px;color:var(--txt2)">Sem '+p.semana+' · '+(p.tecnicoNombre||'—')+'</div>'
           +'<div style="margin-top:8px;display:flex;gap:6px">'
@@ -14587,6 +14583,12 @@ function syncSupabase(){
   supaFetch('agua_lecturas','GET',null,'fecha=gte.'+fechaMin+'&order=fecha.desc').then(function(rows){
     if(rows&&rows.length){AGUA_LECTURAS=rows;saveDB('agua_lecturas',AGUA_LECTURAS);}
   }).catch(function(){});
+  // Sync agua_pozo_lecturas (completo -- historico chico, una lectura por
+  // dia desde que arranco el seguimiento; la grafica anual necesita ver todo
+  // el ano, no solo los ultimos 90 dias)
+  supaFetch('agua_pozo_lecturas','GET',null,'order=fecha.asc').then(function(rows){
+    if(rows&&rows.length){AGUA_POZO_LECTURAS=rows;saveDB('agua_pozo_lecturas',AGUA_POZO_LECTURAS);}
+  }).catch(function(){});
   // Sync listas_config desde Supabase
   supaFetch('listas_config','GET',null,'').then(function(rows){
     if(rows&&rows.length){
@@ -15100,6 +15102,7 @@ function reintentarOrdenesSync(){
   var localPM03 = loadDB('pm03_plan',[]);
   var localInsp = loadDB('inspecciones',[]);
   var localAgua = loadDB('agua_lecturas',[]);
+  var localAguaPozo = loadDB('agua_pozo_lecturas',[]);
   var SIETE_DIAS = 7*24*60*60*1000;
   pendientes.forEach(function(item){
     if((Date.now()-item.ts) >= SIETE_DIAS) return; // máximo 7 días
@@ -15115,6 +15118,9 @@ function reintentarOrdenesSync(){
     } else if(item.table==='agua_lecturas'){
       var row = localAgua.find(function(x){return x.id===item.id;});
       if(row) syncAguaSupa(row);
+    } else if(item.table==='agua_pozo_lecturas'){
+      var rowPozo = localAguaPozo.find(function(x){return x.id===item.id;});
+      if(rowPozo) syncAguaPozoSupa(rowPozo);
     } else {
       var o = local.find(function(x){return x.id===item.id;});
       if(o) saveOrdenSupa(o);
@@ -15215,6 +15221,20 @@ function syncAguaSupa(row){
           showAlert('⚠️ Error al sincronizar registro de agua '+row.fecha,'error');
           var q=loadDB('supa_retry_queue',[]);
           q.push({table:'agua_lecturas',id:row.id,ts:Date.now()});
+          saveDB('supa_retry_queue',q);
+        }
+      });
+    }
+  });
+}
+function syncAguaPozoSupa(row){
+  supaFetch('agua_pozo_lecturas','POST',row,'').then(function(data){
+    if(data===null){
+      supaFetch('agua_pozo_lecturas','PATCH',row,'id=eq.'+row.id).then(function(data2){
+        if(data2===null){
+          showAlert('⚠️ Error al sincronizar lectura del pozo '+row.fecha,'error');
+          var q=loadDB('supa_retry_queue',[]);
+          q.push({table:'agua_pozo_lecturas',id:row.id,ts:Date.now()});
           saveDB('supa_retry_queue',q);
         }
       });
@@ -20597,41 +20617,6 @@ function getProtocoloPM03(linea,equipo,actividad){
 // nunca le cambia los requisitos a algo que el técnico ya venía llenando, solo
 // aplica desde la siguiente vez que se genere esa actividad. Si no tiene
 // snapshot, se consulta el protocolo vigente normal.
-// ================================================================
-// TIEMPO ESTIMADO DE PARO (suma de horas del protocolo) y MINIATURAS de imágenes
-// ================================================================
-// Suma las horas ("hrs") de los puntos de un protocolo. Devuelve null si el protocolo
-// no existe o ninguno de sus puntos tiene horas capturadas (se muestra "Sin tiempo").
-function pm3HorasProtocolo(proto){
-  if(!proto||!Array.isArray(proto.actividades)||!proto.actividades.length) return null;
-  var tot=0,con=0;
-  proto.actividades.forEach(function(a){
-    var h=parseFloat(a&&a.hrs);
-    if(!isNaN(h)&&h>0){tot+=h;con++;}
-  });
-  if(!con) return null;
-  return Math.round(tot*100)/100;
-}
-function pm3HorasEstimadas(p){
-  try{ return pm3HorasProtocolo(_pm3ProtocoloEfectivo(p)); }catch(e){ return null; }
-}
-// Badge "⏱ X h" para tarjetas de PM03 (o "⏱ Sin tiempo" si el protocolo no tiene horas)
-function pm3HorasBadgeHTML(p){
-  var h=pm3HorasEstimadas(p);
-  return h!=null
-    ?'<span class="badge" style="background:#e0f2fe;color:#0369a1" title="Tiempo estimado de paro (suma del protocolo)">⏱ '+h+' h</span>'
-    :'<span class="badge" style="background:#f3f4f6;color:#9ca3af" title="El protocolo no tiene horas capturadas — edítalo en Admin → Protocolos PM03">⏱ Sin tiempo</span>';
-}
-// Convierte los links de imagen (jpg/png/gif/webp) de un texto ya listo para HTML en
-// miniaturas que abren la imagen completa en otra pestaña. El texto alrededor no se toca.
-function htmlMiniaturasImg(html){
-  if(!html) return html;
-  return String(html).replace(/(?:📷\s*)?(https?:\/\/[^\s<>"']+?\.(?:jpe?g|png|gif|webp))(?=[\s<]|$)/gi,function(m,url){
-    return '<a href="'+url+'" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="display:inline-block;margin:4px 6px 4px 0;vertical-align:top">'
-      +'<img src="'+url+'" loading="lazy" alt="📷 Imagen" style="width:96px;height:96px;object-fit:cover;border-radius:8px;border:1px solid #cbd5e1;background:#fff;display:block"></a>';
-  });
-}
-
 function _pm3ProtocoloEfectivo(p){
   if(p&&p.protocoloSnapshot) return p.protocoloSnapshot;
   var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
@@ -21909,7 +21894,7 @@ function _protoFiltrarLista(){
       +'<div>'
       +'<div style="font-family:Nunito,sans-serif;font-size:15px;font-weight:800">'+p.linea+'</div>'
       +'<div style="font-size:12px;color:var(--txt2);margin-top:2px">🔧 '+( p.equipo||'—')+' · 📝 '+(p.equipo_secundario||'—')+'</div>'
-      +'<div style="font-size:11px;color:var(--txt3);margin-top:2px">'+( p.codigo||'REG-MTT-002.02')+' · <strong>'+(p.actividades?p.actividades.length:0)+'</strong> actividades'+(function(){var _h=pm3HorasProtocolo(p);return ' · <strong style="color:'+(_h!=null?'#0369a1':'#dc2626')+'">⏱ '+(_h!=null?(_h+' h'):'Sin tiempo')+'</strong>';})()+(p.activo===false?' · <span style="color:#dc2626;font-weight:700">Inactivo</span>':'')+'</div>'
+      +'<div style="font-size:11px;color:var(--txt3);margin-top:2px">'+( p.codigo||'REG-MTT-002.02')+' · <strong>'+(p.actividades?p.actividades.length:0)+'</strong> actividades'+(p.activo===false?' · <span style="color:#dc2626;font-weight:700">Inactivo</span>':'')+'</div>'
       +'</div>'
       +'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
       +'<button onclick="verProtocoloFormato(\''+p.id+'\')" style="padding:6px 12px;background:#eff6ff;border:none;border-radius:7px;font-size:.8rem;color:#1d4ed8;cursor:pointer">👁️ Ver</button>'
@@ -21998,7 +21983,7 @@ function verProtocoloFormato(id){
       +(a.comoSeHace?(
         '<div style="margin:-4px 0 8px">'
         +'<span onclick="_verProtoToggleComo('+i+')" id="verproto-como-lbl-'+i+'" style="font-size:.72rem;font-weight:700;color:#1d4ed8;cursor:pointer">📖 Cómo se hace ▴</span>'
-        +'<div id="verproto-como-'+i+'" style="display:block;background:#eff6ff;border-radius:8px;padding:8px;margin-top:6px;font-size:.76rem;color:#1e3a8a;white-space:pre-wrap;line-height:1.4">'+htmlMiniaturasImg(esc(a.comoSeHace))+'</div>'
+        +'<div id="verproto-como-'+i+'" style="display:block;background:#eff6ff;border-radius:8px;padding:8px;margin-top:6px;font-size:.76rem;color:#1e3a8a;white-space:pre-wrap;line-height:1.4">'+esc(a.comoSeHace)+'</div>'
         +'</div>'
       ):'')
 
@@ -22332,7 +22317,7 @@ function proto_actRowHTML(a,i){
     +'<select id="proto-act-esp-'+i+'" class="form-control" style="width:90px;padding:6px;font-size:.82rem">'
     +((LISTAS.tipos_actividad&&LISTAS.tipos_actividad.length)?LISTAS.tipos_actividad:DEFAULT_LISTAS.tipos_actividad).map(function(e){return '<option value="'+e+'"'+((a.tipo||a.esp)===e?' selected':'')+'>'+e+'</option>';}).join('')
     +'</select>'
-    +'<input type="number" id="proto-act-hrs-'+i+'" class="form-control" placeholder="Hrs" value="'+(a.hrs||1)+'" style="width:62px;padding:6px;font-size:.82rem" min="0" step="0.05">'
+    +'<input type="number" id="proto-act-hrs-'+i+'" class="form-control" placeholder="Hrs" value="'+(a.hrs||1)+'" style="width:55px;padding:6px;font-size:.82rem" min="0.5" step="0.5">'
     +'<button onclick="proto_removeAct('+i+')" style="padding:4px 8px;background:#fee2e2;border:none;border-radius:6px;color:#dc2626;cursor:pointer;font-size:.8rem">✕</button>'
     +'</div>'
     +'<textarea id="proto-act-como-'+i+'" class="form-control" placeholder="📖 Cómo se hace (paso a paso, opcional) — el técnico la verá al ejecutar" rows="2" style="margin:4px 0 4px 26px;width:calc(100% - 26px);padding:6px;font-size:.78rem">'+(a.comoSeHace||'')+'</textarea>'
@@ -22496,10 +22481,9 @@ function abrirEditorProtocolo(id, prefill){
       +'<div style="font-size:.8rem;font-weight:800;color:#1a3c5e;text-transform:uppercase">Actividades</div>'
       +'<button onclick="proto_addAct()" style="padding:5px 12px;background:#1a3c5e;color:#fff;border:none;border-radius:6px;font-size:.8rem;cursor:pointer">+ Agregar</button>'
       +'</div>'
-      +'<div id="proto-acts-list" oninput="proto_actualizarTotalHrs()">'
+      +'<div id="proto-acts-list">'
       +acts.map(function(a,i){return actRow(a,i);}).join('')
       +'</div>'
-      +'<div id="proto-total-hrs" style="margin-top:8px;font-size:.82rem;font-weight:800;color:#0369a1"></div>'
       +'<div style="display:flex;gap:10px;margin-top:16px">'
       +'<button onclick="var m=document.getElementById(\'modal-editor-proto\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
       +'<button onclick="guardarProtocolo(\''+( id||'')+'\')" style="flex:2;padding:13px;background:#1a3c5e;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar Protocolo</button>'
@@ -22507,26 +22491,7 @@ function abrirEditorProtocolo(id, prefill){
       +'</div>';
     document.body.appendChild(modal);
     window._protoActCount = acts.length;
-    proto_actualizarTotalHrs();
   });
-}
-
-// Total en vivo de horas del protocolo que se está editando (solo cuenta los renglones
-// con descripción, igual que guardarProtocolo).
-function proto_actualizarTotalHrs(){
-  var out=document.getElementById('proto-total-hrs');
-  var list=document.getElementById('proto-acts-list');
-  if(!out||!list) return;
-  var tot=0,n=0;
-  list.querySelectorAll('input[id^="proto-act-hrs-"]').forEach(function(inp){
-    var idx=inp.id.replace('proto-act-hrs-','');
-    var desc=document.getElementById('proto-act-desc-'+idx);
-    if(!desc||!desc.value.trim()) return;
-    var h=parseFloat(inp.value);
-    if(!isNaN(h)&&h>0){tot+=h;n++;}
-  });
-  tot=Math.round(tot*100)/100;
-  out.textContent='⏱ Tiempo de paro total: '+tot+' h'+(n?' ('+n+' puntos)':'');
 }
 
 function proto_addAct(){
@@ -22542,7 +22507,7 @@ function proto_addAct(){
     +'<select id="proto-act-esp-'+i+'" class="form-control" style="width:90px;padding:6px;font-size:.82rem">'
     +((LISTAS.tipos_actividad&&LISTAS.tipos_actividad.length)?LISTAS.tipos_actividad:DEFAULT_LISTAS.tipos_actividad).map(function(e){return '<option>'+e+'</option>';}).join('')
     +'</select>'
-    +'<input type="number" id="proto-act-hrs-'+i+'" class="form-control" placeholder="Hrs" value="1" style="width:62px;padding:6px;font-size:.82rem" min="0" step="0.05">'
+    +'<input type="number" id="proto-act-hrs-'+i+'" class="form-control" placeholder="Hrs" value="1" style="width:55px;padding:6px;font-size:.82rem" min="0.5" step="0.5">'
     +'<button onclick="proto_removeAct('+i+')" style="padding:4px 8px;background:#fee2e2;border:none;border-radius:6px;color:#dc2626;cursor:pointer;font-size:.8rem">✕</button>'
     +'</div>'
     +'<textarea id="proto-act-como-'+i+'" class="form-control" placeholder="📖 Cómo se hace (paso a paso, opcional) — el técnico la verá al ejecutar" rows="2" style="margin:4px 0 4px 26px;width:calc(100% - 26px);padding:6px;font-size:.78rem"></textarea>'
@@ -22563,13 +22528,11 @@ function proto_addAct(){
     +'</div>';
   list.appendChild(div);
   window._protoActCount=(window._protoActCount||0)+1;
-  if(typeof proto_actualizarTotalHrs==='function') proto_actualizarTotalHrs();
 }
 
 function proto_removeAct(i){
   var div=document.getElementById('proto-act-'+i);
   if(div) div.remove();
-  if(typeof proto_actualizarTotalHrs==='function') proto_actualizarTotalHrs();
 }
 
 function proto_toggleMedicion(i){
@@ -33903,6 +33866,12 @@ var AGUA_MEDIDORES=loadDB('agua_medidores',[]);
 var PLAN_ACTIVIDADES=loadDB('plan_actividades',[]);
 var COMPONENTES_EQUIPO=loadDB('componentes_equipo',[]);
 var AGUA_LECTURAS=loadDB('agua_lecturas',[]);
+// Lecturas del medidor del Pozo — tabla y arreglo totalmente aparte de
+// AGUA_LECTURAS/agua_lecturas a propósito: el pozo no entra al balance
+// entrada/proceso/CIP/red fábrica que ya existía y funcionaba, así que vive en
+// su propio mundo (su propia tabla en Supabase, su propio candado de "no debe
+// bajar", su propio reparto de huecos) para no arriesgar esos cálculos.
+var AGUA_POZO_LECTURAS=loadDB('agua_pozo_lecturas',[]);
 
 function showAgua(){
   detalleBackScreen='screen-servicios';
@@ -33913,6 +33882,12 @@ function showAguaDiario(){
   detalleBackScreen='screen-agua';
   showScreen('screen-agua-diario');
   renderAgua();
+}
+
+function showAguaPozo(){
+  detalleBackScreen='screen-agua';
+  showScreen('screen-agua-pozo');
+  renderAguaPozo();
 }
 
 function renderAgua(){
@@ -34078,6 +34053,11 @@ function abrirCapturaDiariaAgua(fecha){
     .sort(function(a,b){return a.orden-b.orden;});
   var salidas=AGUA_MEDIDORES.filter(function(m){return m.tipo==='salida'&&m.activo!==false;})
     .sort(function(a,b){return a.orden-b.orden;});
+  // Pozo: lectura aparte, su propia "lectura anterior" (no la del balance de red)
+  var anterioresPozo=AGUA_POZO_LECTURAS.filter(function(l){return l.fecha&&l.fecha<fecha;})
+    .sort(function(a,b){return a.fecha<b.fecha?1:-1;});
+  var lectAyerPozo=anterioresPozo[0]||null;
+  var lectHoyPozo=AGUA_POZO_LECTURAS.find(function(l){return l.fecha===fecha;})||{};
 
   var modal=document.createElement('div');
   modal.id='modal-agua-captura';
@@ -34106,6 +34086,14 @@ function abrirCapturaDiariaAgua(fecha){
       +'</div>';
   }).join('');
 
+  var valPozo=draft.pozo||lectHoyPozo.lectura||'';
+  var prevPozo=lectAyerPozo?(lectAyerPozo.lectura||0):0;
+  var campo_pozo='<div class="form-group"><label class="form-label">Medidor del Pozo</label>'
+    +'<div style="font-size:11px;color:#6b7280;margin-bottom:4px">Lectura anterior: '+prevPozo+' m³'+(lectAyerPozo?' (del '+lectAyerPozo.fecha+')':' (sin lecturas previas)')+'</div>'
+    +'<input type="number" class="form-control" id="agua-pozo" step="0.01" min="0" value="'+valPozo+'" placeholder="Lectura actual m³" style="padding:10px" oninput="_aguaGuardarBorradorActual()">'
+    +'<label style="display:flex;align-items:center;gap:6px;font-size:11px;color:#92400e;margin-top:4px;cursor:pointer"><input type="checkbox" id="agua-pozo-reset" style="margin:0"> ⚠️ Medidor reiniciado/reemplazado hoy (permite un valor menor)</label>'
+    +'</div>';
+
   modal.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;max-width:500px;margin:auto">'
     +'<div style="font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:14px">💧 Lectura de Agua — '+fecha+'</div>'
     +(hayHueco?'<div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:11px;color:#92400e">⚠️ No hay lectura de ayer ('+ayerStr+') — se compara contra la última real, del '+lectAyer.fecha+'.</div>':'')
@@ -34113,6 +34101,8 @@ function abrirCapturaDiariaAgua(fecha){
     +campos_e
     +'<div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:10px;background:#f1f5f9;padding:6px 10px;border-radius:6px;margin-top:4px">📤 SALIDAS (Medidores)</div>'
     +campos_s
+    +'<div style="font-size:12px;font-weight:700;color:#0c4a6e;margin-bottom:10px;background:#f0f9ff;padding:6px 10px;border-radius:6px;margin-top:4px">💧 POZO (lectura exclusiva — no afecta el balance de arriba)</div>'
+    +campo_pozo
     +'<div class="form-group"><label class="form-label">Notas</label>'
     +'<input type="text" class="form-control" id="agua-notas" value="'+(lectHoy.notas||'')+'" placeholder="Observaciones opcionales..." style="padding:10px"></div>'
     +'<div style="display:flex;gap:8px;margin-top:8px">'
@@ -34127,7 +34117,7 @@ var _aguaCaptureFecha='';
 function _aguaGuardarBorradorActual(){_aguaGuardarBorrador(_aguaCaptureFecha);}
 function _aguaGuardarBorrador(fecha){
   var draft={};
-  ['e1','e2','e3','e4','s1','s2','s3','s4'].forEach(function(k){
+  ['e1','e2','e3','e4','s1','s2','s3','s4','pozo'].forEach(function(k){
     var el=document.getElementById('agua-'+k);
     if(el) draft[k]=el.value;
   });
@@ -34298,6 +34288,40 @@ function guardarLecturaAgua(fecha){
   // Save to Supabase (avisa y encola reintento si falla — ver syncAguaSupa)
   syncAguaSupa(row);
 
+  // ── POZO: lectura y guardado totalmente aparte del balance de arriba ──
+  // Campo opcional: si se deja vacío, simplemente no se toca nada del pozo
+  // ese día (no bloquea ni afecta el guardado de las lecturas de red).
+  // Si el candado del pozo rechaza el valor, se guarda aviso aquí en vez de
+  // llamar showAlert ya mismo — si no, el "✅ Lectura guardada" de un par de
+  // líneas más abajo lo pisa en el mismo instante y nadie llega a leerlo.
+  var pozoAvisoFinal='';
+  var pozoStr=document.getElementById('agua-pozo')?.value;
+  if(pozoStr!==undefined && pozoStr!==null && String(pozoStr).trim()!==''){
+    var pozoVal=parseFloat(pozoStr)||0;
+    var anterioresPozo=AGUA_POZO_LECTURAS.filter(function(l){return l.fecha&&l.fecha<fecha;})
+      .sort(function(a,b){return a.fecha<b.fecha?1:-1;});
+    var lectAyerPozo=anterioresPozo[0]||null;
+    var pozoResetChk=document.getElementById('agua-pozo-reset');
+    if(lectAyerPozo && pozoVal<(lectAyerPozo.lectura||0) && !(pozoResetChk&&pozoResetChk.checked)){
+      pozoAvisoFinal=' — ⚠️ Pozo NO se guardó: '+pozoVal+' es menor a la lectura del '+lectAyerPozo.fecha+' ('+lectAyerPozo.lectura+'). Si el medidor se averió o se reemplazó, marca su casilla de reinicio.';
+    } else {
+      var gapDiasPozo=1;
+      if(lectAyerPozo&&lectAyerPozo.fecha){
+        gapDiasPozo=Math.round((new Date(fecha+'T12:00:00')-new Date(lectAyerPozo.fecha+'T12:00:00'))/86400000)||1;
+        if(gapDiasPozo<1) gapDiasPozo=1;
+      }
+      var notaPozo=(pozoResetChk&&pozoResetChk.checked)?'🔧 Medidor reiniciado/reemplazado (de '+(lectAyerPozo?lectAyerPozo.lectura:0)+' a '+pozoVal+')':null;
+      var pozoRow={
+        id:'AGUAPOZO-'+fecha, fecha:fecha, lectura:pozoVal, nota:notaPozo,
+        capturado_por:currentUser.nombre, capturado_ts:Date.now()
+      };
+      var idxPozo=AGUA_POZO_LECTURAS.findIndex(function(l){return l.fecha===fecha;});
+      if(idxPozo>=0) AGUA_POZO_LECTURAS[idxPozo]=pozoRow; else AGUA_POZO_LECTURAS.push(pozoRow);
+      saveDB('agua_pozo_lecturas',AGUA_POZO_LECTURAS);
+      syncAguaPozoSupa(pozoRow);
+    }
+  }
+
   // Generar una PM02 genérica "Toma de lecturas de agua del día", ya cerrada, con
   // las horas desde que se abrió el formulario (abrirCapturaDiariaAgua) hasta este
   // guardado — a petición de Jorge, para que esta tarea quede registrada y cuente
@@ -34310,7 +34334,7 @@ function guardarLecturaAgua(fecha){
   saveDB('agua_inicio_'+fecha, null); // ya se guardó, limpiar la marca de inicio
   _aguaLimpiarBorrador(fecha);
   document.getElementById('modal-agua-captura')?.remove();
-  showAlert('✅ Lectura guardada — Balance: '+(balance>0?'+':'')+balance+' m³');
+  showAlert('✅ Lectura guardada — Balance: '+(balance>0?'+':'')+balance+' m³'+pozoAvisoFinal,pozoAvisoFinal?'error':'success');
   renderAgua();
 }
 
@@ -34511,6 +34535,217 @@ function showAguaConsulta(tipo,filtroAnio,filtroMes,filtroSem,filtroDia,ultimos3
   wrap.innerHTML=html;
 }
 // ── FIN MÓDULO AGUA ───────────────────────────────────────────────
+
+// ================================================================
+// MÓDULO AGUA — POZO (exclusivo, contra meta de contrato)
+// ================================================================
+// Meta anual del contrato: hay que consumir 25,000 m³/año (ene-dic) o se
+// pierde el derecho a ese volumen aunque salga más caro — por eso esta
+// gráfica es aparte y tan directa: año → mes → día, con línea de meta/
+// promedio necesario en cada nivel, para ver de un vistazo si se va al ritmo.
+var AGUA_POZO_META_ANUAL=25000;
+
+// Mismo reparto de huecos que _aguaValoresPorDia(), pero solo para el pozo
+// (una sola lectura acumulada por día, no 8 campos de entrada/salida).
+function _aguaPozoValoresPorDia(){
+  var ordenadas=AGUA_POZO_LECTURAS.filter(function(l){return l&&l.fecha;})
+    .slice().sort(function(a,b){return a.fecha<b.fecha?-1:a.fecha>b.fecha?1:0;});
+  var mapa={};
+  for(var i=0;i<ordenadas.length-1;i++){
+    var prev=ordenadas[i],next=ordenadas[i+1];
+    var d0=new Date(prev.fecha+'T12:00:00'),d1=new Date(next.fecha+'T12:00:00');
+    var gapDias=Math.round((d1-d0)/86400000);
+    if(gapDias<=0) continue;
+    var delta=Math.max(0,(next.lectura||0)-(prev.lectura||0));
+    var estimado=gapDias>1;
+    for(var k=0;k<gapDias;k++){
+      var f=new Date(d0.getTime()+k*86400000).toISOString().slice(0,10);
+      mapa[f]={consumo:delta/gapDias,estimado:estimado};
+    }
+  }
+  return mapa;
+}
+
+function renderAguaPozo(){
+  var cont=document.getElementById('agua-pozo-content');
+  if(!cont) return;
+  var isAdmin=currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super'||currentUser.rol==='tecnico');
+  var hoy=new Date().toISOString().slice(0,10);
+  var lecturaHoy=AGUA_POZO_LECTURAS.find(function(l){return l.fecha===hoy;});
+
+  // Resumen del año actual contra la meta — siempre visible, sin importar
+  // en qué nivel de la gráfica (año/mes/día) se esté navegando.
+  var porDia=_aguaPozoValoresPorDia();
+  var añoActual=new Date().getFullYear();
+  var acumulado=0;
+  Object.keys(porDia).forEach(function(f){
+    if(new Date(f+'T12:00:00').getFullYear()===añoActual) acumulado+=porDia[f].consumo;
+  });
+  acumulado=Math.round(acumulado*100)/100;
+  var faltante=Math.round((AGUA_POZO_META_ANUAL-acumulado)*100)/100;
+  var inicioAño=new Date(añoActual,0,1),finAño=new Date(añoActual,11,31);
+  var diaDelAño=Math.round((new Date()-inicioAño)/86400000)+1;
+  var diasAño=Math.round((finAño-inicioAño)/86400000)+1;
+  var diasRestantes=Math.max(1,diasAño-diaDelAño+1);
+  var metaEsperadaHoy=AGUA_POZO_META_ANUAL/diasAño*diaDelAño;
+  var vaBien=acumulado>=metaEsperadaHoy;
+  var ritmoNecesario=Math.round((faltante>0?faltante/diasRestantes:0)*100)/100;
+
+  var html='<div style="background:'+(vaBien?'#14532d':'#7f1d1d')+';border-radius:14px;padding:16px;color:#fff;margin-bottom:14px">'
+    +'<div style="font-size:11px;font-weight:700;opacity:.9;text-transform:uppercase;letter-spacing:.05em">Acumulado '+añoActual+' (ene–dic)</div>'
+    +'<div style="font-size:30px;font-weight:900;margin:2px 0">'+acumulado.toLocaleString('es-MX')+' <span style="font-size:14px;font-weight:700">/ '+AGUA_POZO_META_ANUAL.toLocaleString('es-MX')+' m³</span></div>'
+    +'<div style="font-size:12px;opacity:.95">'+(vaBien?'✅ Vas al ritmo correcto para llegar a la meta':'⚠️ Vas atrás del ritmo necesario')+'</div>'
+    +(faltante>0?'<div style="font-size:12px;opacity:.9;margin-top:4px">Faltan '+faltante.toLocaleString('es-MX')+' m³ — se necesitan ~'+ritmoNecesario.toLocaleString('es-MX')+' m³/día el resto del año ('+diasRestantes+' días)</div>':'<div style="font-size:12px;opacity:.9;margin-top:4px">🎉 Meta anual ya cumplida</div>')
+    +'</div>';
+
+  if(isAdmin){
+    html+='<button onclick="abrirCapturaDiariaAgua(\''+hoy+'\')" style="width:100%;padding:10px;background:#0c4a6e;color:#fff;border:none;border-radius:8px;font-weight:700;margin-bottom:14px;cursor:pointer">'+(lecturaHoy?'✏️ Editar':'📋 Registrar')+' lectura de hoy del pozo (mismo formulario de Agua)</button>';
+  }
+  html+='<div id="agua-pozo-wrap"></div>';
+  cont.innerHTML=html;
+  showAguaPozoGrafica(null,null);
+}
+
+function showAguaPozoGrafica(filtroAnio,filtroMes){
+  var wrap=document.getElementById('agua-pozo-wrap');
+  if(!wrap) return;
+
+  var MESES_LABEL=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  var DIAS_LABEL=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  var METAS={'año':AGUA_POZO_META_ANUAL,'mes':AGUA_POZO_META_ANUAL/12,'dia':AGUA_POZO_META_ANUAL/365};
+
+  var porDia=_aguaPozoValoresPorDia();
+  var años=[...new Set(AGUA_POZO_LECTURAS.map(function(l){return new Date(l.fecha+'T12:00:00').getFullYear();}))].sort();
+  var selSt='padding:4px 8px;border:1px solid #d1d5db;border-radius:6px;font-size:11px;background:#fff;color:#374151;cursor:pointer';
+  var añoOpts='<option value="">Todos los años</option>'+años.map(function(a){return'<option value="'+a+'"'+(filtroAnio===a?' selected':'')+'>'+a+'</option>';}).join('');
+  var mesOpts='<option value="">Todos los meses</option>'+MESES_LABEL.map(function(m,i){return'<option value="'+(i+1)+'"'+(filtroMes===(i+1)?' selected':'')+'>'+m+'</option>';}).join('');
+
+  // Año → mes → día (sin nivel de semana, a diferencia de la gráfica de Agua
+  // normal — aquí Jorge pidió explícitamente que de mes se baje directo a día).
+  var grupoPor=!filtroAnio?'año':(!filtroMes?'mes':'dia');
+  var meta=METAS[grupoPor];
+
+  var arr=[];
+  if(grupoPor==='año'){
+    var agrupadoA={};
+    Object.keys(porDia).forEach(function(f){
+      var key=String(new Date(f+'T12:00:00').getFullYear());
+      if(!agrupadoA[key]) agrupadoA[key]={label:key,sortKey:key,key:+key,consumo:0};
+      agrupadoA[key].consumo+=porDia[f].consumo;
+    });
+    arr=Object.values(agrupadoA).sort(function(a,b){return a.sortKey.localeCompare(b.sortKey);});
+  } else if(grupoPor==='mes'){
+    var agrupadoM={};
+    Object.keys(porDia).forEach(function(f){
+      var d=new Date(f+'T12:00:00');
+      if(d.getFullYear()!==filtroAnio) return;
+      var key=d.getMonth()+1;
+      if(!agrupadoM[key]) agrupadoM[key]={label:MESES_LABEL[d.getMonth()],sortKey:String(key).padStart(2,'0'),key:key,consumo:0};
+      agrupadoM[key].consumo+=porDia[f].consumo;
+    });
+    arr=Object.values(agrupadoM).sort(function(a,b){return a.sortKey.localeCompare(b.sortKey);});
+  } else {
+    var ultimoDia=new Date(filtroAnio,filtroMes,0).getDate();
+    for(var dd=1;dd<=ultimoDia;dd++){
+      var d2=new Date(filtroAnio,filtroMes-1,dd);
+      var f2=d2.toISOString().slice(0,10);
+      var v=porDia[f2];
+      arr.push({label:DIAS_LABEL[d2.getDay()]+' '+dd,key:f2,sortKey:f2,consumo:v?v.consumo:null,estimado:v?v.estimado:false,sinDato:!v});
+    }
+  }
+
+  var maxVal=Math.max(meta,Math.max.apply(null,arr.map(function(a){return a.consumo||0;}))||0)*1.12;
+  var BAR_W=Math.max(26,Math.min(60,Math.floor(300/Math.max(arr.length,1))));
+  var GAP=6,PAD_L=8,PAD_R=8,PAD_T=28,PAD_B=36,pH=110;
+  var n=arr.length;
+  var cW=n*(BAR_W+GAP)-GAP;
+  var svgW=cW+PAD_L+PAD_R;
+  var svgH=pH+PAD_T+PAD_B;
+  var canDrillDown=(grupoPor==='año'||grupoPor==='mes');
+
+  var barsHtml='';
+  arr.forEach(function(a,i){
+    var x=PAD_L+i*(BAR_W+GAP);
+    var lbl=String(a.label).substring(0,7);
+    var clk='';
+    if(canDrillDown){
+      if(grupoPor==='año') clk=' onclick="showAguaPozoGrafica('+a.key+',null)" style="cursor:pointer"';
+      else clk=' onclick="showAguaPozoGrafica('+filtroAnio+','+a.key+')" style="cursor:pointer"';
+    }
+    if(a.sinDato){
+      barsHtml+='<g>'
+        +'<rect x="'+x+'" y="'+(PAD_T+pH-4)+'" width="'+BAR_W+'" height="4" rx="2" fill="#e5e7eb"/>'
+        +'<text x="'+(x+BAR_W/2)+'" y="'+(PAD_T+pH+14)+'" text-anchor="middle" font-size="8" fill="#6b7280" transform="rotate(-30,'+(x+BAR_W/2)+','+(PAD_T+pH+14)+')">'+lbl+'</text>'
+        +'</g>';
+    } else {
+      var bH=Math.max(3,Math.round((a.consumo||0)/maxVal*pH));
+      var y=PAD_T+pH-bH;
+      var color=a.estimado?'#9ca3af':'#0c4a6e';
+      barsHtml+='<g'+clk+'>'
+        +'<rect x="'+x+'" y="'+y+'" width="'+BAR_W+'" height="'+bH+'" rx="3" fill="'+color+'"/>'
+        +'<text x="'+(x+BAR_W/2)+'" y="'+(y-3)+'" text-anchor="middle" font-size="8" fill="'+color+'" font-weight="700">'+Math.round(a.consumo)+'</text>'
+        +'<text x="'+(x+BAR_W/2)+'" y="'+(PAD_T+pH+14)+'" text-anchor="middle" font-size="8" fill="#6b7280" transform="rotate(-30,'+(x+BAR_W/2)+','+(PAD_T+pH+14)+')">'+lbl+'</text>'
+        +'</g>';
+    }
+  });
+
+  // Línea de meta/promedio necesario en este nivel
+  var yMeta=PAD_T+pH-Math.round(meta/maxVal*pH);
+  var metaLineHtml='<line x1="'+PAD_L+'" y1="'+yMeta+'" x2="'+(PAD_L+cW)+'" y2="'+yMeta+'" stroke="#dc2626" stroke-width="1.5" stroke-dasharray="4,3"/>'
+    +'<text x="'+(PAD_L+cW)+'" y="'+(yMeta-4)+'" text-anchor="end" font-size="9" fill="#dc2626" font-weight="800">Meta: '+Math.round(meta*100)/100+'</text>';
+
+  var breadcrumb='';
+  if(filtroAnio) breadcrumb+='<span>'+filtroAnio+'</span>';
+  if(filtroMes) breadcrumb+=(breadcrumb?' › ':'')+MESES_LABEL[filtroMes-1];
+
+  var html='';
+  html+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;align-items:center">'
+    +'<select onchange="showAguaPozoGrafica(this.value?+this.value:null,null)" style="'+selSt+'">'+añoOpts+'</select>'
+    +'<select onchange="showAguaPozoGrafica('+(filtroAnio||'null')+',this.value?+this.value:null)" style="'+selSt+'">'+mesOpts+'</select>'
+    +(breadcrumb?'<span style="font-size:11px;color:#0c4a6e;font-weight:700;background:#dbeafe;padding:3px 8px;border-radius:6px">'+breadcrumb+'</span>':'')
+    +'</div>';
+
+  if(!arr.length||arr.every(function(a){return a.sinDato;})){
+    html+='<div style="text-align:center;color:#9ca3af;padding:30px;background:#fff;border-radius:10px">Sin datos para el período seleccionado</div>';
+  } else {
+    html+='<div style="background:#fff;border-radius:10px;padding:12px;box-shadow:0 1px 4px rgba(0,0,0,.08);margin-bottom:10px;overflow-x:auto">'
+      +(canDrillDown?'<div style="font-size:10px;color:#9ca3af;margin-bottom:6px">Toca una barra para ver el siguiente nivel</div>':'')
+      +(grupoPor==='dia'?'<div style="font-size:9px;color:#9ca3af;margin-bottom:6px">🔲 Gris = sin lectura propia ese día, repartido de la lectura más cercana</div>':'')
+      +'<svg width="'+Math.max(svgW,300)+'" height="'+svgH+'" style="display:block;overflow:visible">'
+      +'<rect x="'+PAD_L+'" y="'+PAD_T+'" width="'+cW+'" height="'+pH+'" fill="#f9fafb" rx="4"/>'
+      +barsHtml+metaLineHtml+'</svg></div>';
+
+    html+='<div style="overflow-x:auto;margin-bottom:14px"><table style="width:100%;border-collapse:collapse;font-size:11px">'
+      +'<thead><tr style="background:#f1f5f9">'
+      +'<th style="padding:6px 8px;text-align:left;color:#374151">Período</th>'
+      +'<th style="padding:6px 8px;text-align:center;color:#0c4a6e">Consumo</th>'
+      +'<th style="padding:6px 8px;text-align:center;color:#374151">vs. meta</th>'
+      +'</tr></thead><tbody>';
+    var sumConsumo=0,sumMeta=0;
+    arr.forEach(function(a){
+      if(!a.sinDato){
+        sumConsumo+=a.consumo; sumMeta+=meta;
+        var dif=Math.round((a.consumo-meta)*100)/100;
+        html+='<tr style="border-bottom:1px solid #f3f4f6">'
+          +'<td style="padding:6px 8px;font-weight:700;color:#1a3c5e">'+a.label+'</td>'
+          +'<td style="padding:6px 8px;text-align:center;font-weight:700;color:#0c4a6e">'+Math.round(a.consumo)+' m³'+(a.estimado?' <span style="color:#9ca3af;font-weight:400">(est.)</span>':'')+'</td>'
+          +'<td style="padding:6px 8px;text-align:center;font-weight:700;color:'+(dif>=0?'#14532d':'#7f1d1d')+'">'+(dif>=0?'✅ +':'⚠️ ')+dif+'</td>'
+          +'</tr>';
+      } else {
+        html+='<tr style="border-bottom:1px solid #f3f4f6"><td style="padding:6px 8px;font-weight:700;color:#1a3c5e">'+a.label+'</td><td colspan="2" style="padding:6px 8px;text-align:center;color:#9ca3af">— sin lectura —</td></tr>';
+      }
+    });
+    var sumDif=Math.round((sumConsumo-sumMeta)*100)/100;
+    html+='<tr style="border-top:2px solid #cbd5e1;background:#f8fafc">'
+      +'<td style="padding:6px 8px;font-weight:800;color:#1a3c5e">Total</td>'
+      +'<td style="padding:6px 8px;text-align:center;font-weight:800;color:#0c4a6e">'+Math.round(sumConsumo)+' m³</td>'
+      +'<td style="padding:6px 8px;text-align:center;font-weight:800;color:'+(sumDif>=0?'#14532d':'#7f1d1d')+'">'+(sumDif>=0?'+':'')+sumDif+'</td>'
+      +'</tr>';
+    html+='</tbody></table></div>';
+  }
+  wrap.innerHTML=html;
+}
+// ── FIN MÓDULO AGUA — POZO ─────────────────────────────────────────
 
 // ================================================================
 // ADMIN — MEDIDORES DE AGUA
@@ -36760,7 +36995,7 @@ function verDetalleActividad(id){
     }
   } else {
     protoHtml=p.protocolo
-      ?htmlMiniaturasImg(escHtml(p.protocolo))
+      ?escHtml(p.protocolo)
       :'<span style="color:#9ca3af;font-style:italic">Sin protocolo definido</span>';
   }
   var tieneProc=actsMedicion.some(function(a){return a.medicion&&a.medicion.procedimiento;})||(!actsMedicion.length&&!esDetallado&&!!p.protocolo);
@@ -36773,7 +37008,6 @@ function verDetalleActividad(id){
     +'<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">'
     +'<span style="background:#f1f5f9;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700;color:#374151">'+(tiposLabel[p.tipo]||p.tipo||'General')+'</span>'
     +'<span style="background:#1e3a8a;color:#fff;border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700">⏱️ '+freqLbl+'</span>'
-    +(function(){var _h=pm3HorasProtocolo(getProtocoloPM03(p.linea,p.componente,p.descripcion));return '<span style="background:'+(_h!=null?'#e0f2fe':'#f3f4f6')+';color:'+(_h!=null?'#0369a1':'#9ca3af')+';border-radius:6px;padding:4px 10px;font-size:11px;font-weight:700">⏱ '+(_h!=null?('Paro: '+_h+' h'):'Sin tiempo')+'</span>';})()
     +'</div>'
     +'<div class="form-group"><label class="form-label">📄 Protocolo / Pasos</label>'
     +'<div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:12px;font-size:13px;color:#374151;white-space:pre-wrap;min-height:60px">'+protoHtml+'</div></div>'
