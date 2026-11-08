@@ -20604,12 +20604,22 @@ function getProtocoloPM03(linea,equipo,actividad){
 // Protocolo "efectivo" de una PM03: si esa PM03 ya tiene congelada una copia del
 // protocolo (ver protocoloSnapshot, guardada en guardarProtocolo cuando se edita
 // un protocolo mientras ya hay una PM03 abierta y con avance de esa misma
-// actividad), se usa esa copia tal cual estaba — así una edición al protocolo
-// nunca le cambia los requisitos a algo que el técnico ya venía llenando, solo
-// aplica desde la siguiente vez que se genere esa actividad. Si no tiene
-// snapshot, se consulta el protocolo vigente normal.
+// actividad), se usa esa copia tal cual estaba para el CHECKLIST (actividades,
+// código, etc.) — así una edición al protocolo nunca le cambia los pasos a algo
+// que el técnico ya venía llenando, solo aplica desde la siguiente vez que se
+// genere esa actividad.
+// Las FIRMAS REQUERIDAS son la excepción a propósito (a petición de Jorge):
+// siempre se leen del protocolo vigente, no de la copia congelada, para poder
+// corregir a quién le toca firmar sin esperar a la siguiente generación de la
+// actividad ni tener que tocar el checklist ya congelado. Si el protocolo ya
+// no existe (se borró), se usa como respaldo la firma que traía congelada.
 function _pm3ProtocoloEfectivo(p){
-  if(p&&p.protocoloSnapshot) return p.protocoloSnapshot;
+  if(p&&p.protocoloSnapshot){
+    var protoVigenteFirmas=getProtocoloPM03(p.linea,p.componente,p.actividad);
+    var firmasVigentes=(protoVigenteFirmas&&Array.isArray(protoVigenteFirmas.firmasRequeridas))
+      ?protoVigenteFirmas.firmasRequeridas:p.protocoloSnapshot.firmasRequeridas;
+    return Object.assign({},p.protocoloSnapshot,{firmasRequeridas:firmasVigentes});
+  }
   var proto=getProtocoloPM03(p.linea,p.componente,p.actividad);
   // PM03 sin protocolo definido (típicamente las que vienen de una PM02, de una sola
   // vez, y nunca van a tener un checklist formal) pero con firmas requeridas elegidas
