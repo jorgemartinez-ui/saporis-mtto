@@ -34792,8 +34792,14 @@ function showAguaPozoGrafica(filtroAnio,filtroMes){
   if(filtroAnio) breadcrumb+='<span>'+filtroAnio+'</span>';
   if(filtroMes) breadcrumb+=(breadcrumb?' › ':'')+MESES_LABEL[filtroMes-1];
 
+  // Botón "Atrás" para subir un nivel (día→mes→año) sin tener que usar los
+  // selects de año/mes ni salir de la pantalla (a petición de Jorge).
+  var atrasClk=filtroMes?('showAguaPozoGrafica('+filtroAnio+',null)'):(filtroAnio?'showAguaPozoGrafica(null,null)':'');
+  var atrasBtn=atrasClk?'<button onclick="'+atrasClk+'" style="padding:4px 10px;border:1px solid #0c4a6e;border-radius:6px;font-size:11px;background:#fff;color:#0c4a6e;font-weight:700;cursor:pointer">← Atrás</button>':'';
+
   var html='';
   html+='<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px;align-items:center">'
+    +atrasBtn
     +'<select onchange="showAguaPozoGrafica(this.value?+this.value:null,null)" style="'+selSt+'">'+añoOpts+'</select>'
     +'<select onchange="showAguaPozoGrafica('+(filtroAnio||'null')+',this.value?+this.value:null)" style="'+selSt+'">'+mesOpts+'</select>'
     +(breadcrumb?'<span style="font-size:11px;color:#0c4a6e;font-weight:700;background:#dbeafe;padding:3px 8px;border-radius:6px">'+breadcrumb+'</span>':'')
