@@ -506,6 +506,7 @@ function doLogin(){
   }
   const found=USERS.find(x=>x.username.toLowerCase()===u&&x.password===p&&x.rol!=='super');
   if(!found){errEl.textContent='Usuario o contraseña incorrectos.';errEl.classList.remove('hidden');return;}
+  if(found.activo===false){errEl.textContent='Esta cuenta fue desactivada. Contacta a un administrador.';errEl.classList.remove('hidden');return;}
   errEl.classList.add('hidden');
   currentUser=found;saveDB('session',{id:found.id,rol:found.rol});
   renderMenu();showScreen('screen-menu');
@@ -1473,7 +1474,10 @@ function _renderDetalleOrden(id,o){
   const canClose=(r==='tecnico'||r==='admin')&&o.estado==='abierta'&&!esAnomOperador;
   // Puede dar pre-cierre si: es anom operador Y (está abierta O fue rechazada y volvió a abierta)
   const canPreCierre=(r==='tecnico'||r==='admin'||r==='super')&&o.estado==='abierta'&&esAnomOperador;
-  const canCierreAdmin=(r==='admin'||r==='super')&&(o.estado==='abierta'||o.estado==='pre_cierre');
+  // Forzar cierre saltándose el pre-cierre del técnico y/o la aprobación de quien
+  // levantó la anormalidad: a petición de Jorge, esto queda SOLO para "super" —
+  // un admin ya no debe poder saltarse ese paso.
+  const canCierreAdmin=(r==='super')&&(o.estado==='abierta'||o.estado==='pre_cierre');
   const canCloseAzul=r==='operador'&&o.colorOT==='azul'&&o.levantadoId===currentUser.id&&o.estado!=='cerrada'&&o.estado!=='pre_cierre';
   const canAprobar=(r!=='admin'&&r!=='tecnico'||r==='super')&&estaEnPreCierre&&(o.levantadoId===currentUser.id||r==='super');
   const canReasign=(r==='tecnico'||r==='admin'||r==='lider'||r==='super')&&o.estado==='abierta';
@@ -1579,7 +1583,7 @@ function _renderDetalleOrden(id,o){
       ${canAprobar?`<div style="display:flex;gap:8px"><button class="btn btn-success" style="flex:1" onclick="aprobarCierre('${o.id}')">✅ Aprobar cierre</button><button class="btn" style="flex:1;background:#7f1d1d;color:#fff;border:none" onclick="rechazarCierre('${o.id}')">❌ Rechazar</button></div>`:''}
       ${estaEnPreCierre&&(r==='tecnico'||r==='admin')?`<div style="background:#f0e6ff;border-radius:10px;padding:10px;font-size:13px;color:#7c3aed;font-weight:600">⏳ Esperando aprobación del operador que levantó esta orden</div>`:''}
       ${o.motivoRechazo?`<div style="background:#fee2e2;border-radius:10px;padding:10px;font-size:13px;color:#dc2626;font-weight:600">❌ Rechazado por ${o.rechazadoPor}: ${o.motivoRechazo}</div>`:''}
-      ${canCierreAdmin&&!canClose?`<button class="btn btn-success" onclick="abrirCierre('${o.id}')">✅ Forzar Cierre (Admin)</button>`:''}
+      ${canCierreAdmin&&!canClose?`<button class="btn btn-success" onclick="abrirCierre('${o.id}')">✅ Forzar Cierre (Super)</button>`:''}
       ${o.estado==='conciliar'&&(r==='admin'||r==='super')?`<button class="btn btn-primary" style="background:#7c3aed;color:#fff;border:none" onclick="abrirGestorPM02('${o.id}')">✏️ Modificar y Asignar</button>`:''}
       ${canCloseAzul?`<button class="btn btn-azul-ot" onclick="abrirCierreAzul('${o.id}')">🔵 Marcar resuelta</button>`:''}
       ${canReasign?`<button class="btn btn-warning" onclick="abrirReasignacion('${o.id}')">🔄 Reasignar</button>`:''}
@@ -4330,8 +4334,9 @@ function renderAdminUs(cont){
   }).sort(function(a,b){return a.nombre.localeCompare(b.nombre,'es');});
 
   var rows=usersVisible.map(function(u){
-    return '<tr>'
-      +'<td style="font-weight:600">'+u.nombre+'</td>'
+    var inactivo=(u.activo===false);
+    return '<tr'+(inactivo?' style="opacity:.55"':'')+'>'
+      +'<td style="font-weight:600">'+u.nombre+(inactivo?' <span style="font-size:10px;font-weight:700;color:#b91c1c;background:#fee2e2;padding:1px 6px;border-radius:5px;margin-left:4px">Inactivo</span>':'')+'</td>'
       +'<td style="font-size:12px;color:#6b7280">'+u.username+'</td>'
       +'<td><span class="badge badge-'+u.rol+'">'+(roleLabel[u.rol]||u.rol)+'</span></td>'
       +'<td><button onclick="verDetalleUsuario(\''+u.id+'\')" style="padding:3px 8px;background:#f3f4f6;border:none;border-radius:6px;font-size:.75rem;cursor:pointer">✏️</button></td>'
@@ -4384,11 +4389,13 @@ function verDetalleUsuario(uid){
   var u=USERS.find(function(x){return x.id===uid;});
   if(!u) return;
   var roleLabel={operador:'Operador',lider:'Líder Área',tecnico:'Técnico',admin:'Administrador',lider_calidad:'Líder Calidad',inspector_calidad:'Inspector Calidad',administrativo:'Administrativo',supply:'Supply'};
+  var esUnoMismo=(currentUser&&u.id===currentUser.id);
+  var inactivo=(u.activo===false);
   var modal=document.createElement('div');
   modal.id='modal-usuario';
   modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
   modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box">'
-    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#1a3c5e;margin-bottom:16px">✏️ '+u.nombre+'</div>'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#1a3c5e;margin-bottom:16px">✏️ '+u.nombre+(inactivo?' <span style="font-size:11px;font-weight:700;color:#b91c1c;background:#fee2e2;padding:2px 8px;border-radius:6px">Inactivo</span>':'')+'</div>'
     +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">'
     +'<div><label style="font-size:.75rem;font-weight:700;color:#374151;display:block;margin-bottom:3px">Nombre completo</label>'
     +'<input type="text" id="eu-nombre" class="form-control" value="'+u.nombre+'" style="padding:10px"></div>'
@@ -4411,11 +4418,38 @@ function verDetalleUsuario(uid){
     +_opcionesRolesCustomHtml(u.rol)
     +'</select></div>'
     +'</div>'
+    +(esUnoMismo?'':'<div style="margin-bottom:10px">'
+      +(inactivo
+        ?'<button onclick="toggleActivoUsuario(\''+uid+'\')" style="width:100%;padding:11px;background:#ecfdf5;color:#047857;border:1px solid #a7f3d0;border-radius:11px;font-weight:700;cursor:pointer">✅ Reactivar usuario</button>'
+        :'<button onclick="toggleActivoUsuario(\''+uid+'\')" style="width:100%;padding:11px;background:#fef2f2;color:#b91c1c;border:1px solid #fecaca;border-radius:11px;font-weight:700;cursor:pointer">🚫 Desactivar usuario</button>')
+      +'</div>')
     +'<div style="display:flex;gap:10px">'
     +'<button onclick="var m=document.getElementById(\'modal-usuario\');if(m)m.remove()" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
     +'<button onclick="guardarEdicionUsuario(\'' + uid + '\')" style="flex:2;padding:13px;background:#1a3c5e;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">💾 Guardar cambios</button>'
     +'</div></div>';
   document.body.appendChild(modal);
+}
+
+// Desactiva o reactiva un usuario SIN borrarlo (a petición de Jorge): un usuario
+// desactivado ya no puede iniciar sesión ni aparece en los selectores para asignar
+// tareas nuevas, pero su nombre se sigue mostrando correctamente en todo el
+// historial/órdenes/PM03 donde ya participó (nunca se borra el registro).
+function toggleActivoUsuario(uid){
+  var u=USERS.find(function(x){return x.id===uid;});
+  if(!u) return;
+  if(currentUser&&u.id===currentUser.id){showAlert('No puedes desactivar tu propia cuenta','error');return;}
+  if(u.rol==='super'){showAlert('No se puede desactivar al superusuario','error');return;}
+  var vaAQuedarActivo=(u.activo===false);
+  var msg=vaAQuedarActivo
+    ?('¿Reactivar a '+u.nombre+'? Podrá iniciar sesión de nuevo.')
+    :('¿Desactivar a '+u.nombre+'? No podrá iniciar sesión ni se le podrán asignar tareas nuevas. Su historial no se borra.');
+  if(!confirm(msg)) return;
+  u.activo=vaAQuedarActivo;
+  saveDB('users',USERS);
+  supaUpsert('usuarios',{id:u.id,activo:u.activo}).catch(function(){});
+  var m=document.getElementById('modal-usuario');if(m)m.remove();
+  showAlert(vaAQuedarActivo?'✅ Usuario reactivado':'🚫 Usuario desactivado');
+  renderAdminUs(document.getElementById('admin-content'));
 }
 
 function guardarEdicionUsuario(uid){
@@ -4428,7 +4462,7 @@ function guardarEdicionUsuario(uid){
   var nuevaPass=document.getElementById('eu-pass-nueva').value.trim();
   if(nuevaPass) u.password=nuevaPass;
   saveDB('users',USERS);
-  supaUpsert('usuarios',{id:u.id,username:u.username,nombre:u.nombre,password_hash:u.password,rol:u.rol,activo:true,email:u.email||null}).catch(function(){});
+  supaUpsert('usuarios',{id:u.id,username:u.username,nombre:u.nombre,password_hash:u.password,rol:u.rol,activo:u.activo!==false,email:u.email||null}).catch(function(){});
   var m=document.getElementById('modal-usuario');if(m)m.remove();
   showAlert('✅ Usuario actualizado');
   renderAdminUs(document.getElementById('admin-content'));
