@@ -2150,7 +2150,7 @@ function showPM03Filtros(){
 
 function renderPM03(){
   var cont=document.getElementById('pm03-content');
-  if(mostrarEstadoCargaSiAplica(cont,'pm03',PM03_PLAN.length>0)) return;
+  if(mostrarEstadoCargaSiAplica(cont,'pm03')) return;
   var r=currentUser.rol;
   var isAdmin=r==='admin'||r==='super';
   var isTec=r==='tecnico';
@@ -2302,11 +2302,19 @@ function showDetallePM03(id){
 // había nada todavía (p[campo]===undefined, nunca visto). Llama a cb(huboCambio)
 // al terminar, para que quien la invoque decida si hace falta refrescar la vista.
 function _pm3FetchFirmasPM03(id,cb){
-  var p=PM03_PLAN.find(function(x){return x.id===id;});
-  if(!p){if(cb)cb(false);return;}
+  if(!PM03_PLAN.find(function(x){return x.id===id;})){if(cb)cb(false);return;}
   supaFetch('pm03_plan','GET',null,'id=eq.'+id+'&select=id,fotos,firma_img_operador,firma_img_lider,firma_img_calidad,firma_img_admin').then(function(rows){
     var huboCambio=false;
-    if(rows){
+    // OJO: volver a buscar el objeto AQUÍ, ya que llegó la respuesta — NO reusar
+    // una referencia capturada antes del fetch. Mientras esta consulta puntual
+    // estaba en vuelo (puede tardar unos cientos de ms) pudo correr también un
+    // sync masivo (al entrar, o el periódico), que RECONSTRUYE PM03_PLAN con
+    // objetos nuevos. Si se seguía mutando la referencia vieja, la firma se
+    // guardaba en un objeto ya huérfano (fuera del arreglo real) y se perdía en
+    // silencio al hacer saveDB — esto era justo el bug de "a veces sí, a veces
+    // no se pone verde tenue, y a veces hasta se revierte solo" que reportó Jorge.
+    var p=PM03_PLAN.find(function(x){return x.id===id;});
+    if(rows&&p){
       _pm3ImgsFetched[id]=true;
       if(rows[0]){
         var r=rows[0];
@@ -14589,7 +14597,7 @@ function saveListas(){
 //      revisa tu internet" con un botón para reintentar manualmente.
 // Para agregarlo a una pantalla nueva en el futuro: 1) registrar la pantalla en
 // SYNC_PANTALLAS_CONFIG; 2) al INICIO de su función de render, llamar a
-// mostrarEstadoCargaSiAplica(cont,'clave',datosYaDisponibles) y detenerse si
+// mostrarEstadoCargaSiAplica(cont,'clave') y detenerse si
 // devuelve true; 3) en su sync, avisar éxito/fallo con
 // _syncPantallaExito('clave') / _syncPantallaFallo('clave', reintentarFn).
 var SYNC_ESTADO={};              // clave -> {estado:'cargando'|'ok'|'error', intentos:0}
@@ -14621,9 +14629,15 @@ function reintentarCargaPantalla(clave){
   _syncPantallaRerenderSiVisible(clave);
   syncSupabase();
 }
-function mostrarEstadoCargaSiAplica(cont,clave,datosYaDisponibles){
+// NOTA: se decidió a propósito NO saltar este "Cargando…" solo porque ya
+// hubiera datos viejos guardados en el teléfono de una sesión anterior —
+// eso fue lo que causó que Jorge entrara, viera la pantalla vacía/desactualizada
+// sin ningún aviso, y que segundos después se actualizara sola sin explicación.
+// Mientras no haya confirmación de la sincronización DE ESTA sesión, siempre se
+// avisa (cargando o, si falla, sin conexión), aunque haya algo cacheado.
+function mostrarEstadoCargaSiAplica(cont,clave){
   var est=SYNC_ESTADO[clave];
-  if((est&&est.estado==='ok')||datosYaDisponibles) return false;
+  if(est&&est.estado==='ok') return false;
   if(est&&est.estado==='error'){
     cont.innerHTML='<div class="card" style="text-align:center;padding:36px 16px">'
       +'<div style="font-size:32px;margin-bottom:10px">⚠️</div>'
@@ -15042,6 +15056,11 @@ function syncSupabase(){
     });
     saveDB('pm03_plan',PM03_PLAN);
     _pm3AplicarCortes();
+    // Marcar éxito ANTES de volver a pintar la pantalla -- si no, renderPM03()
+    // se ejecuta mientras SYNC_ESTADO.pm03 todavía dice "cargando" y se queda
+    // pintado el mensaje de "Cargando…" para siempre aunque los datos ya
+    // llegaron bien (quedaba sin repintarse una segunda vez).
+    _syncPantallaExito('pm03');
     // Igual que en el sync de 'ordenes': si "Mis Pendientes" está abierta ahora
     // mismo, refrescar para que las PM03 recién sincronizadas (incluido el botón
     // de filtro PM03) se vean sin que el usuario tenga que tocar un filtro.
@@ -15055,7 +15074,6 @@ function syncSupabase(){
     // "Avance PM" como 100% falso cuando en realidad todavía no se ha cargado.
     window._dorSyncPM03Listo=true;
     if(document.getElementById('dor-content')) renderDOR();
-    _syncPantallaExito('pm03');
   }).catch(function(){_syncPantallaFallo('pm03',_sincronizarPM03Plan);});
   }
   _sincronizarPM03Plan();
