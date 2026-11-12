@@ -5494,7 +5494,7 @@ function confirmarReprogPM03(id){
 }
 
 // ─── aplicarFiltrosPendientes (full version) ───
-function aplicarFiltrosPendientes(){updatePendChart();
+function aplicarFiltrosPendientes(){
   const lDiv=document.getElementById('mis-ordenes-list');
   const r=currentUser.rol;
   const isAdmin=r==='admin'||r==='super';
@@ -5504,6 +5504,17 @@ function aplicarFiltrosPendientes(){updatePendChart();
   const añoFiltro=parseInt(document.getElementById('fp-año')?.value)||currentYear();
   // Calcular semanas del mes si se seleccionó mes y no semana específica
   const semsDelMes = (mesFiltro>0&&!semFiltro) ? getWeeksInMonth(añoFiltro,mesFiltro) : null;
+  // Sin semana ni mes elegidos (vista por defecto): no mostrar PM03 de semanas
+  // futuras todavía no vigentes — solo la semana actual y anteriores. Se
+  // calcula aquí arriba (antes solo existía dentro del bloque de PM03) para
+  // poder pasarle exactamente el mismo criterio a la gráfica de Cumplimiento.
+  const soloDefecto=!semsDelMes&&semFiltro===0;
+  // La gráfica de "Cumplimiento PM" debe reflejar EXACTAMENTE lo mismo que ve
+  // el técnico (o lo que el admin filtró por técnico) en esta misma lista —
+  // antes tenía su propio cálculo aparte, que no aplicaba el mismo criterio de
+  // semana por defecto ni excluía las PM03 reprogramadas, así que mostraba
+  // números de todo el año aunque la lista de abajo estuviera filtrada.
+  updatePendChart(tecFiltro,añoFiltro,semFiltro,semsDelMes,soloDefecto);
 
   let ots=[...ORDENES].sort((a,b)=>b.ts-a.ts);
   if(r==='tecnico') ots=ots.filter(o=>o.tecnicoAsignado===currentUser.id);
@@ -5520,10 +5531,7 @@ function aplicarFiltrosPendientes(){updatePendChart();
 
   let pm03List=[];
   if(filtrosPend.tipo==='todas'||filtrosPend.tipo==='PM03'){
-    // Sin semana ni mes elegidos (vista por defecto): no mostrar PM03 de semanas
-    // futuras todavía no vigentes — solo la semana actual y anteriores.
-    // Si el admin elige explícitamente una semana o un mes, se respeta tal cual.
-    var soloDefecto=!semsDelMes&&semFiltro===0;
+    // (soloDefecto ya se calculó arriba, antes de la gráfica, con el mismo criterio)
     pm03List=[...PM03_PLAN].filter(p=>{
       if(p.año!==añoFiltro) return false;
       if(p.estado==='reprogramada') return false; // ya tiene su PM03 nueva en otra semana
@@ -15563,31 +15571,51 @@ function reloadKPIs(){
   }
 }
 
-function updatePendChart(){
+// Parámetros opcionales: cuando se llama desde aplicarFiltrosPendientes() se
+// le pasa EXACTAMENTE el mismo criterio (técnico, año, semana, semanas-del-mes
+// y "soloDefecto") que arma la lista de "Mis Pendientes" de abajo -- así la
+// gráfica de Cumplimiento siempre refleja lo mismo que ve el técnico (o lo que
+// el admin filtró por técnico), nunca el total de todo el año/toda la planta.
+// Si se llama sin parámetros, los recalcula leyendo los mismos controles.
+function updatePendChart(tecId,año,sem,semsDelMes,soloDefecto){
   var wrap = document.getElementById('pend-chart-wrap');
   if(!wrap) return;
-  var semSel = document.getElementById('fp-semana');
-  var añoSel = document.getElementById('fp-año');
-  var tecSel = document.getElementById('fpen-tecnico');
-  var sem = semSel ? parseInt(semSel.value)||0 : 0;
-  var año = añoSel ? parseInt(añoSel.value)||currentYear() : currentYear();
-  var tecId = tecSel ? tecSel.value : '';
-  
-  // Get PM03 matching filters
+  if(tecId===undefined){
+    var tecSel=document.getElementById('fpen-tecnico');
+    var semSel=document.getElementById('fp-semana');
+    var mesSel=document.getElementById('fp-mes');
+    var añoSel=document.getElementById('fp-año');
+    tecId=tecSel?tecSel.value:'';
+    sem=semSel?parseInt(semSel.value)||0:0;
+    año=añoSel?parseInt(añoSel.value)||currentYear():currentYear();
+    var mesFiltroLocal=mesSel?parseInt(mesSel.value)||0:0;
+    semsDelMes=(mesFiltroLocal>0&&!sem)?getWeeksInMonth(año,mesFiltroLocal):null;
+    soloDefecto=!semsDelMes&&sem===0;
+  }
+
+  // Get PM03 matching filters -- mismo criterio que pm03List en
+  // aplicarFiltrosPendientes: año, excluye reprogramadas, por defecto solo
+  // semana actual y anteriores (soloDefecto) salvo que se eligiera semana/mes,
+  // y el técnico (propio si es rol técnico, o el elegido por el admin).
   var r=currentUser.rol;
   var pm03List = PM03_PLAN.filter(function(p){
     if(p.esInspeccion) return false;
-    if(sem > 0 && p.semana !== sem) return false;
     if(p.año !== año) return false;
+    if(p.estado==='reprogramada') return false;
+    if(soloDefecto&&año===currentYear()&&p.semana>currentWeek()) return false;
+    if(semsDelMes&&!semsDelMes.includes(p.semana)) return false;
+    if(!semsDelMes&&sem>0&&p.semana!==sem) return false;
     if(tecId && p.tecnicoId !== tecId) return false;
     // For tecnico: only their assigned PM03
     if(r==='tecnico' && !tecId && p.tecnicoId!==currentUser.id && p.responsableAreaId!==currentUser.id) return false;
     return true;
   });
-  // Also include PM02 and PM04 for the chart
+  // Also include PM02 and PM04 for the chart -- mismo criterio de semana/mes
+  // que usa la lista para las OT (sin el límite de "soloDefecto", igual que allá).
   var otsList = ORDENES.filter(function(o){
     if(o.tipo!=='PM02'&&o.tipo!=='PM04') return false;
-    if(sem > 0 && o.semana !== sem) return false;
+    if(semsDelMes&&!semsDelMes.includes(o.semana)) return false;
+    if(!semsDelMes&&sem>0&&o.semana!==sem) return false;
     if(tecId && o.tecnicoAsignado !== tecId) return false;
     if(r==='tecnico' && !tecId && o.tecnicoAsignado!==currentUser.id) return false;
     return true;
