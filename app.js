@@ -2150,6 +2150,7 @@ function showPM03Filtros(){
 
 function renderPM03(){
   var cont=document.getElementById('pm03-content');
+  if(mostrarEstadoCargaSiAplica(cont,'pm03',PM03_PLAN.length>0)) return;
   var r=currentUser.rol;
   var isAdmin=r==='admin'||r==='super';
   var isTec=r==='tecnico';
@@ -14578,6 +14579,65 @@ function saveListas(){
   });
 }
 
+// ── Mecanismo genérico de "Cargando… / Sin conexión" para pantallas que
+// dependen de datos de Supabase (a petición de Jorge: ningún botón debe
+// quedarse mostrando información "en ceros" sin avisar cuando su
+// sincronización falla) ─────────────────────────────────────────────────────
+//   1) Mientras una pantalla todavía no tiene datos confirmados, pinta "Cargando…".
+//   2) Si la sincronización de esa pantalla falla, reintenta sola varias veces.
+//   3) Si después de varios intentos sigue sin poder, muestra "Sin conexión —
+//      revisa tu internet" con un botón para reintentar manualmente.
+// Para agregarlo a una pantalla nueva en el futuro: 1) registrar la pantalla en
+// SYNC_PANTALLAS_CONFIG; 2) al INICIO de su función de render, llamar a
+// mostrarEstadoCargaSiAplica(cont,'clave',datosYaDisponibles) y detenerse si
+// devuelve true; 3) en su sync, avisar éxito/fallo con
+// _syncPantallaExito('clave') / _syncPantallaFallo('clave', reintentarFn).
+var SYNC_ESTADO={};              // clave -> {estado:'cargando'|'ok'|'error', intentos:0}
+var SYNC_PANTALLAS_CONFIG={      // clave -> cómo volver a pintar esa pantalla
+  pm03:{screenId:'screen-pm03', renderFn:function(){renderPM03();}}
+};
+var SYNC_REINTENTO_MAX=4;
+var SYNC_REINTENTO_ESPERA_MS=3000;
+function _syncPantallaExito(clave){
+  SYNC_ESTADO[clave]={estado:'ok',intentos:0};
+}
+function _syncPantallaFallo(clave,reintentarFn){
+  var est=SYNC_ESTADO[clave]||(SYNC_ESTADO[clave]={estado:'cargando',intentos:0});
+  est.intentos++;
+  if(est.intentos<SYNC_REINTENTO_MAX){
+    setTimeout(reintentarFn,SYNC_REINTENTO_ESPERA_MS);
+  } else {
+    est.estado='error';
+    _syncPantallaRerenderSiVisible(clave);
+  }
+}
+function _syncPantallaRerenderSiVisible(clave){
+  var cfg=SYNC_PANTALLAS_CONFIG[clave]; if(!cfg) return;
+  var scr=document.getElementById(cfg.screenId);
+  if(scr&&scr.classList.contains('active')) cfg.renderFn();
+}
+function reintentarCargaPantalla(clave){
+  SYNC_ESTADO[clave]={estado:'cargando',intentos:0};
+  _syncPantallaRerenderSiVisible(clave);
+  syncSupabase();
+}
+function mostrarEstadoCargaSiAplica(cont,clave,datosYaDisponibles){
+  var est=SYNC_ESTADO[clave];
+  if((est&&est.estado==='ok')||datosYaDisponibles) return false;
+  if(est&&est.estado==='error'){
+    cont.innerHTML='<div class="card" style="text-align:center;padding:36px 16px">'
+      +'<div style="font-size:32px;margin-bottom:10px">⚠️</div>'
+      +'<div style="font-weight:700;color:#b91c1c;margin-bottom:6px">Sin conexión</div>'
+      +'<div style="font-size:13px;color:#6b7280;margin-bottom:18px">No se pudo cargar la información. Revisa tu internet.</div>'
+      +'<button class="btn btn-primary" onclick="reintentarCargaPantalla(\''+clave+'\')">🔄 Reintentar</button>'
+      +'</div>';
+    return true;
+  }
+  cont.innerHTML='<div class="card" style="text-align:center;padding:36px 16px;color:#6b7280">'
+    +'<div style="font-size:28px;margin-bottom:10px">⏳</div>Cargando información…</div>';
+  return true;
+}
+
 function syncSupabase(){
   cargarProtocolosSupa();
   cargarChecklistConfig();
@@ -14850,8 +14910,9 @@ function syncSupabase(){
     window._dorSyncOrdenesListo=true;
     if(document.getElementById('dor-content')) renderDOR();
   }).catch(function(){});
+  function _sincronizarPM03Plan(){
   supaFetch('pm03_plan','GET',null,'order=semana.asc&limit=999999&select=actividad,actividades_estado,actividades_estado_final,actividades_estado_inicial,anio,area,cerrada_por,cerrada_ts,comentarios_actividades,componente,desinf_produccion,dias_trabajo,draft_ts,es_inspeccion,estado,estado_calidad,estado_flujo,firma_nombre_admin,origen_ot,origen_pm02,firma_nombre_calidad,firma_nombre_lider,firma_nombre_operador,firma_tecnico,firma_tecnico_ts,firma_ts_admin,firma_ts_calidad,firma_ts_lider,firma_ts_operador,fuente_excel,generado_por,grasa_aceite,herramienta_ingresada,herramienta_salida,hora_fin,hora_inicio,horas_actividades,horas_cierre,id,liberado_admin_por,liberado_admin_ts,liberado_por,liberado_prod_por,liberado_prod_ts,liberado_ts,limpieza_mtto,comentario_desinfeccion,linea,mediciones_actividades,observaciones_cierre,personas_actividades,rechazo_calidad,refacciones_nuevas,refacciones_usadas,reporte_actividades,responsable_area_id,responsable_area_nombre,semana,tecnico_id,tecnico_nombre,ts,semanas_vencidas,motivo_recorrido,protocolo_snapshot,firmas_requeridas_override').then(function(rows){
-    if(!rows)return;
+    if(!rows){_syncPantallaFallo('pm03',_sincronizarPM03Plan);return;}
     var localPM03=loadDB('pm03_plan',[]);
     PM03_PLAN=rows.map(function(r){
       // Preserve local cerrada state if Supabase has it as abierta (sync lag)
@@ -14994,7 +15055,10 @@ function syncSupabase(){
     // "Avance PM" como 100% falso cuando en realidad todavía no se ha cargado.
     window._dorSyncPM03Listo=true;
     if(document.getElementById('dor-content')) renderDOR();
-  }).catch(function(){});
+    _syncPantallaExito('pm03');
+  }).catch(function(){_syncPantallaFallo('pm03',_sincronizarPM03Plan);});
+  }
+  _sincronizarPM03Plan();
   supaFetch('refacciones','GET',null,'order=codigo.asc').then(function(rows){if(rows&&rows.length){REFACCIONES=rows;saveDB('refacciones',REFACCIONES);}}).catch(function(){});
   supaFetch('mtbf_data','GET',null,'order=anio.desc,semana.desc').then(function(rows){if(rows&&rows.length){MTBF_DATA=rows;saveDB('mtbf_data',MTBF_DATA);}}).catch(function(){});
   supaFetch('gasto_data','GET',null,'order=anio.asc,semana.asc').then(function(rows){if(rows&&rows.length){GASTO_DATA=rows;saveDB('gasto_data',GASTO_DATA);}}).catch(function(){});
