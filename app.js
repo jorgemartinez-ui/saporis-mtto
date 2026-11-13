@@ -3099,6 +3099,14 @@ function confirmarCierrePM03(id){
   p.limpiezaMtto=window._pm3Limp;
   p.desinfProduccion=window._pm3Desinf;
   p.comentarioDesinfeccion=desinfCom?desinfCom.value.trim():'';
+  // Grasa/Aceite obligatorio (a petición de Jorge): antes se podía guardar sin
+  // elegir SI/NO, y si se elegía SI, sin indicar qué se usó.
+  if(window._pm3UsaGrasa===null||window._pm3UsaGrasa===undefined){
+    pm3ShowError('Indica si se usó Grasa/Aceite grado alimenticio (SI/NO)');return;
+  }
+  if(window._pm3UsaGrasa&&!(grasa&&grasa.value.trim())){
+    pm3ShowError('Indica el tipo y cantidad de Grasa/Aceite usada');return;
+  }
   p.usaGrasa=window._pm3UsaGrasa;
   p.grasaAceite=grasa&&window._pm3UsaGrasa?grasa.value.trim():'';
   p.cerradaTs=Date.now();
@@ -15598,7 +15606,14 @@ function updatePendChart(tecId,año,sem,semsDelMes,soloDefecto){
   // semana actual y anteriores (soloDefecto) salvo que se eligiera semana/mes,
   // y el técnico (propio si es rol técnico, o el elegido por el admin).
   var r=currentUser.rol;
-  var pm03List = PM03_PLAN.filter(function(p){
+  // "Mis Pendientes" tiene más filtros además de técnico/semana/mes/año (estado
+  // Abiertas/Cerradas/Todos, tipo PM01-04/Temporal, color, prioridad, anomalía) --
+  // la gráfica debe reflejar EXACTAMENTE lo mismo que la lista de abajo con esos
+  // filtros también, no solo con técnico/semana/mes/año, para no mostrar un total
+  // que ya no corresponde a lo que el usuario está viendo (ej. si filtró a Temporal
+  // la lista no trae ninguna PM03, o si dejó el filtro por defecto de Abiertas,
+  // no debe sumar las PM03 ya cerradas al total).
+  var pm03List = (filtrosPend.tipo==='todas'||filtrosPend.tipo==='PM03') ? PM03_PLAN.filter(function(p){
     if(p.esInspeccion) return false;
     if(p.año !== año) return false;
     if(p.estado==='reprogramada') return false;
@@ -15608,8 +15623,10 @@ function updatePendChart(tecId,año,sem,semsDelMes,soloDefecto){
     if(tecId && p.tecnicoId !== tecId) return false;
     // For tecnico: only their assigned PM03
     if(r==='tecnico' && !tecId && p.tecnicoId!==currentUser.id && p.responsableAreaId!==currentUser.id) return false;
+    if(filtrosPend.estado==='cerrada'&&p.estado!=='cerrada') return false;
+    if(filtrosPend.estado==='abierta'&&p.estado==='cerrada') return false;
     return true;
-  });
+  }) : [];
   // Also include PM02 and PM04 for the chart -- mismo criterio de semana/mes
   // que usa la lista para las OT (sin el límite de "soloDefecto", igual que allá).
   var otsList = ORDENES.filter(function(o){
@@ -15618,6 +15635,15 @@ function updatePendChart(tecId,año,sem,semsDelMes,soloDefecto){
     if(!semsDelMes&&sem>0&&o.semana!==sem) return false;
     if(tecId && o.tecnicoAsignado !== tecId) return false;
     if(r==='tecnico' && !tecId && o.tecnicoAsignado!==currentUser.id) return false;
+    if(filtrosPend.estado!=='todos'&&o.estado!==filtrosPend.estado) return false;
+    if(filtrosPend.tipo==='temporal'){
+      if(!o.esResueltaTemporal) return false;
+    } else if(filtrosPend.tipo!=='todas'&&filtrosPend.tipo!=='PM03'){
+      if(o.tipo!==filtrosPend.tipo) return false;
+    }
+    if(filtrosPend.color!=='todos'&&o.colorOT!==filtrosPend.color) return false;
+    if(filtrosPend.prio!=='todas'&&o.prioridad!==filtrosPend.prio) return false;
+    if(filtrosPend.anom&&filtrosPend.anom!=='todas'&&o.tipoAnormalidad!==filtrosPend.anom) return false;
     return true;
   });
   var allItems = pm03List.concat(otsList);
@@ -20810,6 +20836,16 @@ function cargarProtocolosSupa(){
     if(rows&&rows.length){
       PROTOCOLOS_PM03_SUPA=rows;
       console.log('Protocolos cargados:',rows.length);
+      // Repintar las pantallas de PM03 que ya estén abiertas (el color de avance
+      // de cada PM03 depende de este catálogo, no solo de sus propios datos) --
+      // este fetch corre en paralelo con todo lo demás al abrir la app, sin orden
+      // garantizado, así que si una pantalla se pintó ANTES de que este catálogo
+      // llegara, se quedaba con el color de respaldo (amarillo/blanco, nunca
+      // verde tenue) para siempre, hasta salir y volver a entrar. Esto la
+      // repinta sola en cuanto el catálogo real ya está disponible.
+      if(document.getElementById('screen-pm03')&&document.getElementById('screen-pm03').classList.contains('active')) renderPM03();
+      if(document.getElementById('screen-ordenes')&&document.getElementById('screen-ordenes').classList.contains('active')&&document.getElementById('fp-semana')) aplicarFiltrosPendientes();
+      if(document.getElementById('dor-content')) renderDOR();
     }
   }).catch(function(){});
 }
