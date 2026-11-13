@@ -5559,6 +5559,10 @@ function aplicarFiltrosPendientes(){
       if(r==='tecnico'&&p.tecnicoId!==currentUser.id&&p.responsableAreaId!==currentUser.id) return false;
       if(filtrosPend.estado==='cerrada'&&p.estado!=='cerrada') return false;
       if(filtrosPend.estado==='abierta'&&p.estado==='cerrada') return false;
+      // Las PM03 nunca tienen estado 'pre_cierre' (eso es solo de PM01/02/04) --
+      // sin esta línea, al filtrar por "Pre-cierre" no se excluía ninguna PM03
+      // (ni abiertas ni cerradas), así que aparecían todas igual que sin filtro.
+      if(filtrosPend.estado==='pre_cierre') return false;
       if(tecFiltro&&p.tecnicoId!==tecFiltro) return false;
       return true;
     }).sort((a,b)=>b.semana-a.semana);
@@ -15760,6 +15764,14 @@ function updatePendChart(tecId,año,sem,semsDelMes,soloDefecto){
 
   var total = allItems.length;
   var cerradas = allItems.filter(function(p){return (p.estado||'')=='cerrada';}).length;
+  // Las OT (PM02/PM04) pasan por "pre_cierre" (reportadas, pendientes de que
+  // un admin las apruebe) antes de "cerrada" -- las PM03 nunca tienen este
+  // estado. Se cuentan aparte de "Abiertas" (a petición de Jorge) para que
+  // este número coincida exactamente con lo que ves al usar el filtro
+  // "Abiertas" de la lista de abajo (que solo mira estado==='abierta' y deja
+  // las de pre-cierre fuera, visibles solo con su propio filtro o en "Todos").
+  var preCierre = allItems.filter(function(p){return p.estado==='pre_cierre';}).length;
+  var abiertas = total-cerradas-preCierre;
   var pct = total > 0 ? Math.round((cerradas/total)*100) : 0;
 
   // Mismo cálculo (cerradas/total) pero restringido solo a la semana ACTUAL
@@ -15780,7 +15792,8 @@ function updatePendChart(tecId,año,sem,semsDelMes,soloDefecto){
   document.getElementById('pend-chart-legend').innerHTML =
     '<div>📋 Total de PM ('+año+'): <b>' + total + '</b></div>' +
     '<div style="color:#43A047">✅ Cerradas: <b>' + cerradas + '</b></div>' +
-    '<div style="color:#E53935">🔴 Abiertas: <b>' + (total-cerradas) + '</b></div>' +
+    '<div style="color:#E53935">🔴 Abiertas: <b>' + abiertas + '</b></div>' +
+    '<div style="color:#7c3aed">⏳ Pre-cierre: <b>' + preCierre + '</b></div>' +
     '<div style="color:'+color+';font-weight:800;font-size:14px;margin-top:4px">Cumplimiento: ' + pct + '%</div>' +
     '<div style="color:'+colorSem+';font-weight:800;font-size:13px;margin-top:2px">Cumplimiento a la semana: ' + pctSem + '%'+(totalSem?'':' (sin PM esta semana)')+'</div>';
   
@@ -22105,6 +22118,10 @@ function showHistorialMedicion(linea, actId, componente, actividad){
 function showMenuProtocolosPM03(){
   detalleBackScreen = 'screen-menu';
   window._protoBackFn=null;
+  // Esta pantalla reutiliza el mismo espacio que "Mis Pendientes" -- sin
+  // esto, la tarjeta de Cumplimiento PM se quedaba pegada/visible encima
+  // (con los datos viejos) porque solo se oculta desde updatePendChart().
+  var wChart=document.getElementById('pend-chart-wrap'); if(wChart) wChart.style.display='none';
   var fDiv=document.getElementById('ordenes-filtros');
   var lDiv=document.getElementById('mis-ordenes-list');
   fDiv.innerHTML='<div style="font-family:Nunito,sans-serif;font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:8px">🗂️ Protocolos PM03</div>';
@@ -22125,6 +22142,7 @@ function showAdminProtocolos(){
   detalleBackScreen = 'screen-ordenes';
   window._protoBackFn='showMenuProtocolosPM03';
   window._protoVolverASemana=false;
+  var wChart=document.getElementById('pend-chart-wrap'); if(wChart) wChart.style.display='none';
   var fDiv=document.getElementById('ordenes-filtros');
   var lDiv=document.getElementById('mis-ordenes-list');
 
@@ -22403,6 +22421,7 @@ function pm3FolioHTML(p){
 function showProtocolosProximaSemana(){
   detalleBackScreen = 'screen-ordenes';
   window._protoBackFn='showMenuProtocolosPM03';
+  var wChart=document.getElementById('pend-chart-wrap'); if(wChart) wChart.style.display='none';
   var fDiv=document.getElementById('ordenes-filtros');
   var lDiv=document.getElementById('mis-ordenes-list');
 
@@ -30869,6 +30888,10 @@ function renderBuzonList(){
   var lDiv = document.getElementById('mis-ordenes-list');
   var fDiv = document.getElementById('ordenes-filtros');
   if(!lDiv||!fDiv) return;
+  // Mismo caso que en Protocolos PM03: el Buzón reutiliza el espacio de "Mis
+  // Pendientes", así que hay que ocultar la tarjeta de Cumplimiento PM que se
+  // quedaba pegada de la última vez que se vio Mis Pendientes.
+  var wChart=document.getElementById('pend-chart-wrap'); if(wChart) wChart.style.display='none';
 
   // No marcar como leídas automáticamente — el usuario lo hace manualmente
   var notifs = misNotificaciones().slice().sort(function(a,b){return (b.ts||0)-(a.ts||0);});
