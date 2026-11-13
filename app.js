@@ -5361,6 +5361,12 @@ function eliminarOT(id){
 
 // ─── renderResumenConsulta (visual with %) ───
 function renderResumenConsulta(){
+  // Mismo mecanismo de "Cargando…"/"Sin conexión" que el resto de la pantalla
+  // -- sin esto, entrar rápido a Consultar OT (antes de que terminara la
+  // sync) mostraba este resumen en ceros sin avisar que todavía no había
+  // llegado nada.
+  var contResumen=document.getElementById('consulta-resumen');
+  if(contResumen && mostrarEstadoCargaSiAplica(contResumen,'ordenes')) return;
   const ots=ORDENES,total=ots.length;
   const sol=ots.filter(o=>o.estado==='cerrada').length,ab=total-sol;
   const pctSol=total?Math.round((sol/total)*100):0,pctAb=total?Math.round((ab/total)*100):0;
@@ -14632,8 +14638,9 @@ var SYNC_PANTALLAS_CONFIG={      // clave -> lista de pantallas que hay que volv
   pm03:[{screenId:'screen-pm03', renderFn:function(){renderPM03();}}],
   ordenes:[
     {screenId:'screen-ordenes', renderFn:function(){renderMisOrdenes();}},
-    {screenId:'screen-consulta', renderFn:function(){filtrarOrdenes();}}
-  ]
+    {screenId:'screen-consulta', renderFn:function(){filtrarOrdenes();renderResumenConsulta();renderResumenTecnicosOT();}}
+  ],
+  plan:[{screenId:'screen-plan', renderFn:function(){renderPlanMenu();}}]
 };
 var SYNC_REINTENTO_MAX=4;
 var SYNC_REINTENTO_ESPERA_MS=3000;
@@ -14665,6 +14672,49 @@ function reintentarCargaPantalla(clave){
   SYNC_ESTADO[clave]={estado:'cargando',intentos:0};
   _syncPantallaRerenderSiVisible(clave);
   syncSupabase();
+}
+// ── Variante para una pantalla que depende de VARIAS tablas a la vez (ej. el
+// Calendario de Plan Mtto necesita plan_actividades + componentes_equipo +
+// equipos_linea + activo_componentes) -- la pantalla no se da por lista hasta
+// que CADA una de esas tablas haya confirmado al menos una sincronización
+// exitosa en esta sesión, y se da por fallida (Sin conexión) si alguna de
+// ellas agota sus reintentos SIN haber llegado bien ni una vez. Una vez que
+// una tabla ya llegó bien una vez, una falla tardía suya (ej. un corte breve
+// en un resync periódico posterior) ya NO tira la pantalla a "Sin conexión"
+// -- se queda con el último dato bueno conocido, igual que el resto de la app.
+var SYNC_SUBCLAVES={};  // claveGrupo -> {subclave:'ok'|'error', ...}
+function _syncSubExito(claveGrupo,sub){
+  var g=SYNC_SUBCLAVES[claveGrupo]||(SYNC_SUBCLAVES[claveGrupo]={});
+  g[sub]='ok';
+  _syncSubEvaluar(claveGrupo);
+}
+function _syncSubFallo(claveGrupo,sub,reintentarFn){
+  var g=SYNC_SUBCLAVES[claveGrupo]||(SYNC_SUBCLAVES[claveGrupo]={});
+  var key=claveGrupo+'.'+sub;
+  var est=SYNC_ESTADO[key]||(SYNC_ESTADO[key]={estado:'cargando',intentos:0});
+  est.intentos++;
+  if(est.intentos<SYNC_REINTENTO_MAX){
+    setTimeout(reintentarFn,SYNC_REINTENTO_ESPERA_MS);
+  } else if(g[sub]!=='ok'){
+    g[sub]='error';
+    _syncSubEvaluar(claveGrupo);
+  }
+}
+function _syncSubEvaluar(claveGrupo){
+  var g=SYNC_SUBCLAVES[claveGrupo]; if(!g) return;
+  var subs=Object.keys(g);
+  var yaOk=SYNC_ESTADO[claveGrupo]&&SYNC_ESTADO[claveGrupo].estado==='ok';
+  if(subs.some(function(s){return g[s]==='error';})){
+    SYNC_ESTADO[claveGrupo]={estado:'error',intentos:0};
+    _syncPantallaRerenderSiVisible(claveGrupo);
+  } else if(!yaOk&&subs.length&&subs.every(function(s){return g[s]==='ok';})){
+    // Primera vez que las 4 tablas quedan listas -- repintar solo aquí (una
+    // sola vez), no en cada sub-sync individual, para no interrumpir al
+    // usuario si ya avanzó a una pantalla más adentro (ej. un calendario
+    // específico) usando esta misma clave.
+    SYNC_ESTADO[claveGrupo]={estado:'ok',intentos:0};
+    _syncPantallaRerenderSiVisible(claveGrupo);
+  }
 }
 // NOTA: se decidió a propósito NO saltar este "Cargando…" solo porque ya
 // hubiera datos viejos guardados en el teléfono de una sesión anterior —
@@ -14711,14 +14761,26 @@ function syncSupabase(){
   setTimeout(syncNotificaciones, 1500);
   // Actualizar badges admin
   setTimeout(actualizarBadgesAdmin, 2000);
-  // Sync plan_actividades
+  // Sync plan_actividades (Calendario de Plan Mtto -- clave agrupada 'plan',
+  // ver _syncSubExito/_syncSubFallo: esta pantalla depende de 4 tablas, no
+  // se da por lista hasta que las 4 hayan llegado bien al menos una vez)
+  function _sincronizarPlanActividades(){
   supaFetch('plan_actividades','GET',null,'activo=eq.true&order=linea.asc&limit=2000').then(function(rows){
+    if(rows===null){_syncSubFallo('plan','plan_actividades',_sincronizarPlanActividades);return;}
     if(rows&&rows.length){PLAN_ACTIVIDADES=rows;saveDB('plan_actividades',PLAN_ACTIVIDADES);}
-  }).catch(function(){});
+    _syncSubExito('plan','plan_actividades');
+  }).catch(function(){_syncSubFallo('plan','plan_actividades',_sincronizarPlanActividades);});
+  }
+  _sincronizarPlanActividades();
   // Sync componentes_equipo
+  function _sincronizarComponentesEquipo(){
   supaFetch('componentes_equipo','GET',null,'activo=eq.true&order=linea.asc&limit=2000').then(function(rows){
+    if(rows===null){_syncSubFallo('plan','componentes_equipo',_sincronizarComponentesEquipo);return;}
     if(rows&&rows.length){COMPONENTES_EQUIPO=rows;saveDB('componentes_equipo',COMPONENTES_EQUIPO);}
-  }).catch(function(){});
+    _syncSubExito('plan','componentes_equipo');
+  }).catch(function(){_syncSubFallo('plan','componentes_equipo',_sincronizarComponentesEquipo);});
+  }
+  _sincronizarComponentesEquipo();
   // Sync agua_medidores
   supaFetch('agua_medidores','GET',null,'activo=eq.true&order=orden.asc').then(function(rows){
     if(rows&&rows.length){AGUA_MEDIDORES=rows;saveDB('agua_medidores',AGUA_MEDIDORES);}
@@ -14757,13 +14819,18 @@ function syncSupabase(){
       saveDB('pm_areas_config',PM_AREAS);
     }
   }).catch(function(){});
-  // Sync equipos por linea
+  // Sync equipos por linea (parte del grupo 'plan', ver nota arriba)
+  function _sincronizarEquiposLinea(){
   supaFetch('equipos_linea','GET',null,'activo=eq.true&limit=2000').then(function(rows){
+    if(rows===null){_syncSubFallo('plan','equipos_linea',_sincronizarEquiposLinea);return;}
     if(rows&&rows.length){
       EQUIPOS_LINEA=rows;
       saveDB('equipos_linea',EQUIPOS_LINEA);
     }
-  }).catch(function(){});
+    _syncSubExito('plan','equipos_linea');
+  }).catch(function(){_syncSubFallo('plan','equipos_linea',_sincronizarEquiposLinea);});
+  }
+  _sincronizarEquiposLinea();
   // Sync cementerio de equipos
   supaFetch('cementerio_equipos','GET',null,'activo=eq.true&order=ts.desc&limit=2000').then(function(rows){
     if(rows){
@@ -14796,14 +14863,20 @@ function syncSupabase(){
       if(document.getElementById('screen-priorizacion-lineas')&&document.getElementById('screen-priorizacion-lineas').classList.contains('active')) renderPriorizacionLista();
     }
   }).catch(function(){});
-  // Sync componentes de activos
+  // Sync componentes de activos (parte del grupo 'plan', ver nota arriba --
+  // también alimenta Registro de Activos, repintado sin tocar)
+  function _sincronizarActivoComponentes(){
   supaFetch('activo_componentes','GET',null,'activo=eq.true&limit=4000').then(function(rows){
+    if(rows===null){_syncSubFallo('plan','activo_componentes',_sincronizarActivoComponentes);return;}
     if(rows&&rows.length){
       ACTIVO_COMPONENTES=rows.map(function(r){return{id:r.id,activoId:r.activo_id,areaId:r.area_id,linea:r.linea,nombre:r.nombre,marca:r.marca,modelo:r.modelo,serie:r.serie,anioInstalacion:r.anio_instalacion,estado:r.estado_operativo,criticidad:r.criticidad,vinculadoA:r.vinculado_a,registradoPor:r.creado_por,ts:r.creado_ts,activo:r.activo};});
       saveDB('activo_componentes',ACTIVO_COMPONENTES);
       if(document.getElementById('screen-registro-activos')&&document.getElementById('screen-registro-activos').classList.contains('active')) renderRegistroActivosLista();
     }
-  }).catch(function(){});
+    _syncSubExito('plan','activo_componentes');
+  }).catch(function(){_syncSubFallo('plan','activo_componentes',_sincronizarActivoComponentes);});
+  }
+  _sincronizarActivoComponentes();
   // Sync DOR planes
   supaFetch('dor_planes','GET',null,'order=creado_ts.desc&limit=500').then(function(rows){
     if(rows&&rows.length){
@@ -14967,7 +15040,7 @@ function syncSupabase(){
     // Mismo caso en "Consultar OT" (screen-consulta/filtrarOrdenes) — faltaba
     // este refresco, así que quien entraba rápido se quedaba viendo la lista
     // vieja (o el "Cargando…") hasta tocar un filtro a mano.
-    if(document.getElementById('screen-consulta')&&document.getElementById('screen-consulta').classList.contains('active')) filtrarOrdenes();
+    if(document.getElementById('screen-consulta')&&document.getElementById('screen-consulta').classList.contains('active')){ filtrarOrdenes(); renderResumenConsulta(); renderResumenTecnicosOT(); }
     // Marca que ya llegó al menos una sincronización real de órdenes en esta
     // sesión — usado por el tablero de DOR para no mostrar números de OTs/
     // anormalidades calculados sobre un ORDENES todavía vacío o desactualizado.
@@ -15652,81 +15725,64 @@ function updatePendChart(tecId,año,sem,semsDelMes,soloDefecto){
     soloDefecto=!semsDelMes&&sem===0;
   }
 
-  // Get PM03 matching filters -- mismo criterio que pm03List en
-  // aplicarFiltrosPendientes: año, excluye reprogramadas, por defecto solo
-  // semana actual y anteriores (soloDefecto) salvo que se eligiera semana/mes,
-  // y el técnico (propio si es rol técnico, o el elegido por el admin).
   var r=currentUser.rol;
-  // "Mis Pendientes" tiene más filtros además de técnico/semana/mes/año (estado
-  // Abiertas/Cerradas/Todos, tipo PM01-04/Temporal, color, prioridad, anomalía) --
-  // la gráfica debe reflejar EXACTAMENTE lo mismo que la lista de abajo con esos
-  // filtros también, no solo con técnico/semana/mes/año, para no mostrar un total
-  // que ya no corresponde a lo que el usuario está viendo (ej. si filtró a Temporal
-  // la lista no trae ninguna PM03, o si dejó el filtro por defecto de Abiertas,
-  // no debe sumar las PM03 ya cerradas al total).
-  // pm03DelPeriodo: SIN filtrar por estado -- se usa solo para decidir si hay
-  // algo de PM03 que le toque a este período/técnico/tipo en absoluto (línea
-  // "if(!pm03DelPeriodo.length) ocultar"). pm03List sí aplica el filtro de
-  // estado para los números que se muestran. Antes ambos eran lo mismo, y eso
-  // ocultaba la gráfica entera en cuanto, por ejemplo, ya no quedaba ninguna
-  // PM03 ABIERTA en el período (todas cerradas a tiempo) -- un día normal y
-  // bueno, no un caso de "aquí no aplica PM03", así que no debía desaparecer.
-  var pm03DelPeriodo = (filtrosPend.tipo==='todas'||filtrosPend.tipo==='PM03') ? PM03_PLAN.filter(function(p){
+  // A petición de Jorge: esta tarjeta YA NO varía con los filtros de
+  // semana/mes/estado/tipo de la lista de abajo (antes "Cerradas" se veía en
+  // 0 solo porque el usuario había filtrado "Abiertas", por ejemplo). Ahora
+  // siempre es el total "a la fecha" del AÑO completo -- todas las PM01-04
+  // cuya semana ya llegó (hasta la semana actual) -- para el técnico
+  // filtrado (o toda la planta si no hay uno elegido). El único filtro de la
+  // lista que sigue respetando es el técnico (fpen-tecnico/fp-año).
+  var pm03Anual = PM03_PLAN.filter(function(p){
     if(p.esInspeccion) return false;
     if(p.año !== año) return false;
     if(p.estado==='reprogramada') return false;
-    if(soloDefecto&&año===currentYear()&&p.semana>currentWeek()) return false;
-    if(semsDelMes&&!semsDelMes.includes(p.semana)) return false;
-    if(!semsDelMes&&sem>0&&p.semana!==sem) return false;
+    if(año===currentYear()&&p.semana>currentWeek()) return false;
     if(tecId && p.tecnicoId !== tecId) return false;
     // For tecnico: only their assigned PM03
     if(r==='tecnico' && !tecId && p.tecnicoId!==currentUser.id && p.responsableAreaId!==currentUser.id) return false;
     return true;
-  }) : [];
-  var pm03List = pm03DelPeriodo.filter(function(p){
-    if(filtrosPend.estado==='cerrada'&&p.estado!=='cerrada') return false;
-    if(filtrosPend.estado==='abierta'&&p.estado==='cerrada') return false;
-    return true;
   });
-  // Also include PM02 and PM04 for the chart -- mismo criterio de semana/mes
-  // que usa la lista para las OT (sin el límite de "soloDefecto", igual que allá).
-  var otsList = ORDENES.filter(function(o){
+  // PM02 y PM04 del año -- mismo alcance que pm03Anual (año completo a la
+  // fecha, sin importar semana/mes/estado/tipo filtrados en la lista).
+  var otsAnual = ORDENES.filter(function(o){
     if(o.tipo!=='PM02'&&o.tipo!=='PM04') return false;
-    if(semsDelMes&&!semsDelMes.includes(o.semana)) return false;
-    if(!semsDelMes&&sem>0&&o.semana!==sem) return false;
+    if((o.año||currentYear()) !== año) return false;
+    if(año===currentYear()&&o.semana>currentWeek()) return false;
     if(tecId && o.tecnicoAsignado !== tecId) return false;
     if(r==='tecnico' && !tecId && o.tecnicoAsignado!==currentUser.id) return false;
-    if(filtrosPend.estado!=='todos'&&o.estado!==filtrosPend.estado) return false;
-    if(filtrosPend.tipo==='temporal'){
-      if(!o.esResueltaTemporal) return false;
-    } else if(filtrosPend.tipo!=='todas'&&filtrosPend.tipo!=='PM03'){
-      if(o.tipo!==filtrosPend.tipo) return false;
-    }
-    if(filtrosPend.color!=='todos'&&o.colorOT!==filtrosPend.color) return false;
-    if(filtrosPend.prio!=='todas'&&o.prioridad!==filtrosPend.prio) return false;
-    if(filtrosPend.anom&&filtrosPend.anom!=='todas'&&o.tipoAnormalidad!==filtrosPend.anom) return false;
     return true;
   });
-  var allItems = pm03List.concat(otsList);
-  
-  if(!pm03DelPeriodo.length){wrap.style.display='none';return;}
+  var allItems = pm03Anual.concat(otsAnual);
+
+  if(!allItems.length){wrap.style.display='none';return;}
   wrap.style.display='block';
-  
+
   var total = allItems.length;
   var cerradas = allItems.filter(function(p){return (p.estado||'')=='cerrada';}).length;
   var pct = total > 0 ? Math.round((cerradas/total)*100) : 0;
-  
+
+  // Mismo cálculo (cerradas/total) pero restringido solo a la semana ACTUAL
+  // -- a petición de Jorge, para distinguir el cumplimiento acumulado del
+  // año del cumplimiento de la semana en curso.
+  var itemsSemana = allItems.filter(function(p){return p.semana===currentWeek();});
+  var totalSem = itemsSemana.length;
+  var cerradasSem = itemsSemana.filter(function(p){return (p.estado||'')=='cerrada';}).length;
+  var pctSem = totalSem > 0 ? Math.round((cerradasSem/totalSem)*100) : 0;
+  var colorSem = pctSem <= 50 ? '#E53935' : pctSem <= 80 ? '#FFB300' : '#43A047';
+
   var color = pct <= 50 ? '#E53935' : pct <= 80 ? '#FFB300' : '#43A047';
   var emoji = pct > 80 ? '👏' : '';
-  
+
   document.getElementById('pend-chart-pct').textContent = pct + '%';
   document.getElementById('pend-chart-pct').style.color = color;
   document.getElementById('pend-chart-emoji').textContent = emoji;
   document.getElementById('pend-chart-legend').innerHTML =
-    '<div>📋 Total PM03: <b>' + total + '</b></div>' +
+    '<div>📋 Total de PM ('+año+'): <b>' + total + '</b></div>' +
     '<div style="color:#43A047">✅ Cerradas: <b>' + cerradas + '</b></div>' +
     '<div style="color:#E53935">🔴 Abiertas: <b>' + (total-cerradas) + '</b></div>' +
-    '<div style="color:'+color+';font-weight:800;font-size:14px;margin-top:4px">Cumplimiento: ' + pct + '%</div>';
+    '<div style="color:'+color+';font-weight:800;font-size:14px;margin-top:4px">Cumplimiento: ' + pct + '%</div>' +
+    '<div style="color:'+colorSem+';font-weight:800;font-size:13px;margin-top:2px">Cumplimiento a la semana: ' + pctSem + '%'+(totalSem?'':' (sin PM esta semana)')+'</div>';
   
   // Draw chart
   var canvas = document.getElementById('chart-pend-cumpl');
@@ -31107,6 +31163,9 @@ function _horasSinTraslape(ordenes){
 function renderResumenTecnicosOT(){
   var cont = document.getElementById('resumen-tecnicos-ot');
   if(!cont) return;
+  // Mismo mecanismo de "Cargando…"/"Sin conexión" -- este resumen también
+  // lee ORDENES directo, así que sin esto se veía en ceros sin avisar.
+  if(mostrarEstadoCargaSiAplica(cont,'ordenes')) return;
 
   var filtFecha = window._rtFecha || '';
   var filtSem = window._rtSem || '';
@@ -36600,6 +36659,13 @@ function showPlanMantenimiento(){
 function renderPlanMenu(){
   var cont=document.getElementById('plan-content');
   if(!cont) return;
+  // El Calendario de Plan Mtto depende de 4 tablas (plan_actividades,
+  // componentes_equipo, equipos_linea, activo_componentes) -- mismo
+  // mecanismo de Cargando/Sin conexión que el resto de la app, agrupadas
+  // bajo la clave 'plan' (ver _syncSubExito/_syncSubFallo). Este es "mi
+  // principal documento para una auditoría" (palabras de Jorge), así que no
+  // debe mostrarse incompleto/vacío sin avisar.
+  if(mostrarEstadoCargaSiAplica(cont,'plan')) return;
   document.getElementById('plan-topbar-sub').textContent='Selecciona un área';
 
   // Build area list with line counts
