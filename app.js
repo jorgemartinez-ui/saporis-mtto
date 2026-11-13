@@ -5235,6 +5235,10 @@ function _fechaOTCardHTML(o){
 }
 // ─── Filtrar ordenes (new version with all filters) ───
 function filtrarOrdenes(){
+  // Mismo mecanismo de "Cargando…"/"Sin conexión" que en Mis Pendientes/PM03 --
+  // sin esto, entrar a Consultar OT antes de que termine la sync mostraba la
+  // lista vacía (0 resultados) sin avisar que todavía no había llegado nada.
+  if(mostrarEstadoCargaSiAplica(document.getElementById('consulta-list'),'ordenes')) return;
   const q=(document.getElementById('consulta-search')?.value||'').toLowerCase();
   // Text search applied below with other filters
   const tecF=document.getElementById('filtro-tecnico')?.value||'';
@@ -5800,6 +5804,12 @@ function renderAdminPM03(cont){
 function renderMisOrdenes(){
   const fDiv=document.getElementById('ordenes-filtros');
   const lDiv=document.getElementById('mis-ordenes-list');
+  // Mientras no haya confirmación de sincronización de 'ordenes' en esta
+  // sesión, avisar "Cargando…"/"Sin conexión" en vez de mostrar la lista en
+  // ceros o con datos viejos sin avisar (a petición de Jorge, mismo mecanismo
+  // ya usado en PM03) -- se limpia también el bloque de filtros para que no
+  // se vea a medias junto al aviso.
+  if(mostrarEstadoCargaSiAplica(lDiv,'ordenes')){ if(fDiv) fDiv.innerHTML=''; return; }
   const r=currentUser.rol;
   // Super: ve todos los PM03 pendientes en cualquier flujo
   if(r==='super'){
@@ -14612,13 +14622,18 @@ function saveListas(){
 //   3) Si después de varios intentos sigue sin poder, muestra "Sin conexión —
 //      revisa tu internet" con un botón para reintentar manualmente.
 // Para agregarlo a una pantalla nueva en el futuro: 1) registrar la pantalla en
-// SYNC_PANTALLAS_CONFIG; 2) al INICIO de su función de render, llamar a
-// mostrarEstadoCargaSiAplica(cont,'clave') y detenerse si
-// devuelve true; 3) en su sync, avisar éxito/fallo con
+// SYNC_PANTALLAS_CONFIG (una clave puede tener varias pantallas si dependen del
+// mismo dato, ej. 'ordenes' alimenta Mis Pendientes Y Consultar OT); 2) al
+// INICIO de su función de render, llamar a mostrarEstadoCargaSiAplica(cont,'clave')
+// y detenerse si devuelve true; 3) en su sync, avisar éxito/fallo con
 // _syncPantallaExito('clave') / _syncPantallaFallo('clave', reintentarFn).
 var SYNC_ESTADO={};              // clave -> {estado:'cargando'|'ok'|'error', intentos:0}
-var SYNC_PANTALLAS_CONFIG={      // clave -> cómo volver a pintar esa pantalla
-  pm03:{screenId:'screen-pm03', renderFn:function(){renderPM03();}}
+var SYNC_PANTALLAS_CONFIG={      // clave -> lista de pantallas que hay que volver a pintar
+  pm03:[{screenId:'screen-pm03', renderFn:function(){renderPM03();}}],
+  ordenes:[
+    {screenId:'screen-ordenes', renderFn:function(){renderMisOrdenes();}},
+    {screenId:'screen-consulta', renderFn:function(){filtrarOrdenes();}}
+  ]
 };
 var SYNC_REINTENTO_MAX=4;
 var SYNC_REINTENTO_ESPERA_MS=3000;
@@ -14633,12 +14648,18 @@ function _syncPantallaFallo(clave,reintentarFn){
   } else {
     est.estado='error';
     _syncPantallaRerenderSiVisible(clave);
+    // DOR no usa mostrarEstadoCargaSiAplica (tiene su propio aviso por
+    // tarjeta), pero sus tarjetas de 'ordenes'/'pm03' sí deben pasar de
+    // "Cargando…" a "Sin conexión" en cuanto se agotan los reintentos.
+    if((clave==='ordenes'||clave==='pm03')&&document.getElementById('dor-content')) renderDOR();
   }
 }
 function _syncPantallaRerenderSiVisible(clave){
-  var cfg=SYNC_PANTALLAS_CONFIG[clave]; if(!cfg) return;
-  var scr=document.getElementById(cfg.screenId);
-  if(scr&&scr.classList.contains('active')) cfg.renderFn();
+  var cfgs=SYNC_PANTALLAS_CONFIG[clave]; if(!cfgs) return;
+  cfgs.forEach(function(cfg){
+    var scr=document.getElementById(cfg.screenId);
+    if(scr&&scr.classList.contains('active')) cfg.renderFn();
+  });
 }
 function reintentarCargaPantalla(clave){
   SYNC_ESTADO[clave]={estado:'cargando',intentos:0};
@@ -14885,8 +14906,9 @@ function syncSupabase(){
     USERS=USERS.concat(superLocal);
     saveDB('users',USERS);
   }).catch(function(){});
+  function _sincronizarOrdenes(){
   supaFetch('ordenes','GET',null,'order=ts.desc&limit=999999&select=anio,aprobado_por,area,causa_raiz,cerrada_por,cerrada_ts,color_ot,componente,conciliado_con,conciliado_con_nombre,detalle,es_resuelta_temporal,estado,fecha_trabajo,foto_vista_ts,fuente_bitacora,fuente_label,historial_modificacion,historial_reasignacion,hora_entrega,hora_fin_trabajo,hora_inicio,hora_inicio_trabajo,hora_llamado,horas_cierre,id,levantado_id,levantado_por,lider_pm04,limpieza_avisado_a,limpieza_requerida,linea,motivo_rechazo,mttr,observaciones_cierre,pendiente_asignacion,pm03_definitiva,pre_cierre_por,pre_cierre_ts,prioridad,rechazado_por,refacciones_usadas,rol_levantador,semana,semana_resolucion,tecnico_asignado,tecnico_nombre,tecnicos_adicionales,tiempo_respuesta,tipo,tipo_anormalidad,trabajo_dias,ts,turno').then(function(rows){
-    if(!rows)return;
+    if(!rows){_syncPantallaFallo('ordenes',_sincronizarOrdenes);return;}
     var localOrdenes = loadDB('ordenes',[]);
     var syncedIds = new Set(rows.map(function(r){return r.id;}));
     // Preservar órdenes locales que NO llegaron a Supabase (save pendiente)
@@ -14925,23 +14947,37 @@ function syncSupabase(){
       return l;
     }));
     saveDB('ordenes',ORDENES);
-    // Si la pantalla "Mis Pendientes" (vista con filtros fp-semana/fp-mes/etc.)
-    // está abierta en este momento, refrescar la lista con los datos recién
-    // sincronizados — sin esto, quien entró antes de que terminara la sync veía
-    // una lista incompleta hasta que tocaba un filtro manualmente.
-    if(document.getElementById('screen-ordenes')&&document.getElementById('screen-ordenes').classList.contains('active')&&document.getElementById('fp-semana')) aplicarFiltrosPendientes();
+    // Marcar éxito ANTES de volver a pintar la pantalla -- mismo motivo que en
+    // pm03: si no, un renderMisOrdenes()/filtrarOrdenes() disparado por el
+    // repintado de abajo se ejecutaría mientras SYNC_ESTADO.ordenes todavía
+    // dice "cargando" y se quedaría pintado el mensaje de "Cargando…" para
+    // siempre aunque los datos ya llegaron bien.
+    _syncPantallaExito('ordenes');
+    // Si la pantalla "Mis Pendientes" está abierta en este momento, refrescar
+    // con los datos recién sincronizados — sin esto, quien entró antes de que
+    // terminara la sync veía una lista incompleta (o el mensaje de "Cargando…"
+    // para siempre) hasta tocar un filtro manualmente. Si los filtros ya están
+    // pintados (fp-semana existe) solo se refresca la lista, conservando lo que
+    // el usuario ya haya elegido; si no (pantalla recién saliendo de "Cargando…",
+    // o un rol sin filtros como super/líder/calidad) se vuelve a entrar completo.
+    if(document.getElementById('screen-ordenes')&&document.getElementById('screen-ordenes').classList.contains('active')){
+      if(document.getElementById('fp-semana')) aplicarFiltrosPendientes();
+      else renderMisOrdenes();
+    }
     // Mismo caso en "Consultar OT" (screen-consulta/filtrarOrdenes) — faltaba
     // este refresco, así que quien entraba rápido se quedaba viendo la lista
-    // vieja hasta tocar un filtro a mano.
+    // vieja (o el "Cargando…") hasta tocar un filtro a mano.
     if(document.getElementById('screen-consulta')&&document.getElementById('screen-consulta').classList.contains('active')) filtrarOrdenes();
     // Marca que ya llegó al menos una sincronización real de órdenes en esta
     // sesión — usado por el tablero de DOR para no mostrar números de OTs/
     // anormalidades calculados sobre un ORDENES todavía vacío o desactualizado.
     window._dorSyncOrdenesListo=true;
     if(document.getElementById('dor-content')) renderDOR();
-  }).catch(function(){});
+  }).catch(function(){_syncPantallaFallo('ordenes',_sincronizarOrdenes);});
+  }
+  _sincronizarOrdenes();
   function _sincronizarPM03Plan(){
-  supaFetch('pm03_plan','GET',null,'order=semana.asc&limit=999999&select=actividad,actividades_estado,actividades_estado_final,actividades_estado_inicial,anio,area,cerrada_por,cerrada_ts,comentarios_actividades,componente,desinf_produccion,dias_trabajo,draft_ts,es_inspeccion,estado,estado_calidad,estado_flujo,firma_nombre_admin,origen_ot,origen_pm02,firma_nombre_calidad,firma_nombre_lider,firma_nombre_operador,firma_tecnico,firma_tecnico_ts,firma_ts_admin,firma_ts_calidad,firma_ts_lider,firma_ts_operador,fuente_excel,generado_por,grasa_aceite,herramienta_ingresada,herramienta_salida,hora_fin,hora_inicio,horas_actividades,horas_cierre,id,liberado_admin_por,liberado_admin_ts,liberado_por,liberado_prod_por,liberado_prod_ts,liberado_ts,limpieza_mtto,comentario_desinfeccion,linea,mediciones_actividades,observaciones_cierre,personas_actividades,rechazo_calidad,refacciones_nuevas,refacciones_usadas,reporte_actividades,responsable_area_id,responsable_area_nombre,semana,tecnico_id,tecnico_nombre,ts,semanas_vencidas,motivo_recorrido,protocolo_snapshot,firmas_requeridas_override').then(function(rows){
+  supaFetch('pm03_plan','GET',null,'order=semana.asc&limit=999999&select=actividad,actividades_estado,actividades_estado_final,actividades_estado_inicial,anio,area,cerrada_por,cerrada_ts,comentarios_actividades,componente,desinf_produccion,dias_trabajo,draft_ts,es_inspeccion,estado,estado_calidad,estado_flujo,firma_nombre_admin,origen_ot,origen_pm02,firma_nombre_calidad,firma_nombre_lider,firma_nombre_operador,firma_tecnico,firma_tecnico_ts,firma_ts_admin,firma_ts_calidad,firma_ts_lider,firma_ts_operador,fuente_excel,generado_por,grasa_aceite,herramienta_ingresada,herramienta_salida,hora_fin,hora_inicio,horas_actividades,horas_cierre,id,liberado_admin_por,liberado_admin_ts,liberado_por,liberado_prod_por,liberado_prod_ts,liberado_ts,limpieza_mtto,comentario_desinfeccion,linea,mediciones_actividades,observaciones_cierre,personas_actividades,rechazo_calidad,refacciones_nuevas,refacciones_usadas,reporte_actividades,responsable_area_id,responsable_area_nombre,semana,tecnico_id,tecnico_nombre,ts,semanas_vencidas,motivo_recorrido,protocolo_snapshot,firmas_requeridas_override,nota_reprogramacion,reprogramada_a,reprogramada_por,reprogramada_ts,reprogramada_de').then(function(rows){
     if(!rows){_syncPantallaFallo('pm03',_sincronizarPM03Plan);return;}
     var localPM03=loadDB('pm03_plan',[]);
     PM03_PLAN=rows.map(function(r){
@@ -15018,6 +15054,16 @@ function syncSupabase(){
         estadoFlujo:r.estado_flujo||(local?local.estadoFlujo:'ejecucion'),
         notaReprogramacion:r.nota_reprogramacion||(local?local.notaReprogramacion:null),
         motivoReprogramacion:r.nota_reprogramacion||(local?local.motivoReprogramacion:null),
+        // La "huella" de reprogramación manual (botón PM03) depende de estos 4
+        // campos -- sin este rescate con respaldo local, cualquier resync masivo
+        // los borraba (quedaban undefined) porque no venían en el SELECT ni se
+        // preservaban aquí, dejando el mensaje de verMotivoReprogramacionPM03()
+        // en blanco aunque la PM03 sí tuviera motivo guardado (bug reportado
+        // por Jorge: "si tiene comentario aunque no lo muestra").
+        reprogramadaA:r.reprogramada_a||(local?local.reprogramadaA:null),
+        reprogramadaPor:r.reprogramada_por||(local?local.reprogramadaPor:null),
+        reprogramadaTs:r.reprogramada_ts||(local?local.reprogramadaTs:null),
+        reprogramadaDe:r.reprogramada_de||(local?local.reprogramadaDe:null),
         fotos:local&&local.fotos!==undefined?local.fotos:undefined,
         // Campos de borrador — priorizar Supabase sobre local
         comentariosActividades:(function(){
@@ -15079,8 +15125,13 @@ function syncSupabase(){
     _syncPantallaExito('pm03');
     // Igual que en el sync de 'ordenes': si "Mis Pendientes" está abierta ahora
     // mismo, refrescar para que las PM03 recién sincronizadas (incluido el botón
-    // de filtro PM03) se vean sin que el usuario tenga que tocar un filtro.
-    if(document.getElementById('screen-ordenes')&&document.getElementById('screen-ordenes').classList.contains('active')&&document.getElementById('fp-semana')) aplicarFiltrosPendientes();
+    // de filtro PM03) se vean sin que el usuario tenga que tocar un filtro. Si
+    // todavía no hay filtros pintados (pantalla en "Cargando…", o rol sin
+    // filtros) se entra completo con renderMisOrdenes().
+    if(document.getElementById('screen-ordenes')&&document.getElementById('screen-ordenes').classList.contains('active')){
+      if(document.getElementById('fp-semana')) aplicarFiltrosPendientes();
+      else renderMisOrdenes();
+    }
     // Mismo caso en el tablero principal de PM03 (screen-pm03/renderPM03) —
     // faltaba este refresco: quien entraba rápido veía tarjetas en blanco o con
     // el color/semana viejos hasta volver a entrar a la pantalla.
@@ -15267,7 +15318,7 @@ function reintentarOrdenesSync(){
 }
 setTimeout(reintentarOrdenesSync, 5000);
 setInterval(reintentarOrdenesSync, 5*60*1000);
-function savePM03Supa(p){supaUpsert('pm03_plan',{id:p.id,linea:p.linea,componente:p.componente||null,actividad:p.actividad,area:p.area||null,semana:p.semana,anio:p.año||2026,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null,responsable_area_id:p.responsableAreaId||null,responsable_area_nombre:p.responsableAreaNombre||null,estado:p.estado||'abierta',prioridad:p.prioridad||null,fuente_excel:p.fuenteExcel||false,horas_cierre:p.horasCierre||0,observaciones_cierre:p.observacionesCierre||null,cerrada_ts:p.cerradaTs||null,cerrada_por:p.cerradaPor||null,generado_por:p.generadoPor||null,origen_ot:p.origenOT||null,origen_pm02:p.origenPM02||null,ts:p.ts||Date.now(),liberado_por:p.liberadoPor||null,liberado_ts:p.liberadoTs||null,estado_calidad:p.estadoCalidad||null,rechazo_calidad:p.rechazoCalidad||null,actividades_estado:p.actividadesEstado?JSON.stringify(p.actividadesEstado):null,refacciones_usadas:p.refaccionesUsadas||null,herramienta_ingresada:p.herramientaIngresada||null,herramienta_salida:p.herramientaSalida||null,grasa_aceite:p.grasaAceite||null,limpieza_mtto:typeof p.limpiezaMtto==='boolean'?p.limpiezaMtto:null,desinf_produccion:typeof p.desinfProduccion==='boolean'?p.desinfProduccion:null,firma_tecnico:p.firmaTecnico||null,firma_tecnico_ts:p.firmaTecnicoTs||null,comentarios_actividades:p.comentariosActividades?JSON.stringify(p.comentariosActividades):null,mediciones_actividades:p.medicionesActividades?JSON.stringify(p.medicionesActividades):null,liberado_prod_por:p.liberadoProdPor||null,liberado_prod_ts:p.liberadoProdTs||null,liberado_admin_por:p.liberadoAdminPor||null,liberado_admin_ts:p.liberadoAdminTs||null,estado_flujo:p.estadoFlujo||'ejecucion',nota_reprogramacion:p.notaReprogramacion||null,reprogramada_por:p.reprogramadaPor||null,reprogramada_ts:p.reprogramadaTs||null,comentario_desinfeccion:p.comentarioDesinfeccion||null,tecnicos_adicionales:p.tecnicosAdicionales&&p.tecnicosAdicionales.length?JSON.stringify(p.tecnicosAdicionales):null,comentario_firma_calidad:p.comentarioFirmaCalidad||null,comentario_firma_prod:p.comentarioFirmaProd||null,comentario_firma_admin:p.comentarioFirmaAdmin||null,
+function savePM03Supa(p){supaUpsert('pm03_plan',{id:p.id,linea:p.linea,componente:p.componente||null,actividad:p.actividad,area:p.area||null,semana:p.semana,anio:p.año||2026,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null,responsable_area_id:p.responsableAreaId||null,responsable_area_nombre:p.responsableAreaNombre||null,estado:p.estado||'abierta',prioridad:p.prioridad||null,fuente_excel:p.fuenteExcel||false,horas_cierre:p.horasCierre||0,observaciones_cierre:p.observacionesCierre||null,cerrada_ts:p.cerradaTs||null,cerrada_por:p.cerradaPor||null,generado_por:p.generadoPor||null,origen_ot:p.origenOT||null,origen_pm02:p.origenPM02||null,ts:p.ts||Date.now(),liberado_por:p.liberadoPor||null,liberado_ts:p.liberadoTs||null,estado_calidad:p.estadoCalidad||null,rechazo_calidad:p.rechazoCalidad||null,actividades_estado:p.actividadesEstado?JSON.stringify(p.actividadesEstado):null,refacciones_usadas:p.refaccionesUsadas||null,herramienta_ingresada:p.herramientaIngresada||null,herramienta_salida:p.herramientaSalida||null,grasa_aceite:p.grasaAceite||null,limpieza_mtto:typeof p.limpiezaMtto==='boolean'?p.limpiezaMtto:null,desinf_produccion:typeof p.desinfProduccion==='boolean'?p.desinfProduccion:null,firma_tecnico:p.firmaTecnico||null,firma_tecnico_ts:p.firmaTecnicoTs||null,comentarios_actividades:p.comentariosActividades?JSON.stringify(p.comentariosActividades):null,mediciones_actividades:p.medicionesActividades?JSON.stringify(p.medicionesActividades):null,liberado_prod_por:p.liberadoProdPor||null,liberado_prod_ts:p.liberadoProdTs||null,liberado_admin_por:p.liberadoAdminPor||null,liberado_admin_ts:p.liberadoAdminTs||null,estado_flujo:p.estadoFlujo||'ejecucion',nota_reprogramacion:p.notaReprogramacion||null,reprogramada_por:p.reprogramadaPor||null,reprogramada_ts:p.reprogramadaTs||null,reprogramada_a:p.reprogramadaA||null,reprogramada_de:p.reprogramadaDe||null,comentario_desinfeccion:p.comentarioDesinfeccion||null,tecnicos_adicionales:p.tecnicosAdicionales&&p.tecnicosAdicionales.length?JSON.stringify(p.tecnicosAdicionales):null,comentario_firma_calidad:p.comentarioFirmaCalidad||null,comentario_firma_prod:p.comentarioFirmaProd||null,comentario_firma_admin:p.comentarioFirmaAdmin||null,
   semanas_vencidas:p.semanasVencidas&&p.semanasVencidas.length?JSON.stringify(p.semanasVencidas):undefined,
   motivo_recorrido:p.motivoRecorrido||undefined,
   protocolo_snapshot:p.protocoloSnapshot?JSON.stringify(p.protocoloSnapshot):undefined,
@@ -15613,7 +15664,14 @@ function updatePendChart(tecId,año,sem,semsDelMes,soloDefecto){
   // que ya no corresponde a lo que el usuario está viendo (ej. si filtró a Temporal
   // la lista no trae ninguna PM03, o si dejó el filtro por defecto de Abiertas,
   // no debe sumar las PM03 ya cerradas al total).
-  var pm03List = (filtrosPend.tipo==='todas'||filtrosPend.tipo==='PM03') ? PM03_PLAN.filter(function(p){
+  // pm03DelPeriodo: SIN filtrar por estado -- se usa solo para decidir si hay
+  // algo de PM03 que le toque a este período/técnico/tipo en absoluto (línea
+  // "if(!pm03DelPeriodo.length) ocultar"). pm03List sí aplica el filtro de
+  // estado para los números que se muestran. Antes ambos eran lo mismo, y eso
+  // ocultaba la gráfica entera en cuanto, por ejemplo, ya no quedaba ninguna
+  // PM03 ABIERTA en el período (todas cerradas a tiempo) -- un día normal y
+  // bueno, no un caso de "aquí no aplica PM03", así que no debía desaparecer.
+  var pm03DelPeriodo = (filtrosPend.tipo==='todas'||filtrosPend.tipo==='PM03') ? PM03_PLAN.filter(function(p){
     if(p.esInspeccion) return false;
     if(p.año !== año) return false;
     if(p.estado==='reprogramada') return false;
@@ -15623,10 +15681,13 @@ function updatePendChart(tecId,año,sem,semsDelMes,soloDefecto){
     if(tecId && p.tecnicoId !== tecId) return false;
     // For tecnico: only their assigned PM03
     if(r==='tecnico' && !tecId && p.tecnicoId!==currentUser.id && p.responsableAreaId!==currentUser.id) return false;
+    return true;
+  }) : [];
+  var pm03List = pm03DelPeriodo.filter(function(p){
     if(filtrosPend.estado==='cerrada'&&p.estado!=='cerrada') return false;
     if(filtrosPend.estado==='abierta'&&p.estado==='cerrada') return false;
     return true;
-  }) : [];
+  });
   // Also include PM02 and PM04 for the chart -- mismo criterio de semana/mes
   // que usa la lista para las OT (sin el límite de "soloDefecto", igual que allá).
   var otsList = ORDENES.filter(function(o){
@@ -15648,7 +15709,7 @@ function updatePendChart(tecId,año,sem,semsDelMes,soloDefecto){
   });
   var allItems = pm03List.concat(otsList);
   
-  if(!pm03List.length){wrap.style.display='none';return;}
+  if(!pm03DelPeriodo.length){wrap.style.display='none';return;}
   wrap.style.display='block';
   
   var total = allItems.length;
@@ -20844,7 +20905,10 @@ function cargarProtocolosSupa(){
       // verde tenue) para siempre, hasta salir y volver a entrar. Esto la
       // repinta sola en cuanto el catálogo real ya está disponible.
       if(document.getElementById('screen-pm03')&&document.getElementById('screen-pm03').classList.contains('active')) renderPM03();
-      if(document.getElementById('screen-ordenes')&&document.getElementById('screen-ordenes').classList.contains('active')&&document.getElementById('fp-semana')) aplicarFiltrosPendientes();
+      if(document.getElementById('screen-ordenes')&&document.getElementById('screen-ordenes').classList.contains('active')){
+        if(document.getElementById('fp-semana')) aplicarFiltrosPendientes();
+        else renderMisOrdenes();
+      }
       if(document.getElementById('dor-content')) renderDOR();
     }
   }).catch(function(){});
@@ -32029,6 +32093,16 @@ function _renderDORInner(cont,dias,ultimoAcc){
   // de un número que podría ser falso.
   var _ordenesListas=!!window._dorSyncOrdenesListo;
   var _pm3Listas=!!window._dorSyncPM03Listo;
+  // Si la sincronización de 'ordenes'/'pm03' ya agotó sus reintentos (ver
+  // mecanismo genérico de Cargando/Sin conexión), estas mismas tarjetas grises
+  // cambian el texto a "Sin conexión" en vez de quedarse en "Cargando…" para
+  // siempre sin avisar que en realidad ya falló.
+  var _ordenesError = SYNC_ESTADO.ordenes && SYNC_ESTADO.ordenes.estado==='error';
+  var _pm3Error = SYNC_ESTADO.pm03 && SYNC_ESTADO.pm03.estado==='error';
+  var _ordenesEstadoLbl = _ordenesError ? 'Sin conexión' : 'Cargando…';
+  var _ordenesEstadoSub = _ordenesError ? 'Revisa tu internet' : 'Sincronizando datos';
+  var _pm3EstadoLbl = _pm3Error ? 'Sin conexión' : 'Cargando…';
+  var _pm3EstadoSub = _pm3Error ? 'Revisa tu internet' : 'Sincronizando datos';
 
   var otsAbiertas=ORDENES.filter(function(o){return o.estado==='abierta'&&!o.fuenteBitacora;}).length;
   var otsTotal=ORDENES.filter(function(o){return !o.fuenteBitacora;}).length;
@@ -32062,8 +32136,8 @@ function _renderDORInner(cont,dias,ultimoAcc){
       +'</div>')
     :('<div style="background:#9ca3af;border-radius:12px;padding:12px;color:#fff;text-align:center">'
       +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Anorm. Seguridad</div>'
-      +'<div style="font-size:15px;font-weight:900;line-height:1.1">Cargando…</div>'
-      +'<div style="font-size:9px;opacity:.85;margin-top:2px">Sincronizando datos</div>'
+      +'<div style="font-size:15px;font-weight:900;line-height:1.1">'+_ordenesEstadoLbl+'</div>'
+      +'<div style="font-size:9px;opacity:.85;margin-top:2px">'+_ordenesEstadoSub+'</div>'
       +'</div>');
 
   html+=_ordenesListas
@@ -32074,8 +32148,8 @@ function _renderDORInner(cont,dias,ultimoAcc){
       +'</div>')
     :('<div style="background:#9ca3af;border-radius:12px;padding:12px;color:#fff;text-align:center">'
       +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Anorm. Calidad</div>'
-      +'<div style="font-size:15px;font-weight:900;line-height:1.1">Cargando…</div>'
-      +'<div style="font-size:9px;opacity:.85;margin-top:2px">Sincronizando datos</div>'
+      +'<div style="font-size:15px;font-weight:900;line-height:1.1">'+_ordenesEstadoLbl+'</div>'
+      +'<div style="font-size:9px;opacity:.85;margin-top:2px">'+_ordenesEstadoSub+'</div>'
       +'</div>');
 
   // Mismo semáforo de 3 niveles que ya se usa en la tarjeta "Cumplimiento Mtto
@@ -32091,8 +32165,8 @@ function _renderDORInner(cont,dias,ultimoAcc){
       +'</div>')
     :('<div style="background:#9ca3af;border-radius:12px;padding:12px;color:#fff;text-align:center">'
       +'<div style="font-size:10px;font-weight:700;opacity:.9;margin-bottom:2px">Avance PM Sem '+currentWeek()+'</div>'
-      +'<div style="font-size:15px;font-weight:900;line-height:1.1">Cargando…</div>'
-      +'<div style="font-size:9px;opacity:.7;margin-top:2px">Sincronizando datos</div>'
+      +'<div style="font-size:15px;font-weight:900;line-height:1.1">'+_pm3EstadoLbl+'</div>'
+      +'<div style="font-size:9px;opacity:.7;margin-top:2px">'+_pm3EstadoSub+'</div>'
       +'</div>');
   html+='</div>';
 
@@ -32111,7 +32185,7 @@ function _renderDORInner(cont,dias,ultimoAcc){
       +'</div>')
     :('<div style="background:#fff;border:1px solid #d1d5db;border-radius:12px;padding:12px">'
       +'<div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:8px">ÓRDENES DE TRABAJO</div>'
-      +'<div style="text-align:center;color:#9ca3af;font-size:12px;padding:14px 0">Cargando…</div>'
+      +'<div style="text-align:center;color:#9ca3af;font-size:12px;padding:14px 0">'+_ordenesEstadoLbl+'</div>'
       +'</div>');
 
   var refA=(REF_FALTANTES||[]).filter(function(r){return r.estado!=='comprada'&&r.prioridad==='A';}).length;
