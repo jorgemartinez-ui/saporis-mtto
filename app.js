@@ -22990,6 +22990,25 @@ function confirmarReprogramar(id){
   },200);
 }
 
+// Mensaje rápido (sin salir del Calendario de Plan de Mantenimiento) con el
+// motivo, quién y cuándo reprogramó esta PM03, y a qué semana se movió -- para
+// auditoría, ver showPlanCalendario (celda gris "R" en la semana original).
+// El motivo se guarda en la PM03 NUEVA (notaReprogramacion), no en la
+// original, así que hay que seguir el enlace reprogramadaA para encontrarlo.
+function verMotivoReprogramacionPM03(id){
+  var p=PM03_PLAN.find(function(x){return x.id===id;});
+  if(!p) return;
+  var destino=p.reprogramadaA?PM03_PLAN.find(function(x){return x.id===p.reprogramadaA;}):null;
+  var nota=destino?(destino.notaReprogramacion||''):'';
+  var destTxt=destino?('Sem '+destino.semana+'/'+destino.año):'—';
+  var msg='📅 '+(p.componente||'General')+' — '+(p.actividad||'—')+'\n\n'
+    +'Reprogramada de Sem '+p.semana+'/'+p.año+' a '+destTxt+'\n\n'
+    +'Motivo: '+(nota||'(sin motivo registrado)')+'\n'
+    +'Por: '+(p.reprogramadaPor||'—')+'\n'
+    +'Fecha: '+(p.reprogramadaTs?new Date(p.reprogramadaTs).toLocaleString('es-MX'):'—');
+  alert(msg);
+}
+
 // ================================================================
 // CERRAR SIN EJECUTAR / NO APLICA (solo admin/super)
 // Cierre directo, sin protocolo ni firmas, sin pasar por el flujo de
@@ -37943,6 +37962,7 @@ function showPlanCalendario(areaId,linea){
   var planKeys={};
   var manualItems=[];
   var freqMap={};
+  var _posiblesManuales=[];
   todos.forEach(function(p){
     var esExcel=p.fuenteExcel===true||_excelGP.indexOf(p.generadoPor)>=0;
     if(esExcel){
@@ -37953,7 +37973,24 @@ function showPlanCalendario(areaId,linea){
       freqMap[k].registros.push(p);
       planKeys[k]=freqMap[k];
     } else {
-      if(p.semana) manualItems.push(p);
+      if(p.semana) _posiblesManuales.push(p);
+    }
+  });
+  // Segunda pasada: una PM03 reprogramada manualmente (botón "📅 Reprogramar")
+  // sale con generadoPor/fuenteExcel propios de quien la reprogramó, así que no
+  // califica como "esExcel" aunque sea la continuación de una actividad del
+  // plan — si su mismo equipo+actividad ya está en el Plan formal, se une a esa
+  // misma fila (en vez de esconderse en "Lanzadas Manualmente") para poder ver
+  // en una sola fila de dónde a dónde se movió. Si no pertenece a ninguna
+  // actividad del plan, se queda en la sección manual como antes.
+  _posiblesManuales.forEach(function(p){
+    var eq=p.componente||'General';
+    var act=p.actividad||'—';
+    var k=eq+'||'+act;
+    if(planKeys[k]){
+      freqMap[k].registros.push(p);
+    } else {
+      manualItems.push(p);
     }
   });
 
@@ -38093,7 +38130,17 @@ function showPlanCalendario(areaId,linea){
     } else {
       semanas.forEach(function(s){
         var p=act.programado[s];
-        if(p){
+        if(p&&p.estado==='reprogramada'){
+          // Se movió a propósito desde el botón PM03 (motivo obligatorio ya
+          // capturado en confirmarReprogramar) -- se pinta de GRIS, distinto del
+          // rojo de "Vencida" (que es cuando el corte automático del martes 6:30am
+          // la recorre sola por no haberse cerrado, sin que nadie la haya movido
+          // a propósito). Deja huella de que aquí SÍ estaba programada, en vez de
+          // verse como si nunca hubiera existido en esta semana. Click muestra el
+          // motivo/quién/cuándo/a qué semana se movió sin salir del calendario.
+          var _tituloReprog=('Sem '+s+' — '+act.label+' — Reprogramada').replace(/"/g,'&quot;');
+          html+='<td style="background:#9ca3af;text-align:center;cursor:pointer" onclick="verMotivoReprogramacionPM03(\''+p.id+'\')" title="'+_tituloReprog+'"><span style="color:#fff;font-size:9px;pointer-events:none">R</span></td>';
+        } else if(p){
           var isPast=s<semActual;
           var isVenc=isPast&&p.estado!=='cerrada';
           var bg=isVenc?'#7f1d1d':'#1e3a8a';
