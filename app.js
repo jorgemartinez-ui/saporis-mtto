@@ -321,7 +321,26 @@ function getTurno(){
   if(h>=870&&h<1350)return'B'; // 14:30-22:30
   return'C';
 }
-function showAlert(msg,tipo='success'){const el=document.getElementById('global-alert');el.textContent=msg;el.className='alert alert-'+tipo;el.classList.remove('hidden');setTimeout(()=>el.classList.add('hidden'),3000);}
+var _alertHideTimer=null;
+function showAlert(msg,tipo='success'){
+  const el=document.getElementById('global-alert');
+  el.textContent=msg;el.className='alert alert-'+tipo;el.classList.remove('hidden');
+  if(_alertHideTimer) clearTimeout(_alertHideTimer);
+  // Los de tipo "error" se dejan más tiempo visibles -- antes todos
+  // desaparecían a los 3s, muy poco para alcanzar a leerlos (a petición de
+  // Jorge). Éxito/advertencia se quedan igual que siempre.
+  var dur = tipo==='error' ? 12000 : 3000;
+  _alertHideTimer=setTimeout(()=>el.classList.add('hidden'),dur);
+}
+// Mensaje genérico y amigable para fallas de conexión al guardar/sincronizar
+// -- antes varias pantallas mostraban el texto técnico crudo que regresaba
+// el servidor o fetch (ej. "Error al sincronizar orden OT-123: {\"code\":...")
+// que no le ayuda en nada al usuario. El detalle técnico real se conserva en
+// consola para poder depurar. A petición de Jorge.
+function showErrorConexion(detalleTecnico){
+  if(detalleTecnico) console.error('Error de conexión:',detalleTecnico);
+  showAlert('⚠️ Error al intentar conectar. Si el problema persiste, cierra e inicia sesión.','error');
+}
 function cerrarModal(id){document.getElementById(id).classList.add('hidden');}
 function showModal(id){document.getElementById(id).classList.remove('hidden');}
 // Cancelar el cierre genérico (modal-cierre): además de cerrar el modal, libera
@@ -687,6 +706,11 @@ function _iniciarPMReal(tipo){
   if(saved&&saved.tipo===tipo&&saved.levantadoId===currentUser.id&&(Date.now()-saved.ts)<86400000){
     if(confirm('Tienes un registro de '+tipo+' sin terminar. ¿Continuar donde lo dejaste?')){
       pmState=saved;
+      // Migrar borradores guardados antes de este cambio (foto única) al
+      // nuevo formato de varias fotos, para no perder la que ya tenía.
+      if(pmState.foto && !(pmState.fotos&&pmState.fotos.length)){
+        pmState.fotos=[pmState.foto];
+      }
       pmStepNum=saved._stepNum||0;
     } else {
       pmState={tipo,levantadoPor:nombreEfectivo(),levantadoId:currentUser.id,ts:Date.now(),foto:null};
@@ -837,10 +861,13 @@ function renderPMStep(){
     c.innerHTML=`${dup?`<div class="dup-warn">⚠️ Posible duplicado detectado (${dup}). Puedes continuar de todas formas.</div>`:''}
     <div class="wizard-title">📝 Detalle y Fotografía</div>
     <div class="form-group"><div style="display:flex;gap:6px"><textarea class="form-control" id="inp-detalle" placeholder="Describe qué está pasando..." style="min-height:110px;flex:1">${pmState.detalle||''}</textarea>${micBtn('inp-detalle')}</div></div>
-    <div class="form-group"><label class="form-label">📷 Fotografía (opcional)</label>
-      <div style="display:flex;gap:8px;margin-bottom:8px"><button class="btn btn-outline" style="flex:1;padding:12px" onclick="document.getElementById('foto-input-camara').click()">📷 Cámara</button><button class="btn btn-outline" style="flex:1;padding:12px" onclick="document.getElementById('foto-input-galeria').click()">🖼️ Galería</button></div>
-      <input type="file" id="foto-input-camara" accept="image/*" capture="environment" style="display:none" onchange="procesarFoto(this)"><input type="file" id="foto-input-galeria" accept="image/*" style="display:none" onchange="procesarFoto(this)">
-      ${pmState.foto?`<div style="position:relative"><img src="${pmState.foto}" class="foto-preview"><button type="button" onclick="pmBorrarFoto()" style="display:block;margin-top:6px;background:#fef2f2;color:#7f1d1d;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer;width:100%">🗑️ Borrar foto</button></div>`:''}
+    <div class="form-group"><label class="form-label">📷 Fotografías (opcional, hasta 5)</label>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <button class="btn btn-outline" style="flex:1;padding:12px" ${(pmState.fotos&&pmState.fotos.length>=5)?'disabled':''} onclick="document.getElementById('foto-input-camara').click()">📷 Cámara</button>
+        <button class="btn btn-outline" style="flex:1;padding:12px" ${(pmState.fotos&&pmState.fotos.length>=5)?'disabled':''} onclick="document.getElementById('foto-input-galeria').click()">🖼️ Galería</button>
+      </div>
+      <input type="file" id="foto-input-camara" accept="image/*" capture="environment" style="display:none" onchange="procesarFoto(this)"><input type="file" id="foto-input-galeria" accept="image/*" multiple style="display:none" onchange="procesarFoto(this)">
+      ${(pmState.fotos&&pmState.fotos.length)?`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">${pmState.fotos.map(function(f,i){return'<div style="position:relative;display:inline-block"><img src="'+f+'" class="foto-preview" style="width:80px;height:80px;margin:0"><button type="button" onclick="pmBorrarFoto('+i+')" style="position:absolute;top:-6px;right:-6px;background:#7f1d1d;color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer;line-height:1">×</button></div>';}).join('')}</div><div style="font-size:11px;color:#6b7280;margin-top:4px">${pmState.fotos.length}/5 foto(s)</div>`:''}
     </div>`;
   }
   else if(stepName==='fecha_trabajo'){
@@ -969,25 +996,37 @@ function onTipoAnomChange(sel){
   contDiv.style.display=needsCont?'block':'none';
 }
 function procesarFoto(input){
-  const f=input.files[0];if(!f)return;
-  // Save current text values BEFORE processing
+  var files=input.files?Array.from(input.files):[];
+  if(!files.length) return;
+  // Save current text values BEFORE processing (renderPMStep los vuelve a
+  // pintar usando pmState, así que no se pierden aunque se re-renderice).
   const det=document.getElementById('inp-detalle');if(det)pmState.detalle=det.value;
   const comp=document.getElementById('inp-componente');if(comp)pmState.componente=comp.value;
-  comprimirImagen(f,function(b64){
-    pmState.foto=b64;
-    // Update preview without re-rendering (preserves text inputs)
-    var preview=document.querySelector('.foto-preview');
-    var container=document.querySelector('#foto-input-camara')?.parentElement||document.querySelector('#foto-input-galeria')?.parentElement;
-    if(preview){preview.src=b64;}
-    else{
-      // No preview yet — just update without full re-render
-      var noFotoDiv=document.querySelector('[style*="Sin foto"]');
-      if(noFotoDiv){
-        noFotoDiv.outerHTML='<div style="position:relative"><img src="'+b64+'" class="foto-preview"><div style="font-size:12px;color:var(--vd);font-weight:700;margin-top:4px">✅ Foto cargada</div></div>';
-      } else {
-        renderPMStep(); // fallback only
+  if(!pmState.fotos) pmState.fotos=[];
+
+  // Tope de 5 fotos por aviso: si selecciona más de las que alcanzan, se
+  // suben solo hasta llegar al máximo y se avisa cuántas no entraron (a
+  // petición de Jorge).
+  var espacio=5-pmState.fotos.length;
+  var descartadas=0;
+  if(files.length>espacio){descartadas=files.length-espacio;files=files.slice(0,espacio);}
+  if(!files.length){
+    showAlert('Ya tienes 5 fotos, el máximo permitido','error');
+    input.value='';
+    return;
+  }
+
+  var procesadas=0;
+  files.forEach(function(f){
+    comprimirImagen(f,function(b64){
+      pmState.fotos.push(b64);
+      procesadas++;
+      if(procesadas===files.length){
+        input.value='';
+        if(descartadas>0) showAlert('Se guardaron '+files.length+' foto(s) — '+descartadas+' no se subieron, ya llegaste al máximo de 5');
+        renderPMStep();
       }
-    }
+    });
   });
 }
 
@@ -1119,7 +1158,7 @@ function guardarOT(){
     id,tipo:pmTipo,area:pmState.area,linea:pmState.lineaDisplay||pmState.linea,
     componente:pmState.componente||'—',prioridad:pmState.prioridad,
     tipoAnormalidad:pmState.tipoAnormalidadDisplay||pmState.tipoAnormalidad||'—',
-    detalle:pmState.detalle,foto:pmState.foto||null,
+    detalle:pmState.detalle,foto:null,fotos:(pmState.fotos&&pmState.fotos.length)?pmState.fotos:undefined,
     tecnicoAsignado:(esRolAnormalidad()&&pmTipo==='PM02')?'':tecId,
     tecnicoNombre:(esRolAnormalidad()&&pmTipo==='PM02')?'Sin asignar':tecNom,
     conciliadoCon:'',
@@ -1222,10 +1261,10 @@ function renderAtencionStep(){
     </div>
     <div class="form-group"><label class="form-label">Refacciones utilizadas</label>
       <input type="text" class="form-control" id="atc-refacciones" value="${atencionState.refacciones||''}" placeholder="Código o descripción..."><div id="atc-ref-standby" style="margin-top:4px"></div></div>
-    <div class="form-group"><label class="form-label">📷 Fotografía (opcional)</label>
-      <div class="foto-btn" onclick="document.getElementById('atc-foto-input').click()">${atencionState.foto?'✅ Foto cargada':'📷 Agregar foto'}</div>
-      <input type="file" id="atc-foto-input" accept="image/*" accept="image/*" style="display:none" onchange="procesarFotoAtc(this)">
-      ${atencionState.foto?`<img src="${atencionState.foto}" class="foto-preview">`:''}
+    <div class="form-group"><label class="form-label">📷 Fotografías (opcional, hasta 5)</label>
+      <div class="foto-btn" ${(atencionState.fotos&&atencionState.fotos.length>=5)?'style="opacity:.5;pointer-events:none"':''} onclick="document.getElementById('atc-foto-input').click()">${(atencionState.fotos&&atencionState.fotos.length)?'✅ '+atencionState.fotos.length+'/5 foto(s) — agregar más':'📷 Agregar fotos'}</div>
+      <input type="file" id="atc-foto-input" accept="image/*" multiple style="display:none" onchange="procesarFotoAtc(this)">
+      ${(atencionState.fotos&&atencionState.fotos.length)?`<div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">${atencionState.fotos.map(function(f,i){return'<div style="position:relative;display:inline-block"><img src="'+f+'" class="foto-preview" style="width:80px;height:80px;margin:0"><button type="button" onclick="atcBorrarFoto('+i+')" style="position:absolute;top:-6px;right:-6px;background:#7f1d1d;color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer;line-height:1">×</button></div>';}).join('')}</div>`:''}
     </div>`;
     _standbyDisponiblesHtml('atc-ref-standby','texto','atc-refacciones');
   }
@@ -1241,10 +1280,41 @@ function atcSetTipo(t,btn){
 }
 function onAtcLineaChange(sel){atencionState.linea=sel.value;const w=document.getElementById('atc-otra-w');if(w)w.classList.toggle('hidden',sel.value!=='otra');}
 function procesarFotoAtc(input){
-  const f=input.files[0];if(!f)return;
+  var files=input.files?Array.from(input.files):[];
+  if(!files.length) return;
   // Guardar campos actuales antes de re-render
   _guardarCamposAtencion();
-  comprimirImagen(f,function(b64){atencionState.foto=b64;renderAtencionStep();});
+  if(!atencionState.fotos) atencionState.fotos=[];
+
+  // Tope de 5 fotos: si selecciona más de las que alcanzan, se suben solo
+  // hasta llegar al máximo y se avisa cuántas no entraron (a petición de
+  // Jorge).
+  var espacio=5-atencionState.fotos.length;
+  var descartadas=0;
+  if(files.length>espacio){descartadas=files.length-espacio;files=files.slice(0,espacio);}
+  if(!files.length){
+    showAlert('Ya tienes 5 fotos, el máximo permitido','error');
+    input.value='';
+    return;
+  }
+
+  var procesadas=0;
+  files.forEach(function(f){
+    comprimirImagen(f,function(b64){
+      atencionState.fotos.push(b64);
+      procesadas++;
+      if(procesadas===files.length){
+        input.value='';
+        if(descartadas>0) showAlert('Se guardaron '+files.length+' foto(s) — '+descartadas+' no se subieron, ya llegaste al máximo de 5');
+        renderAtencionStep();
+      }
+    });
+  });
+}
+function atcBorrarFoto(idx){
+  if(atencionState.fotos && atencionState.fotos.length) atencionState.fotos.splice(idx,1);
+  var inp=document.getElementById('atc-foto-input');if(inp)inp.value='';
+  renderAtencionStep();
 }
 function _guardarCamposAtencion(){
   // Guardar todos los campos del paso 5 al atencionState
@@ -1319,7 +1389,7 @@ function guardarAtencion(){
   const ot={
     id,tipo,area:'productiva',linea:atencionState.lineaDisplay||'—',
     componente:atencionState.componente||'—',prioridad:'A',tipoAnormalidad:'Paro Menor',colorOT:tipo==='PM02'?'rojo':null,
-    detalle:atencionState.falla||'Atención a línea',causaRaiz:atencionState.causaRaiz,foto:atencionState.foto||null,
+    detalle:atencionState.falla||'Atención a línea',causaRaiz:atencionState.causaRaiz,foto:null,fotos:(atencionState.fotos&&atencionState.fotos.length)?atencionState.fotos:undefined,
     tecnicoAsignado:currentUser.id,tecnicoNombre:currentUser.nombre,
     levantadoPor:nombreEfectivo(),levantadoId:currentUser.id,
     ts:Date.now(),fecha:atencionState.fecha||todayStr(),esAtencion:true,turno:getTurno(),
@@ -1422,17 +1492,26 @@ function showDetalle(id){
   // La foto (base64) ya no viaja en la sincronización general (para no bajar
   // imágenes de órdenes que nadie está viendo); se pide puntual al abrir el
   // detalle, una sola vez por orden por sesión.
-  if(o.foto || _ordenFotoFetched[id]){
+  if(o.foto || (o.fotos&&o.fotos.length) || _ordenFotoFetched[id]){
     _renderDetalleOrden(id,o);
     return;
   }
-  supaFetch('ordenes','GET',null,'id=eq.'+id+'&select=id,foto').then(function(rows){
+  supaFetch('ordenes','GET',null,'id=eq.'+id+'&select=id,foto,fotos').then(function(rows){
     if(rows){
       _ordenFotoFetched[id]=true;
       // Asignar SIEMPRE un valor definitivo (aunque sea null = confirmado sin
       // foto), para que quede registrado como "ya se sabe" y no como
       // "desconocido" — así un guardado posterior no se equivoca de estado.
-      if(rows[0]) o.foto=rows[0].foto||null;
+      if(rows[0]){
+        o.foto=rows[0].foto||null;
+        // fotos (varias, PM01/02/04): igual que con las de PM03, nunca se
+        // borra un arreglo que este dispositivo ya tenía solo porque el
+        // servidor, en ese instante, respondió vacío.
+        var fotosSrv=null;
+        try{ fotosSrv=rows[0].fotos?JSON.parse(rows[0].fotos):null; }catch(e){ fotosSrv=null; }
+        if(fotosSrv && fotosSrv.length) o.fotos=fotosSrv;
+        else if(o.fotos===undefined) o.fotos=[];
+      }
       saveDB('ordenes',ORDENES);
     }
     if(otCerrandoId!==id) return; // el usuario ya salió de este detalle
@@ -1572,7 +1651,8 @@ function _renderDetalleOrden(id,o){
       ${o.turno?row('🔄 Turno','Turno '+o.turno):''}
       ${r==='super'?'<div style="margin-top:8px;padding:8px;background:#fef3c7;border-radius:8px;font-size:11px;color:#92400e"><b>🔒 Solo super</b> · Registro: '+fmtDateTime(o.ts)+(o.cerradaTs?' · Captura cierre: '+fmtDateTime(o.cerradaTs):'')+'</div>':''}
     </div>
-    <div class="card"><div class="card-title">📝 Detalle</div><p style="font-size:14px;color:var(--txt2);line-height:1.6">${o.detalle}</p>${o.causaRaiz?`<div style="margin-top:10px;font-weight:700;font-size:13px">💡 Causa raíz:</div><p style="font-size:13px;color:var(--txt2);margin-top:4px">${o.causaRaiz}</p>`:''}${o.foto?`<div style="margin-top:10px;font-weight:700;font-size:13px">📷 Foto:</div><img src="${o.foto}" class="foto-preview mt4" style="cursor:pointer" onclick="verFotoOrdenGrande('${o.id}')">`:''}
+    <div class="card"><div class="card-title">📝 Detalle</div><p style="font-size:14px;color:var(--txt2);line-height:1.6">${o.detalle}</p>${o.causaRaiz?`<div style="margin-top:10px;font-weight:700;font-size:13px">💡 Causa raíz:</div><p style="font-size:13px;color:var(--txt2);margin-top:4px">${o.causaRaiz}</p>`:''}${(o.fotos&&o.fotos.length)?`<div style="margin-top:10px;font-weight:700;font-size:13px">📷 Fotos (${o.fotos.length}):</div><div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:4px">${o.fotos.map(function(f,i){return'<img src="'+f+'" style="width:70px;height:70px;object-fit:cover;border-radius:8px;cursor:pointer" onclick="otVerFotoGrande(\''+o.id+'\','+i+')">';}).join('')}</div>`:(o.foto?`<div style="margin-top:10px;font-weight:700;font-size:13px">📷 Foto:</div><img src="${o.foto}" class="foto-preview mt4" style="cursor:pointer" onclick="verFotoOrdenGrande('${o.id}')">`:'')}
+      <button onclick="otAgregarFotos('${o.id}')" style="width:100%;margin-top:10px;padding:10px;background:#e0f7fa;color:#0891b2;border:2px solid #0891b2;border-radius:11px;font-weight:700;cursor:pointer">📷 ${(o.fotos&&o.fotos.length)?'Ver / Agregar fotos ('+o.fotos.length+')':'Agregar fotos'}</button>
     </div>
     ${(o.estado==='cerrada'||o.estado==='pre_cierre')&&o.observacionesCierre?`<div class="card"><div class="card-title">${o.estado==='pre_cierre'?'🔧 Reporte del técnico (pendiente de aprobar)':'✅ Observaciones de cierre'}</div><p style="font-size:13px;color:var(--txt2)">${o.observacionesCierre}</p>${o.refaccionesUsadas?row('🔩 Refacciones',o.refaccionesUsadas):''}</div>`:''}
     ${hist}
@@ -1608,6 +1688,135 @@ function verFotoOrdenGrande(id){
     +'<div style="display:flex;gap:12px;margin-top:16px">'
     +'<button onclick="this.closest(\'div\').parentElement.remove()" style="padding:10px 20px;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:10px;cursor:pointer">✕ Cerrar</button>'
     +'</div>';
+  modal.onclick=function(e){if(e.target===modal)modal.remove();};
+  document.body.appendChild(modal);
+}
+
+// ── Fotos (varias) en órdenes PM01/PM02/PM04 ────────────────────────────
+// Igual que en PM03 (pm3AgregarFotos/pm3ProcesarFotos/pm3EliminarFoto/
+// pm3VerFotoGrande): se puede agregar o ver fotos en cualquier momento
+// mientras se atiende la orden, no solo al levantarla. Límite 5 por orden
+// (a petición de Jorge; en PM03 el límite es 10). No viajan en la
+// sincronización general — se guardan/leen igual que el campo "foto" de
+// siempre (ver showDetalle/abrirGestorPM02 y saveOrdenSupa).
+var LIMITE_FOTOS_OT=5;
+function otAgregarFotos(id){
+  var o=ORDENES.find(function(x){return x.id===id;});
+  if(!o) return;
+  if(!o.fotos) o.fotos=[];
+
+  var modal=document.createElement('div');
+  modal.id='modal-ot-fotos';
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:10000;display:flex;align-items:flex-end;justify-content:center';
+
+  function renderFotosModal(){
+    var previews=o.fotos.map(function(f,i){
+      return'<div style="position:relative;display:inline-block;margin:4px">'
+        +'<img src="'+f+'" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:2px solid #e5e7eb;cursor:pointer" onclick="otVerFotoGrande(\''+id+'\','+i+')">'
+        +'<button onclick="otEliminarFoto(\''+id+'\','+i+')" style="position:absolute;top:-6px;right:-6px;background:#7f1d1d;color:#fff;border:none;border-radius:50%;width:20px;height:20px;font-size:12px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">×</button>'
+        +'</div>';
+    }).join('');
+
+    modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px 20px 32px;width:100%;max-width:480px">'
+      +'<div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 16px"></div>'
+      +'<div style="font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:4px">📷 Fotos de la orden</div>'
+      +'<div style="font-size:12px;color:#6b7280;margin-bottom:16px">'+id+' · '+(o.fotos.length)+'/'+LIMITE_FOTOS_OT+' foto(s)</div>'
+      +(o.fotos.length?'<div style="margin-bottom:16px;min-height:88px">'+previews+'</div>':'<div style="background:#f9fafb;border-radius:10px;padding:20px;text-align:center;color:#9ca3af;margin-bottom:16px">Sin fotos aún</div>')
+      +(o.fotos.length<LIMITE_FOTOS_OT?(
+        '<input type="file" id="ot-foto-input" accept="image/*" multiple style="display:none" onchange="otProcesarFotos(\''+id+'\')">'
+        +'<input type="file" id="ot-camara-input" accept="image/*" capture="environment" style="display:none" onchange="otProcesarFotos(\''+id+'\')">'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
+        +'<button onclick="document.getElementById(\'ot-camara-input\').click()" style="padding:12px;background:#e0f7fa;color:#0891b2;border:2px solid #0891b2;border-radius:11px;font-weight:700;cursor:pointer">📸 Cámara</button>'
+        +'<button onclick="document.getElementById(\'ot-foto-input\').click()" style="padding:12px;background:#f3f4f6;color:#374151;border:2px solid #e5e7eb;border-radius:11px;font-weight:700;cursor:pointer">🖼️ Galería</button>'
+        +'</div>'
+      ):'<div style="font-size:12px;color:#b45309;text-align:center;margin-bottom:12px">Ya llegaste al máximo de '+LIMITE_FOTOS_OT+' fotos</div>')
+      +'<button onclick="document.getElementById(\'modal-ot-fotos\').remove()" style="width:100%;padding:12px;background:#1a3c5e;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">✅ Listo</button>'
+      +'</div>';
+  }
+
+  document.body.appendChild(modal);
+  renderFotosModal();
+  window._otFotosRender=renderFotosModal;
+}
+
+function otProcesarFotos(id){
+  var o=ORDENES.find(function(x){return x.id===id;});
+  if(!o) return;
+  if(!o.fotos) o.fotos=[];
+
+  var inputs=['ot-foto-input','ot-camara-input'];
+  var archivos=[];
+  inputs.forEach(function(inputId){
+    var inp=document.getElementById(inputId);
+    if(inp&&inp.files) Array.from(inp.files).forEach(function(f){archivos.push(f);});
+  });
+  if(!archivos.length) return;
+
+  // Tope de 5 fotos por orden: si selecciona más de las que alcanzan, se
+  // suben solo hasta llegar al máximo y se avisa cuántas no entraron (a
+  // petición de Jorge).
+  var espacio=LIMITE_FOTOS_OT-o.fotos.length;
+  var descartadas=0;
+  if(archivos.length>espacio){descartadas=archivos.length-espacio;archivos=archivos.slice(0,espacio);}
+  if(!archivos.length){
+    showAlert('Ya llegaste al máximo de '+LIMITE_FOTOS_OT+' fotos','error');
+    inputs.forEach(function(inputId){var inp=document.getElementById(inputId);if(inp)inp.value='';});
+    return;
+  }
+
+  var procesados=0;
+  archivos.forEach(function(file){
+    var r=new FileReader();
+    r.onload=function(e){
+      var img=new Image();
+      img.onload=function(){
+        var M=1024;
+        var w=img.width,h=img.height;
+        if(w>M){h=Math.round(h*M/w);w=M;}
+        if(h>M){w=Math.round(w*M/h);h=M;}
+        var c=document.createElement('canvas');
+        c.width=w;c.height=h;
+        c.getContext('2d').drawImage(img,0,0,w,h);
+        o.fotos.push(c.toDataURL('image/jpeg',.7));
+        procesados++;
+        if(procesados===archivos.length){
+          saveDB('ordenes',ORDENES);
+          saveOrdenSupa(o);
+          var msg='✅ '+archivos.length+' foto(s) guardada(s)';
+          if(descartadas>0) msg+=' — '+descartadas+' no se subieron, ya llegaste al máximo de '+LIMITE_FOTOS_OT;
+          showAlert(msg);
+          inputs.forEach(function(inputId){var inp=document.getElementById(inputId);if(inp)inp.value='';});
+          if(window._otFotosRender) window._otFotosRender();
+        }
+      };
+      img.src=e.target.result;
+    };
+    r.readAsDataURL(file);
+  });
+}
+
+function otEliminarFoto(id,idx){
+  var o=ORDENES.find(function(x){return x.id===id;});
+  if(!o||!o.fotos) return;
+  if(!confirm('¿Eliminar esta foto?')) return;
+  o.fotos.splice(idx,1);
+  saveDB('ordenes',ORDENES);
+  saveOrdenSupa(o);
+  if(window._otFotosRender) window._otFotosRender();
+}
+
+function otVerFotoGrande(id,idx){
+  var o=ORDENES.find(function(x){return x.id===id;});
+  if(!o||!o.fotos||!o.fotos[idx]) return;
+  var modal=document.createElement('div');
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:10001;display:flex;align-items:center;justify-content:center;flex-direction:column';
+  modal.innerHTML='<img src="'+o.fotos[idx]+'" style="max-width:95vw;max-height:85vh;object-fit:contain;border-radius:8px">'
+    +'<div style="display:flex;gap:12px;margin-top:16px">'
+    +(idx>0?'<button onclick="this.closest(\'div\').parentElement.remove();otVerFotoGrande(\''+id+'\','+(idx-1)+')" style="padding:10px 20px;background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:20px">‹</button>':'')
+    +'<button onclick="this.closest(\'div\').parentElement.remove()" style="padding:10px 20px;background:rgba(255,255,255,.15);color:#fff;border:none;border-radius:10px;cursor:pointer">✕ Cerrar</button>'
+    +(idx<o.fotos.length-1?'<button onclick="this.closest(\'div\').parentElement.remove();otVerFotoGrande(\''+id+'\','+(idx+1)+')" style="padding:10px 20px;background:rgba(255,255,255,.2);color:#fff;border:none;border-radius:10px;cursor:pointer;font-size:20px">›</button>':'')
+    +'</div>'
+    +'<div style="color:rgba(255,255,255,.6);font-size:12px;margin-top:8px">'+(idx+1)+' / '+o.fotos.length+'</div>';
   modal.onclick=function(e){if(e.target===modal)modal.remove();};
   document.body.appendChild(modal);
 }
@@ -6164,6 +6373,15 @@ function _limpiarFotosAntiguas(){
     fetch(SUPA_URL+'/rest/v1/pm03_plan?id=eq.'+p.id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},body:JSON.stringify({fotos:null})}).catch(function(){});
   });
   if(pm3ConFoto.length>0){saveDB('pm03_plan',PM03_PLAN);}
+  // Mismo criterio de 7 días para las fotos (varias, hasta 5) de PM01/02/04.
+  var ordenesConFotos=ORDENES.filter(function(o){
+    return o.fotos&&o.fotos.length&&o.estado==='cerrada'&&o.cerradaTs&&(ahora-o.cerradaTs)>SIETE_DIAS;
+  });
+  ordenesConFotos.forEach(function(o){
+    o.fotos=[];
+    fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+o.id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},body:JSON.stringify({fotos:null})}).catch(function(){});
+  });
+  if(ordenesConFotos.length>0){saveDB('ordenes',ORDENES);}
 
   // Fotos de órdenes que el técnico asignado ya vio: se borran 1 mes después de esa primera vista,
   // sin importar si la orden ya se cerró o sigue abierta.
@@ -6176,6 +6394,15 @@ function _limpiarFotosAntiguas(){
     fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+o.id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},body:JSON.stringify({foto:null})}).catch(function(){});
   });
   if(ordenesConFotoVista.length>0){saveDB('ordenes',ORDENES);console.log('[FOTOS] Limpiadas (1 mes desde vista técnico) '+ordenesConFotoVista.length+' fotos');}
+  // Mismo criterio de 1 mes para las fotos (varias) de PM01/02/04.
+  var ordenesConFotosVista=ORDENES.filter(function(o){
+    return o.fotos&&o.fotos.length&&o.fotoVistaTs&&(ahora-o.fotoVistaTs)>UN_MES;
+  });
+  ordenesConFotosVista.forEach(function(o){
+    o.fotos=[];
+    fetch(SUPA_URL+'/rest/v1/ordenes?id=eq.'+o.id,{method:'PATCH',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Content-Type':'application/json'},body:JSON.stringify({fotos:null})}).catch(function(){});
+  });
+  if(ordenesConFotosVista.length>0){saveDB('ordenes',ORDENES);}
 }
 
 // ================================================================
@@ -15013,7 +15240,7 @@ function syncSupabase(){
         estadoFinal = local.estado;
         setTimeout(function(){ saveOrdenSupa(local); }, 1000);
       }
-      return {id:r.id,tipo:r.tipo,area:r.area,linea:r.linea,componente:r.componente,prioridad:r.prioridad,tipoAnormalidad:r.tipo_anormalidad,detalle:r.detalle,foto:local?local.foto:undefined,fotoVistaTs:r.foto_vista_ts||null,
+      return {id:r.id,tipo:r.tipo,area:r.area,linea:r.linea,componente:r.componente,prioridad:r.prioridad,tipoAnormalidad:r.tipo_anormalidad,detalle:r.detalle,foto:local?local.foto:undefined,fotos:local?local.fotos:undefined,fotoVistaTs:r.foto_vista_ts||null,
       // Mismo arreglo que en pm03_plan: si Supabase todavía no trae técnico (retraso de
       // sincronización), se conserva el que ya estaba guardado localmente.
       tecnicoAsignado:r.tecnico_asignado||(local?local.tecnicoAsignado:null),tecnicoNombre:r.tecnico_nombre||(local?local.tecnicoNombre:null),levantadoPor:r.levantado_por,levantadoId:r.levantado_id,estado:estadoFinal,colorOT:r.color_ot,semana:r.semana,año:r.anio,ts:r.ts,observacionesCierre:r.observaciones_cierre,horasCierre:r.horas_cierre||0,horaInicioTrabajo:r.hora_inicio_trabajo,horaFinTrabajo:r.hora_fin_trabajo,fechaTrabajo:r.fecha_trabajo||null,cerradaTs:r.cerrada_ts,cerradaPor:r.cerrada_por,refaccionesUsadas:r.refacciones_usadas,causaRaiz:r.causa_raiz,horaLlamado:r.hora_llamado,horaInicio:r.hora_inicio,horaEntrega:r.hora_entrega,tiempoRespuesta:r.tiempo_respuesta,mttr:r.mttr,turno:r.turno,liderPM04:r.lider_pm04,historialReasignacion:r.historial_reasignacion||[],historialModificacion:r.historial_modificacion||[],motivoRechazo:r.motivo_rechazo||null,rechazadoPor:r.rechazado_por||null,preCierreTs:r.pre_cierre_ts||null,preCierrePor:r.pre_cierre_por||null,aprobadoPor:r.aprobado_por||null,rolLevantador:r.rol_levantador||null,esResueltaTemporal:r.es_resuelta_temporal||false,pm03Definitiva:r.pm03_definitiva||null,fuenteBitacora:r.fuente_bitacora||false,fuenteLabel:r.fuente_label||null,limpiezaRequerida:r.limpieza_requerida!=null?r.limpieza_requerida:null,limpiezaAvisadoA:r.limpieza_avisado_a||null,tecnicosAdicionales:(function(){try{return r.tecnicos_adicionales?JSON.parse(r.tecnicos_adicionales):[];}catch(e){return [];}})(),trabajoDias:(function(){try{return r.trabajo_dias?JSON.parse(r.trabajo_dias):[];}catch(e){return [];}})(),pendienteAsignacion:r.pendiente_asignacion||false,conciliadoCon:r.conciliado_con||null,conciliadoConNombre:r.conciliado_con_nombre||null,semanaResolucion:r.semana_resolucion||null};
@@ -15288,6 +15515,10 @@ function saveOrdenSupa(o){
     // foto ya no viaja en la sincronización general; si nunca se cargó en este
     // dispositivo (undefined) se omite para no borrar en Supabase lo que sí exista.
     foto:o.foto!==undefined?(o.foto||null):undefined,
+    // fotos (varias, hasta 5 en PM01/02/04) -- mismo criterio que foto: si
+    // nunca se cargaron en este dispositivo (undefined) se omiten para no
+    // borrar en Supabase lo que sí exista.
+    fotos:o.fotos!==undefined?(o.fotos&&o.fotos.length?JSON.stringify(o.fotos):null):undefined,
     tipo_anormalidad:o.tipoAnormalidad||null, detalle:(o.detalle||'').substring(0,500),
     tecnico_asignado:o.tecnicoAsignado||null,
     tecnico_nombre:o.tecnicoNombre||null,
@@ -15343,7 +15574,7 @@ function saveOrdenSupa(o){
     if(!r.ok){
       return r.text().then(function(txt){
         console.error('saveOrdenSupa FAIL ['+o.id+']: '+txt);
-        showAlert('⚠️ Error al sincronizar orden '+o.id.substring(0,15)+': '+txt.substring(0,80),'error');
+        showErrorConexion(txt);
         // Guardar en cola local para retry
         var q=loadDB('supa_retry_queue',[]);
         q.push({table:'ordenes',id:o.id,ts:Date.now()});
@@ -19061,12 +19292,11 @@ function guardarEdicionOTAdmin(id){
 // ================================================================
 // PM — Borrar foto en wizard
 // ================================================================
-function pmBorrarFoto(){
-  pmState.foto = null;
-  // Re-render solo la preview sin perder el texto
-  var preview = document.querySelector('.foto-preview');
-  if(preview && preview.parentElement){
-    preview.parentElement.outerHTML = '';
+function pmBorrarFoto(idx){
+  if(pmState.fotos && pmState.fotos.length){
+    pmState.fotos.splice(idx,1);
+  } else {
+    pmState.foto = null; // compatibilidad por si quedara algo del formato anterior
   }
   // Reset file inputs
   var cam = document.getElementById('foto-input-camara');
@@ -19074,6 +19304,7 @@ function pmBorrarFoto(){
   if(cam) cam.value='';
   if(gal) gal.value='';
   showAlert('Foto eliminada','warning');
+  renderPMStep();
 }
 
 // ================================================================
@@ -20649,7 +20880,7 @@ function guardarRessueltaTemporalmente(){
     area: pmState.area, linea: pmState.lineaDisplay||pmState.linea,
     componente: pmState.componente||'—', prioridad: pmState.prioridad,
     tipoAnormalidad: pmState.tipoAnormalidadDisplay||pmState.tipoAnormalidad||'—',
-    detalle: pmState.detalle, foto: pmState.foto||null,
+    detalle: pmState.detalle, foto:null,fotos:(pmState.fotos&&pmState.fotos.length)?pmState.fotos:undefined,
     tecnicoAsignado: tecId, tecnicoNombre: tecNom,
     levantadoPor: currentUser.nombre, levantadoId: currentUser.id,
     rolLevantador: currentUser.rol,
@@ -20742,7 +20973,7 @@ function supabaseStatePatch(id, fields){
     if(!r.ok){
       return r.text().then(function(txt){
         console.error('supabaseStatePatch FAIL ['+id+']: '+txt);
-        showAlert('⚠️ Error actualizando estado: '+txt.substring(0,60),'error');
+        showErrorConexion(txt);
       });
     } else {
       console.log('supabaseStatePatch OK: '+id+' → '+JSON.stringify(fields).substring(0,60));
@@ -20787,7 +21018,7 @@ function guardarAtencionTemporal(){
   var tr=null,mttr=null;
   if(atencionState.horaLlamado&&atencionState.horaInicio)tr=Math.round((atencionState.horaInicio-atencionState.horaLlamado)/60000);
   if(atencionState.horaInicio&&atencionState.horaEntrega)mttr=Math.round((atencionState.horaEntrega-atencionState.horaInicio)/60000);
-  var ot={id:idPM,tipo,area:'productiva',linea:atencionState.lineaDisplay||'—',componente:atencionState.componente||'—',prioridad:'A',tipoAnormalidad:'Paro Menor',colorOT:tipo==='PM02'?'rojo':null,detalle:atencionState.falla||'Atención a línea',causaRaiz:atencionState.causaRaiz,foto:atencionState.foto||null,tecnicoAsignado:currentUser.id,tecnicoNombre:currentUser.nombre,levantadoPor:nombreEfectivo(),levantadoId:currentUser.id,rolLevantador:currentUser.rol,ts:Date.now(),fecha:atencionState.fecha||todayStr(),esAtencion:true,turno:getTurno(),estado:'cerrada',semana:currentWeek(),año:currentYear(),horaLlamado:atencionState.horaLlamado,horaInicio:atencionState.horaInicio,horaEntrega:atencionState.horaEntrega,tiempoRespuesta:tr,mttr,liderPM04:atencionState.liderPM04||null,refaccionesUsadas:atencionState.refacciones||'',horasCierre:hrs,observacionesCierre:'Resuelta temporalmente. PM03 generada: '+idPM3,cerradaTs:Date.now(),cerradaPor:nombreEfectivo(),esResueltaTemporal:true,pm03Definitiva:idPM3,historialReasignacion:[],historialModificacion:[]};
+  var ot={id:idPM,tipo,area:'productiva',linea:atencionState.lineaDisplay||'—',componente:atencionState.componente||'—',prioridad:'A',tipoAnormalidad:'Paro Menor',colorOT:tipo==='PM02'?'rojo':null,detalle:atencionState.falla||'Atención a línea',causaRaiz:atencionState.causaRaiz,foto:null,fotos:(atencionState.fotos&&atencionState.fotos.length)?atencionState.fotos:undefined,tecnicoAsignado:currentUser.id,tecnicoNombre:currentUser.nombre,levantadoPor:nombreEfectivo(),levantadoId:currentUser.id,rolLevantador:currentUser.rol,ts:Date.now(),fecha:atencionState.fecha||todayStr(),esAtencion:true,turno:getTurno(),estado:'cerrada',semana:currentWeek(),año:currentYear(),horaLlamado:atencionState.horaLlamado,horaInicio:atencionState.horaInicio,horaEntrega:atencionState.horaEntrega,tiempoRespuesta:tr,mttr,liderPM04:atencionState.liderPM04||null,refaccionesUsadas:atencionState.refacciones||'',horasCierre:hrs,observacionesCierre:'Resuelta temporalmente. PM03 generada: '+idPM3,cerradaTs:Date.now(),cerradaPor:nombreEfectivo(),esResueltaTemporal:true,pm03Definitiva:idPM3,historialReasignacion:[],historialModificacion:[]};
   // Igual que guardarRessueltaTemporalmente(): la PM03 de solución definitiva debe
   // nacer SIN asignar y sin semana, para que caiga en el botón PM03 'Por Asignar' y
   // sea el administrador quien la programe y asigne — no el técnico que hizo la
@@ -27256,6 +27487,7 @@ async function importarDireccionesProleIT(){
 // ================================================================
 // FOTOS PM03 — Múltiples imágenes desde cámara o galería
 // ================================================================
+var LIMITE_FOTOS_PM03=10;
 function pm3AgregarFotos(id){
   var p=PM03_PLAN.find(function(x){return x.id===id;});
   if(!p) return;
@@ -27276,16 +27508,18 @@ function pm3AgregarFotos(id){
     modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px 20px 32px;width:100%;max-width:480px">'
       +'<div style="width:40px;height:4px;background:#e5e7eb;border-radius:2px;margin:0 auto 16px"></div>'
       +'<div style="font-size:16px;font-weight:800;color:#1a3c5e;margin-bottom:4px">📷 Fotos del protocolo</div>'
-      +'<div style="font-size:12px;color:#6b7280;margin-bottom:16px">'+id+' · '+(p.fotos.length)+' foto(s)</div>'
+      +'<div style="font-size:12px;color:#6b7280;margin-bottom:16px">'+id+' · '+(p.fotos.length)+'/'+LIMITE_FOTOS_PM03+' foto(s)</div>'
       // Previews
       +(p.fotos.length?'<div style="margin-bottom:16px;min-height:88px">'+previews+'</div>':'<div style="background:#f9fafb;border-radius:10px;padding:20px;text-align:center;color:#9ca3af;margin-bottom:16px">Sin fotos aún</div>')
-      // Botones agregar
-      +'<input type="file" id="pm3-foto-input" accept="image/*" multiple style="display:none" onchange="pm3ProcesarFotos(\''+id+'\')">'
-      +'<input type="file" id="pm3-camara-input" accept="image/*" capture="environment" style="display:none" onchange="pm3ProcesarFotos(\''+id+'\')">'
-      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
-      +'<button onclick="document.getElementById(\'pm3-camara-input\').click()" style="padding:12px;background:#e0f7fa;color:#0891b2;border:2px solid #0891b2;border-radius:11px;font-weight:700;cursor:pointer">📸 Cámara</button>'
-      +'<button onclick="document.getElementById(\'pm3-foto-input\').click()" style="padding:12px;background:#f3f4f6;color:#374151;border:2px solid #e5e7eb;border-radius:11px;font-weight:700;cursor:pointer">🖼️ Galería</button>'
-      +'</div>'
+      // Botones agregar (ocultos si ya se llegó al tope)
+      +(p.fotos.length<LIMITE_FOTOS_PM03?(
+        '<input type="file" id="pm3-foto-input" accept="image/*" multiple style="display:none" onchange="pm3ProcesarFotos(\''+id+'\')">'
+        +'<input type="file" id="pm3-camara-input" accept="image/*" capture="environment" style="display:none" onchange="pm3ProcesarFotos(\''+id+'\')">'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
+        +'<button onclick="document.getElementById(\'pm3-camara-input\').click()" style="padding:12px;background:#e0f7fa;color:#0891b2;border:2px solid #0891b2;border-radius:11px;font-weight:700;cursor:pointer">📸 Cámara</button>'
+        +'<button onclick="document.getElementById(\'pm3-foto-input\').click()" style="padding:12px;background:#f3f4f6;color:#374151;border:2px solid #e5e7eb;border-radius:11px;font-weight:700;cursor:pointer">🖼️ Galería</button>'
+        +'</div>'
+      ):'<div style="font-size:12px;color:#b45309;text-align:center;margin-bottom:12px">Ya llegaste al máximo de '+LIMITE_FOTOS_PM03+' fotos</div>')
       +'<button onclick="document.getElementById(\'modal-pm3-fotos\').remove()" style="width:100%;padding:12px;background:#1a3c5e;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">✅ Listo</button>'
       +'</div>';
   }
@@ -27309,6 +27543,19 @@ function pm3ProcesarFotos(id){
   });
 
   if(!archivos.length) return;
+
+  // Tope de 10 fotos por PM03: si selecciona más de las que alcanzan, se
+  // suben solo hasta llegar al máximo y se avisa cuántas no entraron (a
+  // petición de Jorge).
+  var espacio=LIMITE_FOTOS_PM03-p.fotos.length;
+  var descartadas=0;
+  if(archivos.length>espacio){descartadas=archivos.length-espacio;archivos=archivos.slice(0,espacio);}
+  if(!archivos.length){
+    showAlert('Ya llegaste al máximo de '+LIMITE_FOTOS_PM03+' fotos','error');
+    inputs.forEach(function(inputId){var inp=document.getElementById(inputId);if(inp)inp.value='';});
+    return;
+  }
+
   var procesados=0;
   archivos.forEach(function(file){
     var r=new FileReader();
@@ -27328,7 +27575,10 @@ function pm3ProcesarFotos(id){
           // Guardar en localStorage y Supabase
           saveDB('pm03_plan',PM03_PLAN);
           savePM03Supa(p);
-          showAlert('✅ '+archivos.length+' foto(s) guardada(s)');
+          var msg='✅ '+archivos.length+' foto(s) guardada(s)';
+          if(descartadas>0) msg+=' — '+descartadas+' no se subieron, ya llegaste al máximo de '+LIMITE_FOTOS_PM03;
+          showAlert(msg);
+          inputs.forEach(function(inputId){var inp=document.getElementById(inputId);if(inp)inp.value='';});
           if(window._pm3FotosRender) window._pm3FotosRender();
         }
       };
@@ -27337,6 +27587,7 @@ function pm3ProcesarFotos(id){
     r.readAsDataURL(file);
   });
 }
+
 
 function pm3EliminarFoto(id,idx){
   var p=PM03_PLAN.find(function(x){return x.id===id;});
@@ -29555,11 +29806,17 @@ function abrirGestorPM02(id){
   // Esta ventana puede abrirse directo desde una lista, sin pasar antes por
   // showDetalle(), así que también necesita pedir la foto puntual si falta
   // (comparte la misma cache de _ordenFotoFetched para no duplicar peticiones).
-  if(!(o.foto || _ordenFotoFetched[id])){
-    supaFetch('ordenes','GET',null,'id=eq.'+id+'&select=id,foto').then(function(rows){
+  if(!(o.foto || (o.fotos&&o.fotos.length) || _ordenFotoFetched[id])){
+    supaFetch('ordenes','GET',null,'id=eq.'+id+'&select=id,foto,fotos').then(function(rows){
       if(rows){
         _ordenFotoFetched[id]=true;
-        if(rows[0]) o.foto=rows[0].foto||null;
+        if(rows[0]){
+          o.foto=rows[0].foto||null;
+          var fotosSrv2=null;
+          try{ fotosSrv2=rows[0].fotos?JSON.parse(rows[0].fotos):null; }catch(e){ fotosSrv2=null; }
+          if(fotosSrv2 && fotosSrv2.length) o.fotos=fotosSrv2;
+          else if(o.fotos===undefined) o.fotos=[];
+        }
         saveDB('ordenes',ORDENES);
       }
       _abrirGestorPM02Render(id,o);
@@ -32883,7 +33140,7 @@ function _reconGuardar(){
     if(!r.ok){
       return r.text().then(function(txt){
         console.error('Reconocimiento — error al guardar:',txt);
-        showAlert('⚠️ No se pudo guardar: '+txt.substring(0,180),'error');
+        showErrorConexion(txt);
         if(btn){btn.disabled=false;btn.textContent='💾 Guardar';}
       });
     }
@@ -32907,7 +33164,7 @@ function _reconGuardar(){
     if(document.getElementById('dor-content')) renderDOR();
   }).catch(function(e){
     console.error('Reconocimiento — error de red al guardar:',e);
-    showAlert('⚠️ No se pudo guardar (red): '+e.message,'error');
+    showErrorConexion(e.message);
     if(btn){btn.disabled=false;btn.textContent='💾 Guardar';}
   });
 }
