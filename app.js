@@ -38424,6 +38424,37 @@ function _freqBucketOrden(actDef){
 // Normaliza texto para comparar actividades/componentes sin que un acento, mayúscula
 // o punto final de más los trate como "actividades distintas" (solo para comparar,
 // nunca se usa para guardar ni mostrar el texto).
+// ── Calendario: semanas en que una actividad de PLAN UNIFICADO quedó "incluida" ──
+// En un plan unificado, cuando coinciden frecuencias solo sale la PM03 de mayor nivel.
+// Para que la actividad absorbida no se vea "sin programar", se marca con "I" la semana
+// en que otra actividad unificada del MISMO equipo (mayor frecuencia en semanas) tiene
+// PM03, siempre que TODOS los puntos del protocolo de la absorbida estén dentro del
+// protocolo de la que sí sale (así no se marca nada en planes no acumulativos).
+// Devuelve {semana: pm03Anfitriona}. Solo visual: no crea PM03 ni toca KPIs.
+function pm3IncluidasEnSemanas(actDef,linea,eq,anio){
+  var res={};
+  if(!actDef||actDef.serie_unificada!==true) return res;
+  function n(x){return _normTxtAct(x);}
+  function puntos(a){var pr=getProtocoloPM03(a.linea,a.componente,a.descripcion);return (pr&&Array.isArray(pr.actividades))?pr.actividades.map(function(x){return n(x&&x.desc);}).filter(Boolean):[];}
+  var mios=puntos(actDef);
+  if(!mios.length) return res;
+  var anfitrionas=PLAN_ACTIVIDADES.filter(function(x){
+    if(!x||x.id===actDef.id||x.activo===false||x.serie_unificada!==true) return false;
+    if(x.area_id!==actDef.area_id||x.linea!==actDef.linea||n(x.componente)!==n(actDef.componente)) return false;
+    if(!((x.frecuencia_semanas||0)>(actDef.frecuencia_semanas||0))) return false;
+    var suyos=puntos(x);
+    return suyos.length&&mios.every(function(m){return suyos.indexOf(m)>=0;});
+  }).sort(function(a,b){return (b.frecuencia_semanas||0)-(a.frecuencia_semanas||0);});
+  anfitrionas.forEach(function(h){
+    PM03_PLAN.forEach(function(p){
+      if(p.linea!==linea||p.año!==anio||!p.semana||p.estado==='reprogramada') return;
+      if(n(p.componente)!==n(eq)||n(p.actividad)!==n(h.descripcion)) return;
+      if(!res[p.semana]) res[p.semana]=p;
+    });
+  });
+  return res;
+}
+
 function _normTxtAct(s){
   if(!s) return '';
   return s.toString().normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerCase().trim().replace(/[.\s]+$/,'');
@@ -38686,6 +38717,10 @@ function showPlanCalendario(areaId,linea){
   });
 
   function _renderActRow(eq,act,_actDef,ai){
+    var _incl=pm3IncluidasEnSemanas(_actDef,linea,eq,anio);
+    // Actividad sin PM03 propia este año pero incluida en otra del plan unificado: se dibuja
+    // con su renglón normal (celdas "I") en vez de la leyenda "Sin prog.".
+    if(act.sinProgEsteAnio&&Object.keys(_incl).length) act=Object.assign({},act,{sinProgEsteAnio:false});
     var rowBg=ai%2===0?'#fff':'#f8fafc';
     var _lblStyle='padding:2px 6px;font-weight:600;color:#374151;width:'+COL_W+'px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;position:sticky;left:0;background:'+rowBg+(_actDef?';cursor:pointer':'');
     var _lblClick=_actDef?' onclick="verDetalleActividad(\''+_actDef.id+'\')"':'';
@@ -38715,6 +38750,11 @@ function showPlanCalendario(areaId,linea){
           var isVenc=isPast&&p.estado!=='cerrada';
           var bg=isVenc?'#7f1d1d':'#1e3a8a';
           html+='<td style="background:'+bg+';text-align:center;cursor:pointer" data-pm3id="'+p.id+'" onclick="if(this.dataset.pm3id)showDetallePM03(this.dataset.pm3id)" title="Sem '+s+' — '+act.label+' — '+(p.tecnicoNombre||'Sin asignar')+'"><span style="color:#fff;font-size:9px;pointer-events:none">P</span></td>';
+        } else if(_incl[s]){
+          var _h=_incl[s];
+          var _hVenc=s<semActual&&_h.estado!=='cerrada';
+          var _tituloIncl=('Sem '+s+' — '+act.label+' — Incluida en '+(_h.actividad||'')).replace(/"/g,'&quot;');
+          html+='<td style="background:'+(_hVenc?'#7f1d1d':'#93c5fd')+';text-align:center;cursor:pointer" data-pm3id="'+_h.id+'" onclick="if(this.dataset.pm3id)showDetallePM03(this.dataset.pm3id)" title="'+_tituloIncl+'"><span style="color:'+(_hVenc?'#fff':'#1e3a8a')+';font-size:9px;font-weight:800;pointer-events:none">I</span></td>';
         } else if(act.vencidas&&act.vencidas[s]){
           // Esta semana ya no tiene fila propia (la PM03 se recorrió hacia
           // adelante sin cerrarse), pero sí se dejó pasar sin ejecutarse — se
@@ -38773,6 +38813,11 @@ function showPlanCalendario(areaId,linea){
         html+='<td style="background:'+col+';text-align:center;cursor:pointer" data-pm3id="'+real.id+'" onclick="if(this.dataset.pm3id)showDetallePM03(this.dataset.pm3id)" title="'+(real.enTiempo?'En tiempo':'Tarde')+'"><span style="color:#fff;font-size:9px;pointer-events:none">✓</span></td>';
       } else if(prog&&isPast&&prog.estado!=='cerrada'){
         html+='<td style="background:#7f1d1d;text-align:center" title="Vencida"><span style="color:#fff;font-size:9px">!</span></td>';
+      } else if(_incl[s]&&_incl[s].estado==='cerrada'){
+        var _hr={enTiempo:true}; // mismo criterio que la anfitriona en este calendario (cerrada = en tiempo)
+        html+='<td style="background:'+(_hr.enTiempo?'#14532d':'#d97706')+';text-align:center;cursor:pointer" data-pm3id="'+_incl[s].id+'" onclick="if(this.dataset.pm3id)showDetallePM03(this.dataset.pm3id)" title="Incluida en '+String(_incl[s].actividad||'').replace(/"/g,'&quot;')+' — '+(_hr.enTiempo?'En tiempo':'Tarde')+'"><span style="color:#fff;font-size:9px;font-weight:800;pointer-events:none">I</span></td>';
+      } else if(_incl[s]&&isPast){
+        html+='<td style="background:#7f1d1d;text-align:center" title="Vencida (incluida en '+String(_incl[s].actividad||'').replace(/"/g,'&quot;')+')"><span style="color:#fff;font-size:9px">!</span></td>';
       } else {
         html+='<td style="background:'+(s===semActual?'#fed7aa':'transparent')+'">&nbsp;</td>';
       }
