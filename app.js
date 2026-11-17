@@ -31435,16 +31435,31 @@ function renderPanelCargaTecnicos(){
 
   var data = tecList.map(function(tec){
     var misOT = base.filter(function(o){ return o.tecnicoNombre===tec.nombre; });
-    var abiertas = misOT.filter(function(o){ return o.estado!=='cerrada'; });
+    // "Pre-cierre" (ya reportada por el técnico, solo falta que un admin la
+    // apruebe) se cuenta aparte de "Abiertas" -- a petición de Jorge, porque
+    // antes se sumaba junto con lo realmente pendiente y un técnico que ya
+    // había terminado todo (y solo esperaba aprobación) se veía como si
+    // siguiera saturado, cuando en realidad ya está libre para tomar más PM.
+    var preCierre = misOT.filter(function(o){ return o.estado==='pre_cierre'; });
+    // "Abiertas" (pendientes reales): todo lo que NO esté cerrado ni en
+    // pre-cierre -- incluye 'abierta' y otros estados del flujo (conciliar,
+    // en espera) que sí siguen requiriendo trabajo del técnico.
+    var abiertas = misOT.filter(function(o){ return o.estado!=='cerrada'&&o.estado!=='pre_cierre'; });
     var cerradas = misOT.filter(function(o){ return o.estado==='cerrada'; }).length;
     var vencidas = abiertas.filter(function(o){
       return o.semanaResolucion && parseInt(o.semanaResolucion) < semActual;
     }).length;
-    var semCounts = sems.map(function(s){
-      return abiertas.filter(function(o){ return parseInt(o.semanaResolucion)===s; }).length;
+    // Por semana (según la semana para la que se le pidió resolverla):
+    // cuántas se le asignaron en total vs cuántas ya accionó (cerró o mandó
+    // a pre-cierre) -- a petición de Jorge, para comparar si el técnico va
+    // avanzando con lo que le toca cada semana o se está quedando atrás.
+    var semData = sems.map(function(s){
+      var deEsaSemana = misOT.filter(function(o){ return parseInt(o.semanaResolucion)===s; });
+      var accionadas = deEsaSemana.filter(function(o){ return o.estado==='cerrada'||o.estado==='pre_cierre'; }).length;
+      return {asignadas:deEsaSemana.length, accionadas:accionadas};
     });
     var satPct = Math.min(100, Math.round((abiertas.length/8)*100));
-    return {tec:tec, abiertas:abiertas.length, cerradas:cerradas, total:misOT.length, vencidas:vencidas, semCounts:semCounts, satPct:satPct};
+    return {tec:tec, abiertas:abiertas.length, preCierre:preCierre.length, cerradas:cerradas, total:misOT.length, vencidas:vencidas, semData:semData, satPct:satPct};
   });
 
   // ── Tarjetas ──────────────────────────────────────────────────
@@ -31457,6 +31472,7 @@ function renderPanelCargaTecnicos(){
       +'</div>'
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:3px;font-size:11px;margin-bottom:7px">'
       +'<span style="color:#6b7280">Abiertas</span><span style="font-weight:700;color:'+(d.abiertas>5?'#dc2626':d.abiertas>2?'#d97706':'#16a34a')+'">'+d.abiertas+'</span>'
+      +'<span style="color:#6b7280">Pre-cierre</span><span style="font-weight:700;color:'+(d.preCierre>0?'#7c3aed':'#6b7280')+'">'+d.preCierre+'</span>'
       +'<span style="color:#6b7280">Cerradas</span><span style="font-weight:700;color:#16a34a">'+d.cerradas+'</span>'
       +'<span style="color:#6b7280">Vencidas</span><span style="font-weight:700;color:'+(d.vencidas>0?'#dc2626':'#6b7280')+'">'+d.vencidas+'</span>'
       +'</div>'
@@ -31479,11 +31495,17 @@ function renderPanelCargaTecnicos(){
     var tds = '<td style="font-size:11px;font-weight:700;color:#1a3c5e;padding:6px 8px;border-bottom:1px solid #f3f4f6;white-space:nowrap">'+d.tec.nombre+'</td>';
     tds += '<td style="padding:6px 5px;border-bottom:1px solid #f3f4f6;text-align:center"><span style="padding:2px 6px;border-radius:8px;font-size:10px;font-weight:700;background:'+(d.vencidas>0?'#fee2e2':'#f3f4f6')+';color:'+(d.vencidas>0?'#dc2626':'#9ca3af')+'">'+d.vencidas+'</span></td>';
     sems.forEach(function(s,si){
-      var c = d.semCounts[si];
+      var sd = d.semData[si];
       var isActual = s===semActual;
-      var bg = c>=4?'#fee2e2':c>=2?'#fef3c7':c>=1?'#dcfce7':'#f3f4f6';
-      var fc = c>=4?'#dc2626':c>=2?'#d97706':c>=1?'#16a34a':'#9ca3af';
-      tds += '<td style="padding:6px 5px;border-bottom:1px solid #f3f4f6;text-align:center;background:'+(isActual?'#f0f7ff':'transparent')+'"><span style="padding:2px 6px;border-radius:8px;font-size:10px;font-weight:700;background:'+bg+';color:'+fc+'">'+c+'</span></td>';
+      var bg,fc,texto;
+      if(sd.asignadas===0){ bg='#f3f4f6'; fc='#9ca3af'; texto='—'; }
+      else {
+        texto=sd.accionadas+'/'+sd.asignadas;
+        if(sd.accionadas>=sd.asignadas){ bg='#dcfce7'; fc='#16a34a'; } // accionó todo
+        else if(sd.accionadas>0){ bg='#fef3c7'; fc='#d97706'; } // accionó parcial
+        else { bg='#fee2e2'; fc='#dc2626'; } // nada accionado
+      }
+      tds += '<td style="padding:6px 5px;border-bottom:1px solid #f3f4f6;text-align:center;background:'+(isActual?'#f0f7ff':'transparent')+'"><span style="padding:2px 6px;border-radius:8px;font-size:10px;font-weight:700;background:'+bg+';color:'+fc+'">'+texto+'</span></td>';
     });
     tds += '<td style="padding:6px 5px;border-bottom:1px solid #f3f4f6;text-align:center"><span style="padding:2px 6px;border-radius:8px;font-size:10px;font-weight:700;background:'+(d.abiertas>=6?'#fee2e2':d.abiertas>=3?'#fef3c7':'#f3f4f6')+';color:'+(d.abiertas>=6?'#dc2626':d.abiertas>=3?'#d97706':'#374151')+'">'+d.abiertas+'</span></td>';
     return '<tr>'+tds+'</tr>';
@@ -31494,7 +31516,7 @@ function renderPanelCargaTecnicos(){
     +'<thead><tr style="background:#f8fafc">'+thCells+'</tr></thead>'
     +'<tbody>'+rows+'</tbody>'
     +'</table>'
-    +'<div style="font-size:10px;color:#6b7280;margin-top:4px">* Semana actual · Venc. = sin cerrar en semanas anteriores</div>'
+    +'<div style="font-size:10px;color:#6b7280;margin-top:4px">* Semana actual · Venc. = sin cerrar en semanas anteriores · Cada celda = accionadas/asignadas esa semana (accionada = cerrada o mandada a pre-cierre)</div>'
     +'</div>';
 
   return '<div style="margin-bottom:4px">'
@@ -31502,9 +31524,9 @@ function renderPanelCargaTecnicos(){
     +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(155px,1fr));gap:8px">'+cards+'</div>'
     +tabla
     +'<div style="display:flex;gap:12px;margin-top:8px;flex-wrap:wrap;font-size:11px;color:#6b7280">'
-    +'<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#dc2626;margin-right:4px"></span>Alta (+4)</span>'
-    +'<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#d97706;margin-right:4px"></span>Media (2-3)</span>'
-    +'<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#16a34a;margin-right:4px"></span>Baja (1)</span>'
+    +'<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#16a34a;margin-right:4px"></span>Accionó todo lo de esa semana</span>'
+    +'<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#d97706;margin-right:4px"></span>Accionó parte</span>'
+    +'<span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#dc2626;margin-right:4px"></span>No ha accionado nada</span>'
     +'</div>'
     +'<hr style="border:none;border-top:1px solid #e5e7eb;margin:14px 0 10px">'
     +'<div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">PM02 pendientes de asignar</div>'
