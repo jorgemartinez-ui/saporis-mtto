@@ -1419,7 +1419,7 @@ function guardarAtencion(){
 // ================================================================
 // MIS ÓRDENES
 // ================================================================
-function showMisOrdenes(){detalleBackScreen='screen-menu';renderMisOrdenes();showScreen('screen-ordenes');}
+function showMisOrdenes(){detalleBackScreen='screen-menu';window._screenOrdenesVista='mis_pendientes';renderMisOrdenes();showScreen('screen-ordenes');}
 
 function buildFiltrosPendientes(){
   const isAdmin=currentUser.rol==='admin';
@@ -14872,7 +14872,15 @@ var SYNC_ESTADO={};              // clave -> {estado:'cargando'|'ok'|'error', in
 var SYNC_PANTALLAS_CONFIG={      // clave -> lista de pantallas que hay que volver a pintar
   pm03:[{screenId:'screen-pm03', renderFn:function(){renderPM03();}}],
   ordenes:[
-    {screenId:'screen-ordenes', renderFn:function(){renderMisOrdenes();}},
+    // #screen-ordenes es un lienzo compartido: Mis Pendientes y PM02 por
+    // Asignar pintan ahí mismo (#ordenes-filtros/#mis-ordenes-list). Hay que
+    // repintar la vista que esté realmente activa, no siempre Mis Pendientes
+    // -- de lo contrario un reintento de sync que termina mientras el admin
+    // está en PM02 por Asignar lo manda de vuelta a Mis Pendientes.
+    {screenId:'screen-ordenes', renderFn:function(){
+      if(window._screenOrdenesVista==='pm02_asignar') _renderPM02Asignar();
+      else renderMisOrdenes();
+    }},
     {screenId:'screen-consulta', renderFn:function(){filtrarOrdenes();renderResumenConsulta();renderResumenTecnicosOT();}}
   ],
   plan:[{screenId:'screen-plan', renderFn:function(){renderPlanMenu();}}]
@@ -24119,6 +24127,7 @@ function kpiCardGrande(titulo, valor, color, sub){
 
 function showPM02PorAsignar(){
   detalleBackScreen='screen-menu';
+  window._screenOrdenesVista='pm02_asignar';
   // Por defecto mostrar sin asignar
   window._pm02AsigEstado='pendiente';
   window._pm02AsigPrio='';
@@ -31421,7 +31430,7 @@ function renderPanelCargaTecnicos(){
 
   var semActual = currentWeek();
   var sems = [];
-  for(var s=-4; s<=4; s++) sems.push(semActual+s);
+  for(var s=-8; s<=0; s++) sems.push(semActual+s);
 
   // Roles que generan PM02 para este botón
   var rolesValidos = ['operador','lider','inspector_calidad','lider_calidad','administrativo','supply','admin','super'];
