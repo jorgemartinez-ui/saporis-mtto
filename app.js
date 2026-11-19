@@ -339,7 +339,10 @@ function showAlert(msg,tipo='success'){
 // consola para poder depurar. A petición de Jorge.
 function showErrorConexion(detalleTecnico){
   if(detalleTecnico) console.error('Error de conexión:',detalleTecnico);
-  showAlert('⚠️ Error al intentar conectar. Si el problema persiste, cierra e inicia sesión.','error');
+  // A petición de Jorge: aclarar que lo capturado NO se perdió (sigue en este
+  // dispositivo), solo no llegó todavía al servidor -- antes el mensaje no
+  // dejaba claro si el dato se había perdido o no.
+  showAlert('⚠️ No se pudo guardar en el servidor (se quedó solo en este dispositivo, se reintentará solo). Si el problema persiste, cierra e inicia sesión.','error');
 }
 function cerrarModal(id){document.getElementById(id).classList.add('hidden');}
 function showModal(id){document.getElementById(id).classList.remove('hidden');}
@@ -6259,11 +6262,37 @@ function supaAuthRefresh(){
     body:JSON.stringify({refresh_token:s.refresh_token})
   }).then(function(r){return r.json().then(function(j){return{ok:r.ok,body:j};});})
     .then(function(res){
-      if(!res.ok){console.warn('supaAuthRefresh: fallo el refresco de sesion:',res.body);return null;}
+      if(!res.ok){
+        console.warn('supaAuthRefresh: fallo el refresco de sesion:',res.body);
+        // La sesión real quedó inservible (ej. refresh_token ya usado por otra
+        // pestaña/dispositivo con la misma cuenta) -- a diferencia de un simple
+        // corte de internet, esto NO se arregla solo reintentando: hace falta
+        // un login nuevo para obtener un token válido. Antes la app se quedaba
+        // fallando en silencio en cada guardado hasta que alguien notaba el
+        // problema y cerraba sesión manualmente (caso real: PM03/Activos que
+        // no se guardaban). A petición de Jorge, ahora se fuerza el regreso al
+        // login con un aviso claro en cuanto se detecta esto.
+        _forzarRelogueoPorSesionInvalida();
+        return null;
+      }
       var sess={access_token:res.body.access_token,refresh_token:res.body.refresh_token,expires_at:Date.now()+(res.body.expires_in||3600)*1000};
       supaSession=sess;saveDB('supaSession',sess);
       return sess;
     }).catch(function(e){console.warn('supaAuthRefresh error:',e.message);return null;});
+}
+// Solo se llama cuando la RENOVACIÓN de la sesión real fue rechazada por el
+// servidor (no ante un simple corte de internet, que sí se recupera solo y
+// no debe interrumpir a alguien trabajando sin señal). Evita disparar más de
+// una vez seguida (ej. si el intervalo de 45 min y una recarga coinciden).
+function _forzarRelogueoPorSesionInvalida(){
+  if(!currentUser) return;
+  if(window._forzandoRelogueo) return;
+  window._forzandoRelogueo=true;
+  showAlert('⚠️ Tu sesión expiró. Vuelve a iniciar sesión.','error');
+  setTimeout(function(){
+    doLogout();
+    window._forzandoRelogueo=false;
+  },1500);
 }
 
 function supaAuthClear(){
@@ -15010,7 +15039,20 @@ function syncSupabase(){
   function _sincronizarPlanActividades(){
   supaFetch('plan_actividades','GET',null,'activo=eq.true&order=linea.asc&limit=2000').then(function(rows){
     if(rows===null){_syncSubFallo('plan','plan_actividades',_sincronizarPlanActividades);return;}
-    if(rows&&rows.length){PLAN_ACTIVIDADES=rows;saveDB('plan_actividades',PLAN_ACTIVIDADES);}
+    // Preservar actividades locales que NO llegaron a Supabase (save pendiente)
+    // y reintentar guardarlas -- antes esto reemplazaba toda la lista local
+    // sin protección: una actividad nueva (con toda su serie de PM03) que no
+    // lograra sincronizar se borraba sola en el siguiente resync, sin avisar.
+    var localPlan=loadDB('plan_actividades',[]);
+    var planSyncedIds=new Set(rows.map(function(r){return r.id;}));
+    var localSoloPlan=localPlan.filter(function(l){return !planSyncedIds.has(l.id);});
+    if(localSoloPlan.length){
+      setTimeout(function(){
+        localSoloPlan.forEach(function(p){ supaFetch('plan_actividades','POST',p,'').catch(function(){}); });
+      },2000);
+    }
+    PLAN_ACTIVIDADES=rows.concat(localSoloPlan);
+    saveDB('plan_actividades',PLAN_ACTIVIDADES);
     _syncSubExito('plan','plan_actividades');
   }).catch(function(){_syncSubFallo('plan','plan_actividades',_sincronizarPlanActividades);});
   }
@@ -15066,10 +15108,18 @@ function syncSupabase(){
   function _sincronizarEquiposLinea(){
   supaFetch('equipos_linea','GET',null,'activo=eq.true&limit=2000').then(function(rows){
     if(rows===null){_syncSubFallo('plan','equipos_linea',_sincronizarEquiposLinea);return;}
-    if(rows&&rows.length){
-      EQUIPOS_LINEA=rows;
-      saveDB('equipos_linea',EQUIPOS_LINEA);
+    // Preservar equipos locales que NO llegaron a Supabase y reintentar
+    // guardarlos -- mismo motivo que plan_actividades/activos.
+    var localEq=loadDB('equipos_linea',[]);
+    var eqSyncedIds=new Set(rows.map(function(r){return r.id;}));
+    var localSoloEq=localEq.filter(function(l){return !eqSyncedIds.has(l.id);});
+    if(localSoloEq.length){
+      setTimeout(function(){
+        localSoloEq.forEach(function(e){ supaFetch('equipos_linea','POST',e,'').catch(function(){}); });
+      },2000);
     }
+    EQUIPOS_LINEA=rows.concat(localSoloEq);
+    saveDB('equipos_linea',EQUIPOS_LINEA);
     _syncSubExito('plan','equipos_linea');
   }).catch(function(){_syncSubFallo('plan','equipos_linea',_sincronizarEquiposLinea);});
   }
@@ -15084,8 +15134,23 @@ function syncSupabase(){
   }).catch(function(){});
   // Sync registro de activos
   supaFetch('activos','GET',null,'activo=eq.true&limit=2000').then(function(rows){
-    if(rows&&rows.length){
-      ACTIVOS=rows.map(function(r){return{id:r.id,areaId:r.area_id,linea:r.linea,nombre:r.nombre,modelo:r.modelo,marca:r.marca,serie:r.serie,anioInstalacion:r.anio_instalacion,estado:r.estado,criticidad:r.criticidad,registradoPor:r.registrado_por,registradoId:r.registrado_id,ts:r.ts,activo:r.activo};});
+    if(rows){
+      // Preservar activos locales que NO llegaron a Supabase y reintentar
+      // guardarlos -- antes se reemplazaba toda la lista local sin
+      // protección: un activo nuevo que no lograra sincronizar (ej. por el
+      // problema de sesión) se borraba del dispositivo en el siguiente
+      // resync, sin avisar. Caso real reportado por Jorge.
+      var localAct=loadDB('activos',[]);
+      var actSyncedIds=new Set(rows.map(function(r){return r.id;}));
+      var localSoloAct=localAct.filter(function(l){return !actSyncedIds.has(l.id);});
+      if(localSoloAct.length){
+        setTimeout(function(){
+          localSoloAct.forEach(function(a){
+            supaFetch('activos','POST',{id:a.id,area_id:a.areaId,linea:a.linea,nombre:a.nombre,modelo:a.modelo,marca:a.marca,serie:a.serie,anio_instalacion:a.anioInstalacion,estado:a.estado,criticidad:a.criticidad,activo:true,registrado_por:a.registradoPor,registrado_id:a.registradoId,ts:a.ts},'').catch(function(){});
+          });
+        },2000);
+      }
+      ACTIVOS=rows.map(function(r){return{id:r.id,areaId:r.area_id,linea:r.linea,nombre:r.nombre,modelo:r.modelo,marca:r.marca,serie:r.serie,anioInstalacion:r.anio_instalacion,estado:r.estado,criticidad:r.criticidad,registradoPor:r.registrado_por,registradoId:r.registrado_id,ts:r.ts,activo:r.activo};}).concat(localSoloAct);
       saveDB('activos',ACTIVOS);
       if(document.getElementById('screen-registro-activos')&&document.getElementById('screen-registro-activos').classList.contains('active')) renderRegistroActivosLista();
     }
@@ -15111,11 +15176,21 @@ function syncSupabase(){
   function _sincronizarActivoComponentes(){
   supaFetch('activo_componentes','GET',null,'activo=eq.true&limit=4000').then(function(rows){
     if(rows===null){_syncSubFallo('plan','activo_componentes',_sincronizarActivoComponentes);return;}
-    if(rows&&rows.length){
-      ACTIVO_COMPONENTES=rows.map(function(r){return{id:r.id,activoId:r.activo_id,areaId:r.area_id,linea:r.linea,nombre:r.nombre,marca:r.marca,modelo:r.modelo,serie:r.serie,anioInstalacion:r.anio_instalacion,estado:r.estado_operativo,criticidad:r.criticidad,vinculadoA:r.vinculado_a,registradoPor:r.creado_por,ts:r.creado_ts,activo:r.activo};});
-      saveDB('activo_componentes',ACTIVO_COMPONENTES);
-      if(document.getElementById('screen-registro-activos')&&document.getElementById('screen-registro-activos').classList.contains('active')) renderRegistroActivosLista();
+    // Preservar componentes locales que NO llegaron a Supabase y reintentar
+    // guardarlos -- mismo motivo que activos/plan_actividades/equipos_linea.
+    var localComp=loadDB('activo_componentes',[]);
+    var compSyncedIds=new Set(rows.map(function(r){return r.id;}));
+    var localSoloComp=localComp.filter(function(l){return !compSyncedIds.has(l.id);});
+    if(localSoloComp.length){
+      setTimeout(function(){
+        localSoloComp.forEach(function(c){
+          supaFetch('activo_componentes','POST',{id:c.id,activo_id:c.activoId,area_id:c.areaId,linea:c.linea,nombre:c.nombre,marca:c.marca,modelo:c.modelo,serie:c.serie,anio_instalacion:c.anioInstalacion,estado_operativo:c.estado,criticidad:c.criticidad,vinculado_a:c.vinculadoA,activo:true,creado_por:c.registradoPor,creado_ts:c.ts},'').catch(function(){});
+        });
+      },2000);
     }
+    ACTIVO_COMPONENTES=rows.map(function(r){return{id:r.id,activoId:r.activo_id,areaId:r.area_id,linea:r.linea,nombre:r.nombre,marca:r.marca,modelo:r.modelo,serie:r.serie,anioInstalacion:r.anio_instalacion,estado:r.estado_operativo,criticidad:r.criticidad,vinculadoA:r.vinculado_a,registradoPor:r.creado_por,ts:r.creado_ts,activo:r.activo};}).concat(localSoloComp);
+    saveDB('activo_componentes',ACTIVO_COMPONENTES);
+    if(document.getElementById('screen-registro-activos')&&document.getElementById('screen-registro-activos').classList.contains('active')) renderRegistroActivosLista();
     _syncSubExito('plan','activo_componentes');
   }).catch(function(){_syncSubFallo('plan','activo_componentes',_sincronizarActivoComponentes);});
   }
@@ -15227,9 +15302,13 @@ function syncSupabase(){
     if(!rows){_syncPantallaFallo('ordenes',_sincronizarOrdenes);return;}
     var localOrdenes = loadDB('ordenes',[]);
     var syncedIds = new Set(rows.map(function(r){return r.id;}));
-    // Preservar órdenes locales que NO llegaron a Supabase (save pendiente)
+    // Preservar órdenes locales que NO llegaron a Supabase (save pendiente).
+    // Antes esto expiraba a los 7 días (se dejaba de proteger y se perdía en
+    // el siguiente resync) -- eso fue justo lo que borró una anormalidad real
+    // de calidad que llevaba más de una semana sin poder sincronizar. Ahora
+    // nunca se descarta por antigüedad, solo se sigue reintentando.
     var localSoloIds = localOrdenes.filter(function(l){
-      return !syncedIds.has(l.id) && (Date.now()-l.ts) < 86400000*7; // menos de 7 días
+      return !syncedIds.has(l.id);
     });
     // Reintentar guardar en Supabase las que no llegaron
     if(localSoloIds.length){
@@ -15277,7 +15356,13 @@ function syncSupabase(){
     // el usuario ya haya elegido; si no (pantalla recién saliendo de "Cargando…",
     // o un rol sin filtros como super/líder/calidad) se vuelve a entrar completo.
     if(document.getElementById('screen-ordenes')&&document.getElementById('screen-ordenes').classList.contains('active')){
-      if(document.getElementById('fp-semana')) aplicarFiltrosPendientes();
+      // Igual que en el reintento de la cola (ver SYNC_PANTALLAS_CONFIG.ordenes): si el
+      // admin está viendo "PM02 por Asignar" hay que repintar ESA vista, no mandarlo de
+      // vuelta a "Mis Pendientes" -- a este sync normal (no solo al de reintentos) le
+      // faltaba este mismo cuidado, y era la causa de que el botón "redirigiera" solo de
+      // repente. Caso real reportado por Jorge.
+      if(window._screenOrdenesVista==='pm02_asignar') _renderPM02Asignar();
+      else if(document.getElementById('fp-semana')) aplicarFiltrosPendientes();
       else renderMisOrdenes();
     }
     // Mismo caso en "Consultar OT" (screen-consulta/filtrarOrdenes) — faltaba
@@ -15296,6 +15381,20 @@ function syncSupabase(){
   supaFetch('pm03_plan','GET',null,'order=semana.asc&limit=999999&select=actividad,actividades_estado,actividades_estado_final,actividades_estado_inicial,anio,area,cerrada_por,cerrada_ts,comentarios_actividades,componente,desinf_produccion,dias_trabajo,draft_ts,es_inspeccion,estado,estado_calidad,estado_flujo,firma_nombre_admin,origen_ot,origen_pm02,firma_nombre_calidad,firma_nombre_lider,firma_nombre_operador,firma_tecnico,firma_tecnico_ts,firma_ts_admin,firma_ts_calidad,firma_ts_lider,firma_ts_operador,fuente_excel,generado_por,grasa_aceite,herramienta_ingresada,herramienta_salida,hora_fin,hora_inicio,horas_actividades,horas_cierre,id,liberado_admin_por,liberado_admin_ts,liberado_por,liberado_prod_por,liberado_prod_ts,liberado_ts,limpieza_mtto,comentario_desinfeccion,linea,mediciones_actividades,observaciones_cierre,personas_actividades,rechazo_calidad,refacciones_nuevas,refacciones_usadas,reporte_actividades,responsable_area_id,responsable_area_nombre,semana,tecnico_id,tecnico_nombre,ts,semanas_vencidas,motivo_recorrido,protocolo_snapshot,firmas_requeridas_override,nota_reprogramacion,reprogramada_a,reprogramada_por,reprogramada_ts,reprogramada_de').then(function(rows){
     if(!rows){_syncPantallaFallo('pm03',_sincronizarPM03Plan);return;}
     var localPM03=loadDB('pm03_plan',[]);
+    // Preservar PM03 locales que NO llegaron a Supabase (save pendiente) y
+    // reintentar guardarlas -- antes esta sincronización reemplazaba toda la
+    // lista local sin ninguna protección (a diferencia de órdenes, que sí la
+    // tenía), así que una PM03 nueva -- o una serie completa generada al dar
+    // de alta una actividad -- que no lograra sincronizar se borraba sola en
+    // el siguiente resync, sin avisar. Mismo mecanismo que ya usa 'ordenes'.
+    var pm03SyncedIds=new Set(rows.map(function(r){return r.id;}));
+    var localSoloPM03=localPM03.filter(function(l){return !pm03SyncedIds.has(l.id);});
+    if(localSoloPM03.length){
+      console.log('Reintentando sync de '+localSoloPM03.length+' PM03 locales no sincronizadas');
+      setTimeout(function(){
+        localSoloPM03.forEach(function(p){ savePM03Supa(p); });
+      },2000);
+    }
     PM03_PLAN=rows.map(function(r){
       // Preserve local cerrada state if Supabase has it as abierta (sync lag)
       var local=localPM03.find(function(l){return l.id===r.id;});
@@ -15431,7 +15530,7 @@ function syncSupabase(){
         })(),
         _draftTs:r.draft_ts||(local?local._draftTs:0)
       };
-    });
+    }).concat(localSoloPM03);
     saveDB('pm03_plan',PM03_PLAN);
     _pm3AplicarCortes();
     // Marcar éxito ANTES de volver a pintar la pantalla -- si no, renderPM03()
@@ -15445,7 +15544,10 @@ function syncSupabase(){
     // todavía no hay filtros pintados (pantalla en "Cargando…", o rol sin
     // filtros) se entra completo con renderMisOrdenes().
     if(document.getElementById('screen-ordenes')&&document.getElementById('screen-ordenes').classList.contains('active')){
-      if(document.getElementById('fp-semana')) aplicarFiltrosPendientes();
+      // Mismo cuidado que en el sync de 'ordenes': no mandar a "Mis Pendientes" a quien
+      // está viendo "PM02 por Asignar" (ver _screenOrdenesVista).
+      if(window._screenOrdenesVista==='pm02_asignar') _renderPM02Asignar();
+      else if(document.getElementById('fp-semana')) aplicarFiltrosPendientes();
       else renderMisOrdenes();
     }
     // Mismo caso en el tablero principal de PM03 (screen-pm03/renderPM03) —
@@ -15603,10 +15705,12 @@ function saveOrdenSupa(o){
 }
 
 // Reintentar órdenes, PM03, checklists y registros de agua que fallaron al
-// sincronizar. Los pendientes que llevan menos de 7 días en la cola se reintentan
-// (así sobreviven a un corte de Supabase de un par de días) y además de correr al
-// abrir la app, se repite cada 5 minutos para reintentar solo en cuanto Supabase
-// vuelva a responder, sin que nadie tenga que recargar la app.
+// sincronizar. Antes se dejaban de reintentar (y se descartaban de esta cola)
+// a los 7 días -- eso fue justo lo que provocó que una anormalidad real de
+// calidad desapareciera porque llevaba más de una semana sin poder
+// sincronizar. Ahora se reintenta siempre, sin límite de antigüedad; además
+// de correr al abrir la app, se repite cada 5 minutos para reintentar solo en
+// cuanto Supabase vuelva a responder, sin que nadie tenga que recargar la app.
 function reintentarOrdenesSync(){
   var pendientes = loadDB('supa_retry_queue',[]);
   if(!pendientes.length) return;
@@ -15614,9 +15718,7 @@ function reintentarOrdenesSync(){
   var localPM03 = loadDB('pm03_plan',[]);
   var localInsp = loadDB('inspecciones',[]);
   var localAgua = loadDB('agua_lecturas',[]);
-  var SIETE_DIAS = 7*24*60*60*1000;
   pendientes.forEach(function(item){
-    if((Date.now()-item.ts) >= SIETE_DIAS) return; // máximo 7 días
     if(item.table==='pm03_plan'){
       var p = localPM03.find(function(x){return x.id===item.id;});
       if(p) savePM03Supa(p);
@@ -15649,7 +15751,7 @@ function savePM03Supa(p){supaUpsert('pm03_plan',{id:p.id,linea:p.linea,component
   fotos:p.fotos!==undefined?(p.fotos&&p.fotos.length?JSON.stringify(p.fotos):null):undefined,firma_img_operador:p.firmaImgOperador!==undefined?(p.firmaImgOperador||null):undefined,firma_nombre_operador:p.firmaNombreOperador||null,firma_ts_operador:p.firmaTsOperador||null,firma_img_lider:p.firmaImgLider!==undefined?(p.firmaImgLider||null):undefined,firma_nombre_lider:p.firmaNombreLider||null,firma_ts_lider:p.firmaTsLider||null,firma_img_calidad:p.firmaImgCalidad!==undefined?(p.firmaImgCalidad||null):undefined,firma_nombre_calidad:p.firmaNombreCalidad||null,firma_ts_calidad:p.firmaTsCalidad||null,firma_img_admin:p.firmaImgAdmin!==undefined?(p.firmaImgAdmin||null):undefined,firma_nombre_admin:p.firmaNombreAdmin||null,firma_ts_admin:p.firmaTsAdmin||null}).then(function(data){
   if(data===null){
     // supaUpsert nunca rechaza; en falla resuelve null — así detectamos el error real.
-    showAlert('⚠️ Error al sincronizar PM03 '+p.id.substring(0,15),'error');
+    showErrorConexion('savePM03Supa ['+p.id+']');
     var q=loadDB('supa_retry_queue',[]);
     q.push({table:'pm03_plan',id:p.id,ts:Date.now()});
     saveDB('supa_retry_queue',q);
@@ -15681,7 +15783,7 @@ function syncChecklistSupa(insp, momentoTurno){
     puntos_detalle: JSON.stringify(insp.puntos||[]),
   }).then(function(data){
     if(data===null){
-      showAlert('⚠️ Error al sincronizar checklist '+(insp.id||'').substring(0,15),'error');
+      showErrorConexion('syncChecklistSupa ['+insp.id+']');
       var q=loadDB('supa_retry_queue',[]);
       q.push({table:'checklist',id:insp.id,ts:Date.now(),momento:momentoTurno||null});
       saveDB('supa_retry_queue',q);
@@ -15711,7 +15813,7 @@ function syncInspeccionTurnoSupa(inspeccionActual){
     puntos_detalle:inspeccionActual.puntos?JSON.stringify(inspeccionActual.puntos):null
   }).then(function(data){
     if(data===null){
-      showAlert('⚠️ Error al sincronizar inspección '+(inspeccionActual.id||'').substring(0,15),'error');
+      showErrorConexion('syncInspeccionTurnoSupa ['+inspeccionActual.id+']');
       var q=loadDB('supa_retry_queue',[]);
       q.push({table:'inspeccion_turno',id:inspeccionActual.id,ts:Date.now()});
       saveDB('supa_retry_queue',q);
@@ -15726,7 +15828,7 @@ function syncAguaSupa(row){
     if(data===null){
       supaFetch('agua_lecturas','PATCH',row,'id=eq.'+row.id).then(function(data2){
         if(data2===null){
-          showAlert('⚠️ Error al sincronizar registro de agua '+row.fecha,'error');
+          showErrorConexion('syncAguaSupa ['+row.fecha+']');
           var q=loadDB('supa_retry_queue',[]);
           q.push({table:'agua_lecturas',id:row.id,ts:Date.now()});
           saveDB('supa_retry_queue',q);
@@ -21296,7 +21398,10 @@ function cargarProtocolosSupa(){
       // repinta sola en cuanto el catálogo real ya está disponible.
       if(document.getElementById('screen-pm03')&&document.getElementById('screen-pm03').classList.contains('active')) renderPM03();
       if(document.getElementById('screen-ordenes')&&document.getElementById('screen-ordenes').classList.contains('active')){
-        if(document.getElementById('fp-semana')) aplicarFiltrosPendientes();
+        // Mismo cuidado que en el sync de 'ordenes': no mandar a "Mis Pendientes" a quien
+        // está viendo "PM02 por Asignar" (ver _screenOrdenesVista).
+        if(window._screenOrdenesVista==='pm02_asignar') _renderPM02Asignar();
+        else if(document.getElementById('fp-semana')) aplicarFiltrosPendientes();
         else renderMisOrdenes();
       }
       if(document.getElementById('dor-content')) renderDOR();
@@ -22837,23 +22942,38 @@ function _protoAccionesPM03(pmId){
   var p=PM03_PLAN.find(function(x){return x.id===pmId;});
   if(!p) return;
   function n(x){return (x||'').toString().trim().toLowerCase();}
-  var nLinea=n(p.linea), nEquipo=n(p.componente);
-  var match=null;
-  // Preferir un protocolo que ya coincida por equipo; si no hay, tomar el genérico de la línea
-  (PROTOCOLOS_PM03_SUPA||[]).forEach(function(s){
-    if(match) return;
+  var nLinea=n(p.linea), nEquipo=n(p.componente), nAct=n(p.actividad);
+  var candidatos=(PROTOCOLOS_PM03_SUPA||[]).filter(function(s){
     var sl=n(s.linea);
-    if(!sl||!(sl===nLinea||nLinea.indexOf(sl)>=0||sl.indexOf(nLinea)>=0)) return;
-    var se=n(s.equipo);
-    if(nEquipo&&se&&(se===nEquipo||nEquipo.indexOf(se)>=0||se.indexOf(nEquipo)>=0)) match=s;
+    return sl&&(sl===nLinea||nLinea.indexOf(sl)>=0||sl.indexOf(nLinea)>=0);
   });
+  var match=null;
+  // 1) línea+equipo+actividad exacto -- el más específico. Antes este botón sólo
+  // comparaba línea+equipo, así que si un mismo equipo tenía más de un protocolo (uno
+  // por actividad, ej. "Inspección C/5 Sem" y "Preventivo Mayor C/8 Meses"), "Editar
+  // protocolo" podía abrir -- y al guardar, sobrescribir -- el de la actividad
+  // EQUIVOCADA. Caso real reportado por Jorge. Mismo criterio que getProtocoloPM03.
+  candidatos.forEach(function(s){
+    if(match) return;
+    var se=n(s.equipo), sa=n(s.equipo_secundario);
+    if(nEquipo&&nAct&&se&&sa&&(se===nEquipo||nEquipo.indexOf(se)>=0||se.indexOf(nEquipo)>=0)&&(sa===nAct||nAct.indexOf(sa)>=0||sa.indexOf(nAct)>=0)) match=s;
+  });
+  // 2) línea+equipo, sólo contra protocolos que NO tienen actividad propia asignada
+  // (compatibilidad con protocolos antiguos sin ese campo) -- nunca contra uno que sí
+  // tiene actividad definida pero distinta, para no ofrecer editar/sobrescribir el
+  // protocolo de otra actividad por error.
   if(!match){
-    // Respaldo: sólo aceptar un protocolo "genérico" de la línea (sin equipo propio) o,
-    // si esta PM03 no tiene componente, cualquiera de la línea. Nunca el de OTRO equipo distinto.
-    (PROTOCOLOS_PM03_SUPA||[]).forEach(function(s){
+    candidatos.forEach(function(s){
       if(match) return;
-      var sl=n(s.linea);
-      if(!sl||!(sl===nLinea||nLinea.indexOf(sl)>=0||sl.indexOf(nLinea)>=0)) return;
+      var se=n(s.equipo), sa=n(s.equipo_secundario);
+      if(nEquipo&&se&&!sa&&(se===nEquipo||nEquipo.indexOf(se)>=0||se.indexOf(nEquipo)>=0)) match=s;
+    });
+  }
+  if(!match){
+    // 3) Respaldo: sólo aceptar un protocolo "genérico" de la línea (sin equipo propio) o,
+    // si esta PM03 no tiene componente, cualquiera de la línea. Nunca el de OTRO equipo distinto.
+    candidatos.forEach(function(s){
+      if(match) return;
       var se=n(s.equipo);
       if(nEquipo&&se) return;
       match=s;
@@ -24156,6 +24276,12 @@ function showPM02PorAsignar(){
 function _renderPM02Asignar(){
   var fDiv=document.getElementById('ordenes-filtros');
   var lDiv=document.getElementById('mis-ordenes-list');
+  // Mismo mecanismo de "Cargando…/Sin conexión" que ya usa Mis Pendientes (ver
+  // SYNC_ESTADO/mostrarEstadoCargaSiAplica) -- a petición de Jorge: esta pantalla no lo
+  // tenía, así que si entraba antes de que terminara de sincronizar 'ordenes' (típico
+  // justo al abrir la app) se veía en blanco/vacía sin ningún aviso, en vez de mostrar que
+  // seguía cargando y reintentar sola.
+  if(mostrarEstadoCargaSiAplica(lDiv,'ordenes')){ if(fDiv) fDiv.innerHTML=''; return; }
   if(!window._pm02AsigEstado) window._pm02AsigEstado='todas';
   if(!window._pm02AsigPrio) window._pm02AsigPrio='';
   if(!window._pm02AsigTec) window._pm02AsigTec='';
@@ -37816,6 +37942,7 @@ function verDetalleActividad(id){
     +(tieneProc?'<button onclick="verProcedimientoPDF(\''+id+'\')" style="width:100%;padding:11px;background:#0f766e;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;margin-bottom:10px">📄 5W+1H</button>':'')
     +'<div style="font-size:10px;color:#9ca3af;margin:6px 0 14px">Creado por '+(p.creado_por||'—')+(p.creado_ts?' · '+fmtDate(p.creado_ts):'')+'</div>'
     +'<div style="display:flex;flex-direction:column;gap:8px">'
+    +'<button onclick="verProtocoloDesdeActividad(\''+id+'\')" style="padding:12px;background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;font-weight:700;color:#1d4ed8;cursor:pointer">📄 Ver / Editar protocolo</button>'
     +'<button onclick="document.getElementById(\'modal-detalle-actividad\').remove();abrirNuevaActividadParaEquipo(\''+p.area_id+'\',\''+p.linea.replace(/'/g,"\\'")+'\',\''+(p.componente||'').replace(/'/g,"\\'")+'\')" style="padding:12px;background:#14532d;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">➕ Agregar actividad a este equipo</button>'
     +'<div style="display:flex;gap:8px">'
     +'<button onclick="document.getElementById(\'modal-detalle-actividad\').remove();'+(esDetallado?'editarProtocoloDetalladoDesdeActividad(\''+id+'\')':'editarActividad(\''+id+'\')')+'" style="flex:1;padding:12px;background:#1e3a8a;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">✏️ Editar</button>'
@@ -37870,9 +37997,91 @@ function editarProtocoloDetalladoDesdeActividad(id){
   var p=PLAN_ACTIVIDADES.find(function(x){return x.id===id;});
   if(!p) return;
   supaFetch('protocolos_pm03','GET',null,'order=linea.asc').then(function(rows){
-    var proto=(rows||[]).find(function(s){return s.activo!==false&&s.linea===p.linea;});
-    if(!proto){showAlert('No se encontró el protocolo de esta línea','error');return;}
+    // Antes esta función sólo comparaba línea (ni siquiera equipo), así que en una línea
+    // con varios equipos/actividades podía abrir el protocolo de un equipo o actividad
+    // totalmente distinta al dar clic en el lápiz de una actividad del calendario de Plan
+    // de Mantenimiento -- caso real reportado por Jorge. Mismo criterio por niveles
+    // (línea+equipo+actividad) que _protoAccionesPM03/getProtocoloPM03.
+    function n(x){return (x||'').toString().trim().toLowerCase();}
+    var nLinea=n(p.linea), nEquipo=n(p.componente), nAct=n(p.descripcion);
+    var candidatos=(rows||[]).filter(function(s){
+      if(s.activo===false) return false;
+      var sl=n(s.linea);
+      return sl&&(sl===nLinea||nLinea.indexOf(sl)>=0||sl.indexOf(nLinea)>=0);
+    });
+    var proto=null;
+    candidatos.forEach(function(s){
+      if(proto) return;
+      var se=n(s.equipo), sa=n(s.equipo_secundario);
+      if(nEquipo&&nAct&&se&&sa&&(se===nEquipo||nEquipo.indexOf(se)>=0||se.indexOf(nEquipo)>=0)&&(sa===nAct||nAct.indexOf(sa)>=0||sa.indexOf(nAct)>=0)) proto=s;
+    });
+    if(!proto){
+      candidatos.forEach(function(s){
+        if(proto) return;
+        var se=n(s.equipo), sa=n(s.equipo_secundario);
+        if(nEquipo&&se&&!sa&&(se===nEquipo||nEquipo.indexOf(se)>=0||se.indexOf(nEquipo)>=0)) proto=s;
+      });
+    }
+    if(!proto){
+      candidatos.forEach(function(s){
+        if(proto) return;
+        var se=n(s.equipo);
+        if(nEquipo&&se) return;
+        proto=s;
+      });
+    }
+    if(!proto){showAlert('No se encontró el protocolo de esta actividad','error');return;}
     abrirEditorProtocolo(proto.id);
+  });
+}
+
+// Botón "Ver / Editar protocolo" en el detalle de una actividad del Plan de Mantenimiento
+// (calendario). Antes, para ver o modificar el protocolo real de una actividad sólo
+// existía el camino de "Editar" (que dependía de la bandera vieja protocolo_detallado y
+// podía no mostrar nada aunque el protocolo sí existiera), o entrar por la tarjeta PM03 en
+// "Mis Pendientes". A petición de Jorge: mismo emparejamiento seguro (línea+equipo+
+// actividad) que esa tarjeta, para nunca abrir -- ni dejar sobrescribir sin querer -- el
+// protocolo de OTRA actividad del mismo equipo. Si no existe protocolo aún, abre el
+// formulario de "Generar protocolo nuevo" prellenado con línea/equipo/actividad.
+function verProtocoloDesdeActividad(id){
+  var p=PLAN_ACTIVIDADES.find(function(x){return x.id===id;});
+  if(!p) return;
+  supaFetch('protocolos_pm03','GET',null,'order=linea.asc').then(function(rows){
+    function n(x){return (x||'').toString().trim().toLowerCase();}
+    var nLinea=n(p.linea), nEquipo=n(p.componente), nAct=n(p.descripcion);
+    var candidatos=(rows||[]).filter(function(s){
+      if(s.activo===false) return false;
+      var sl=n(s.linea);
+      return sl&&(sl===nLinea||nLinea.indexOf(sl)>=0||sl.indexOf(nLinea)>=0);
+    });
+    var match=null;
+    candidatos.forEach(function(s){
+      if(match) return;
+      var se=n(s.equipo), sa=n(s.equipo_secundario);
+      if(nEquipo&&nAct&&se&&sa&&(se===nEquipo||nEquipo.indexOf(se)>=0||se.indexOf(nEquipo)>=0)&&(sa===nAct||nAct.indexOf(sa)>=0||sa.indexOf(nAct)>=0)) match=s;
+    });
+    if(!match){
+      candidatos.forEach(function(s){
+        if(match) return;
+        var se=n(s.equipo), sa=n(s.equipo_secundario);
+        if(nEquipo&&se&&!sa&&(se===nEquipo||nEquipo.indexOf(se)>=0||se.indexOf(nEquipo)>=0)) match=s;
+      });
+    }
+    if(!match){
+      candidatos.forEach(function(s){
+        if(match) return;
+        var se=n(s.equipo);
+        if(nEquipo&&se) return;
+        match=s;
+      });
+    }
+    var modalViejo=document.getElementById('modal-detalle-actividad');
+    if(modalViejo) modalViejo.remove();
+    if(match){
+      abrirEditorProtocolo(match.id);
+    } else {
+      abrirEditorProtocolo(null,{linea:p.linea,equipo:p.componente||'',actividad:p.descripcion||''});
+    }
   });
 }
 
