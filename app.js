@@ -194,6 +194,14 @@ const DEFAULT_LISTAS={
   bomba_modelos:['130','60'],
 };
 let LISTAS=loadDB('listas',DEFAULT_LISTAS);
+// Backfill de catálogos NUEVOS: un dispositivo que ya traía 'listas' guardada
+// de antes de que existiera, por ejemplo, bomba_series_positiva se queda con
+// ese objeto viejo tal cual (loadDB solo usa DEFAULT_LISTAS si no había NADA
+// guardado) -- sin esto, cualquier catálogo agregado después de que alguien ya
+// usó la app sale vacío para esa persona, aunque sí tenga datos por default.
+Object.keys(DEFAULT_LISTAS).forEach(function(k){
+  if(!(k in LISTAS)) LISTAS[k]=DEFAULT_LISTAS[k];
+});
 
 // Catálogo "legacy" de tipos de anormalidad usado por las OT importadas de la
 // bitácora histórica (REG-MTT-001.03), de antes de que existiera el catálogo
