@@ -414,7 +414,10 @@ function goBack(){
       window._conciliarBack=false;
       showPM02PorConciliar();
     } else {
-      if(tb) tb.innerHTML='<button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">📌 Mis Pendientes</div></div>';
+      // Mismo título real de esta pantalla (ver showPM02PorAsignar) -- antes decía
+      // "Mis Pendientes" aquí también, aunque el contenido que se repinta abajo
+      // (_renderPM02Asignar) siempre fue el correcto.
+      if(tb) tb.innerHTML='<button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">📋 PM02 por Asignar</div></div>';
       _renderPM02Asignar();
       showScreen('screen-ordenes');
     }
@@ -1422,7 +1425,20 @@ function guardarAtencion(){
 // ================================================================
 // MIS ÓRDENES
 // ================================================================
-function showMisOrdenes(){detalleBackScreen='screen-menu';window._screenOrdenesVista='mis_pendientes';renderMisOrdenes();showScreen('screen-ordenes');}
+function showMisOrdenes(){
+  detalleBackScreen='screen-menu';
+  window._screenOrdenesVista='mis_pendientes';
+  // #screen-ordenes es un lienzo compartido con "PM02 por Asignar" y sus sub-pantallas,
+  // que sí ponen su propio título -- antes "Mis Pendientes" nunca ponía el suyo (confiaba
+  // en que el HTML siempre trajera "📌 Mis Pendientes" por default), así que en cuanto se
+  // agregó el título propio de PM02 por Asignar, venir de ahí de regreso a Mis Pendientes
+  // se quedaba mostrando "PM02 por Asignar" por error. Se pone explícito, igual que las
+  // demás pantallas de este mismo lienzo.
+  var tb=document.querySelector('#screen-ordenes .topbar');
+  if(tb) tb.innerHTML='<button class="topbar-back" onclick="goBack()">←</button><div><div class="topbar-title">📌 Mis Pendientes</div></div>';
+  renderMisOrdenes();
+  showScreen('screen-ordenes');
+}
 
 function buildFiltrosPendientes(){
   const isAdmin=currentUser.rol==='admin';
@@ -6333,6 +6349,31 @@ function supaFetch(t,m,b,p){var url=SUPA_URL+'/rest/v1/'+t+(p?'?'+p:'');var usan
   }
   return _supaFetchHandleResponse(r,t);
 }).catch(function(e){console.error('supaFetch catch:',e);return null;});}
+// Descarga TODAS las filas de una tabla en bloques (offset/limit) en vez de un
+// solo GET con limit=999999 -- una tabla ya grande (ej. pm03_plan con miles de
+// filas tras cargar un plan completo por SQL, como las 132 PM03 de Lámpara UV
+// que sumaron 8,318 filas) puede tronar ese único GET con "57014 statement
+// timeout" en Supabase, aunque la app reintente y eventualmente sí entre. Con
+// bloques de 1,000 cada petición es rápida y nunca debería tronar por tiempo.
+// `paramsBase` lleva los mismos filtros/select/order de siempre (SIN limit ni
+// offset, esta función los agrega); requiere un order= estable para que la
+// paginación no repita ni salte filas entre bloques. Devuelve una promesa que
+// resuelve el arreglo COMPLETO (igual que supaFetch) o null si algún bloque
+// falló de verdad -- mismo contrato que ya revisan los llamadores (if(!rows)).
+function supaFetchPaginado(t,paramsBase,tamBloque){
+  tamBloque=tamBloque||1000;
+  var acumulado=[];
+  function siguienteBloque(offset){
+    var p=(paramsBase?paramsBase+'&':'')+'offset='+offset+'&limit='+tamBloque;
+    return supaFetch(t,'GET',null,p).then(function(rows){
+      if(rows===null) return null;
+      acumulado=acumulado.concat(rows);
+      if(rows.length<tamBloque) return acumulado;
+      return siguienteBloque(offset+tamBloque);
+    });
+  }
+  return siguienteBloque(0);
+}
 function _supaFetchHandleResponse(r,t){
   if(!r.ok){return r.text().then(function(txt){console.error('supaFetch error ['+t+']:',txt);return null;});}
   // PATCH/DELETE normalmente responden 204 sin cuerpo — antes se intentaba leer ese
@@ -12249,6 +12290,19 @@ var _firmaOtId=null;
 //    1° Técnico Mantenimiento → 2°/3° Líder de Área y Calidad (en cualquier
 //    orden entre ellas) → 4° Coordinador de Mantenimiento (siempre al final).
 function _pm3ChecklistCompleto(p,proto){
+  // Campos generales de cierre (Herramienta salida / Grasa-Aceite): aplican
+  // siempre, tenga o no protocolo con actividades — igual que ya hace
+  // pm3SaveCache al guardar el borrador. Antes solo se checaban hasta el
+  // botón final "Guardar y Firmar" (confirmarCierrePM03), así que el técnico
+  // podía firmar su parte (abrirModalFirma) sin haberlos llenado.
+  if(!p.diasTrabajo||!p.diasTrabajo.length) return {ok:false,msg:'Indica la hora de inicio y hora final del trabajo antes de firmar'};
+  if(p.diasTrabajo.some(function(d){return !d.horaInicio||!d.horaFin;})) return {ok:false,msg:'Indica la hora de inicio y hora final de todos los días de trabajo antes de firmar'};
+  if(p.limpiezaMtto!==true) return {ok:false,msg:'La limpieza por Mantenimiento es obligatoria (SI requerido) antes de firmar'};
+  if(!p.herramientaSalida) return {ok:false,msg:'Confirma si la herramienta salió completa (SI/NO) antes de firmar'};
+  if(p.herramientaSalida==='no') return {ok:false,msg:'⚠️ Retira toda la herramienta antes de firmar'};
+  if(p.usaGrasa==null) return {ok:false,msg:'Indica si se usó Grasa/Aceite grado alimenticio (SI/NO) antes de firmar'};
+  if(p.usaGrasa&&!(p.grasaAceite&&p.grasaAceite.trim())) return {ok:false,msg:'Indica el tipo y cantidad de Grasa/Aceite usada antes de firmar'};
+
   if(!proto||!proto.actividades||!proto.actividades.length) return {ok:true};
   var faltanEstado=[],faltanComentario=[],faltanMedicion=[];
   proto.actividades.forEach(function(a){
@@ -14898,21 +14952,32 @@ function saveListas(){
 // y detenerse si devuelve true; 3) en su sync, avisar éxito/fallo con
 // _syncPantallaExito('clave') / _syncPantallaFallo('clave', reintentarFn).
 var SYNC_ESTADO={};              // clave -> {estado:'cargando'|'ok'|'error', intentos:0}
+// #screen-ordenes es un lienzo compartido: Mis Pendientes, PM02 por Asignar y las 3
+// vistas de Protocolos PM03 (menú, Protocolos existentes, PM03 por semana) pintan ahí
+// mismo (#ordenes-filtros/#mis-ordenes-list). Cualquier repintado disparado por un sync
+// de fondo (ordenes/pm03/protocolos, normal o de reintento) tiene que repintar la vista
+// que esté REALMENTE activa -- si no, en cuanto uno de esos syncs termina mientras el
+// admin está viendo cualquiera de las otras, lo manda de vuelta a Mis Pendientes sin
+// avisar (pasó primero con PM02 por Asignar, y el mismo motivo volvió a pasar con
+// Protocolos PM03 -- casos reales reportados por Jorge). Centralizado aquí para que las
+// 4 llamadas (la cola de reintentos de abajo + los 3 sync normales que repintan
+// screen-ordenes) usen siempre el mismo criterio.
+function _repintarOrdenesSegunVista(){
+  var v=window._screenOrdenesVista;
+  if(v==='pm02_asignar') _renderPM02Asignar();
+  else if(v==='protocolos_menu') showMenuProtocolosPM03();
+  else if(v==='protocolos_existentes') _protoFiltrarLista();
+  else if(v==='protocolos_semana') showProtocolosProximaSemana();
+  else if(document.getElementById('fp-semana')) aplicarFiltrosPendientes();
+  else renderMisOrdenes();
+}
 var SYNC_PANTALLAS_CONFIG={      // clave -> lista de pantallas que hay que volver a pintar
   pm03:[{screenId:'screen-pm03', renderFn:function(){renderPM03();}}],
   ordenes:[
-    // #screen-ordenes es un lienzo compartido: Mis Pendientes y PM02 por
-    // Asignar pintan ahí mismo (#ordenes-filtros/#mis-ordenes-list). Hay que
-    // repintar la vista que esté realmente activa, no siempre Mis Pendientes
-    // -- de lo contrario un reintento de sync que termina mientras el admin
-    // está en PM02 por Asignar lo manda de vuelta a Mis Pendientes.
-    {screenId:'screen-ordenes', renderFn:function(){
-      if(window._screenOrdenesVista==='pm02_asignar') _renderPM02Asignar();
-      else renderMisOrdenes();
-    }},
+    {screenId:'screen-ordenes', renderFn:_repintarOrdenesSegunVista},
     {screenId:'screen-consulta', renderFn:function(){filtrarOrdenes();renderResumenConsulta();renderResumenTecnicosOT();}}
   ],
-  plan:[{screenId:'screen-plan', renderFn:function(){renderPlanMenu();}}]
+  plan:[{screenId:'screen-plan', renderFn:_repintarPlanSegunVista}]
 };
 var SYNC_REINTENTO_MAX=4;
 var SYNC_REINTENTO_ESPERA_MS=3000;
@@ -15298,7 +15363,7 @@ function syncSupabase(){
     saveDB('users',USERS);
   }).catch(function(){});
   function _sincronizarOrdenes(){
-  supaFetch('ordenes','GET',null,'order=ts.desc&limit=999999&select=anio,aprobado_por,area,causa_raiz,cerrada_por,cerrada_ts,color_ot,componente,conciliado_con,conciliado_con_nombre,detalle,es_resuelta_temporal,estado,fecha_trabajo,foto_vista_ts,fuente_bitacora,fuente_label,historial_modificacion,historial_reasignacion,hora_entrega,hora_fin_trabajo,hora_inicio,hora_inicio_trabajo,hora_llamado,horas_cierre,id,levantado_id,levantado_por,lider_pm04,limpieza_avisado_a,limpieza_requerida,linea,motivo_rechazo,mttr,observaciones_cierre,pendiente_asignacion,pm03_definitiva,pre_cierre_por,pre_cierre_ts,prioridad,rechazado_por,refacciones_usadas,rol_levantador,semana,semana_resolucion,tecnico_asignado,tecnico_nombre,tecnicos_adicionales,tiempo_respuesta,tipo,tipo_anormalidad,trabajo_dias,ts,turno').then(function(rows){
+  supaFetchPaginado('ordenes','order=ts.desc&select=anio,aprobado_por,area,causa_raiz,cerrada_por,cerrada_ts,color_ot,componente,conciliado_con,conciliado_con_nombre,detalle,es_resuelta_temporal,estado,fecha_trabajo,foto_vista_ts,fuente_bitacora,fuente_label,historial_modificacion,historial_reasignacion,hora_entrega,hora_fin_trabajo,hora_inicio,hora_inicio_trabajo,hora_llamado,horas_cierre,id,levantado_id,levantado_por,lider_pm04,limpieza_avisado_a,limpieza_requerida,linea,motivo_rechazo,mttr,observaciones_cierre,pendiente_asignacion,pm03_definitiva,pre_cierre_por,pre_cierre_ts,prioridad,rechazado_por,refacciones_usadas,rol_levantador,semana,semana_resolucion,tecnico_asignado,tecnico_nombre,tecnicos_adicionales,tiempo_respuesta,tipo,tipo_anormalidad,trabajo_dias,ts,turno',1000).then(function(rows){
     if(!rows){_syncPantallaFallo('ordenes',_sincronizarOrdenes);return;}
     var localOrdenes = loadDB('ordenes',[]);
     var syncedIds = new Set(rows.map(function(r){return r.id;}));
@@ -15356,14 +15421,11 @@ function syncSupabase(){
     // el usuario ya haya elegido; si no (pantalla recién saliendo de "Cargando…",
     // o un rol sin filtros como super/líder/calidad) se vuelve a entrar completo.
     if(document.getElementById('screen-ordenes')&&document.getElementById('screen-ordenes').classList.contains('active')){
-      // Igual que en el reintento de la cola (ver SYNC_PANTALLAS_CONFIG.ordenes): si el
-      // admin está viendo "PM02 por Asignar" hay que repintar ESA vista, no mandarlo de
-      // vuelta a "Mis Pendientes" -- a este sync normal (no solo al de reintentos) le
-      // faltaba este mismo cuidado, y era la causa de que el botón "redirigiera" solo de
-      // repente. Caso real reportado por Jorge.
-      if(window._screenOrdenesVista==='pm02_asignar') _renderPM02Asignar();
-      else if(document.getElementById('fp-semana')) aplicarFiltrosPendientes();
-      else renderMisOrdenes();
+      // Repintar la vista que esté realmente activa (ver _repintarOrdenesSegunVista) --
+      // a este sync normal (no solo al de reintentos) le faltaba este cuidado, y era la
+      // causa de que "PM02 por Asignar" y, luego, "Protocolos PM03" "redirigieran" solos
+      // de repente a "Mis Pendientes". Casos reales reportados por Jorge.
+      _repintarOrdenesSegunVista();
     }
     // Mismo caso en "Consultar OT" (screen-consulta/filtrarOrdenes) — faltaba
     // este refresco, así que quien entraba rápido se quedaba viendo la lista
@@ -15378,7 +15440,7 @@ function syncSupabase(){
   }
   _sincronizarOrdenes();
   function _sincronizarPM03Plan(){
-  supaFetch('pm03_plan','GET',null,'order=semana.asc&limit=999999&select=actividad,actividades_estado,actividades_estado_final,actividades_estado_inicial,anio,area,cerrada_por,cerrada_ts,comentarios_actividades,componente,desinf_produccion,dias_trabajo,draft_ts,es_inspeccion,estado,estado_calidad,estado_flujo,firma_nombre_admin,origen_ot,origen_pm02,firma_nombre_calidad,firma_nombre_lider,firma_nombre_operador,firma_tecnico,firma_tecnico_ts,firma_ts_admin,firma_ts_calidad,firma_ts_lider,firma_ts_operador,fuente_excel,generado_por,grasa_aceite,herramienta_ingresada,herramienta_salida,hora_fin,hora_inicio,horas_actividades,horas_cierre,id,liberado_admin_por,liberado_admin_ts,liberado_por,liberado_prod_por,liberado_prod_ts,liberado_ts,limpieza_mtto,comentario_desinfeccion,linea,mediciones_actividades,observaciones_cierre,personas_actividades,rechazo_calidad,refacciones_nuevas,refacciones_usadas,reporte_actividades,responsable_area_id,responsable_area_nombre,semana,tecnico_id,tecnico_nombre,ts,semanas_vencidas,motivo_recorrido,protocolo_snapshot,firmas_requeridas_override,nota_reprogramacion,reprogramada_a,reprogramada_por,reprogramada_ts,reprogramada_de').then(function(rows){
+  supaFetchPaginado('pm03_plan','order=semana.asc&select=actividad,actividades_estado,actividades_estado_final,actividades_estado_inicial,anio,area,cerrada_por,cerrada_ts,comentarios_actividades,componente,desinf_produccion,dias_trabajo,draft_ts,es_inspeccion,estado,estado_calidad,estado_flujo,firma_nombre_admin,origen_ot,origen_pm02,firma_nombre_calidad,firma_nombre_lider,firma_nombre_operador,firma_tecnico,firma_tecnico_ts,firma_ts_admin,firma_ts_calidad,firma_ts_lider,firma_ts_operador,fuente_excel,generado_por,grasa_aceite,herramienta_ingresada,herramienta_salida,hora_fin,hora_inicio,horas_actividades,horas_cierre,id,liberado_admin_por,liberado_admin_ts,liberado_por,liberado_prod_por,liberado_prod_ts,liberado_ts,limpieza_mtto,comentario_desinfeccion,linea,mediciones_actividades,observaciones_cierre,personas_actividades,rechazo_calidad,refacciones_nuevas,refacciones_usadas,reporte_actividades,responsable_area_id,responsable_area_nombre,semana,tecnico_id,tecnico_nombre,ts,semanas_vencidas,motivo_recorrido,protocolo_snapshot,firmas_requeridas_override,nota_reprogramacion,reprogramada_a,reprogramada_por,reprogramada_ts,reprogramada_de',1000).then(function(rows){
     if(!rows){_syncPantallaFallo('pm03',_sincronizarPM03Plan);return;}
     var localPM03=loadDB('pm03_plan',[]);
     // Preservar PM03 locales que NO llegaron a Supabase (save pendiente) y
@@ -15544,16 +15606,19 @@ function syncSupabase(){
     // todavía no hay filtros pintados (pantalla en "Cargando…", o rol sin
     // filtros) se entra completo con renderMisOrdenes().
     if(document.getElementById('screen-ordenes')&&document.getElementById('screen-ordenes').classList.contains('active')){
-      // Mismo cuidado que en el sync de 'ordenes': no mandar a "Mis Pendientes" a quien
-      // está viendo "PM02 por Asignar" (ver _screenOrdenesVista).
-      if(window._screenOrdenesVista==='pm02_asignar') _renderPM02Asignar();
-      else if(document.getElementById('fp-semana')) aplicarFiltrosPendientes();
-      else renderMisOrdenes();
+      // Mismo cuidado que en el sync de 'ordenes': repintar la vista que esté realmente
+      // activa (ver _repintarOrdenesSegunVista), no siempre "Mis Pendientes".
+      _repintarOrdenesSegunVista();
     }
     // Mismo caso en el tablero principal de PM03 (screen-pm03/renderPM03) —
     // faltaba este refresco: quien entraba rápido veía tarjetas en blanco o con
     // el color/semana viejos hasta volver a entrar a la pantalla.
     if(document.getElementById('screen-pm03')&&document.getElementById('screen-pm03').classList.contains('active')) renderPM03();
+    // Mismo caso en Plan Mtto (screen-plan/#plan-content): el Calendario (por
+    // línea o Completo) ahora también depende de 'pm03' (ver showPlanCalendario),
+    // así que debe repintarse en cuanto este sync termine -- respetando la vista
+    // real que esté abierta (menú/área/detalle/calendario), no siempre el menú.
+    if(document.getElementById('screen-plan')&&document.getElementById('screen-plan').classList.contains('active')) _repintarPlanSegunVista();
     // Marca que ya llegó al menos una sincronización real de PM03 en esta
     // sesión — usado por el tablero de DOR (ver abajo) para no mostrar el KPI
     // "Avance PM" como 100% falso cuando en realidad todavía no se ha cargado.
@@ -20026,7 +20091,11 @@ function _chkContinuarLocalONuevo(tipoId, tipo, puntos){
     estado: 'en_progreso',
     puntos: puntos.map(function(p) {
       var texto = p.texto || p.nombre || String(p);
-      return { id: p.id, texto: texto, nombre: texto, tipo: p.tipo || 'punto', padreId: p.padreId||null, nivel: p.nivel||0, estado: null, hora: null, iniciales: '', comentario: '' };
+      var pf = { id: p.id, texto: texto, nombre: texto, tipo: p.tipo || 'punto', padreId: p.padreId||null, nivel: p.nivel||0, estado: null, hora: null, iniciales: '', comentario: '' };
+      // Puntos tipo "valor": sin esto, el punto se crea sin rango/unidad y chkSetValor
+      // nunca puede detectar "fuera de rango" (queda en verde sin importar el valor).
+      if(pf.tipo==='valor'){ pf.unidad=p.unidad; pf.valorMin=p.valorMin; pf.valorMax=p.valorMax; }
+      return pf;
     }),
     tsInicio: Date.now()
   };
@@ -21398,11 +21467,12 @@ function cargarProtocolosSupa(){
       // repinta sola en cuanto el catálogo real ya está disponible.
       if(document.getElementById('screen-pm03')&&document.getElementById('screen-pm03').classList.contains('active')) renderPM03();
       if(document.getElementById('screen-ordenes')&&document.getElementById('screen-ordenes').classList.contains('active')){
-        // Mismo cuidado que en el sync de 'ordenes': no mandar a "Mis Pendientes" a quien
-        // está viendo "PM02 por Asignar" (ver _screenOrdenesVista).
-        if(window._screenOrdenesVista==='pm02_asignar') _renderPM02Asignar();
-        else if(document.getElementById('fp-semana')) aplicarFiltrosPendientes();
-        else renderMisOrdenes();
+        // Mismo cuidado que en el sync de 'ordenes': repintar la vista que esté realmente
+        // activa (ver _repintarOrdenesSegunVista). Este catálogo de protocolos en
+        // particular es justo del que dependen las 3 vistas de "Protocolos PM03", así que
+        // sin esto, estar ahí viéndolas más de 5 minutos (el sync de fondo automático)
+        // terminaba "mandando" de vuelta a Mis Pendientes. Caso real reportado por Jorge.
+        _repintarOrdenesSegunVista();
       }
       if(document.getElementById('dor-content')) renderDOR();
     }
@@ -22544,6 +22614,15 @@ function showHistorialMedicion(linea, actId, componente, actividad){
 function showMenuProtocolosPM03(){
   detalleBackScreen = 'screen-menu';
   window._protoBackFn=null;
+  // Igual que PM02 por Asignar: #screen-ordenes es un lienzo compartido y esta pantalla
+  // nunca ponía ni su propio título de la barra superior ni window._screenOrdenesVista,
+  // así que (a) la barra de arriba se quedaba con el "📌 Mis Pendientes" por default del
+  // HTML, y (b) un sync de fondo (sobre todo el de protocolos, del que depende esta misma
+  // pantalla) terminaba repintando Mis Pendientes encima sin avisar. Mismo caso reportado
+  // por Jorge que ya se corrigió para PM02 por Asignar.
+  window._screenOrdenesVista='protocolos_menu';
+  var tb=document.querySelector('#screen-ordenes .topbar');
+  if(tb) tb.innerHTML='<button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">🗂️ Protocolos PM03</div></div>';
   // Esta pantalla reutiliza el mismo espacio que "Mis Pendientes" -- sin
   // esto, la tarjeta de Cumplimiento PM se quedaba pegada/visible encima
   // (con los datos viejos) porque solo se oculta desde updatePendChart().
@@ -22568,6 +22647,11 @@ function showAdminProtocolos(){
   detalleBackScreen = 'screen-ordenes';
   window._protoBackFn='showMenuProtocolosPM03';
   window._protoVolverASemana=false;
+  // Ver nota en showMenuProtocolosPM03 -- mismo cuidado para que no se quede el título de
+  // la barra superior equivocado ni un sync de fondo repinte Mis Pendientes encima.
+  window._screenOrdenesVista='protocolos_existentes';
+  var tb=document.querySelector('#screen-ordenes .topbar');
+  if(tb) tb.innerHTML='<button class="topbar-back" onclick="goBack()">←</button><div><div class="topbar-title">📋 Protocolos existentes</div></div>';
   var wChart=document.getElementById('pend-chart-wrap'); if(wChart) wChart.style.display='none';
   var fDiv=document.getElementById('ordenes-filtros');
   var lDiv=document.getElementById('mis-ordenes-list');
@@ -22847,6 +22931,13 @@ function pm3FolioHTML(p){
 function showProtocolosProximaSemana(){
   detalleBackScreen = 'screen-ordenes';
   window._protoBackFn='showMenuProtocolosPM03';
+  // Ver nota en showMenuProtocolosPM03 -- mismo cuidado para que no se quede el título de
+  // la barra superior equivocado ni un sync de fondo repinte Mis Pendientes encima. Esta
+  // función se vuelve a llamar a sí misma como repintado (ver _repintarOrdenesSegunVista
+  // y el filtro de área de abajo), así que puede correr varias veces sin problema.
+  window._screenOrdenesVista='protocolos_semana';
+  var tb=document.querySelector('#screen-ordenes .topbar');
+  if(tb) tb.innerHTML='<button class="topbar-back" onclick="goBack()">←</button><div><div class="topbar-title">📅 PM03 por semana</div></div>';
   var wChart=document.getElementById('pend-chart-wrap'); if(wChart) wChart.style.display='none';
   var fDiv=document.getElementById('ordenes-filtros');
   var lDiv=document.getElementById('mis-ordenes-list');
@@ -24248,6 +24339,16 @@ function kpiCardGrande(titulo, valor, color, sub){
 function showPM02PorAsignar(){
   detalleBackScreen='screen-menu';
   window._screenOrdenesVista='pm02_asignar';
+  // La barra superior de #screen-ordenes trae por defecto el título "📌 Mis Pendientes"
+  // (texto fijo en el HTML) y esta pantalla nunca lo cambiaba -- así que aunque el
+  // contenido de abajo SÍ era "PM02 por Asignar" correctamente, el título de hasta
+  // arriba seguía diciendo "Mis Pendientes" todo el tiempo. Si hacías scroll hacia abajo
+  // para revisar la lista, ese título (el único que sí decía "PM02 por Asignar") quedaba
+  // fuera de vista, y parecía que la pantalla "te mandó" sola a Mis Pendientes. Caso real
+  // reportado por Jorge -- se corrige igual que ya hacen "Por Conciliar"/"Por Validar"/
+  // "En Espera"/"Consulta Asignadas", que sí ponen su propio título.
+  var tb=document.querySelector('#screen-ordenes .topbar');
+  if(tb) tb.innerHTML='<button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">📋 PM02 por Asignar</div></div>';
   // Por defecto mostrar sin asignar
   window._pm02AsigEstado='pendiente';
   window._pm02AsigPrio='';
@@ -24882,13 +24983,20 @@ function _renderHorarios(lDiv){
     var turnoColor={'1':'#000','2':'#000','3':'#000','M':'#fff','D':'#fff','I':'#000','V':'#000','P':'#fff','F':'#000','R':'#000'};
     var turnoBg={'1':'#4ade80','2':'#9ca3af','3':'#fb923c','M':'#14b8a6','D':'#7c3aed','I':'#f472b6','V':'#38bdf8','P':'#1e3a8a','F':'#ef4444','R':'#facc15'};
 
+    // "Hoy" con el mismo corte de día que usa el resto de la app (6:30am-6:30am):
+    // una madrugada antes de las 6:30 todavía cuenta como el día laboral anterior
+    // (el técnico de T3 que entró ayer en la noche sigue "en el día de ayer").
+    var _hoyHor=new Date(fechaLocal()+'T12:00:00');
+    var hoyAño=_hoyHor.getFullYear(), hoyMes=_hoyHor.getMonth()+1, hoyDia=_hoyHor.getDate();
+
     // Cabecera días
     var headerDias='<tr><th style="position:sticky;left:0;background:#1a3c5e;z-index:2;padding:4px 8px;font-size:.7rem;color:#fff;white-space:nowrap">Técnico</th>';
     for(var d=1;d<=diasMes;d++){
       var dow=new Date(_gpAño+'-'+String(_gpMes).padStart(2,'0')+'-'+String(d).padStart(2,'0')+'T12:00:00').getDay();
       var esFS=dow===0||dow===6;
-      headerDias+='<th style="background:'+(esFS?'#374151':'#1a3c5e')+';padding:2px;font-size:.6rem;font-weight:700;color:#fff;text-align:center;min-width:28px">'
-        +'<div>'+d+'</div><div style="opacity:.8">'+diasSem[dow]+'</div></th>';
+      var esHoyCol=(_gpAño===hoyAño&&_gpMes===hoyMes&&d===hoyDia);
+      headerDias+='<th style="background:'+(esHoyCol?'#dc2626':(esFS?'#374151':'#1a3c5e'))+';padding:2px;font-size:.6rem;font-weight:700;color:#fff;text-align:center;min-width:28px'+(esHoyCol?';box-shadow:inset 0 0 0 2px #fde047':'')+'">'
+        +'<div>'+(esHoyCol?'📍':'')+d+'</div><div style="opacity:.8">'+diasSem[dow]+'</div></th>';
     }
     headerDias+='</tr>';
 
@@ -24904,8 +25012,10 @@ function _renderHorarios(lDiv){
         var val=diasEmp[d]||diasEmp[String(d)]||'';
         var bg=turnoBg[val]||'#fff';
         var col=turnoColor[val]||'#d1d5db';
+        var esHoyCol=(_gpAño===hoyAño&&_gpMes===hoyMes&&d===hoyDia);
+        var marcaHoy=esHoyCol?';box-shadow:inset 0 0 0 2px #dc2626':'';
         if(esAdmin){
-          fila+='<td style="padding:0;border-bottom:1px solid #e5e7eb;min-width:28px">'
+          fila+='<td style="padding:0;border-bottom:1px solid #e5e7eb;min-width:28px'+marcaHoy+'">'
             +'<select data-emp="'+e.id+'" data-dia="'+d+'" onchange="horSetVal(this)" onkeydown="horNavegar(this,event)" style="display:block;width:100%;height:28px;border:none;background:'+bg+';color:'+col+';font-size:.65rem;font-weight:800;text-align:center;text-align-last:center;cursor:pointer;padding:0;-webkit-appearance:none;-moz-appearance:none;appearance:none">'
             +'<option value="">-</option>'
             +'<option value="1"'+(val==='1'?' selected':'')+'>1</option>'
@@ -24920,7 +25030,7 @@ function _renderHorarios(lDiv){
             +'<option value="R"'+(val==='R'?' selected':'')+'>R</option>'
             +'</select></td>';
         } else {
-          fila+='<td style="background:'+bg+';text-align:center;font-size:.65rem;font-weight:800;color:'+col+';padding:3px 2px;border-bottom:1px solid #e5e7eb;min-width:28px">'+(val||'')+'</td>';
+          fila+='<td style="background:'+bg+';text-align:center;font-size:.65rem;font-weight:800;color:'+col+';padding:3px 2px;border-bottom:1px solid #e5e7eb;min-width:28px'+marcaHoy+'">'+(val||'')+'</td>';
         }
       }
       return fila+'</tr>';
@@ -24937,6 +25047,7 @@ function _renderHorarios(lDiv){
       +'<span style="background:#1e3a8a;color:#fff;padding:2px 8px;border-radius:4px;font-weight:700">P=Permiso</span>'
       +'<span style="background:#ef4444;color:#000;padding:2px 8px;border-radius:4px;font-weight:700">F=Falta</span>'
       +'<span style="background:#facc15;color:#000;padding:2px 8px;border-radius:4px;font-weight:700">R=Retardo</span>'
+      +'<span style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:4px;font-weight:700">📍=Hoy</span>'
       +(esAdmin?'<button onclick="horGuardar()" style="margin-left:auto;padding:2px 12px;background:#1a3c5e;color:#fff;border:none;border-radius:6px;font-size:.72rem;font-weight:700;cursor:pointer">💾 Guardar</button>':'')
       +'</div>';
 
@@ -34660,9 +34771,14 @@ function conciliarOT(id){
       null,o.levantadoId,o.id);
   }
   showAlert('🤝 OT enviada a Por Conciliar');
-  if(document.getElementById('screen-pm02asignar')&&document.getElementById('screen-pm02asignar').classList.contains('active')){
+  // 'screen-pm02asignar' nunca fue el id real de ningún elemento (PM02 por Asignar
+  // comparte el lienzo de #screen-ordenes), así que esta condición nunca era cierta y
+  // la lista de PM02 por Asignar se quedaba sin refrescar al conciliar una orden desde
+  // ahí -- se corrige con el mismo indicador que ya usan los demás repintados
+  // (window._screenOrdenesVista).
+  if(window._screenOrdenesVista==='pm02_asignar'){
     _renderPM02Asignar();
-  } else {
+  } else if(document.getElementById('screen-consulta')&&document.getElementById('screen-consulta').classList.contains('active')){
     filtrarOrdenes();
     renderResumenConsulta();
   }
@@ -37197,9 +37313,29 @@ function showPlanMantenimiento(){
   renderPlanMenu();
 }
 
+// #plan-content es un lienzo compartido (igual que #screen-ordenes): el menú
+// de Plan Mtto, una área, el detalle de una línea, su calendario anual y el
+// Calendario Completo pintan todos ahí. Antes, cualquier sync que repintara
+// 'plan' (vía SYNC_PANTALLAS_CONFIG) siempre volvía a pintar renderPlanMenu()
+// sin importar qué vista estuviera realmente abierta -- mismo motivo por el
+// que antes "PM02 por Asignar" y "Protocolos PM03" regresaban solos a su
+// pantalla por defecto (ver _repintarOrdenesSegunVista). Se centraliza aquí
+// para que las 2 vías que repintan #plan-content (SYNC_PANTALLAS_CONFIG.plan
+// y el aviso manual de _sincronizarPM03Plan, ver syncSupabase) usen siempre
+// el mismo criterio.
+function _repintarPlanSegunVista(){
+  var v=window._screenPlanVista||{};
+  if(v.vista==='area') renderPlanArea(v.areaId);
+  else if(v.vista==='detalle') showPlanDetalle(v.areaId,v.linea);
+  else if(v.vista==='calendario') showPlanCalendario(v.areaId,v.linea);
+  else if(v.vista==='calendario_completo') showCalendarioCompleto();
+  else renderPlanMenu();
+}
+
 function renderPlanMenu(){
   var cont=document.getElementById('plan-content');
   if(!cont) return;
+  window._screenPlanVista={vista:'menu'};
   // El Calendario de Plan Mtto depende de 4 tablas (plan_actividades,
   // componentes_equipo, equipos_linea, activo_componentes) -- mismo
   // mecanismo de Cargando/Sin conexión que el resto de la app, agrupadas
@@ -37290,6 +37426,7 @@ function _getPM3KPIs(linea){
 function renderPlanArea(areaId){
   var cont=document.getElementById('plan-content');
   if(!cont) return;
+  window._screenPlanVista={vista:'area',areaId:areaId};
   var area=PM_AREAS.find(function(a){return a.id===areaId;})||{label:areaId,icon:'📍'};
   document.getElementById('plan-topbar-sub').textContent=area.icon+' '+area.label;
 
@@ -38602,6 +38739,7 @@ function imprimirPlanLinea(areaId,linea){
 function showPlanDetalle(areaId,linea){
   var cont=document.getElementById('plan-content');
   if(!cont) return;
+  window._screenPlanVista={vista:'detalle',areaId:areaId,linea:linea};
   document.getElementById('plan-topbar-sub').textContent=linea;
   var kpi=_getPM3KPIs(linea);
   var anio=currentYear();
@@ -38778,7 +38916,16 @@ function detenerActividadOrfanaCalendario(areaId,linea,eq,actLabel){
 function showPlanCalendario(areaId,linea){
   var cont=document.getElementById('plan-content');
   if(!cont) return;
+  window._screenPlanVista={vista:'calendario',areaId:areaId,linea:linea};
   document.getElementById('plan-topbar-sub').textContent=linea+' — Calendario';
+  // Este calendario lee PM03_PLAN directo (para pintar "Sin prog." / lo ya
+  // programado) -- antes no esperaba a que esa tabla terminara de sincronizar,
+  // así que una carga grande (ej. las 132 PM03 de Lámpara UV cargadas por SQL,
+  // 8,318 filas en pm03_plan) podía mostrarse como "Sin prog." mientras el
+  // sync de 'pm03' seguía reintentando por el timeout de Supabase. Se exige
+  // 'plan' (igual que el resto de Plan Mtto) y también 'pm03'.
+  if(mostrarEstadoCargaSiAplica(cont,'plan')) return;
+  if(mostrarEstadoCargaSiAplica(cont,'pm03')) return;
 
   var anio=window._planCalAnio||currentYear();
   var semActual=(anio===currentYear())?currentWeek():0;
@@ -39601,7 +39748,12 @@ function showPlanListadoFiltrado(areaId,linea,filtro,opts){
 function showCalendarioCompleto(){
   var cont=document.getElementById('plan-content');
   if(!cont) return;
+  window._screenPlanVista={vista:'calendario_completo'};
   document.getElementById('plan-topbar-sub').textContent='Calendario Completo';
+  // Mismo caso que showPlanCalendario: lee PM03_PLAN de todas las líneas, así
+  // que también debe esperar a que 'pm03' termine de sincronizar.
+  if(mostrarEstadoCargaSiAplica(cont,'plan')) return;
+  if(mostrarEstadoCargaSiAplica(cont,'pm03')) return;
 
   var anio=currentYear();
   var semActual=currentWeek();
