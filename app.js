@@ -15406,6 +15406,27 @@ function syncSupabase(){
       setTimeout(function(){ saveOrdenSupa(l); }, 500);
       return l;
     }));
+    // Releer localStorage justo antes de guardar: este sync pudo tardar varios
+    // segundos (descarga paginada), y si en ese tiempo OTRA pestaña/sesión
+    // abierta en este mismo dispositivo guardó una orden nueva (p.ej. una
+    // anormalidad recién levantada) que todavía no llegaba a Supabase cuando
+    // empezó este sync, un guardado "a ciegas" aquí la borraría de localStorage
+    // sin que llegara a existir en ningún lado. Esta es la causa real reportada
+    // por Jorge de "se perdió una anormalidad" con 2 sesiones abiertas. Cualquier
+    // id que exista AHORA en localStorage, no esté ya en lo que vamos a guardar,
+    // y no haya sido eliminado, se conserva y se reintenta mandar a Supabase.
+    var localJustoAntes = loadDB('ordenes',[]);
+    var idsAGuardar = new Set(ORDENES.map(function(o){return o.id;}));
+    var aparecioDuranteSync = localJustoAntes.filter(function(l){
+      return !idsAGuardar.has(l.id) && ORDENES_ELIMINADAS.indexOf(l.id)<0;
+    });
+    if(aparecioDuranteSync.length){
+      console.log('Conservando '+aparecioDuranteSync.length+' orden(es) creada(s) en otra sesión durante este sync');
+      ORDENES=ORDENES.concat(aparecioDuranteSync);
+      setTimeout(function(){
+        aparecioDuranteSync.forEach(function(o){ saveOrdenSupa(o); });
+      }, 500);
+    }
     saveDB('ordenes',ORDENES);
     // Marcar éxito ANTES de volver a pintar la pantalla -- mismo motivo que en
     // pm03: si no, un renderMisOrdenes()/filtrarOrdenes() disparado por el
@@ -15593,6 +15614,38 @@ function syncSupabase(){
         _draftTs:r.draft_ts||(local?local._draftTs:0)
       };
     }).concat(localSoloPM03);
+    // Mismo cuidado que en 'ordenes' (ver _sincronizarOrdenes): releer
+    // localStorage justo antes de guardar, para no borrar una PM03 que otra
+    // pestaña/sesión de este mismo dispositivo haya guardado localmente
+    // mientras este sync (ahora paginado) todavía estaba en curso.
+    var localPM03JustoAntes = loadDB('pm03_plan',[]);
+    var idsPM03AGuardar = new Set(PM03_PLAN.map(function(p){return p.id;}));
+    var pm03AparecioDuranteSync = localPM03JustoAntes.filter(function(l){
+      return !idsPM03AGuardar.has(l.id);
+    });
+    if(pm03AparecioDuranteSync.length){
+      console.log('Conservando '+pm03AparecioDuranteSync.length+' PM03 creada(s) en otra sesión durante este sync');
+      PM03_PLAN=PM03_PLAN.concat(pm03AparecioDuranteSync);
+      setTimeout(function(){
+        pm03AparecioDuranteSync.forEach(function(p){ savePM03Supa(p); });
+      }, 500);
+    }
+    // Fotos y las 4 firmas (imagen) NUNCA vienen en este SELECT masivo (ver
+    // _pm3FetchFirmasPM03 / showDetallePM03) -- arriba siempre se rellenan desde
+    // el "local" capturado al INICIO de este sync. Si alguien abrió el detalle o
+    // le dio "actualizar firmas" mientras este sync (paginado, puede tardar con
+    // mala señal) todavía estaba esperando respuesta, ese guardado más fresco
+    // quedaría pisado por la foto vieja al llegar aquí. Como estas 5 columnas
+    // jamás las trae esta consulta, lo que haya AHORA en localStorage siempre
+    // es al menos tan bueno como lo que se armó arriba -- se sobreescribe sin
+    // riesgo de preferir algo más viejo.
+    PM03_PLAN.forEach(function(p){
+      var frescoAhora = localPM03JustoAntes.find(function(l){return l.id===p.id;});
+      if(!frescoAhora) return;
+      ['fotos','firmaImgOperador','firmaImgLider','firmaImgCalidad','firmaImgAdmin'].forEach(function(campo){
+        if(frescoAhora[campo]!==undefined) p[campo]=frescoAhora[campo];
+      });
+    });
     saveDB('pm03_plan',PM03_PLAN);
     _pm3AplicarCortes();
     // Marcar éxito ANTES de volver a pintar la pantalla -- si no, renderPM03()
