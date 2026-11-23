@@ -17357,16 +17357,40 @@ function _bombaPoblarSelectsCatalogo(){
   if(serieSel){
     var series=(tipo==='centrifuga'?LISTAS.bomba_series_centrifuga:LISTAS.bomba_series_positiva)||[];
     var valPrevio=serieSel.value;
-    serieSel.innerHTML='<option value="">-- Selecciona --</option>'+series.map(function(s){return '<option value="'+s+'">'+s+'</option>';}).join('');
+    serieSel.innerHTML='<option value="">-- Selecciona --</option>'+series.map(function(s){return '<option value="'+s+'">'+s+'</option>';}).join('')+'<option value="__nueva__">➕ Agregar nueva...</option>';
     if(series.indexOf(valPrevio)>=0) serieSel.value=valPrevio;
   }
   var modeloSel=document.getElementById('bomba-modelo');
   if(modeloSel){
     var modelos=LISTAS.bomba_modelos||[];
     var modValPrevio=modeloSel.value;
-    modeloSel.innerHTML='<option value="">-- Selecciona --</option>'+modelos.map(function(m){return '<option value="'+m+'">'+m+'</option>';}).join('');
+    modeloSel.innerHTML='<option value="">-- Selecciona --</option>'+modelos.map(function(m){return '<option value="'+m+'">'+m+'</option>';}).join('')+'<option value="__nueva__">➕ Agregar nuevo...</option>';
     if(modelos.indexOf(modValPrevio)>=0) modeloSel.value=modValPrevio;
   }
+  _bombaActualizarPreviewCodigo();
+}
+
+// Jorge pidió poder escribir Serie/Modelo nuevos directo desde este formulario,
+// sin tener que ir primero a Admin → Listas. Al elegir "➕ Agregar nueva/o..."
+// se pide el texto con prompt() (mismo patrón ya usado en el resto de la app
+// para altas rápidas), se agrega al catálogo correspondiente de LISTAS, se
+// sincroniza con Supabase vía saveListas() (así queda disponible también desde
+// Admin → Listas) y se deja seleccionado para seguir armando el código.
+function _bombaSelectCambio(campo){
+  var sel=document.getElementById('bomba-'+campo);
+  if(!sel) return;
+  if(sel.value!=='__nueva__'){ _bombaActualizarPreviewCodigo(); return; }
+  var esSerie=campo==='serie';
+  var tipo=document.getElementById('bomba-tipo').value;
+  var clave=esSerie?(tipo==='centrifuga'?'bomba_series_centrifuga':'bomba_series_positiva'):'bomba_modelos';
+  var etiqueta=esSerie?'Serie':'Modelo (tamaño)';
+  var nuevo=prompt('Nueva '+etiqueta+':');
+  if(!nuevo||!nuevo.trim()){ sel.value=''; _bombaActualizarPreviewCodigo(); return; }
+  nuevo=nuevo.trim();
+  if(!LISTAS[clave]) LISTAS[clave]=[];
+  if(LISTAS[clave].indexOf(nuevo)<0){ LISTAS[clave].push(nuevo); saveListas(); }
+  _bombaPoblarSelectsCatalogo();
+  sel.value=nuevo;
   _bombaActualizarPreviewCodigo();
 }
 
