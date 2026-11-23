@@ -187,6 +187,11 @@ const DEFAULT_LISTAS={
     {minAnios:26,maxAnios:30,dias:30},
     {minAnios:31,maxAnios:35,dias:32}
   ],
+  // Catálogos del módulo de Bombas (ver generarCodigoBomba) -- abiertos, Jorge
+  // agrega series/modelos nuevos desde Admin → Listas según los vaya necesitando.
+  bomba_series_positiva:['U1','U2','U3'],
+  bomba_series_centrifuga:['CE','SA','AB','VT'],
+  bomba_modelos:['130','60'],
 };
 let LISTAS=loadDB('listas',DEFAULT_LISTAS);
 
@@ -664,6 +669,12 @@ var ACTIVOS=loadDB('activos',[]);
 var ACTIVO_COMPONENTES=loadDB('activo_componentes',[]);
 var ACTIVOS_ESTADOS=['Operando','En mantenimiento','Fuera de servicio'];
 var ACTIVOS_CRITICIDAD=['A','B','C'];
+// ── Módulo de Bombas (repuestos rotables: la unidad física se mueve entre
+// posiciones -- ver generarCodigoBomba / showBombas) ──
+var BOMBAS_UNIDADES=loadDB('bombas_unidades',[]);
+var BOMBAS_POSICIONES=loadDB('bombas_posiciones',[]);
+var BOMBAS_HISTORIAL=loadDB('bombas_historial',[]);
+var BOMBAS_ESTADOS=['instalada','pendiente_mtto','disponible','baja'];
 var PRIORIZACION_LINEAS=loadDB('priorizacion_lineas',[]);
 var PRIORIZACION_COMPONENTES=loadDB('priorizacion_componentes',[]);
 function getLineasPorArea(a){
@@ -4796,7 +4807,7 @@ function renderAdminGasto(cont){
 function guardarGastoS(){const sem=parseInt(document.getElementById('gas-sem')?.value),año=parseInt(document.getElementById('gas-año')?.value)||currentYear(),plan=parseFloat(document.getElementById('gas-plan')?.value)||0,real=parseFloat(document.getElementById('gas-real')?.value)||0;const idx=GASTO_DATA.findIndex(g=>g.semana===sem&&g.año===año);const e={semana:sem,año,planeado:plan,real,ts:Date.now()};if(idx>=0)GASTO_DATA[idx]=e;else GASTO_DATA.push(e);saveDB('gasto_data',GASTO_DATA);showAlert('✅ Guardado');renderAdminGasto(document.getElementById('admin-content'));}
 function cargarSemanasDelMes(){const año=parseInt(document.getElementById('gas-año-b')?.value)||currentYear();const mes=parseInt(document.getElementById('gas-mes-b')?.value)||1;const semanas=getWeeksInMonth(año,mes);const cont=document.getElementById('gas-semanas-mes');cont.innerHTML=semanas.map(s=>{const ex=GASTO_DATA.find(g=>g.semana===s&&g.año===año);return`<div class="card" style="padding:12px;margin-bottom:8px"><div style="font-weight:700;font-size:13px;margin-bottom:8px">Semana ${s}</div><div style="display:flex;gap:8px"><div style="flex:1"><label class="form-label" style="font-size:11px">Planeado ($)</label><input type="number" class="form-control" id="bp-${s}" value="${ex?ex.planeado:''}" step="0.01"></div><div style="flex:1"><label class="form-label" style="font-size:11px">Real ($)</label><input type="number" class="form-control" id="br-${s}" value="${ex?ex.real:''}" step="0.01"></div></div></div>`;}).join('')+'<button class="btn btn-success" onclick="guardarBulk('+año+',['+semanas.join(',')+'])">💾 Guardar todas las semanas</button>';}
 function guardarBulk(año,sems){sems.forEach(s=>{const p=parseFloat(document.getElementById('bp-'+s)?.value)||0,r=parseFloat(document.getElementById('br-'+s)?.value)||0;if(p>0||r>0){const idx=GASTO_DATA.findIndex(g=>g.semana===s&&g.año===año);const e={semana:s,año,planeado:p,real:r,ts:Date.now()};if(idx>=0)GASTO_DATA[idx]=e;else GASTO_DATA.push(e);}});saveDB('gasto_data',GASTO_DATA);showAlert('✅ Mes guardado');renderAdminGasto(document.getElementById('admin-content'));}
-function renderAdminListas(cont){cont.innerHTML=`<div class="card"><div class="card-title mb12">📋 Editar Listas</div>${renderListaEd('Líneas Proceso','lineas_proceso')+renderListaEd('Líneas Envasado','lineas_envasado')}${renderListaEd('Servicios Industriales','lineas_servicios')}${renderListaEd('Bodega','lineas_bodega')}${renderListaEd('Instalaciones','lineas_instalaciones')}${renderListaEd('Tipos de Anormalidad','tipos_anormalidad')}${renderListaEd('Tipos de Actividad (Mtto. Planeado)','tipos_actividad')}${renderVacLFTBandas()}</div>`;
+function renderAdminListas(cont){cont.innerHTML=`<div class="card"><div class="card-title mb12">📋 Editar Listas</div>${renderListaEd('Líneas Proceso','lineas_proceso')+renderListaEd('Líneas Envasado','lineas_envasado')}${renderListaEd('Servicios Industriales','lineas_servicios')}${renderListaEd('Bodega','lineas_bodega')}${renderListaEd('Instalaciones','lineas_instalaciones')}${renderListaEd('Tipos de Anormalidad','tipos_anormalidad')}${renderListaEd('Tipos de Actividad (Mtto. Planeado)','tipos_actividad')}${renderListaEd('Bombas — Series (Positiva: U1/U2/U3...)','bomba_series_positiva')}${renderListaEd('Bombas — Series (Centrífuga: CE/SA/AB/VT...)','bomba_series_centrifuga')}${renderListaEd('Bombas — Modelos (tamaño)','bomba_modelos')}${renderVacLFTBandas()}</div>`;
   // Append areas card
   var areaDiv=document.createElement('div');
   renderAdminAreas(areaDiv);
@@ -15098,6 +15109,8 @@ function syncSupabase(){
   setTimeout(syncNotificaciones, 1500);
   // Actualizar badges admin
   setTimeout(actualizarBadgesAdmin, 2000);
+  // Sync módulo de Bombas (Fase 1a: catálogo de Unidades y Posiciones)
+  _sincronizarBombas();
   // Sync plan_actividades (Calendario de Plan Mtto -- clave agrupada 'plan',
   // ver _syncSubExito/_syncSubFallo: esta pantalla depende de 4 tablas, no
   // se da por lista hasta que las 4 hayan llegado bien al menos una vez)
@@ -17285,6 +17298,218 @@ function renderRegistroActivosLista(){
     return;
   }
   cont.innerHTML=lista.map(function(a){ return _activoCardHtml(a,esAdmin); }).join('');
+}
+
+// ================================================================
+// BOMBAS (repuestos rotables) — FASE 1a: catálogo de Unidades.
+// Una Unidad es la bomba física completa (motor + reductor + cuerpo, nunca se
+// separan). Su código se arma solo a partir de Tipo/Serie/Modelo/Potencia,
+// nunca se escribe a mano, para que no haya códigos inconsistentes. Ver
+// conversación con Jorge: BBP/BBC + Serie (U1/U2/U3 positiva, CE/SA/AB/VT
+// centrífuga) + Modelo (tamaño) + Potencia + consecutivo por combinación
+// exacta de los 4 anteriores.
+// ================================================================
+function generarCodigoBomba(tipo,serie,modelo,potenciaHp){
+  var prefijo = tipo==='centrifuga' ? 'BBC' : 'BBP';
+  var potTxt = (potenciaHp!==null&&potenciaHp!==undefined&&potenciaHp!=='') ? (parseFloat(potenciaHp)+'HP') : '';
+  var base = [prefijo, serie||'', modelo||''].filter(Boolean).join('-');
+  if(potTxt) base += '-'+potTxt;
+  // Consecutivo: siguiente número libre para esta MISMA combinación exacta
+  // (tipo+serie+modelo+potencia), no un consecutivo global -- así 001,002...
+  // te dicen "esta es la bomba #2 de ese modelo exacto".
+  var existentes = BOMBAS_UNIDADES.filter(function(u){
+    return u.tipo===tipo && u.serie===serie && u.modelo===modelo && String(u.potenciaHp||'')===String(potenciaHp||'');
+  });
+  var maxCons = existentes.reduce(function(m,u){return Math.max(m,u.consecutivo||0);},0);
+  var consecutivo = maxCons+1;
+  var consTxt = String(consecutivo).padStart(3,'0');
+  return {codigo: base+'-'+consTxt, consecutivo: consecutivo};
+}
+
+function showBombas(){
+  showScreen('screen-bombas-unidades');
+  window._bombaEditId=null;
+  var wrap=document.getElementById('bomba-form-wrap');
+  if(wrap) wrap.classList.add('hidden');
+  var esAdmin=currentUser.rol==='admin'||currentUser.rol==='super';
+  var btnNuevo=document.getElementById('btn-bomba-nuevo');
+  if(btnNuevo) btnNuevo.style.display=esAdmin?'block':'none';
+  _bombaPoblarSelectsCatalogo();
+  renderBombasUnidadesLista();
+}
+
+// Llena los <select> de Serie (según Tipo) y Modelo con lo que haya ahora
+// mismo en LISTAS.bomba_series_positiva/centrifuga/bomba_modelos -- Jorge los
+// administra desde Admin → Listas, así que siempre se leen frescos, nunca
+// hardcodeados aquí.
+function _bombaPoblarSelectsCatalogo(){
+  var tipoSel=document.getElementById('bomba-tipo');
+  var tipo=tipoSel?tipoSel.value:'positiva';
+  var serieSel=document.getElementById('bomba-serie');
+  if(serieSel){
+    var series=(tipo==='centrifuga'?LISTAS.bomba_series_centrifuga:LISTAS.bomba_series_positiva)||[];
+    var valPrevio=serieSel.value;
+    serieSel.innerHTML='<option value="">-- Selecciona --</option>'+series.map(function(s){return '<option value="'+s+'">'+s+'</option>';}).join('');
+    if(series.indexOf(valPrevio)>=0) serieSel.value=valPrevio;
+  }
+  var modeloSel=document.getElementById('bomba-modelo');
+  if(modeloSel){
+    var modelos=LISTAS.bomba_modelos||[];
+    var modValPrevio=modeloSel.value;
+    modeloSel.innerHTML='<option value="">-- Selecciona --</option>'+modelos.map(function(m){return '<option value="'+m+'">'+m+'</option>';}).join('');
+    if(modelos.indexOf(modValPrevio)>=0) modeloSel.value=modValPrevio;
+  }
+  _bombaActualizarPreviewCodigo();
+}
+
+// Recalcula y muestra el código que se generaría con lo que hay capturado
+// ahora mismo en el formulario -- se llama en cada cambio para que Jorge lo
+// vea ANTES de guardar (confirmó que quiere verlo armado antes de fijarlo).
+function _bombaActualizarPreviewCodigo(){
+  var prev=document.getElementById('bomba-codigo-preview');
+  if(!prev) return;
+  if(window._bombaEditId){ prev.textContent='Código (no cambia al editar): '+window._bombaEditId; return; }
+  var tipo=document.getElementById('bomba-tipo')?document.getElementById('bomba-tipo').value:'';
+  var serie=document.getElementById('bomba-serie')?document.getElementById('bomba-serie').value:'';
+  var modelo=document.getElementById('bomba-modelo')?document.getElementById('bomba-modelo').value:'';
+  var pot=document.getElementById('bomba-potencia')?document.getElementById('bomba-potencia').value:'';
+  if(!serie||!modelo){ prev.textContent='Código: completa Serie y Modelo para verlo'; return; }
+  var r=generarCodigoBomba(tipo,serie,modelo,pot);
+  prev.textContent='Código: '+r.codigo;
+}
+
+function abrirFormBomba(id){
+  var esAdmin=currentUser.rol==='admin'||currentUser.rol==='super';
+  if(!esAdmin) return;
+  window._bombaEditId=id||null;
+  var u=id?BOMBAS_UNIDADES.find(function(x){return x.id===id;}):null;
+  var titulo=document.getElementById('bomba-form-titulo');
+  if(titulo) titulo.textContent=u?'✏️ Editar unidad: '+u.id:'➕ Registrar unidad';
+  document.getElementById('bomba-tipo').value=u?u.tipo:'positiva';
+  document.getElementById('bomba-tipo').disabled=!!u; // el tipo/serie/modelo/potencia arman el código -- no se cambian al editar
+  _bombaPoblarSelectsCatalogo();
+  document.getElementById('bomba-serie').value=u?u.serie:'';
+  document.getElementById('bomba-serie').disabled=!!u;
+  document.getElementById('bomba-modelo').value=u?u.modelo:'';
+  document.getElementById('bomba-modelo').disabled=!!u;
+  document.getElementById('bomba-potencia').value=u?(u.potenciaHp||''):'';
+  document.getElementById('bomba-potencia').disabled=!!u;
+  document.getElementById('bomba-motor-serie').value=u?(u.motorSerie||''):'';
+  document.getElementById('bomba-reductor-serie').value=u?(u.reductorSerie||''):'';
+  document.getElementById('bomba-cuerpo-serie').value=u?(u.cuerpoSerie||''):'';
+  document.getElementById('bomba-notas').value=u?(u.notas||''):'';
+  _bombaActualizarPreviewCodigo();
+  var wrap=document.getElementById('bomba-form-wrap');
+  if(wrap){wrap.classList.remove('hidden');wrap.scrollIntoView({behavior:'smooth',block:'start'});}
+}
+
+function cerrarFormBomba(){
+  window._bombaEditId=null;
+  var wrap=document.getElementById('bomba-form-wrap');
+  if(wrap) wrap.classList.add('hidden');
+}
+
+function guardarBomba(){
+  var tipo=document.getElementById('bomba-tipo').value;
+  var serie=document.getElementById('bomba-serie').value;
+  var modelo=document.getElementById('bomba-modelo').value;
+  var potencia=(document.getElementById('bomba-potencia').value||'').trim();
+  var motorSerie=(document.getElementById('bomba-motor-serie').value||'').trim();
+  var reductorSerie=(document.getElementById('bomba-reductor-serie').value||'').trim();
+  var cuerpoSerie=(document.getElementById('bomba-cuerpo-serie').value||'').trim();
+  var notas=(document.getElementById('bomba-notas').value||'').trim();
+
+  var editId=window._bombaEditId;
+  if(editId){
+    var u=BOMBAS_UNIDADES.find(function(x){return x.id===editId;});
+    if(!u){showAlert('No se encontró la unidad','error');return;}
+    // Tipo/Serie/Modelo/Potencia NO se editan (son los deshabilitados arriba):
+    // cambiarlos invalidaría el código ya asignado. Solo se actualizan los
+    // datos descriptivos.
+    u.motorSerie=motorSerie;u.reductorSerie=reductorSerie;u.cuerpoSerie=cuerpoSerie;u.notas=notas;
+    saveDB('bombas_unidades',BOMBAS_UNIDADES);
+    supaFetch('bombas_unidades','PATCH',{motor_serie:motorSerie,reductor_serie:reductorSerie,cuerpo_serie:cuerpoSerie,notas:notas},'id=eq.'+editId).catch(function(){});
+    showAlert('✅ Unidad actualizada');
+  } else {
+    if(!serie||!modelo){showAlert('Selecciona Serie y Modelo','error');return;}
+    var r=generarCodigoBomba(tipo,serie,modelo,potencia);
+    var row={
+      id:r.codigo,
+      tipo:tipo,serie:serie,modelo:modelo,potenciaHp:potencia||null,consecutivo:r.consecutivo,
+      motorSerie:motorSerie,reductorSerie:reductorSerie,cuerpoSerie:cuerpoSerie,
+      estado:'disponible', // recién dada de alta: se asume lista para instalar; si no, Jorge la pasa a "pendiente_mtto" a mano
+      posicionActualId:null,
+      notas:notas,
+      activo:true,
+      creadoPor:nombreEfectivo()||currentUser.nombre,
+      creadoTs:Date.now()
+    };
+    BOMBAS_UNIDADES.unshift(row);
+    saveDB('bombas_unidades',BOMBAS_UNIDADES);
+    supaFetch('bombas_unidades','POST',{
+      id:row.id,tipo:row.tipo,serie:row.serie,modelo:row.modelo,potencia_hp:row.potenciaHp,consecutivo:row.consecutivo,
+      motor_serie:row.motorSerie,reductor_serie:row.reductorSerie,cuerpo_serie:row.cuerpoSerie,
+      estado:row.estado,posicion_actual_id:null,notas:row.notas,activo:true,
+      creado_por:row.creadoPor,creado_ts:row.creadoTs
+    },'').catch(function(){});
+    showAlert('✅ Unidad registrada: '+row.id);
+  }
+  cerrarFormBomba();
+  renderBombasUnidadesLista();
+}
+
+function eliminarBomba(id){
+  var esAdmin=currentUser.rol==='admin'||currentUser.rol==='super';
+  if(!esAdmin) return;
+  var u=BOMBAS_UNIDADES.find(function(x){return x.id===id;});
+  if(u&&u.estado==='instalada'){showAlert('No puedes dar de baja una unidad instalada -- retírala de su posición primero','error');return;}
+  if(!confirm('¿Dar de baja esta unidad del catálogo?')) return;
+  u.activo=false;u.estado='baja';
+  saveDB('bombas_unidades',BOMBAS_UNIDADES);
+  supaFetch('bombas_unidades','PATCH',{activo:false,estado:'baja'},'id=eq.'+id).catch(function(){});
+  showAlert('Unidad dada de baja');
+  renderBombasUnidadesLista();
+}
+
+var BOMBAS_ESTADO_LABEL={instalada:{txt:'🟢 Instalada',color:'#16a34a'},pendiente_mtto:{txt:'🟠 Pendiente mtto.',color:'#d97706'},disponible:{txt:'🔵 Disponible',color:'#2563eb'},baja:{txt:'⚪ De baja',color:'#6b7280'}};
+
+function renderBombasUnidadesLista(){
+  var cont=document.getElementById('bombas-unidades-lista');
+  if(!cont) return;
+  var esAdmin=currentUser.rol==='admin'||currentUser.rol==='super';
+  var lista=BOMBAS_UNIDADES.filter(function(u){return u.activo!==false;}).sort(function(a,b){return (a.id||'').localeCompare(b.id||'');});
+  if(!lista.length){
+    cont.innerHTML='<div class="card text-center" style="padding:32px;color:var(--txt3)"><div style="font-size:40px;margin-bottom:8px">🔧</div><div style="font-weight:700">Sin unidades registradas</div></div>';
+    return;
+  }
+  cont.innerHTML=lista.map(function(u){
+    var est=BOMBAS_ESTADO_LABEL[u.estado]||BOMBAS_ESTADO_LABEL.disponible;
+    var pos=u.posicionActualId?(BOMBAS_POSICIONES.find(function(p){return p.id===u.posicionActualId;})||{}).nombre:null;
+    return '<div class="card" style="padding:12px;margin-bottom:8px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
+      +'<div><div style="font-weight:800;font-size:14px">'+u.id+'</div>'
+      +'<div style="font-size:12px;color:#6b7280">'+(u.tipo==='centrifuga'?'Centrífuga':'Positiva')+' · Serie '+u.serie+' · Modelo '+u.modelo+(u.potenciaHp?' · '+u.potenciaHp+' HP':'')+'</div>'
+      +(pos?'<div style="font-size:12px;color:#1a3c5e;margin-top:2px">📍 '+pos+'</div>':'')
+      +'</div>'
+      +'<span style="font-size:11px;font-weight:700;color:'+est.color+'">'+est.txt+'</span>'
+      +'</div>'
+      +(esAdmin?'<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-outline btn-sm" style="width:auto;padding:5px 10px" onclick="abrirFormBomba(\''+u.id+'\')">✏️ Editar</button><button class="btn btn-outline btn-sm" style="width:auto;padding:5px 10px;color:#dc2626" onclick="eliminarBomba(\''+u.id+'\')">🗑️ Baja</button></div>':'')
+      +'</div>';
+  }).join('');
+}
+
+function _sincronizarBombas(){
+  supaFetch('bombas_unidades','GET',null,'activo=eq.true&order=id.asc').then(function(rows){
+    if(rows===null) return;
+    BOMBAS_UNIDADES=rows.map(function(r){return {id:r.id,tipo:r.tipo,serie:r.serie,modelo:r.modelo,potenciaHp:r.potencia_hp,consecutivo:r.consecutivo,motorSerie:r.motor_serie,reductorSerie:r.reductor_serie,cuerpoSerie:r.cuerpo_serie,estado:r.estado,posicionActualId:r.posicion_actual_id,notas:r.notas,activo:r.activo,creadoPor:r.creado_por,creadoTs:r.creado_ts};});
+    saveDB('bombas_unidades',BOMBAS_UNIDADES);
+    if(document.getElementById('screen-bombas-unidades')&&document.getElementById('screen-bombas-unidades').classList.contains('active')) renderBombasUnidadesLista();
+  }).catch(function(){});
+  supaFetch('bombas_posiciones','GET',null,'activo=eq.true&order=nombre.asc').then(function(rows){
+    if(rows===null) return;
+    BOMBAS_POSICIONES=rows.map(function(r){return {id:r.id,nombre:r.nombre,areaId:r.area_id,frecuenciaDias:r.frecuencia_dias,unidadActualId:r.unidad_actual_id,fechaInstalacionActual:r.fecha_instalacion_actual,activo:r.activo,creadoPor:r.creado_por,creadoTs:r.creado_ts};});
+    saveDB('bombas_posiciones',BOMBAS_POSICIONES);
+  }).catch(function(){});
 }
 
 // ================================================================
