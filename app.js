@@ -15132,14 +15132,28 @@ function syncSupabase(){
     var localPlan=loadDB('plan_actividades',[]);
     var planSyncedIds=new Set(rows.map(function(r){return r.id;}));
     var localSoloPlan=localPlan.filter(function(l){return !planSyncedIds.has(l.id);});
-    if(localSoloPlan.length){
-      setTimeout(function(){
-        localSoloPlan.forEach(function(p){ supaFetch('plan_actividades','POST',p,'').catch(function(){}); });
-      },2000);
-    }
-    PLAN_ACTIVIDADES=rows.concat(localSoloPlan);
-    saveDB('plan_actividades',PLAN_ACTIVIDADES);
-    _syncSubExito('plan','plan_actividades');
+    // Fix 2026-11-23: una actividad dada de baja en Supabase (activo=false, desde la app
+    // en otro dispositivo o por SQL) no viene en la lista de activas, y este dispositivo
+    // la trataba como "pendiente de guardar" y la volvía a subir ACTIVA (revivía).
+    // Ahora se consultan los IDs dados de baja: esos se quitan del dispositivo y no se
+    // re-suben. Si esa consulta falla, se conservan localmente pero NO se re-suben en
+    // esta vuelta (se reintenta en la siguiente sincronización).
+    var _aplicarPlan=function(inactivosIds,puedeResubir){
+      var soloPend=localSoloPlan.filter(function(l){return !inactivosIds.has(l.id);});
+      if(puedeResubir&&soloPend.length){
+        setTimeout(function(){
+          soloPend.forEach(function(p){ supaFetch('plan_actividades','POST',p,'').catch(function(){}); });
+        },2000);
+      }
+      PLAN_ACTIVIDADES=rows.concat(soloPend);
+      saveDB('plan_actividades',PLAN_ACTIVIDADES);
+      _syncSubExito('plan','plan_actividades');
+    };
+    if(!localSoloPlan.length){ _aplicarPlan(new Set(),false); return; }
+    supaFetch('plan_actividades','GET',null,'activo=eq.false&select=id&limit=10000').then(function(inact){
+      if(!Array.isArray(inact)){ _aplicarPlan(new Set(),false); return; }
+      _aplicarPlan(new Set(inact.map(function(r){return r.id;})),true);
+    }).catch(function(){ _aplicarPlan(new Set(),false); });
   }).catch(function(){_syncSubFallo('plan','plan_actividades',_sincronizarPlanActividades);});
   }
   _sincronizarPlanActividades();
