@@ -236,7 +236,7 @@ tr:nth-child(even) td{background:#F8FAFC}
 </script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="app.js?v=20261125e" defer></script>
+<script src="app.js?v=20261125f" defer></script>
 
 <style id="lup-css">
 .lup-doc{background:#fff;border:2px solid #1a3c5e;border-radius:10px;overflow:hidden;margin:12px;font-family:Arial,sans-serif}
@@ -1017,8 +1017,11 @@ tr:nth-child(even) td{background:#F8FAFC}
       </div>
       <div class="form-group"><label class="form-label">Potencia (HP)</label><input type="number" class="form-control" id="bomba-potencia" placeholder="Ej: 15" step="0.5" oninput="_bombaActualizarPreviewCodigo()"></div>
       <div id="bomba-codigo-preview" style="font-weight:700;color:#7c3aed;margin-bottom:12px;font-size:13px">Código: completa Serie y Modelo para verlo</div>
+      <div class="form-group"><label class="form-label">Año de fabricación</label><input type="number" class="form-control" id="bomba-anio" placeholder="Ej: 2024" step="1" min="1980" max="2100"></div>
       <div class="form-group"><label class="form-label">N° de serie — Motor</label><input type="text" class="form-control" id="bomba-motor-serie"></div>
       <div class="form-group"><label class="form-label">N° de serie — Reductor / caja de engranes</label><input type="text" class="form-control" id="bomba-reductor-serie"></div>
+      <div class="form-group"><label class="form-label">RPM máx. del reductor</label><input type="number" class="form-control" id="bomba-reductor-rpm-max" placeholder="Ej: 1750" step="1"></div>
+      <div class="form-group"><label class="form-label">Relación de reducción</label><input type="text" class="form-control" id="bomba-reductor-relacion" placeholder="Ej: 20:1"></div>
       <div class="form-group"><label class="form-label">N° de serie — Cuerpo de bomba</label><input type="text" class="form-control" id="bomba-cuerpo-serie"></div>
       <div class="form-group"><label class="form-label">Notas</label><textarea class="form-control" id="bomba-notas" rows="2"></textarea></div>
       <button class="btn btn-success" onclick="guardarBomba()">✅ Guardar</button>

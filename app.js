@@ -17470,8 +17470,11 @@ function abrirFormBomba(id){
   document.getElementById('bomba-modelo').disabled=!!u;
   document.getElementById('bomba-potencia').value=u?(u.potenciaHp||''):'';
   document.getElementById('bomba-potencia').disabled=!!u;
+  document.getElementById('bomba-anio').value=u?(u.anio||''):'';
   document.getElementById('bomba-motor-serie').value=u?(u.motorSerie||''):'';
   document.getElementById('bomba-reductor-serie').value=u?(u.reductorSerie||''):'';
+  document.getElementById('bomba-reductor-rpm-max').value=u?(u.reductorRpmMax||''):'';
+  document.getElementById('bomba-reductor-relacion').value=u?(u.reductorRelacion||''):'';
   document.getElementById('bomba-cuerpo-serie').value=u?(u.cuerpoSerie||''):'';
   document.getElementById('bomba-notas').value=u?(u.notas||''):'';
   _bombaActualizarPreviewCodigo();
@@ -17490,8 +17493,11 @@ function guardarBomba(){
   var serie=document.getElementById('bomba-serie').value;
   var modelo=document.getElementById('bomba-modelo').value;
   var potencia=(document.getElementById('bomba-potencia').value||'').trim();
+  var anio=(document.getElementById('bomba-anio').value||'').trim();
   var motorSerie=(document.getElementById('bomba-motor-serie').value||'').trim();
   var reductorSerie=(document.getElementById('bomba-reductor-serie').value||'').trim();
+  var reductorRpmMax=(document.getElementById('bomba-reductor-rpm-max').value||'').trim();
+  var reductorRelacion=(document.getElementById('bomba-reductor-relacion').value||'').trim();
   var cuerpoSerie=(document.getElementById('bomba-cuerpo-serie').value||'').trim();
   var notas=(document.getElementById('bomba-notas').value||'').trim();
 
@@ -17502,9 +17508,9 @@ function guardarBomba(){
     // Tipo/Serie/Modelo/Potencia NO se editan (son los deshabilitados arriba):
     // cambiarlos invalidaría el código ya asignado. Solo se actualizan los
     // datos descriptivos.
-    u.motorSerie=motorSerie;u.reductorSerie=reductorSerie;u.cuerpoSerie=cuerpoSerie;u.notas=notas;
+    u.anio=anio||null;u.motorSerie=motorSerie;u.reductorSerie=reductorSerie;u.reductorRpmMax=reductorRpmMax||null;u.reductorRelacion=reductorRelacion;u.cuerpoSerie=cuerpoSerie;u.notas=notas;
     saveDB('bombas_unidades',BOMBAS_UNIDADES);
-    supaFetch('bombas_unidades','PATCH',{motor_serie:motorSerie,reductor_serie:reductorSerie,cuerpo_serie:cuerpoSerie,notas:notas},'id=eq.'+editId).catch(function(){});
+    supaFetch('bombas_unidades','PATCH',{anio:anio||null,motor_serie:motorSerie,reductor_serie:reductorSerie,reductor_rpm_max:reductorRpmMax||null,reductor_relacion:reductorRelacion,cuerpo_serie:cuerpoSerie,notas:notas},'id=eq.'+editId).catch(function(){});
     showAlert('✅ Unidad actualizada');
   } else {
     if(!serie||!modelo){showAlert('Selecciona Serie y Modelo','error');return;}
@@ -17512,7 +17518,7 @@ function guardarBomba(){
     var row={
       id:r.codigo,
       tipo:tipo,serie:serie,modelo:modelo,potenciaHp:potencia||null,consecutivo:r.consecutivo,
-      motorSerie:motorSerie,reductorSerie:reductorSerie,cuerpoSerie:cuerpoSerie,
+      anio:anio||null,motorSerie:motorSerie,reductorSerie:reductorSerie,reductorRpmMax:reductorRpmMax||null,reductorRelacion:reductorRelacion,cuerpoSerie:cuerpoSerie,
       estado:'disponible', // recién dada de alta: se asume lista para instalar; si no, Jorge la pasa a "pendiente_mtto" a mano
       posicionActualId:null,
       notas:notas,
@@ -17524,7 +17530,7 @@ function guardarBomba(){
     saveDB('bombas_unidades',BOMBAS_UNIDADES);
     supaFetch('bombas_unidades','POST',{
       id:row.id,tipo:row.tipo,serie:row.serie,modelo:row.modelo,potencia_hp:row.potenciaHp,consecutivo:row.consecutivo,
-      motor_serie:row.motorSerie,reductor_serie:row.reductorSerie,cuerpo_serie:row.cuerpoSerie,
+      anio:row.anio,motor_serie:row.motorSerie,reductor_serie:row.reductorSerie,reductor_rpm_max:row.reductorRpmMax,reductor_relacion:row.reductorRelacion,cuerpo_serie:row.cuerpoSerie,
       estado:row.estado,posicion_actual_id:null,notas:row.notas,activo:true,
       creado_por:row.creadoPor,creado_ts:row.creadoTs
     },'').catch(function(){});
@@ -17564,7 +17570,8 @@ function renderBombasUnidadesLista(){
     return '<div class="card" style="padding:12px;margin-bottom:8px">'
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
       +'<div><div style="font-weight:800;font-size:14px">'+u.id+'</div>'
-      +'<div style="font-size:12px;color:#6b7280">'+(u.tipo==='centrifuga'?'Centrífuga':'Positiva')+' · Serie '+u.serie+' · Modelo '+u.modelo+(u.potenciaHp?' · '+u.potenciaHp+' HP':'')+'</div>'
+      +'<div style="font-size:12px;color:#6b7280">'+(u.tipo==='centrifuga'?'Centrífuga':'Positiva')+' · Serie '+u.serie+' · Modelo '+u.modelo+(u.potenciaHp?' · '+u.potenciaHp+' HP':'')+(u.anio?' · '+u.anio:'')+'</div>'
+      +(u.reductorRelacion||u.reductorRpmMax?'<div style="font-size:11px;color:#6b7280;margin-top:1px">Reductor'+(u.reductorRelacion?' · Relación '+u.reductorRelacion:'')+(u.reductorRpmMax?' · RPM máx '+u.reductorRpmMax:'')+'</div>':'')
       +(pos?'<div style="font-size:12px;color:#1a3c5e;margin-top:2px">📍 '+pos+'</div>':'')
       +'</div>'
       +'<span style="font-size:11px;font-weight:700;color:'+est.color+'">'+est.txt+'</span>'
@@ -17577,7 +17584,7 @@ function renderBombasUnidadesLista(){
 function _sincronizarBombas(){
   supaFetch('bombas_unidades','GET',null,'activo=eq.true&order=id.asc').then(function(rows){
     if(rows===null) return;
-    BOMBAS_UNIDADES=rows.map(function(r){return {id:r.id,tipo:r.tipo,serie:r.serie,modelo:r.modelo,potenciaHp:r.potencia_hp,consecutivo:r.consecutivo,motorSerie:r.motor_serie,reductorSerie:r.reductor_serie,cuerpoSerie:r.cuerpo_serie,estado:r.estado,posicionActualId:r.posicion_actual_id,notas:r.notas,activo:r.activo,creadoPor:r.creado_por,creadoTs:r.creado_ts};});
+    BOMBAS_UNIDADES=rows.map(function(r){return {id:r.id,tipo:r.tipo,serie:r.serie,modelo:r.modelo,potenciaHp:r.potencia_hp,consecutivo:r.consecutivo,anio:r.anio,motorSerie:r.motor_serie,reductorSerie:r.reductor_serie,reductorRpmMax:r.reductor_rpm_max,reductorRelacion:r.reductor_relacion,cuerpoSerie:r.cuerpo_serie,estado:r.estado,posicionActualId:r.posicion_actual_id,notas:r.notas,activo:r.activo,creadoPor:r.creado_por,creadoTs:r.creado_ts};});
     saveDB('bombas_unidades',BOMBAS_UNIDADES);
     if(document.getElementById('screen-bombas-unidades')&&document.getElementById('screen-bombas-unidades').classList.contains('active')) renderBombasUnidadesLista();
   }).catch(function(){});
