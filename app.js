@@ -15002,6 +15002,7 @@ function _repintarOrdenesSegunVista(){
   else if(v==='protocolos_menu') showMenuProtocolosPM03();
   else if(v==='protocolos_existentes') _protoFiltrarLista();
   else if(v==='protocolos_semana') showProtocolosProximaSemana();
+  else if(v==='por_reprogramar') showPM03PorReprogramar();
   else if(document.getElementById('fp-semana')) aplicarFiltrosPendientes();
   else renderMisOrdenes();
 }
@@ -24659,6 +24660,7 @@ function confirmarCerrarSinEjecutarPM03(id){
 // ================================================================
 function showPM03PorReprogramar(){
   detalleBackScreen='screen-menu';
+  window._screenOrdenesVista='por_reprogramar';
   // Fecha de lanzamiento de la app: semana 21 de 2026
   var SEMANA_LANZAMIENTO=21, ANIO_LANZAMIENTO=2026;
 
