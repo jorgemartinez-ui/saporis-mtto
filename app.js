@@ -6379,6 +6379,20 @@ function supaFetch(t,m,b,p){var url=SUPA_URL+'/rest/v1/'+t+(p?'?'+p:'');var usan
 // paginación no repita ni salte filas entre bloques. Devuelve una promesa que
 // resuelve el arreglo COMPLETO (igual que supaFetch) o null si algún bloque
 // falló de verdad -- mismo contrato que ya revisan los llamadores (if(!rows)).
+// Devuelve un Set con los IDs (de la lista dada) que están registrados como borrados en
+// pm03_borradas, o null si la consulta falló. Consulta por bloques para no exceder la URL.
+function _pm03IdsBorrados(ids){
+  var bloques=[];
+  for(var i=0;i<ids.length;i+=150) bloques.push(ids.slice(i,i+150));
+  var encontrados=new Set();
+  var fallo=false;
+  return Promise.all(bloques.map(function(b){
+    return supaFetch('pm03_borradas','GET',null,'select=id&id=in.('+b.join(',')+')').then(function(rows){
+      if(!Array.isArray(rows)){ fallo=true; return; }
+      rows.forEach(function(r){ encontrados.add(r.id); });
+    }).catch(function(){ fallo=true; });
+  })).then(function(){ return fallo?null:encontrados; });
+}
 function supaFetchPaginado(t,paramsBase,tamBloque){
   tamBloque=tamBloque||1000;
   var acumulado=[];
@@ -15506,8 +15520,16 @@ function syncSupabase(){
     // de alta una actividad -- que no lograra sincronizar se borraba sola en
     // el siguiente resync, sin avisar. Mismo mecanismo que ya usa 'ordenes'.
     var pm03SyncedIds=new Set(rows.map(function(r){return r.id;}));
-    var localSoloPM03=localPM03.filter(function(l){return !pm03SyncedIds.has(l.id);});
-    if(localSoloPM03.length){
+    var localSoloPM03Todas=localPM03.filter(function(l){return !pm03SyncedIds.has(l.id);});
+    // Fix 2026-11-23: una PM03 borrada en Supabase (desde la app en otro dispositivo o
+    // por SQL) desaparece del servidor, y un dispositivo que aún la tenía la trataba como
+    // "pendiente de guardar" y la volvía a subir (revivía). El trigger de la tabla
+    // pm03_borradas registra cada borrado: antes de re-subir, se consultan esos IDs y
+    // las borradas se quitan del dispositivo. Si la consulta falla, se conservan
+    // localmente pero NO se re-suben en esta vuelta.
+    var _continuarSyncPM03=function(localSoloPM03,puedeResubir,descartadas){
+    descartadas=descartadas||new Set();
+    if(puedeResubir&&localSoloPM03.length){
       console.log('Reintentando sync de '+localSoloPM03.length+' PM03 locales no sincronizadas');
       setTimeout(function(){
         localSoloPM03.forEach(function(p){ savePM03Supa(p); });
@@ -15656,7 +15678,7 @@ function syncSupabase(){
     var localPM03JustoAntes = loadDB('pm03_plan',[]);
     var idsPM03AGuardar = new Set(PM03_PLAN.map(function(p){return p.id;}));
     var pm03AparecioDuranteSync = localPM03JustoAntes.filter(function(l){
-      return !idsPM03AGuardar.has(l.id);
+      return !idsPM03AGuardar.has(l.id) && !descartadas.has(l.id);
     });
     if(pm03AparecioDuranteSync.length){
       console.log('Conservando '+pm03AparecioDuranteSync.length+' PM03 creada(s) en otra sesión durante este sync');
@@ -15712,6 +15734,14 @@ function syncSupabase(){
     // "Avance PM" como 100% falso cuando en realidad todavía no se ha cargado.
     window._dorSyncPM03Listo=true;
     if(document.getElementById('dor-content')) renderDOR();
+    };
+    if(!localSoloPM03Todas.length){ _continuarSyncPM03([],false); return; }
+    _pm03IdsBorrados(localSoloPM03Todas.map(function(p){return p.id;})).then(function(borradas){
+      if(borradas===null){ _continuarSyncPM03(localSoloPM03Todas,false); return; }
+      var quedan=localSoloPM03Todas.filter(function(p){return !borradas.has(p.id);});
+      if(quedan.length<localSoloPM03Todas.length) console.log('Descartando '+(localSoloPM03Todas.length-quedan.length)+' PM03 locales ya borradas en el servidor');
+      _continuarSyncPM03(quedan,true,borradas);
+    });
   }).catch(function(){_syncPantallaFallo('pm03',_sincronizarPM03Plan);});
   }
   _sincronizarPM03Plan();
