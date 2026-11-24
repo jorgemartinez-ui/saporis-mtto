@@ -3373,6 +3373,7 @@ function confirmarCierrePM03(id){
 
   saveDB('pm03_plan',PM03_PLAN);
   savePM03Supa(p);
+  _bombaAlCerrarPM03(id);
   _standbyFinalizarUsados(id);
   // Limpiar usuario seleccionado por super
   window._superCierraPor=null;
@@ -17578,6 +17579,13 @@ function eliminarBomba(id){
 }
 
 var BOMBAS_ESTADO_LABEL={instalada:{txt:'🟢 Instalada',color:'#16a34a'},pendiente_mtto:{txt:'🟠 Pendiente mtto.',color:'#d97706'},disponible:{txt:'🔵 Disponible',color:'#2563eb'},baja:{txt:'⚪ De baja',color:'#6b7280'}};
+// Integración de Posiciones con el Plan de Mtto (a petición de Jorge, 2026-11-24):
+// cada Posición vive dentro de esta línea fija "Bombas", dentro del área Servicios
+// Industriales (la más parecida de PM_AREAS; si Jorge prefiere otra área, se cambia
+// aquí). Se usa linea+componente (nombre de la posición) para emparejar, igual que
+// el resto del Plan de Mtto -- sin id nuevo, mismo criterio ya usado en toda la app.
+var BOMBA_PLAN_AREA='servicios';
+var BOMBA_PLAN_LINEA='Bombas';
 
 function renderBombasUnidadesLista(){
   var cont=document.getElementById('bombas-unidades-lista');
@@ -17737,6 +17745,118 @@ function _freqValUnitADias(val,unit){
   return null;
 }
 
+// Asegura que la posición ya sea visible/seleccionable dentro del Plan de Mtto
+// (línea "Bombas" en el área Servicios Industriales) desde que se registra --
+// aunque todavía no tenga ninguna PM03 (eso solo arranca al instalar una bomba,
+// decisión explícita de Jorge 2026-11-24). Agrega la línea al catálogo general
+// la primera vez, y da de alta esta posición como "equipo" de esa línea.
+function _bombaAsegurarCatalogoPlanMtto(nombrePosicion){
+  if(!Array.isArray(LISTAS.lineas_servicios)) LISTAS.lineas_servicios=[];
+  if(LISTAS.lineas_servicios.indexOf(BOMBA_PLAN_LINEA)<0){
+    LISTAS.lineas_servicios.push(BOMBA_PLAN_LINEA);
+    saveListas();
+  }
+  var yaExiste=EQUIPOS_LINEA.some(function(e){return e.activo!==false&&e.area_id===BOMBA_PLAN_AREA&&e.linea===BOMBA_PLAN_LINEA&&e.equipo===nombrePosicion;});
+  if(!yaExiste){
+    var eqRow={id:genID('EQ'),area_id:BOMBA_PLAN_AREA,linea:BOMBA_PLAN_LINEA,equipo:nombrePosicion,activo:true,creado_por:nombreEfectivo()||currentUser.nombre,creado_ts:Date.now()};
+    EQUIPOS_LINEA.push(eqRow);
+    saveDB('equipos_linea',EQUIPOS_LINEA);
+    supaFetch('equipos_linea','POST',eqRow,'').catch(function(){});
+  }
+}
+
+// Si Jorge renombra una Posición, el Plan de Mtto empareja todo por línea+nombre
+// de texto (igual que el resto de la app) -- hay que arrastrar el cambio al
+// catálogo de equipos y, si ya tenía actividad/PM03 generadas, a esas también
+// (mismo mecanismo ya usado en guardarEditActividad para no dejar "huérfanas").
+function _bombaRenombrarEnPlanMtto(nombreViejo,nombreNuevo){
+  if(nombreViejo===nombreNuevo) return;
+  var eq=EQUIPOS_LINEA.find(function(e){return e.activo!==false&&e.area_id===BOMBA_PLAN_AREA&&e.linea===BOMBA_PLAN_LINEA&&e.equipo===nombreViejo;});
+  if(eq){
+    eq.equipo=nombreNuevo;
+    saveDB('equipos_linea',EQUIPOS_LINEA);
+    supaFetch('equipos_linea','PATCH',{equipo:nombreNuevo},'id=eq.'+eq.id).catch(function(){});
+  }
+  var planes=PLAN_ACTIVIDADES.filter(function(p){return p.activo!==false&&p.linea===BOMBA_PLAN_LINEA&&p.componente===nombreViejo;});
+  if(planes.length){
+    planes.forEach(function(p){ p.componente=nombreNuevo; supaFetch('plan_actividades','PATCH',{componente:nombreNuevo},'id=eq.'+p.id).catch(function(){}); });
+    saveDB('plan_actividades',PLAN_ACTIVIDADES);
+  }
+  var pm3s=PM03_PLAN.filter(function(x){return x.linea===BOMBA_PLAN_LINEA&&x.componente===nombreViejo;});
+  if(pm3s.length){
+    pm3s.forEach(function(x){ x.componente=nombreNuevo; });
+    saveDB('pm03_plan',PM03_PLAN);
+    supaFetch('pm03_plan','PATCH',{componente:nombreNuevo},'id=in.('+pm3s.map(function(x){return x.id;}).join(',')+')').catch(function(){});
+  }
+}
+
+// Genera la serie completa de PM03 (hasta año actual+10) de la actividad recurrente
+// de una posición, desde fechaInicio -- mismo algoritmo que guardarNuevaActividad,
+// reutilizado aquí para la línea "Bombas".
+function _bombaGenerarSeriePM03(planId,linea,areaId,componente,descripcion,freqSem,fechaInicio){
+  var anioLimite=currentYear()+10;
+  var usados=_usadosPM03Base();
+  var nuevas=[];
+  var fechaIter=new Date(fechaInicio.getTime());
+  while(fechaIter.getFullYear()<=anioLimite){
+    var pm3Id=_genPM03IdUnico(usados);
+    nuevas.push({id:pm3Id,linea:linea,area:areaId,componente:componente,actividad:descripcion,
+      semana:getWeekNumber(fechaIter),año:fechaIter.getFullYear(),
+      tecnicoId:'',tecnicoNombre:'Sin asignar',estado:'abierta',
+      generadoPor:'Plan Mtto — Bombas',actividadPlanId:planId,
+      ts:Date.now(),horaCreacion:new Date().toISOString()});
+    fechaIter=new Date(fechaIter.getTime());
+    fechaIter.setDate(fechaIter.getDate()+freqSem*7);
+  }
+  nuevas.forEach(function(p){ PM03_PLAN.push(p); });
+  saveDB('pm03_plan',PM03_PLAN);
+  var supaRows=nuevas.map(function(p){
+    return {id:p.id,linea:p.linea,componente:p.componente||null,actividad:p.actividad,area:p.area||null,
+      semana:p.semana,anio:p.año,tecnico_id:p.tecnicoId||null,tecnico_nombre:p.tecnicoNombre||null,
+      estado:p.estado||'abierta',generado_por:p.generadoPor||null,ts:p.ts||Date.now(),estado_flujo:'ejecucion',fuente_excel:false};
+  });
+  if(supaRows.length) supaUpsert('pm03_plan',supaRows).catch(function(){});
+  return nuevas.length;
+}
+
+// Al instalar una bomba en una posición: crea (si no existe ya una activa) la
+// actividad recurrente de Plan Mtto para esa posición y genera su serie de PM03
+// desde la fecha REAL de instalación (pos.fechaInstalacionActual) -- decisión
+// explícita de Jorge: el conteo arranca con la bomba instalada, no desde que se
+// creó la posición. Esa fecha puede ser de hoy (instalación nueva) o retroactiva
+// (Jorge dando de alta una bomba que ya llevaba tiempo ahí, para que el próximo
+// mantenimiento caiga en la fecha correcta y no se reinicie el ciclo completo).
+function _bombaCrearActividadPlanAlInstalar(pos){
+  var yaActiva=PLAN_ACTIVIDADES.some(function(p){return p.activo!==false&&p.linea===BOMBA_PLAN_LINEA&&p.componente===pos.nombre;});
+  if(yaActiva) return;
+  _bombaAsegurarCatalogoPlanMtto(pos.nombre);
+  var freqSem=Math.max(1,Math.round(pos.frecuenciaDias/7));
+  var desc='Mantenimiento de bomba — '+pos.nombre;
+  var planId=genID('ACT');
+  var row={id:planId,area_id:BOMBA_PLAN_AREA,linea:BOMBA_PLAN_LINEA,componente:pos.nombre,descripcion:desc,
+    tipo:'Reemplazo',frecuencia_semanas:freqSem,frecuencia_dias:pos.frecuenciaDias,protocolo:null,
+    requiere_paro:false,activo:true,creado_ts:Date.now(),creado_por:currentUser.nombre};
+  PLAN_ACTIVIDADES.push(row);
+  saveDB('plan_actividades',PLAN_ACTIVIDADES);
+  supaFetch('plan_actividades','POST',row,'').catch(function(){});
+  var fechaInicio=_parseFechaInput(pos.fechaInstalacionActual)||(function(){var d=new Date();d.setHours(0,0,0,0);return d;})();
+  var generadas=_bombaGenerarSeriePM03(planId,BOMBA_PLAN_LINEA,BOMBA_PLAN_AREA,pos.nombre,desc,freqSem,fechaInicio);
+  var hoyMedianoche=new Date(); hoyMedianoche.setHours(0,0,0,0);
+  if(fechaInicio<hoyMedianoche){
+    showAlert('⚠️ '+pos.nombre+': según la fecha de instalación capturada, ya tiene mantenimiento vencido — revísalo en PM03 (Plan Mtto → Bombas).','warning');
+  }
+  return generadas;
+}
+
+// Al retirar una bomba: se cancela (desactiva) la actividad de Plan Mtto de esa
+// posición con el mismo mecanismo seguro ya usado en toda la app (conserva PM03
+// ya cerradas, solo cancela las futuras no ejecutadas) -- cuando entre la
+// siguiente bomba se genera una actividad nueva, con su propia fecha de arranque.
+function _bombaCancelarActividadPlanAlRetirar(pos){
+  var planes=PLAN_ACTIVIDADES.filter(function(p){return p.activo!==false&&p.linea===BOMBA_PLAN_LINEA&&p.componente===pos.nombre;});
+  planes.forEach(function(p){ _eliminarActividadPlanCore(p.id); });
+}
+
 function guardarPosicion(){
   var nombre=(document.getElementById('posicion-nombre').value||'').trim();
   var areaId=document.getElementById('posicion-area').value||'';
@@ -17752,15 +17872,19 @@ function guardarPosicion(){
   if(editId){
     var p=BOMBAS_POSICIONES.find(function(x){return x.id===editId;});
     if(!p){showAlert('No se encontró la posición','error');return;}
+    var nombreViejo=p.nombre;
     p.nombre=nombre;p.areaId=areaId;p.linea=linea;p.frecuenciaDias=frecuenciaDias;
     saveDB('bombas_posiciones',BOMBAS_POSICIONES);
     supaFetch('bombas_posiciones','PATCH',{nombre:nombre,area_id:areaId,linea:linea,frecuencia_dias:frecuenciaDias},'id=eq.'+editId).catch(function(){});
+    if(nombreViejo!==nombre) _bombaRenombrarEnPlanMtto(nombreViejo,nombre);
+    _bombaAsegurarCatalogoPlanMtto(nombre);
     showAlert('✅ Posición actualizada');
   } else {
     var row={id:genID('POS'),nombre:nombre,areaId:areaId,linea:linea,frecuenciaDias:frecuenciaDias,unidadActualId:null,fechaInstalacionActual:null,activo:true,creadoPor:nombreEfectivo()||currentUser.nombre,creadoTs:Date.now()};
     BOMBAS_POSICIONES.unshift(row);
     saveDB('bombas_posiciones',BOMBAS_POSICIONES);
     supaFetch('bombas_posiciones','POST',{id:row.id,nombre:row.nombre,area_id:areaId,linea:linea,frecuencia_dias:frecuenciaDias,unidad_actual_id:null,fecha_instalacion_actual:null,activo:true,creado_por:row.creadoPor,creado_ts:row.creadoTs},'').catch(function(){});
+    _bombaAsegurarCatalogoPlanMtto(nombre);
     showAlert('✅ Posición registrada');
   }
   cerrarFormPosicion();
@@ -17802,18 +17926,55 @@ function _bombaSemaforo(diasRestantes,frecuenciaDias){
   return {color:'#16a34a',txt:'🟢 Vigente ('+diasRestantes+' días)'};
 }
 
+// Clave corta del semáforo para los filtros de estado (Posiciones/Calendario) --
+// "Sin bomba instalada" se agrupa junto con "Vencida" porque en ambos casos
+// urge atención, y así el filtro de 3 opciones cubre los 4 casos de _bombaSemaforo.
+function _bombaEstadoClave(diasRestantes,frecuenciaDias){
+  if(diasRestantes===null||diasRestantes<0) return 'vencida';
+  var umbral=Math.max(3,Math.round(frecuenciaDias*0.15));
+  if(diasRestantes<=umbral) return 'se_acerca';
+  return 'vigente';
+}
+
+// Llena (sin pisar la selección actual) el <select> de filtro por línea con las
+// líneas que realmente existen hoy entre las posiciones activas -- se llama cada
+// vez que se renderiza la lista para que una línea recién usada aparezca sola.
+function _bombaPoblarFiltroLineas(selectId){
+  var sel=document.getElementById(selectId);
+  if(!sel) return;
+  var actual=sel.value;
+  var lineas=Array.from(new Set(BOMBAS_POSICIONES.filter(function(p){return p.activo!==false&&p.linea;}).map(function(p){return p.linea;}))).sort();
+  sel.innerHTML='<option value="">Todas las líneas</option>'+lineas.map(function(l){return '<option value="'+l+'">'+l+'</option>';}).join('');
+  if(lineas.indexOf(actual)>=0) sel.value=actual;
+}
+
+function _bombaAplicarFiltros(lista,prefijoFiltro){
+  var txt=(document.getElementById(prefijoFiltro+'-filtro-texto')?.value||'').trim().toLowerCase();
+  var linea=document.getElementById(prefijoFiltro+'-filtro-linea')?.value||'';
+  var estado=document.getElementById(prefijoFiltro+'-filtro-estado')?.value||'';
+  return lista.filter(function(it){
+    var p=it.p||it;
+    if(linea&&p.linea!==linea) return false;
+    if(estado&&_bombaEstadoClave(it.dias,p.frecuenciaDias)!==estado) return false;
+    if(txt&&!((p.nombre||'').toLowerCase().indexOf(txt)>=0||(p.linea||'').toLowerCase().indexOf(txt)>=0)) return false;
+    return true;
+  });
+}
+
 function renderBombasPosicionesLista(){
   var cont=document.getElementById('bombas-posiciones-lista');
   if(!cont) return;
+  _bombaPoblarFiltroLineas('posicion-filtro-linea');
   var esAdmin=currentUser.rol==='admin'||currentUser.rol==='super';
-  var lista=BOMBAS_POSICIONES.filter(function(p){return p.activo!==false;}).sort(function(a,b){return (a.nombre||'').localeCompare(b.nombre||'');});
+  var todas=BOMBAS_POSICIONES.filter(function(p){return p.activo!==false;}).map(function(p){return {p:p,dias:_bombaDiasRestantes(p)};});
+  var lista=_bombaAplicarFiltros(todas,'posicion').sort(function(a,b){return (a.p.nombre||'').localeCompare(b.p.nombre||'');});
   if(!lista.length){
-    cont.innerHTML='<div class="card text-center" style="padding:32px;color:var(--txt3)"><div style="font-size:40px;margin-bottom:8px">📍</div><div style="font-weight:700">Sin posiciones registradas</div></div>';
+    cont.innerHTML='<div class="card text-center" style="padding:32px;color:var(--txt3)"><div style="font-size:40px;margin-bottom:8px">📍</div><div style="font-weight:700">'+(todas.length?'Sin resultados con ese filtro':'Sin posiciones registradas')+'</div></div>';
     return;
   }
-  cont.innerHTML=lista.map(function(p){
+  cont.innerHTML=lista.map(function(it){
+    var p=it.p,dias=it.dias;
     var u=p.unidadActualId?BOMBAS_UNIDADES.find(function(x){return x.id===p.unidadActualId;}):null;
-    var dias=_bombaDiasRestantes(p);
     var sem=_bombaSemaforo(dias,p.frecuenciaDias);
     return '<div class="card" style="padding:12px;margin-bottom:8px">'
       +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
@@ -17836,12 +17997,15 @@ function renderBombasPosicionesLista(){
 function renderBombasCalendarioLista(){
   var cont=document.getElementById('bombas-calendario-lista');
   if(!cont) return;
-  var lista=BOMBAS_POSICIONES.filter(function(p){return p.activo!==false;}).map(function(p){
+  _bombaPoblarFiltroLineas('calendario-filtro-linea');
+  var esAdmin=currentUser.rol==='admin'||currentUser.rol==='super';
+  var todas=BOMBAS_POSICIONES.filter(function(p){return p.activo!==false;}).map(function(p){
     var dias=_bombaDiasRestantes(p);
     return {p:p,dias:dias,orden:dias===null?-999999:dias};
-  }).sort(function(a,b){return a.orden-b.orden;});
+  });
+  var lista=_bombaAplicarFiltros(todas,'calendario').sort(function(a,b){return a.orden-b.orden;});
   if(!lista.length){
-    cont.innerHTML='<div class="card text-center" style="padding:32px;color:var(--txt3)"><div style="font-size:40px;margin-bottom:8px">📅</div><div style="font-weight:700">Sin posiciones registradas</div></div>';
+    cont.innerHTML='<div class="card text-center" style="padding:32px;color:var(--txt3)"><div style="font-size:40px;margin-bottom:8px">📅</div><div style="font-weight:700">'+(todas.length?'Sin resultados con ese filtro':'Sin posiciones registradas')+'</div></div>';
     return;
   }
   cont.innerHTML=lista.map(function(it){
@@ -17855,7 +18019,12 @@ function renderBombasCalendarioLista(){
       +(p.fechaInstalacionActual?'<div style="font-size:11px;color:#9ca3af;margin-top:1px">Instalada: '+p.fechaInstalacionActual+'</div>':'')
       +'</div>'
       +'<span style="font-size:12px;font-weight:700;color:'+sem.color+';text-align:right;white-space:nowrap">'+sem.txt+'</span>'
-      +'</div></div>';
+      +'</div>'
+      +(esAdmin?'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'
+        +(u?'<button class="btn btn-outline btn-sm" style="width:auto;padding:5px 10px;color:#dc2626" onclick="retirarBombaDePosicion(\''+p.id+'\')">⬅️ Retirar bomba</button>'
+          :'<button class="btn btn-outline btn-sm" style="width:auto;padding:5px 10px" onclick="instalarBombaEnPosicion(\''+p.id+'\')">➕ Instalar bomba</button>')
+        +'</div>':'')
+      +'</div>';
   }).join('');
 }
 
@@ -17867,15 +18036,27 @@ function instalarBombaEnPosicion(posicionId){
   if(resp===null) return;
   var idx=parseInt(resp,10)-1;
   if(isNaN(idx)||idx<0||idx>=disponibles.length){showAlert('Opción no válida','error');return;}
-  _bombaInstalarCore(disponibles[idx].id,posicionId);
+  // Fecha real de instalación/último mantenimiento -- por default HOY (instalación
+  // nueva), pero editable para dar de alta retroactivamente bombas que ya llevan
+  // tiempo instaladas (p. ej. la carga inicial del catálogo): así el próximo
+  // mantenimiento se calcula desde la fecha real, no se reinicia el ciclo completo.
+  var fechaResp=prompt('¿Qué fecha se instaló o se le dio el último mantenimiento a esta bomba? (AAAA-MM-DD)\n\nDeja vacío y presiona Aceptar para usar HOY ('+todayStr()+').','');
+  if(fechaResp===null) return;
+  var fechaTxt=fechaResp.trim()||todayStr();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(fechaTxt)){showAlert('Formato de fecha inválido, usa AAAA-MM-DD','error');return;}
+  var fechaDate=_parseFechaInput(fechaTxt);
+  var hoyMedianoche=new Date(); hoyMedianoche.setHours(0,0,0,0);
+  if(!fechaDate){showAlert('Fecha inválida','error');return;}
+  if(fechaDate>hoyMedianoche){showAlert('La fecha no puede ser futura','error');return;}
+  _bombaInstalarCore(disponibles[idx].id,posicionId,fechaTxt);
 }
 
-function _bombaInstalarCore(unidadId,posicionId){
+function _bombaInstalarCore(unidadId,posicionId,fechaInstalacion){
   var u=BOMBAS_UNIDADES.find(function(x){return x.id===unidadId;});
   var pos=BOMBAS_POSICIONES.find(function(x){return x.id===posicionId;});
   if(!u||!pos) return;
   if(pos.unidadActualId){showAlert('Esta posición ya tiene una bomba instalada','error');return;}
-  var hoy=todayStr();
+  var hoy=fechaInstalacion||todayStr();
   u.estado='instalada';u.posicionActualId=posicionId;
   pos.unidadActualId=unidadId;pos.fechaInstalacionActual=hoy;
   saveDB('bombas_unidades',BOMBAS_UNIDADES);
@@ -17886,6 +18067,7 @@ function _bombaInstalarCore(unidadId,posicionId){
   BOMBAS_HISTORIAL.unshift(hist);
   saveDB('bombas_historial',BOMBAS_HISTORIAL);
   supaFetch('bombas_historial','POST',{id:hist.id,unidad_id:unidadId,posicion_id:posicionId,fecha_instalacion:hoy,fecha_retiro:null,instalado_por:hist.instaladoPor,motivo_retiro:null,pm03_id:null},'').catch(function(){});
+  _bombaCrearActividadPlanAlInstalar(pos);
   showAlert('✅ Bomba '+unidadId+' instalada en '+pos.nombre);
   renderBombasPosicionesLista();
   renderBombasCalendarioLista();
@@ -17901,7 +18083,12 @@ function retirarBombaDePosicion(posicionId){
 
   var usados=_usadosPM03Base();
   var idPM3=_genPM03IdUnico(usados);
-  var pm03={id:idPM3,linea:pos.linea||'—',componente:'Bombas de inyección',actividad:'Mantenimiento de bomba retirada — '+(u?u.id:posicionId)+' — '+pos.nombre,area:pos.areaId||null,semana:currentWeek(),año:currentYear(),tecnicoId:'',tecnicoNombre:'Sin asignar',estado:'abierta',generadoPor:nombreEfectivo()||'Sistema',ts:Date.now(),horaCreacion:new Date().toISOString(),observacionesCierre:(motivo?'Motivo de retiro: '+motivo:null),horasCierre:0};
+  // estadoFlujo:'por_reprogramar' -- a petición de Jorge: esta PM03 ad-hoc (dar
+  // mantenimiento a la bomba que se acaba de retirar) debe caer en "PM03 por
+  // Reprogramar" para que no se pierda entre las de la semana actual; no tiene
+  // semana real asignada todavía, se le asigna una al reprogramarla o se cierra
+  // directo desde ahí.
+  var pm03={id:idPM3,linea:pos.linea||'—',componente:'Bombas de inyección',actividad:'Mantenimiento de bomba retirada — '+(u?u.id:posicionId)+' — '+pos.nombre,area:pos.areaId||null,semana:currentWeek(),año:currentYear(),tecnicoId:'',tecnicoNombre:'Sin asignar',estado:'abierta',estadoFlujo:'por_reprogramar',generadoPor:nombreEfectivo()||'Sistema',ts:Date.now(),horaCreacion:new Date().toISOString(),observacionesCierre:(motivo?'Motivo de retiro: '+motivo:null),horasCierre:0};
   PM03_PLAN.push(pm03);saveDB('pm03_plan',PM03_PLAN);savePM03Supa(pm03);
 
   var histAbierto=BOMBAS_HISTORIAL.find(function(h){return h.unidadId===pos.unidadActualId&&h.posicionId===posicionId&&!h.fechaRetiro;});
@@ -17916,10 +18103,29 @@ function retirarBombaDePosicion(posicionId){
   saveDB('bombas_unidades',BOMBAS_UNIDADES);
   saveDB('bombas_posiciones',BOMBAS_POSICIONES);
   supaFetch('bombas_posiciones','PATCH',{unidad_actual_id:null,fecha_instalacion_actual:null},'id=eq.'+posicionId).catch(function(){});
+  _bombaCancelarActividadPlanAlRetirar(pos);
 
   showAlert('✅ Bomba retirada. Se generó la '+idPM3+' para su mantenimiento.');
   renderBombasPosicionesLista();
   renderBombasCalendarioLista();
+}
+
+// Si la PM03 que se acaba de cerrar (por cualquiera de las 2 vías de cierre:
+// confirmarCierrePM03 o "cerrar sin ejecutar") es la de "mantenimiento de bomba
+// retirada" generada por retirarBombaDePosicion (vinculada vía
+// bombas_historial.pm03Id), la unidad pasa sola a "disponible" -- a petición de
+// Jorge, ya no hace falta el botón manual "✅ Marcar lista" para este caso (se
+// deja el botón de todas formas, por si se necesita marcar lista sin pasar por
+// una PM03 formal).
+function _bombaAlCerrarPM03(pm03Id){
+  var hist=BOMBAS_HISTORIAL.find(function(h){return h.pm03Id===pm03Id;});
+  if(!hist) return;
+  var u=BOMBAS_UNIDADES.find(function(x){return x.id===hist.unidadId;});
+  if(!u||u.estado!=='pendiente_mtto') return;
+  u.estado='disponible';
+  saveDB('bombas_unidades',BOMBAS_UNIDADES);
+  supaFetch('bombas_unidades','PATCH',{estado:'disponible'},'id=eq.'+u.id).catch(function(){});
+  if(document.getElementById('screen-bombas-unidades')&&document.getElementById('screen-bombas-unidades').classList.contains('active')) renderBombasUnidadesLista();
 }
 
 function marcarUnidadLista(id){
@@ -24441,6 +24647,7 @@ function confirmarCerrarSinEjecutarPM03(id){
   p._editadoTs=Date.now();
   saveDB('pm03_plan',PM03_PLAN);
   savePM03Supa(p);
+  _bombaAlCerrarPM03(id);
   var m=document.getElementById('modal-no-aplica-pm3');if(m)m.remove();
   showAlert('🚫 PM03 cerrada como "No aplica"');
   showDetallePM03(id);

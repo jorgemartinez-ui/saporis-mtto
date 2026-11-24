@@ -236,7 +236,7 @@ tr:nth-child(even) td{background:#F8FAFC}
 </script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="app.js?v=20261125h" defer></script>
+<script src="app.js?v=20261125k" defer></script>
 
 <style id="lup-css">
 .lup-doc{background:#fff;border:2px solid #1a3c5e;border-radius:10px;overflow:hidden;margin:12px;font-family:Arial,sans-serif}
@@ -1067,11 +1067,39 @@ tr:nth-child(even) td{background:#F8FAFC}
         <button class="btn btn-success" onclick="guardarPosicion()">✅ Guardar</button>
         <button class="btn btn-gray mt8" onclick="cerrarFormPosicion()">Cancelar</button>
       </div>
+      <div class="card" style="padding:10px 12px;margin-bottom:12px">
+        <input type="text" class="form-control" id="posicion-filtro-texto" placeholder="🔎 Buscar por nombre o línea" oninput="renderBombasPosicionesLista()" style="margin-bottom:8px">
+        <div style="display:flex;gap:6px">
+          <select class="form-control" id="posicion-filtro-linea" onchange="renderBombasPosicionesLista()" style="flex:1">
+            <option value="">Todas las líneas</option>
+          </select>
+          <select class="form-control" id="posicion-filtro-estado" onchange="renderBombasPosicionesLista()" style="flex:1">
+            <option value="">Todos los estados</option>
+            <option value="vigente">🟢 Vigente</option>
+            <option value="se_acerca">🟡 Se acerca</option>
+            <option value="vencida">🔴 Vencida / sin bomba</option>
+          </select>
+        </div>
+      </div>
       <div id="bombas-posiciones-lista"></div>
     </div>
 
     <div id="bombas-tab-calendario" class="hidden">
       <div style="font-size:11px;color:#6b7280;margin-bottom:10px">🟢 Vigente &nbsp; 🟡 Se acerca &nbsp; 🔴 Vencida / sin bomba instalada</div>
+      <div class="card" style="padding:10px 12px;margin-bottom:12px">
+        <input type="text" class="form-control" id="calendario-filtro-texto" placeholder="🔎 Buscar por nombre o línea" oninput="renderBombasCalendarioLista()" style="margin-bottom:8px">
+        <div style="display:flex;gap:6px">
+          <select class="form-control" id="calendario-filtro-linea" onchange="renderBombasCalendarioLista()" style="flex:1">
+            <option value="">Todas las líneas</option>
+          </select>
+          <select class="form-control" id="calendario-filtro-estado" onchange="renderBombasCalendarioLista()" style="flex:1">
+            <option value="">Todos los estados</option>
+            <option value="vigente">🟢 Vigente</option>
+            <option value="se_acerca">🟡 Se acerca</option>
+            <option value="vencida">🔴 Vencida / sin bomba</option>
+          </select>
+        </div>
+      </div>
       <div id="bombas-calendario-lista"></div>
     </div>
   </div>
