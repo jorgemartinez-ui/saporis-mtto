@@ -17381,13 +17381,37 @@ function generarCodigoBomba(tipo,serie,modelo,potenciaHp){
 function showBombas(){
   showScreen('screen-bombas-unidades');
   window._bombaEditId=null;
+  window._posicionEditId=null;
   var wrap=document.getElementById('bomba-form-wrap');
   if(wrap) wrap.classList.add('hidden');
+  var wrapPos=document.getElementById('posicion-form-wrap');
+  if(wrapPos) wrapPos.classList.add('hidden');
   var esAdmin=currentUser.rol==='admin'||currentUser.rol==='super';
   var btnNuevo=document.getElementById('btn-bomba-nuevo');
   if(btnNuevo) btnNuevo.style.display=esAdmin?'block':'none';
+  var btnPosNueva=document.getElementById('btn-posicion-nueva');
+  if(btnPosNueva) btnPosNueva.style.display=esAdmin?'block':'none';
   _bombaPoblarSelectsCatalogo();
-  renderBombasUnidadesLista();
+  _bombaCambiarTab('unidades');
+}
+
+// Alterna entre las 3 pestañas del módulo de Bombas (Unidades / Posiciones /
+// Calendario) -- todas viven en la misma pantalla para no complicar la
+// navegación con más "screens"; solo se muestra/oculta el contenido.
+function _bombaCambiarTab(tab){
+  window._bombaTabActiva=tab;
+  ['unidades','posiciones','calendario'].forEach(function(t){
+    var cont=document.getElementById('bombas-tab-'+t);
+    var btn=document.getElementById('bomba-tab-btn-'+t);
+    if(cont) cont.classList.toggle('hidden',t!==tab);
+    if(btn){
+      btn.style.borderBottomColor=t===tab?'#7c3aed':'transparent';
+      btn.style.color=t===tab?'#7c3aed':'#9ca3af';
+    }
+  });
+  if(tab==='unidades') renderBombasUnidadesLista();
+  else if(tab==='posiciones') renderBombasPosicionesLista();
+  else if(tab==='calendario') renderBombasCalendarioLista();
 }
 
 // Llena los <select> de Serie (según Tipo) y Modelo con lo que haya ahora
@@ -17576,23 +17600,336 @@ function renderBombasUnidadesLista(){
       +'</div>'
       +'<span style="font-size:11px;font-weight:700;color:'+est.color+'">'+est.txt+'</span>'
       +'</div>'
-      +(esAdmin?'<div style="margin-top:8px;display:flex;gap:6px"><button class="btn btn-outline btn-sm" style="width:auto;padding:5px 10px" onclick="abrirFormBomba(\''+u.id+'\')">✏️ Editar</button><button class="btn btn-outline btn-sm" style="width:auto;padding:5px 10px;color:#dc2626" onclick="eliminarBomba(\''+u.id+'\')">🗑️ Baja</button></div>':'')
+      +(esAdmin?'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'
+        +(u.estado==='pendiente_mtto'?'<button class="btn btn-outline btn-sm" style="width:auto;padding:5px 10px;color:#16a34a" onclick="marcarUnidadLista(\''+u.id+'\')">✅ Marcar lista</button>':'')
+        +'<button class="btn btn-outline btn-sm" style="width:auto;padding:5px 10px" onclick="abrirFormBomba(\''+u.id+'\')">✏️ Editar</button><button class="btn btn-outline btn-sm" style="width:auto;padding:5px 10px;color:#dc2626" onclick="eliminarBomba(\''+u.id+'\')">🗑️ Baja</button></div>':'')
       +'</div>';
   }).join('');
 }
 
 function _sincronizarBombas(){
+  var pantallaActiva=document.getElementById('screen-bombas-unidades')&&document.getElementById('screen-bombas-unidades').classList.contains('active');
   supaFetch('bombas_unidades','GET',null,'activo=eq.true&order=id.asc').then(function(rows){
     if(rows===null) return;
-    BOMBAS_UNIDADES=rows.map(function(r){return {id:r.id,tipo:r.tipo,serie:r.serie,modelo:r.modelo,potenciaHp:r.potencia_hp,consecutivo:r.consecutivo,anio:r.anio,motorSerie:r.motor_serie,reductorSerie:r.reductor_serie,reductorRpmMax:r.reductor_rpm_max,reductorRelacion:r.reductor_relacion,cuerpoSerie:r.cuerpo_serie,estado:r.estado,posicionActualId:r.posicion_actual_id,notas:r.notas,activo:r.activo,creadoPor:r.creado_por,creadoTs:r.creado_ts};});
+    // Preservar unidades locales que NO llegaron a Supabase (alta en este dispositivo
+    // que no logró subir -- sesión/red/columna) y reintentar guardarlas -- antes esto
+    // reemplazaba toda la lista local sin protección y una unidad recién dada de alta
+    // podía desaparecer sola en el siguiente resync. Caso real reportado por Jorge
+    // (2026-11-24). Mismo patrón ya usado en activos/plan_actividades/equipos_linea.
+    var localUnid=loadDB('bombas_unidades',[]);
+    var unidSyncedIds=new Set(rows.map(function(r){return r.id;}));
+    var localSoloUnid=localUnid.filter(function(l){return l.activo!==false&&!unidSyncedIds.has(l.id);});
+    if(localSoloUnid.length){
+      setTimeout(function(){
+        localSoloUnid.forEach(function(u){
+          supaFetch('bombas_unidades','POST',{
+            id:u.id,tipo:u.tipo,serie:u.serie,modelo:u.modelo,potencia_hp:u.potenciaHp,consecutivo:u.consecutivo,
+            anio:u.anio||null,motor_serie:u.motorSerie,reductor_serie:u.reductorSerie,reductor_rpm_max:u.reductorRpmMax||null,reductor_relacion:u.reductorRelacion,cuerpo_serie:u.cuerpoSerie,
+            estado:u.estado,posicion_actual_id:u.posicionActualId||null,notas:u.notas,activo:true,
+            creado_por:u.creadoPor,creado_ts:u.creadoTs
+          },'').catch(function(){});
+        });
+      },2000);
+    }
+    BOMBAS_UNIDADES=rows.map(function(r){return {id:r.id,tipo:r.tipo,serie:r.serie,modelo:r.modelo,potenciaHp:r.potencia_hp,consecutivo:r.consecutivo,anio:r.anio,motorSerie:r.motor_serie,reductorSerie:r.reductor_serie,reductorRpmMax:r.reductor_rpm_max,reductorRelacion:r.reductor_relacion,cuerpoSerie:r.cuerpo_serie,estado:r.estado,posicionActualId:r.posicion_actual_id,notas:r.notas,activo:r.activo,creadoPor:r.creado_por,creadoTs:r.creado_ts};}).concat(localSoloUnid);
     saveDB('bombas_unidades',BOMBAS_UNIDADES);
-    if(document.getElementById('screen-bombas-unidades')&&document.getElementById('screen-bombas-unidades').classList.contains('active')) renderBombasUnidadesLista();
+    if(pantallaActiva&&(!window._bombaTabActiva||window._bombaTabActiva==='unidades')) renderBombasUnidadesLista();
+    if(pantallaActiva&&window._bombaTabActiva==='calendario') renderBombasCalendarioLista();
   }).catch(function(){});
   supaFetch('bombas_posiciones','GET',null,'activo=eq.true&order=nombre.asc').then(function(rows){
     if(rows===null) return;
-    BOMBAS_POSICIONES=rows.map(function(r){return {id:r.id,nombre:r.nombre,areaId:r.area_id,frecuenciaDias:r.frecuencia_dias,unidadActualId:r.unidad_actual_id,fechaInstalacionActual:r.fecha_instalacion_actual,activo:r.activo,creadoPor:r.creado_por,creadoTs:r.creado_ts};});
+    // Mismo mecanismo de preservar + reintentar que arriba, para posiciones.
+    var localPos=loadDB('bombas_posiciones',[]);
+    var posSyncedIds=new Set(rows.map(function(r){return r.id;}));
+    var localSoloPos=localPos.filter(function(l){return l.activo!==false&&!posSyncedIds.has(l.id);});
+    if(localSoloPos.length){
+      setTimeout(function(){
+        localSoloPos.forEach(function(p){
+          supaFetch('bombas_posiciones','POST',{
+            id:p.id,nombre:p.nombre,area_id:p.areaId,linea:p.linea||null,frecuencia_dias:p.frecuenciaDias,
+            unidad_actual_id:p.unidadActualId||null,fecha_instalacion_actual:p.fechaInstalacionActual||null,
+            activo:true,creado_por:p.creadoPor,creado_ts:p.creadoTs
+          },'').catch(function(){});
+        });
+      },2000);
+    }
+    BOMBAS_POSICIONES=rows.map(function(r){return {id:r.id,nombre:r.nombre,areaId:r.area_id,linea:r.linea,frecuenciaDias:r.frecuencia_dias,unidadActualId:r.unidad_actual_id,fechaInstalacionActual:r.fecha_instalacion_actual,activo:r.activo,creadoPor:r.creado_por,creadoTs:r.creado_ts};}).concat(localSoloPos);
     saveDB('bombas_posiciones',BOMBAS_POSICIONES);
+    if(pantallaActiva&&window._bombaTabActiva==='posiciones') renderBombasPosicionesLista();
+    if(pantallaActiva&&window._bombaTabActiva==='calendario') renderBombasCalendarioLista();
   }).catch(function(){});
+  supaFetch('bombas_historial','GET',null,'order=fecha_instalacion.desc').then(function(rows){
+    if(rows===null) return;
+    // Historial: no tiene columna "activo" (no hay baja, es bitácora) -- se preserva
+    // cualquier registro local cuyo id no venga todavía en la respuesta del servidor.
+    var localHist=loadDB('bombas_historial',[]);
+    var histSyncedIds=new Set(rows.map(function(r){return r.id;}));
+    var localSoloHist=localHist.filter(function(l){return !histSyncedIds.has(l.id);});
+    if(localSoloHist.length){
+      setTimeout(function(){
+        localSoloHist.forEach(function(h){
+          supaFetch('bombas_historial','POST',{
+            id:h.id,unidad_id:h.unidadId,posicion_id:h.posicionId,fecha_instalacion:h.fechaInstalacion,
+            fecha_retiro:h.fechaRetiro||null,instalado_por:h.instaladoPor,motivo_retiro:h.motivoRetiro||null,pm03_id:h.pm03Id||null
+          },'').catch(function(){});
+        });
+      },2000);
+    }
+    BOMBAS_HISTORIAL=rows.map(function(r){return {id:r.id,unidadId:r.unidad_id,posicionId:r.posicion_id,fechaInstalacion:r.fecha_instalacion,fechaRetiro:r.fecha_retiro,instaladoPor:r.instalado_por,motivoRetiro:r.motivo_retiro,pm03Id:r.pm03_id};}).concat(localSoloHist);
+    saveDB('bombas_historial',BOMBAS_HISTORIAL);
+  }).catch(function(){});
+}
+
+// ---------------------------------------------------------------
+// FASE 1b — Posiciones (ubicaciones fijas donde se instalan las
+// unidades rotables) + Instalar/Retirar + Calendario con semáforo.
+// ---------------------------------------------------------------
+
+function _posicionPoblarAreas(){
+  var sel=document.getElementById('posicion-area');
+  if(!sel) return;
+  sel.innerHTML='<option value="">-- Selecciona --</option>'+PM_AREAS.map(function(a){return '<option value="'+a.id+'">'+a.icon+' '+a.label+'</option>';}).join('');
+}
+
+function _posicionPoblarLineas(){
+  var areaSel=document.getElementById('posicion-area');
+  var lineaSel=document.getElementById('posicion-linea');
+  if(!areaSel||!lineaSel) return;
+  var lineas=getLineasPorArea(areaSel.value);
+  lineaSel.innerHTML='<option value="">-- Selecciona --</option>'+lineas.map(function(l){return '<option value="'+l+'">'+l+'</option>';}).join('');
+}
+
+function abrirFormPosicion(id){
+  window._posicionEditId=id||null;
+  var p=id?BOMBAS_POSICIONES.find(function(x){return x.id===id;}):null;
+  var wrap=document.getElementById('posicion-form-wrap');
+  if(!wrap) return;
+  wrap.classList.remove('hidden');
+  _posicionPoblarAreas();
+  document.getElementById('posicion-form-titulo').textContent=id?'✏️ Editar posición':'➕ Registrar posición';
+  document.getElementById('posicion-nombre').value=p?p.nombre:'';
+  document.getElementById('posicion-area').value=p?(p.areaId||''):'';
+  _posicionPoblarLineas();
+  document.getElementById('posicion-linea').value=p?(p.linea||''):'';
+  var fv=document.getElementById('posicion-freq-val'),fu=document.getElementById('posicion-freq-unit');
+  if(p&&p.frecuenciaDias){
+    if(p.frecuenciaDias%365===0){fv.value=p.frecuenciaDias/365;fu.value='anios';}
+    else if(p.frecuenciaDias%30===0){fv.value=p.frecuenciaDias/30;fu.value='meses';}
+    else if(p.frecuenciaDias%7===0){fv.value=p.frecuenciaDias/7;fu.value='semanas';}
+    else{fv.value=p.frecuenciaDias;fu.value='dias';}
+  } else { fv.value=''; fu.value='meses'; }
+  wrap.scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function cerrarFormPosicion(){
+  window._posicionEditId=null;
+  var wrap=document.getElementById('posicion-form-wrap');
+  if(wrap) wrap.classList.add('hidden');
+}
+
+function _freqValUnitADias(val,unit){
+  var n=parseInt(val,10);
+  if(!n||n<=0) return null;
+  if(unit==='dias') return n;
+  if(unit==='semanas') return n*7;
+  if(unit==='meses') return n*30;
+  if(unit==='anios') return n*365;
+  return null;
+}
+
+function guardarPosicion(){
+  var nombre=(document.getElementById('posicion-nombre').value||'').trim();
+  var areaId=document.getElementById('posicion-area').value||'';
+  var linea=document.getElementById('posicion-linea').value||'';
+  var freqVal=document.getElementById('posicion-freq-val').value;
+  var freqUnit=document.getElementById('posicion-freq-unit').value;
+  if(!nombre){showAlert('Escribe un nombre para la posición','error');return;}
+  if(!areaId||!linea){showAlert('Selecciona área y línea','error');return;}
+  var frecuenciaDias=_freqValUnitADias(freqVal,freqUnit);
+  if(!frecuenciaDias){showAlert('Indica una frecuencia válida','error');return;}
+
+  var editId=window._posicionEditId;
+  if(editId){
+    var p=BOMBAS_POSICIONES.find(function(x){return x.id===editId;});
+    if(!p){showAlert('No se encontró la posición','error');return;}
+    p.nombre=nombre;p.areaId=areaId;p.linea=linea;p.frecuenciaDias=frecuenciaDias;
+    saveDB('bombas_posiciones',BOMBAS_POSICIONES);
+    supaFetch('bombas_posiciones','PATCH',{nombre:nombre,area_id:areaId,linea:linea,frecuencia_dias:frecuenciaDias},'id=eq.'+editId).catch(function(){});
+    showAlert('✅ Posición actualizada');
+  } else {
+    var row={id:genID('POS'),nombre:nombre,areaId:areaId,linea:linea,frecuenciaDias:frecuenciaDias,unidadActualId:null,fechaInstalacionActual:null,activo:true,creadoPor:nombreEfectivo()||currentUser.nombre,creadoTs:Date.now()};
+    BOMBAS_POSICIONES.unshift(row);
+    saveDB('bombas_posiciones',BOMBAS_POSICIONES);
+    supaFetch('bombas_posiciones','POST',{id:row.id,nombre:row.nombre,area_id:areaId,linea:linea,frecuencia_dias:frecuenciaDias,unidad_actual_id:null,fecha_instalacion_actual:null,activo:true,creado_por:row.creadoPor,creado_ts:row.creadoTs},'').catch(function(){});
+    showAlert('✅ Posición registrada');
+  }
+  cerrarFormPosicion();
+  renderBombasPosicionesLista();
+}
+
+function eliminarPosicion(id){
+  var p=BOMBAS_POSICIONES.find(function(x){return x.id===id;});
+  if(!p) return;
+  if(p.unidadActualId){showAlert('Primero retira la bomba instalada en esta posición','error');return;}
+  if(!confirm('¿Eliminar la posición "'+p.nombre+'"?')) return;
+  p.activo=false;
+  saveDB('bombas_posiciones',BOMBAS_POSICIONES);
+  supaFetch('bombas_posiciones','PATCH',{activo:false},'id=eq.'+id).catch(function(){});
+  renderBombasPosicionesLista();
+}
+
+function _freqDiasLabel(dias){
+  if(!dias) return '—';
+  if(dias%365===0) return (dias/365)+(dias===365?' año':' años');
+  if(dias%30===0) return (dias/30)+' meses';
+  if(dias%7===0) return (dias/7)+(dias===7?' semana':' semanas');
+  return dias+' días';
+}
+
+function _bombaDiasRestantes(pos){
+  if(!pos.unidadActualId||!pos.fechaInstalacionActual) return null;
+  var inst=new Date(pos.fechaInstalacionActual+'T00:00:00');
+  var vence=new Date(inst.getTime()+pos.frecuenciaDias*86400000);
+  var hoy=new Date();hoy.setHours(0,0,0,0);
+  return Math.round((vence-hoy)/86400000);
+}
+
+function _bombaSemaforo(diasRestantes,frecuenciaDias){
+  if(diasRestantes===null) return {color:'#dc2626',txt:'🔴 Sin bomba instalada'};
+  if(diasRestantes<0) return {color:'#dc2626',txt:'🔴 Vencida ('+Math.abs(diasRestantes)+' días)'};
+  var umbral=Math.max(3,Math.round(frecuenciaDias*0.15));
+  if(diasRestantes<=umbral) return {color:'#d97706',txt:'🟡 Se acerca ('+diasRestantes+' días)'};
+  return {color:'#16a34a',txt:'🟢 Vigente ('+diasRestantes+' días)'};
+}
+
+function renderBombasPosicionesLista(){
+  var cont=document.getElementById('bombas-posiciones-lista');
+  if(!cont) return;
+  var esAdmin=currentUser.rol==='admin'||currentUser.rol==='super';
+  var lista=BOMBAS_POSICIONES.filter(function(p){return p.activo!==false;}).sort(function(a,b){return (a.nombre||'').localeCompare(b.nombre||'');});
+  if(!lista.length){
+    cont.innerHTML='<div class="card text-center" style="padding:32px;color:var(--txt3)"><div style="font-size:40px;margin-bottom:8px">📍</div><div style="font-weight:700">Sin posiciones registradas</div></div>';
+    return;
+  }
+  cont.innerHTML=lista.map(function(p){
+    var u=p.unidadActualId?BOMBAS_UNIDADES.find(function(x){return x.id===p.unidadActualId;}):null;
+    var dias=_bombaDiasRestantes(p);
+    var sem=_bombaSemaforo(dias,p.frecuenciaDias);
+    return '<div class="card" style="padding:12px;margin-bottom:8px">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
+      +'<div><div style="font-weight:800;font-size:14px">'+p.nombre+'</div>'
+      +'<div style="font-size:12px;color:#6b7280">'+(p.linea||'')+' · Cada '+_freqDiasLabel(p.frecuenciaDias)+'</div>'
+      +(u?'<div style="font-size:12px;color:#1a3c5e;margin-top:2px">🔧 '+u.id+'</div>':'<div style="font-size:12px;color:#9ca3af;margin-top:2px">Sin bomba instalada</div>')
+      +'</div>'
+      +'<span style="font-size:11px;font-weight:700;color:'+sem.color+';text-align:right">'+sem.txt+'</span>'
+      +'</div>'
+      +(esAdmin?'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'
+        +(u?'<button class="btn btn-outline btn-sm" style="width:auto;padding:5px 10px;color:#dc2626" onclick="retirarBombaDePosicion(\''+p.id+'\')">⬅️ Retirar bomba</button>'
+          :'<button class="btn btn-outline btn-sm" style="width:auto;padding:5px 10px" onclick="instalarBombaEnPosicion(\''+p.id+'\')">➕ Instalar bomba</button>')
+        +'<button class="btn btn-outline btn-sm" style="width:auto;padding:5px 10px" onclick="abrirFormPosicion(\''+p.id+'\')">✏️ Editar</button>'
+        +(u?'':'<button class="btn btn-outline btn-sm" style="width:auto;padding:5px 10px;color:#dc2626" onclick="eliminarPosicion(\''+p.id+'\')">🗑️ Eliminar</button>')
+        +'</div>':'')
+      +'</div>';
+  }).join('');
+}
+
+function renderBombasCalendarioLista(){
+  var cont=document.getElementById('bombas-calendario-lista');
+  if(!cont) return;
+  var lista=BOMBAS_POSICIONES.filter(function(p){return p.activo!==false;}).map(function(p){
+    var dias=_bombaDiasRestantes(p);
+    return {p:p,dias:dias,orden:dias===null?-999999:dias};
+  }).sort(function(a,b){return a.orden-b.orden;});
+  if(!lista.length){
+    cont.innerHTML='<div class="card text-center" style="padding:32px;color:var(--txt3)"><div style="font-size:40px;margin-bottom:8px">📅</div><div style="font-weight:700">Sin posiciones registradas</div></div>';
+    return;
+  }
+  cont.innerHTML=lista.map(function(it){
+    var p=it.p;
+    var u=p.unidadActualId?BOMBAS_UNIDADES.find(function(x){return x.id===p.unidadActualId;}):null;
+    var sem=_bombaSemaforo(it.dias,p.frecuenciaDias);
+    return '<div class="card" style="padding:12px;margin-bottom:8px;border-left:4px solid '+sem.color+'">'
+      +'<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'
+      +'<div><div style="font-weight:800;font-size:14px">'+p.nombre+'</div>'
+      +'<div style="font-size:12px;color:#6b7280">'+(p.linea||'')+(u?' · 🔧 '+u.id:'')+'</div>'
+      +(p.fechaInstalacionActual?'<div style="font-size:11px;color:#9ca3af;margin-top:1px">Instalada: '+p.fechaInstalacionActual+'</div>':'')
+      +'</div>'
+      +'<span style="font-size:12px;font-weight:700;color:'+sem.color+';text-align:right;white-space:nowrap">'+sem.txt+'</span>'
+      +'</div></div>';
+  }).join('');
+}
+
+function instalarBombaEnPosicion(posicionId){
+  var disponibles=BOMBAS_UNIDADES.filter(function(u){return u.activo!==false&&(u.estado==='disponible'||u.estado==='pendiente_mtto');});
+  if(!disponibles.length){showAlert('No hay unidades disponibles para instalar','error');return;}
+  var opciones=disponibles.map(function(u,i){return (i+1)+') '+u.id+' — '+(BOMBAS_ESTADO_LABEL[u.estado]||{}).txt;}).join('\n');
+  var resp=prompt('¿Qué unidad quieres instalar?\n\n'+opciones+'\n\nEscribe el número:');
+  if(resp===null) return;
+  var idx=parseInt(resp,10)-1;
+  if(isNaN(idx)||idx<0||idx>=disponibles.length){showAlert('Opción no válida','error');return;}
+  _bombaInstalarCore(disponibles[idx].id,posicionId);
+}
+
+function _bombaInstalarCore(unidadId,posicionId){
+  var u=BOMBAS_UNIDADES.find(function(x){return x.id===unidadId;});
+  var pos=BOMBAS_POSICIONES.find(function(x){return x.id===posicionId;});
+  if(!u||!pos) return;
+  if(pos.unidadActualId){showAlert('Esta posición ya tiene una bomba instalada','error');return;}
+  var hoy=todayStr();
+  u.estado='instalada';u.posicionActualId=posicionId;
+  pos.unidadActualId=unidadId;pos.fechaInstalacionActual=hoy;
+  saveDB('bombas_unidades',BOMBAS_UNIDADES);
+  saveDB('bombas_posiciones',BOMBAS_POSICIONES);
+  supaFetch('bombas_unidades','PATCH',{estado:'instalada',posicion_actual_id:posicionId},'id=eq.'+unidadId).catch(function(){});
+  supaFetch('bombas_posiciones','PATCH',{unidad_actual_id:unidadId,fecha_instalacion_actual:hoy},'id=eq.'+posicionId).catch(function(){});
+  var hist={id:genID('BHIST'),unidadId:unidadId,posicionId:posicionId,fechaInstalacion:hoy,fechaRetiro:null,instaladoPor:nombreEfectivo()||currentUser.nombre,motivoRetiro:null,pm03Id:null};
+  BOMBAS_HISTORIAL.unshift(hist);
+  saveDB('bombas_historial',BOMBAS_HISTORIAL);
+  supaFetch('bombas_historial','POST',{id:hist.id,unidad_id:unidadId,posicion_id:posicionId,fecha_instalacion:hoy,fecha_retiro:null,instalado_por:hist.instaladoPor,motivo_retiro:null,pm03_id:null},'').catch(function(){});
+  showAlert('✅ Bomba '+unidadId+' instalada en '+pos.nombre);
+  renderBombasPosicionesLista();
+  renderBombasCalendarioLista();
+}
+
+function retirarBombaDePosicion(posicionId){
+  var pos=BOMBAS_POSICIONES.find(function(x){return x.id===posicionId;});
+  if(!pos||!pos.unidadActualId) return;
+  var motivo=prompt('¿Motivo del retiro? (ej. mantenimiento programado, falla, etc.)');
+  if(motivo===null) return;
+  var u=BOMBAS_UNIDADES.find(function(x){return x.id===pos.unidadActualId;});
+  var hoy=todayStr();
+
+  var usados=_usadosPM03Base();
+  var idPM3=_genPM03IdUnico(usados);
+  var pm03={id:idPM3,linea:pos.linea||'—',componente:'Bombas de inyección',actividad:'Mantenimiento de bomba retirada — '+(u?u.id:posicionId)+' — '+pos.nombre,area:pos.areaId||null,semana:currentWeek(),año:currentYear(),tecnicoId:'',tecnicoNombre:'Sin asignar',estado:'abierta',generadoPor:nombreEfectivo()||'Sistema',ts:Date.now(),horaCreacion:new Date().toISOString(),observacionesCierre:(motivo?'Motivo de retiro: '+motivo:null),horasCierre:0};
+  PM03_PLAN.push(pm03);saveDB('pm03_plan',PM03_PLAN);savePM03Supa(pm03);
+
+  var histAbierto=BOMBAS_HISTORIAL.find(function(h){return h.unidadId===pos.unidadActualId&&h.posicionId===posicionId&&!h.fechaRetiro;});
+  if(histAbierto){
+    histAbierto.fechaRetiro=hoy;histAbierto.motivoRetiro=motivo||null;histAbierto.pm03Id=idPM3;
+    supaFetch('bombas_historial','PATCH',{fecha_retiro:hoy,motivo_retiro:motivo||null,pm03_id:idPM3},'id=eq.'+histAbierto.id).catch(function(){});
+  }
+  saveDB('bombas_historial',BOMBAS_HISTORIAL);
+
+  if(u){ u.estado='pendiente_mtto'; u.posicionActualId=null; supaFetch('bombas_unidades','PATCH',{estado:'pendiente_mtto',posicion_actual_id:null},'id=eq.'+u.id).catch(function(){}); }
+  pos.unidadActualId=null;pos.fechaInstalacionActual=null;
+  saveDB('bombas_unidades',BOMBAS_UNIDADES);
+  saveDB('bombas_posiciones',BOMBAS_POSICIONES);
+  supaFetch('bombas_posiciones','PATCH',{unidad_actual_id:null,fecha_instalacion_actual:null},'id=eq.'+posicionId).catch(function(){});
+
+  showAlert('✅ Bomba retirada. Se generó la '+idPM3+' para su mantenimiento.');
+  renderBombasPosicionesLista();
+  renderBombasCalendarioLista();
+}
+
+function marcarUnidadLista(id){
+  var u=BOMBAS_UNIDADES.find(function(x){return x.id===id;});
+  if(!u) return;
+  u.estado='disponible';
+  saveDB('bombas_unidades',BOMBAS_UNIDADES);
+  supaFetch('bombas_unidades','PATCH',{estado:'disponible'},'id=eq.'+id).catch(function(){});
+  showAlert('✅ Unidad '+id+' lista para instalar');
+  renderBombasUnidadesLista();
 }
 
 // ================================================================

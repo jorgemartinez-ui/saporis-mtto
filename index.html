@@ -236,7 +236,7 @@ tr:nth-child(even) td{background:#F8FAFC}
 </script>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
-<script src="app.js?v=20261125f" defer></script>
+<script src="app.js?v=20261125h" defer></script>
 
 <style id="lup-css">
 .lup-doc{background:#fff;border:2px solid #1a3c5e;border-radius:10px;overflow:hidden;margin:12px;font-family:Arial,sans-serif}
@@ -994,40 +994,86 @@ tr:nth-child(even) td{background:#F8FAFC}
 
 <!-- ===== BOMBAS (Fase 1a: catálogo de Unidades) ===== -->
 <div id="screen-bombas-unidades" class="screen">
-  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">🔧 Bombas — Unidades</div></div></div>
+  <div class="topbar"><button class="topbar-back" onclick="goMenu()">←</button><div><div class="topbar-title">🔧 Bombas</div></div></div>
   <div class="scroll-content" style="padding:16px">
-    <button id="btn-bomba-nuevo" class="btn btn-primary mb12" style="display:none" onclick="abrirFormBomba()">➕ Registrar unidad</button>
-    <div id="bomba-form-wrap" class="card hidden" style="margin-bottom:16px">
-      <div class="card-title mb8" id="bomba-form-titulo">➕ Registrar unidad</div>
-      <div class="form-group"><label class="form-label">Tipo</label>
-        <select class="form-control" id="bomba-tipo" onchange="_bombaPoblarSelectsCatalogo()">
-          <option value="positiva">Positiva</option>
-          <option value="centrifuga">Centrífuga</option>
-        </select>
-      </div>
-      <div class="form-group"><label class="form-label">Serie</label>
-        <select class="form-control" id="bomba-serie" onchange="_bombaSelectCambio('serie')">
-          <option value="">-- Selecciona --</option>
-        </select>
-      </div>
-      <div class="form-group"><label class="form-label">Modelo (tamaño)</label>
-        <select class="form-control" id="bomba-modelo" onchange="_bombaSelectCambio('modelo')">
-          <option value="">-- Selecciona --</option>
-        </select>
-      </div>
-      <div class="form-group"><label class="form-label">Potencia (HP)</label><input type="number" class="form-control" id="bomba-potencia" placeholder="Ej: 15" step="0.5" oninput="_bombaActualizarPreviewCodigo()"></div>
-      <div id="bomba-codigo-preview" style="font-weight:700;color:#7c3aed;margin-bottom:12px;font-size:13px">Código: completa Serie y Modelo para verlo</div>
-      <div class="form-group"><label class="form-label">Año de fabricación</label><input type="number" class="form-control" id="bomba-anio" placeholder="Ej: 2024" step="1" min="1980" max="2100"></div>
-      <div class="form-group"><label class="form-label">N° de serie — Motor</label><input type="text" class="form-control" id="bomba-motor-serie"></div>
-      <div class="form-group"><label class="form-label">N° de serie — Reductor / caja de engranes</label><input type="text" class="form-control" id="bomba-reductor-serie"></div>
-      <div class="form-group"><label class="form-label">RPM máx. del reductor</label><input type="number" class="form-control" id="bomba-reductor-rpm-max" placeholder="Ej: 1750" step="1"></div>
-      <div class="form-group"><label class="form-label">Relación de reducción</label><input type="text" class="form-control" id="bomba-reductor-relacion" placeholder="Ej: 20:1"></div>
-      <div class="form-group"><label class="form-label">N° de serie — Cuerpo de bomba</label><input type="text" class="form-control" id="bomba-cuerpo-serie"></div>
-      <div class="form-group"><label class="form-label">Notas</label><textarea class="form-control" id="bomba-notas" rows="2"></textarea></div>
-      <button class="btn btn-success" onclick="guardarBomba()">✅ Guardar</button>
-      <button class="btn btn-gray mt8" onclick="cerrarFormBomba()">Cancelar</button>
+    <div style="display:flex;gap:6px;margin-bottom:14px;border-bottom:2px solid #f3e8ff">
+      <button id="bomba-tab-btn-unidades" class="bomba-tab-btn" onclick="_bombaCambiarTab('unidades')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:3px solid #7c3aed;font-weight:800;color:#7c3aed;cursor:pointer;font-size:12.5px">🔧 Unidades</button>
+      <button id="bomba-tab-btn-posiciones" class="bomba-tab-btn" onclick="_bombaCambiarTab('posiciones')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:3px solid transparent;font-weight:800;color:#9ca3af;cursor:pointer;font-size:12.5px">📍 Posiciones</button>
+      <button id="bomba-tab-btn-calendario" class="bomba-tab-btn" onclick="_bombaCambiarTab('calendario')" style="flex:1;padding:10px 4px;background:none;border:none;border-bottom:3px solid transparent;font-weight:800;color:#9ca3af;cursor:pointer;font-size:12.5px">📅 Calendario</button>
     </div>
-    <div id="bombas-unidades-lista"></div>
+
+    <div id="bombas-tab-unidades">
+      <button id="btn-bomba-nuevo" class="btn btn-primary mb12" style="display:none" onclick="abrirFormBomba()">➕ Registrar unidad</button>
+      <div id="bomba-form-wrap" class="card hidden" style="margin-bottom:16px">
+        <div class="card-title mb8" id="bomba-form-titulo">➕ Registrar unidad</div>
+        <div class="form-group"><label class="form-label">Tipo</label>
+          <select class="form-control" id="bomba-tipo" onchange="_bombaPoblarSelectsCatalogo()">
+            <option value="positiva">Positiva</option>
+            <option value="centrifuga">Centrífuga</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Serie</label>
+          <select class="form-control" id="bomba-serie" onchange="_bombaSelectCambio('serie')">
+            <option value="">-- Selecciona --</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Modelo (tamaño)</label>
+          <select class="form-control" id="bomba-modelo" onchange="_bombaSelectCambio('modelo')">
+            <option value="">-- Selecciona --</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Potencia (HP)</label><input type="number" class="form-control" id="bomba-potencia" placeholder="Ej: 15" step="0.5" oninput="_bombaActualizarPreviewCodigo()"></div>
+        <div id="bomba-codigo-preview" style="font-weight:700;color:#7c3aed;margin-bottom:12px;font-size:13px">Código: completa Serie y Modelo para verlo</div>
+        <div class="form-group"><label class="form-label">Año de fabricación</label><input type="number" class="form-control" id="bomba-anio" placeholder="Ej: 2024" step="1" min="1980" max="2100"></div>
+        <div class="form-group"><label class="form-label">N° de serie — Motor</label><input type="text" class="form-control" id="bomba-motor-serie"></div>
+        <div class="form-group"><label class="form-label">N° de serie — Reductor / caja de engranes</label><input type="text" class="form-control" id="bomba-reductor-serie"></div>
+        <div class="form-group"><label class="form-label">RPM máx. del reductor</label><input type="number" class="form-control" id="bomba-reductor-rpm-max" placeholder="Ej: 1750" step="1"></div>
+        <div class="form-group"><label class="form-label">Relación de reducción</label><input type="text" class="form-control" id="bomba-reductor-relacion" placeholder="Ej: 20:1"></div>
+        <div class="form-group"><label class="form-label">N° de serie — Cuerpo de bomba</label><input type="text" class="form-control" id="bomba-cuerpo-serie"></div>
+        <div class="form-group"><label class="form-label">Notas</label><textarea class="form-control" id="bomba-notas" rows="2"></textarea></div>
+        <button class="btn btn-success" onclick="guardarBomba()">✅ Guardar</button>
+        <button class="btn btn-gray mt8" onclick="cerrarFormBomba()">Cancelar</button>
+      </div>
+      <div id="bombas-unidades-lista"></div>
+    </div>
+
+    <div id="bombas-tab-posiciones" class="hidden">
+      <button id="btn-posicion-nueva" class="btn btn-primary mb12" style="display:none" onclick="abrirFormPosicion()">➕ Registrar posición</button>
+      <div id="posicion-form-wrap" class="card hidden" style="margin-bottom:16px">
+        <div class="card-title mb8" id="posicion-form-titulo">➕ Registrar posición</div>
+        <div class="form-group"><label class="form-label">Nombre (ej. "Cocedor 1 — Posición A")</label><input type="text" class="form-control" id="posicion-nombre"></div>
+        <div class="form-group"><label class="form-label">Área</label>
+          <select class="form-control" id="posicion-area" onchange="_posicionPoblarLineas()">
+            <option value="">-- Selecciona --</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Línea</label>
+          <select class="form-control" id="posicion-linea">
+            <option value="">-- Selecciona --</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Frecuencia de mantenimiento</label>
+          <div style="display:flex;gap:6px">
+            <input type="number" class="form-control" id="posicion-freq-val" placeholder="Ej: 6" min="1" style="flex:1">
+            <select class="form-control" id="posicion-freq-unit" style="flex:1">
+              <option value="dias">Días</option>
+              <option value="semanas">Semanas</option>
+              <option value="meses" selected>Meses</option>
+              <option value="anios">Años</option>
+            </select>
+          </div>
+          <div style="font-size:10px;color:#9ca3af;margin-top:3px">El conteo arranca desde que se instale una bomba aquí, no desde hoy.</div>
+        </div>
+        <button class="btn btn-success" onclick="guardarPosicion()">✅ Guardar</button>
+        <button class="btn btn-gray mt8" onclick="cerrarFormPosicion()">Cancelar</button>
+      </div>
+      <div id="bombas-posiciones-lista"></div>
+    </div>
+
+    <div id="bombas-tab-calendario" class="hidden">
+      <div style="font-size:11px;color:#6b7280;margin-bottom:10px">🟢 Vigente &nbsp; 🟡 Se acerca &nbsp; 🔴 Vencida / sin bomba instalada</div>
+      <div id="bombas-calendario-lista"></div>
+    </div>
   </div>
 </div>
 
