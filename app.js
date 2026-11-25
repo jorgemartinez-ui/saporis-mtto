@@ -695,7 +695,20 @@ function getLineasPorArea(a){
   return [];
 }
 function getEquiposPorLinea(area,linea){
-  return EQUIPOS_LINEA.filter(function(e){return e.activo!==false&&e.area_id===area&&e.linea===linea;}).map(function(e){return e.equipo;}).sort();
+  return EQUIPOS_LINEA.filter(function(e){return e.activo!==false&&_matchAreaLinea(e.area_id,e.linea,area,linea);}).map(function(e){return e.equipo;}).sort();
+}
+// "Línea espejo": una línea cuyo contenido se ve igual sin importar desde qué área se
+// entre (hoy solo "Bombas" — se usa igual en Producción-Fabricación y en Envasado).
+// Centraliza el criterio de coincidencia área+línea para no repetir la excepción en
+// cada filtro del motor de Plan Mtto; para cualquier línea que NO sea espejo, se
+// comporta exactamente igual que antes (comparar area_id Y línea).
+function _esLineaEspejo(linea){
+  return linea===BOMBA_PLAN_LINEA;
+}
+function _matchAreaLinea(itemAreaId,itemLinea,areaId,linea){
+  if(itemLinea!==linea) return false;
+  if(_esLineaEspejo(linea)) return true;
+  return itemAreaId===areaId;
 }
 function esProd(a){return a==='proceso'||a==='envasado';}
 
@@ -2708,6 +2721,8 @@ function _renderDetallePM03(id,p){
       if(e==='B') return {label:'Bien',color:'#16a34a'};
       if(e==='R') return {label:'Regular',color:'#d97706'};
       if(e==='C') return {label:'Reprogramar',color:'#dc2626'};
+      if(e==='SI') return {label:'Aplicado',color:'#16a34a'};
+      if(e==='NO') return {label:'No aplica',color:'#6b7280'};
       return {label:'—',color:'#9ca3af'};
     }
     var comentarios=p.comentariosActividades||{};
@@ -2871,6 +2886,15 @@ function confirmarReprogramarDesdeDetalle(id){
   // se mostraba la pantalla sin refrescar su contenido y había que salir y re-entrar.
   setTimeout(function(){ goBack(); },200);
 }
+// Paso de LOTO (bloqueo y etiquetado de energía) agregado 2026-11-24 como primer
+// paso de los protocolos PM03. Se identifica por texto, no por id: el id se
+// renumera cada vez que un protocolo se vuelve a guardar desde el editor (ver
+// guardarProtocolo), así que un marcador por id dejaría de funcionar en cuanto
+// alguien editara el protocolo por otro motivo. El texto sí se conserva.
+function _esPasoLoto(a){
+  return !!(a && typeof a.desc==='string' && a.desc.indexOf('Aplicar bloqueo y etiquetado de energía (LOTO)')===0);
+}
+
 function abrirCierrePM03(id){
   // Super: preguntar quién cierra primero
   if(currentUser.rol==='super'&&!window._superCierraPor){
@@ -2946,18 +2970,37 @@ function abrirCierrePM03(id){
           +'</div>'
         ):'')
 
-        // Estado inicial
-        +'<div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:4px">Estado Inicial</div>'
-        +'<div style="display:flex;gap:4px;margin-bottom:8px">'+estadoBtns('inicial',curI,a.id)+'</div>'
+        +(_esPasoLoto(a)
+          ? (
+            // Paso de LOTO: solo Aplicado / No aplica, sin Estado Inicial ni Comentario
+            '<div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:4px">Estado</div>'
+            +'<div style="display:flex;gap:4px;margin-bottom:8px">'
+            +['SI','NO'].map(function(e){
+                var sel=curF===e;
+                var bg=e==='SI'?'#dcfce7':'#f3f4f6';
+                var col=e==='SI'?'#16a34a':'#6b7280';
+                var lbl=e==='SI'?'✅ Aplicado':'➖ No aplica';
+                return '<button id="pm3-loto-'+a.id+'-'+e+'" onclick="pm3SetEstadoLoto(\''+id+'\','+a.id+',\''+e+'\')" '
+                  +'style="flex:1;padding:8px 2px;border:2px solid '+(sel?col:'#e5e7eb')+';border-radius:6px;'
+                  +'background:'+(sel?bg:'#fff')+';font-weight:'+(sel?'800':'400')+';color:'+(sel?col:'#6b7280')+';cursor:pointer;font-size:.78rem">'+lbl+'</button>';
+              }).join('')
+            +'</div>'
+          )
+          : (
+            // Estado inicial
+            '<div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:4px">Estado Inicial</div>'
+            +'<div style="display:flex;gap:4px;margin-bottom:8px">'+estadoBtns('inicial',curI,a.id)+'</div>'
 
-        // Estado final
-        +'<div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:4px">Estado Final (A=Bien, R=Regular, C=Reprogramar)</div>'
-        +'<div style="display:flex;gap:4px;margin-bottom:8px">'+estadoBtns('final',curF,a.id)+'</div>'
-        +'<div id="pm3-aviso-c-'+a.id+'" style="background:#fee2e2;border-radius:6px;padding:6px 8px;font-size:.75rem;color:#dc2626;margin-bottom:6px;display:'+(curF==='C'?'block':'none')+'">⚠️ Se generará PM03 roja para reprogramar la próxima semana</div>'
+            // Estado final
+            +'<div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:4px">Estado Final (A=Bien, R=Regular, C=Reprogramar)</div>'
+            +'<div style="display:flex;gap:4px;margin-bottom:8px">'+estadoBtns('final',curF,a.id)+'</div>'
+            +'<div id="pm3-aviso-c-'+a.id+'" style="background:#fee2e2;border-radius:6px;padding:6px 8px;font-size:.75rem;color:#dc2626;margin-bottom:6px;display:'+(curF==='C'?'block':'none')+'">⚠️ Se generará PM03 roja para reprogramar la próxima semana</div>'
 
-        // Comentario — obligatorio solo si el Estado Final NO es "Bien" (Regular o Reprogramar); si es Bien, es opcional
-        +'<div id="pm3-com-lbl-'+a.id+'" style="font-size:.72rem;font-weight:700;color:'+(curF==='B'?'#6b7280':'#dc2626')+';margin-bottom:3px">Comentario <span id="pm3-com-ast-'+a.id+'" style="color:#dc2626;display:'+(curF==='B'?'none':'inline')+'">*</span></div>'
-        +'<textarea id="pm3-com-'+a.id+'" class="form-control" rows="2" placeholder="Describe las observaciones de esta actividad..." oninput="pm3SaveCache(\''+id+'\')" style="padding:7px;font-size:.82rem;resize:none">'+com+'</textarea>'
+            // Comentario — obligatorio solo si el Estado Final NO es "Bien" (Regular o Reprogramar); si es Bien, es opcional
+            +'<div id="pm3-com-lbl-'+a.id+'" style="font-size:.72rem;font-weight:700;color:'+(curF==='B'?'#6b7280':'#dc2626')+';margin-bottom:3px">Comentario <span id="pm3-com-ast-'+a.id+'" style="color:#dc2626;display:'+(curF==='B'?'none':'inline')+'">*</span></div>'
+            +'<textarea id="pm3-com-'+a.id+'" class="form-control" rows="2" placeholder="Describe las observaciones de esta actividad..." oninput="pm3SaveCache(\''+id+'\')" style="padding:7px;font-size:.82rem;resize:none">'+com+'</textarea>'
+          )
+        )
 
         // Medición (referencia vs medido), solo si la actividad la requiere
         +(function(){
@@ -3260,7 +3303,7 @@ function confirmarCierrePM03(id){
       // Comentario obligatorio solo si el Estado Final NO es "Bien" (Regular o
       // Reprogramar) — si quedó "Bien" el comentario es opcional, se puede llenar
       // pero no bloquea el guardado/firma.
-      if(ef!=='B'&&!comentariosActs[a.id]) faltanComentarios.push(a.id);
+      if(!_esPasoLoto(a)&&ef!=='B'&&!comentariosActs[a.id]) faltanComentarios.push(a.id);
 
       // Si estado final es C → generar PM03 específica para esa actividad (sin técnico = Por Asignar)
       if(ef==='C'){
@@ -10580,6 +10623,8 @@ function imprimirProtocoloPM03(id){
       var hrs  = (p.horasActividades||{})[a.id] || '';
       // Colores estado
       function estCell(e){
+        if(e==='SI') return '<span style="font-weight:800;color:#16a34a">✓</span>';
+        if(e==='NO') return '<span style="font-weight:800;color:#6b7280">—</span>';
         var col=e==='B'?'#16a34a':e==='R'?'#d97706':e==='C'?'#dc2626':'#000';
         return e?('<span style="font-weight:800;color:'+col+'">'+e+'</span>'):'';
       }
@@ -12342,7 +12387,7 @@ function _pm3ChecklistCompleto(p,proto){
   proto.actividades.forEach(function(a){
     var ef=(p.actividadesEstadoFinal||{})[a.id]||'';
     if(!ef){faltanEstado.push(a.id);return;}
-    if(ef!=='B'&&!((p.comentariosActividades||{})[a.id]||'').trim()) faltanComentario.push(a.id);
+    if(!_esPasoLoto(a)&&ef!=='B'&&!((p.comentariosActividades||{})[a.id]||'').trim()) faltanComentario.push(a.id);
     if(a.medicion){
       var mv=(p.medicionesActividades||{})[a.id]||[];
       var completos=mv.length===3&&mv.every(function(v){return v&&v.referencia!=null&&v.medido!=null&&!isNaN(v.referencia)&&!isNaN(v.medido);});
@@ -12526,7 +12571,14 @@ function renderFirmasPhysical(p,proto){
     {key:'lider',label:'Líder Área'},
     {key:'calidad',label:'Inspector Calidad'},
     {key:'admin',label:'Coordinador de Mantenimiento'}
-  ].filter(function(c){return _firmasReq.indexOf(c.key)>=0;});
+  ].filter(function(c){
+    // Mostrar esta firma si el protocolo la sigue pidiendo, O si ya se había
+    // capturado antes (aunque después se haya quitado de "requeridas" en el
+    // protocolo) — para que editar el protocolo nunca haga "desaparecer" una
+    // firma que el técnico ya dio.
+    var yaFirmada=!!p['firmaImg'+c.key.charAt(0).toUpperCase()+c.key.slice(1)];
+    return _firmasReq.indexOf(c.key)>=0 || yaFirmada;
+  });
   if(!campos.length){
     return '<div class="card" style="margin-top:8px"><div class="card-title">✍️ Firmas de Autorización</div><div style="font-size:12px;color:#6b7280">Este protocolo no requiere firmas de autorización</div></div>';
   }
@@ -17580,12 +17632,16 @@ function eliminarBomba(id){
 }
 
 var BOMBAS_ESTADO_LABEL={instalada:{txt:'🟢 Instalada',color:'#16a34a'},pendiente_mtto:{txt:'🟠 Pendiente mtto.',color:'#d97706'},disponible:{txt:'🔵 Disponible',color:'#2563eb'},baja:{txt:'⚪ De baja',color:'#6b7280'}};
-// Integración de Posiciones con el Plan de Mtto (a petición de Jorge, 2026-11-24):
-// cada Posición vive dentro de esta línea fija "Bombas", dentro del área Servicios
-// Industriales (la más parecida de PM_AREAS; si Jorge prefiere otra área, se cambia
-// aquí). Se usa linea+componente (nombre de la posición) para emparejar, igual que
-// el resto del Plan de Mtto -- sin id nuevo, mismo criterio ya usado en toda la app.
-var BOMBA_PLAN_AREA='servicios';
+// Integración de Posiciones con el Plan de Mtto: cada Posición vive dentro de esta
+// línea fija "Bombas". Se usa linea+componente (nombre de la posición) para
+// emparejar, igual que el resto del Plan de Mtto -- sin id nuevo, mismo criterio ya
+// usado en toda la app.
+// "Línea espejo" (a petición de Jorge, 2026-11-24): "Bombas" se ve igual entrando
+// por Producción-Fabricación o por Envasado -- las bombas se usan indistintamente en
+// ambas áreas, ya no vive solo en Servicios Industriales. BOMBA_PLAN_AREA es nada
+// más el área donde se guarda internamente el registro (ver _matchAreaLinea, que es
+// lo que de verdad decide qué se ve desde cada área).
+var BOMBA_PLAN_AREA='proceso';
 var BOMBA_PLAN_LINEA='Bombas';
 
 function renderBombasUnidadesLista(){
@@ -17752,11 +17808,18 @@ function _freqValUnitADias(val,unit){
 // decisión explícita de Jorge 2026-11-24). Agrega la línea al catálogo general
 // la primera vez, y da de alta esta posición como "equipo" de esa línea.
 function _bombaAsegurarCatalogoPlanMtto(nombrePosicion){
-  if(!Array.isArray(LISTAS.lineas_servicios)) LISTAS.lineas_servicios=[];
-  if(LISTAS.lineas_servicios.indexOf(BOMBA_PLAN_LINEA)<0){
-    LISTAS.lineas_servicios.push(BOMBA_PLAN_LINEA);
-    saveListas();
+  // "Bombas" ya no vive solo en Servicios -- si venía de antes, se retira de ahí
+  var _cambioListas=false;
+  if(Array.isArray(LISTAS.lineas_servicios)){
+    var _idxServ=LISTAS.lineas_servicios.indexOf(BOMBA_PLAN_LINEA);
+    if(_idxServ>=0){ LISTAS.lineas_servicios.splice(_idxServ,1); _cambioListas=true; }
   }
+  // Espejo: debe existir tanto en Producción-Fabricación como en Envasado
+  ['lineas_proceso','lineas_envasado'].forEach(function(key){
+    if(!Array.isArray(LISTAS[key])) LISTAS[key]=[];
+    if(LISTAS[key].indexOf(BOMBA_PLAN_LINEA)<0){ LISTAS[key].push(BOMBA_PLAN_LINEA); _cambioListas=true; }
+  });
+  if(_cambioListas) saveListas();
   var yaExiste=EQUIPOS_LINEA.some(function(e){return e.activo!==false&&e.area_id===BOMBA_PLAN_AREA&&e.linea===BOMBA_PLAN_LINEA&&e.equipo===nombrePosicion;});
   if(!yaExiste){
     var eqRow={id:genID('EQ'),area_id:BOMBA_PLAN_AREA,linea:BOMBA_PLAN_LINEA,equipo:nombrePosicion,activo:true,creado_por:nombreEfectivo()||currentUser.nombre,creado_ts:Date.now()};
@@ -22639,6 +22702,8 @@ function imprimirProtocoloPM03(id){
       var com  = (p.comentariosActividades||{})[a.id] || '';
       // Colores estado
       function estCell(e){
+        if(e==='SI') return '<span style="font-weight:800;color:#16a34a">✓</span>';
+        if(e==='NO') return '<span style="font-weight:800;color:#6b7280">—</span>';
         var col=e==='B'?'#16a34a':e==='R'?'#d97706':e==='C'?'#dc2626':'#000';
         return e?('<span style="font-weight:800;color:'+col+'">'+e+'</span>'):'';
       }
@@ -23091,6 +23156,34 @@ function pm3SetEstadoCampo(pmId, actId, campo, estado){
     if(comLbl) comLbl.style.color=estado==='B'?'#6b7280':'#dc2626';
     if(comAst) comAst.style.display=estado==='B'?'none':'inline';
   }
+}
+
+// Botones Aplicado/No aplica del paso de LOTO — función aparte de
+// pm3SetEstadoCampo para no tocar en nada el comportamiento de las demás
+// actividades (Bien/Regular/Reprogramar). Usa los mismos campos que ya
+// existían (actividadesEstadoFinal/actividadesEstado), solo que con código
+// SI/NO en vez de B/R/C, así que el resto del guardado/sync no cambia.
+function pm3SetEstadoLoto(pmId, actId, estado){
+  var p=PM03_PLAN.find(function(x){return x.id===pmId;});
+  if(!p) return;
+  if(!p.actividadesEstadoFinal) p.actividadesEstadoFinal={};
+  if(!p.actividadesEstado) p.actividadesEstado={};
+  p.actividadesEstadoFinal[actId]=estado;
+  p.actividadesEstado[actId]=estado;
+  saveDB('pm03_plan',PM03_PLAN);
+  pm3SaveCacheSupa(pmId);
+
+  ['SI','NO'].forEach(function(e){
+    var btn=document.getElementById('pm3-loto-'+actId+'-'+e);
+    if(!btn) return;
+    var sel=e===estado;
+    var bg=e==='SI'?'#dcfce7':'#f3f4f6';
+    var col=e==='SI'?'#16a34a':'#6b7280';
+    btn.style.background=sel?bg:'#fff';
+    btn.style.borderColor=sel?col:'#e5e7eb';
+    btn.style.color=sel?col:'#6b7280';
+    btn.style.fontWeight=sel?'800':'400';
+  });
 }
 
 // Despliega/oculta el texto "Cómo se hace" de una actividad (paso a paso definido
@@ -23721,17 +23814,31 @@ function verProtocoloFormato(id){
         +'</div>'
       ):'')
 
-      +'<div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:4px">Estado Inicial</div>'
-      +'<div style="display:flex;gap:4px;margin-bottom:8px">'+estadoBtnsDemo()+'</div>'
+      +(_esPasoLoto(a)
+        ? (
+          '<div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:4px">Estado</div>'
+          +'<div style="display:flex;gap:4px;margin-bottom:8px">'
+          +[['✅ Aplicado'],['➖ No aplica']].map(function(x){
+              return '<div style="flex:1;padding:8px 2px;border:2px solid #e5e7eb;border-radius:6px;background:#fff;font-weight:400;color:#9ca3af;font-size:.78rem;text-align:center">'+x[0]+'</div>';
+            }).join('')
+          +'</div>'
+          +'<div style="margin-bottom:6px"><div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:3px">Personas en esta actividad</div>'
+          +'<div style="padding:7px;font-size:.82rem;max-width:120px;color:#9ca3af;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px">1</div></div>'
+        )
+        : (
+          '<div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:4px">Estado Inicial</div>'
+          +'<div style="display:flex;gap:4px;margin-bottom:8px">'+estadoBtnsDemo()+'</div>'
 
-      +'<div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:4px">Estado Final (A=Bien, R=Regular, C=Reprogramar)</div>'
-      +'<div style="display:flex;gap:4px;margin-bottom:8px">'+estadoBtnsDemo()+'</div>'
+          +'<div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:4px">Estado Final (A=Bien, R=Regular, C=Reprogramar)</div>'
+          +'<div style="display:flex;gap:4px;margin-bottom:8px">'+estadoBtnsDemo()+'</div>'
 
-      +'<div style="margin-bottom:6px"><div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:3px">Personas en esta actividad</div>'
-      +'<div style="padding:7px;font-size:.82rem;max-width:120px;color:#9ca3af;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px">1</div></div>'
+          +'<div style="margin-bottom:6px"><div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:3px">Personas en esta actividad</div>'
+          +'<div style="padding:7px;font-size:.82rem;max-width:120px;color:#9ca3af;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px">1</div></div>'
 
-      +'<div style="font-size:.72rem;font-weight:700;color:#dc2626;margin-bottom:3px">Comentario <span style="color:#dc2626">*</span></div>'
-      +'<div style="padding:7px;font-size:.82rem;color:#9ca3af;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;min-height:34px">Describe las observaciones de esta actividad...</div>'
+          +'<div style="font-size:.72rem;font-weight:700;color:#dc2626;margin-bottom:3px">Comentario <span style="color:#dc2626">*</span></div>'
+          +'<div style="padding:7px;font-size:.82rem;color:#9ca3af;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;min-height:34px">Describe las observaciones de esta actividad...</div>'
+        )
+      )
 
       +(med
         ? '<div style="background:#f8fafc;border-radius:8px;padding:8px;margin-top:8px">'
@@ -38365,7 +38472,7 @@ function renderPlanLinea(areaId,linea){
   if(!cont) return;
   document.getElementById('plan-topbar-sub').textContent=linea;
 
-  var propias=PLAN_ACTIVIDADES.filter(function(p){return p.area_id===areaId&&p.linea===linea;});
+  var propias=PLAN_ACTIVIDADES.filter(function(p){return _matchAreaLinea(p.area_id,p.linea,areaId,linea);});
 
   var tipoIcon={inspeccion:'🔍',lubricacion:'🛢️',limpieza:'🧹',ajuste:'🔧',cambio:'🔄',revision:'📋',otro:'⚙️'};
   var tipoCol={inspeccion:'#1e3a8a',lubricacion:'#14532d',limpieza:'#78350f',ajuste:'#374151',cambio:'#7f1d1d',revision:'#4c1d95',otro:'#374151'};
@@ -39195,7 +39302,7 @@ function eliminarActividadPlan(id){
 // dirección "agregar", sin modificar esas dos funciones existentes.
 
 function _planesActivosDeLinea(areaId,linea){
-  return PLAN_ACTIVIDADES.filter(function(p){return p.area_id===areaId&&p.linea===linea&&p.activo!==false;});
+  return PLAN_ACTIVIDADES.filter(function(p){return _matchAreaLinea(p.area_id,p.linea,areaId,linea)&&p.activo!==false;});
 }
 
 function _crearActividadPlanConSerie(areaId,linea,componente,descripcion,tipo,freqSem,freqDias,protocolo,fechaDeton){
@@ -39561,7 +39668,7 @@ function renderPlanHistorialContent(areaId,linea,tipo,mes,anio,semana,tecnico,bu
 // ================================================================
 function imprimirPlanLinea(areaId,linea){
   var area=PM_AREAS.find(function(a){return a.id===areaId;})||{label:areaId};
-  var propias=PLAN_ACTIVIDADES.filter(function(p){return p.area_id===areaId&&p.linea===linea;});
+  var propias=PLAN_ACTIVIDADES.filter(function(p){return _matchAreaLinea(p.area_id,p.linea,areaId,linea);});
   var tipoIcon={inspeccion:'Inspección',lubricacion:'Lubricación',limpieza:'Limpieza',ajuste:'Ajuste',cambio:'Cambio',revision:'Revisión',otro:'General'};
   var freqLabel=function(s){return s===1?'Semanal':s===2?'Quincenal':s===4?'Mensual':s===8?'Bimestral':s===12?'Trimestral':s===24?'Semestral':s===52?'Anual':'Cada '+s+' sem';};
 
@@ -39890,7 +39997,7 @@ function showPlanCalendario(areaId,linea){
   });
 
   // Actividades activas del plan para esta línea (aunque su próxima ejecución caiga en otro año)
-  var actDefsLinea=PLAN_ACTIVIDADES.filter(function(x){return x.area_id===areaId&&x.linea===linea&&x.activo!==false;});
+  var actDefsLinea=PLAN_ACTIVIDADES.filter(function(x){return _matchAreaLinea(x.area_id,x.linea,areaId,linea)&&x.activo!==false;});
 
   // Get equipos from EQUIPOS_LINEA
   var equipos=getEquiposPorLinea(areaId,linea);
@@ -40001,7 +40108,7 @@ function showPlanCalendario(areaId,linea){
     var acts=eqActMap[eq]||[];
     if(!acts.length){ equiposSinActividad.push(eq); return; }
     acts.forEach(function(act){
-      var _actDef=PLAN_ACTIVIDADES.find(function(x){return x.area_id===areaId&&x.linea===linea&&_normTxtAct(x.componente||'General')===_normTxtAct(eq)&&_normTxtAct(x.descripcion)===_normTxtAct(act.label);});
+      var _actDef=PLAN_ACTIVIDADES.find(function(x){return _matchAreaLinea(x.area_id,x.linea,areaId,linea)&&_normTxtAct(x.componente||'General')===_normTxtAct(eq)&&_normTxtAct(x.descripcion)===_normTxtAct(act.label);});
       var bucket=_freqBucketDeActividad(_actDef);
       bucketOrden[bucket]=_freqBucketOrden(_actDef);
       if(!bucketed[bucket]) bucketed[bucket]={};
@@ -40155,7 +40262,7 @@ function showPlanCalendario(areaId,linea){
       var act=p.actividad||'—';
       var k=comp+'||'+act;
       if(_manualUnicos[k]) return;
-      var yaFormal=PLAN_ACTIVIDADES.some(function(x){return x.area_id===areaId&&x.linea===linea&&(x.componente||'General')===comp&&x.descripcion===act;});
+      var yaFormal=PLAN_ACTIVIDADES.some(function(x){return _matchAreaLinea(x.area_id,x.linea,areaId,linea)&&(x.componente||'General')===comp&&x.descripcion===act;});
       if(!yaFormal) _manualUnicos[k]={comp:comp,act:act};
     });
     var _manualUnicosList=Object.keys(_manualUnicos).map(function(k){return _manualUnicos[k];});
@@ -40558,7 +40665,7 @@ function exportarCalendarioExcel(areaId,linea){
   var hdrs=['Línea','Componente','Actividad','Frecuencia','Semana','Año','Estado','Técnico'];
   var dataRows=todos.map(function(p){
     var comp=p.componente||'General';
-    var _actDef=PLAN_ACTIVIDADES.find(function(x){return x.area_id===areaId&&x.linea===linea&&(x.componente||'General')===comp&&x.descripcion===p.actividad;});
+    var _actDef=PLAN_ACTIVIDADES.find(function(x){return _matchAreaLinea(x.area_id,x.linea,areaId,linea)&&(x.componente||'General')===comp&&x.descripcion===p.actividad;});
     return [linea,comp,p.actividad||'—',_freqBucketDeActividad(_actDef),p.semana,p.año,p.estado||'abierta',p.tecnicoNombre||'Sin asignar'];
   });
   var fname='Calendario_'+linea.replace(/\s+/g,'_')+'_'+anio+'.xlsx';
