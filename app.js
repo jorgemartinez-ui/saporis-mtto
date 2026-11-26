@@ -612,6 +612,32 @@ function renderMenu(){
   if(esAnormRol) document.getElementById('menu-operador').classList.add('hidden');
   document.getElementById('menu-tecnico').classList.toggle('hidden',!(r==='tecnico'||r==='admin'||r==='super'));
   document.getElementById('menu-admin-extra').classList.toggle('hidden',!(r==='admin'||r==='super'));
+  // Técnico: botón Plan Mtto en modo solo lectura (ve calendario/historial/listado/
+  // imprimir, pero no crea/edita/elimina actividades ni usa "Comparar máquinas" — ver
+  // _planSoloLectura). Admin/super ya tienen su propio botón en menu-admin-extra, sin
+  // cambios; este es 100% aditivo, solo para técnico.
+  if(r==='tecnico'){
+    setTimeout(function(){
+      if(!document.getElementById('btn-planmtto-tecnico')){
+        var gridT=document.querySelector('#menu-tecnico .menu-grid');
+        if(gridT){
+          var btnT=document.createElement('div');
+          btnT.id='btn-planmtto-tecnico';
+          btnT.className='menu-btn';
+          btnT.style.cssText='border-color:#14532d;background:linear-gradient(135deg,#fff 60%,#dcfce7)';
+          btnT.onclick=function(){showPlanMantenimiento();};
+          btnT.innerHTML='<div class="menu-icon">📋</div><div class="menu-label">Plan Mtto</div><div class="menu-desc">Ver calendario (solo lectura)</div>';
+          gridT.appendChild(btnT);
+        }
+      }
+    },150);
+  } else {
+    // Si se cambió de usuario sin recargar la página (logout no hace reload) y el
+    // anterior era técnico, se quita el botón — para admin/super no cambia nada más,
+    // ya tienen el suyo propio en menu-admin-extra.
+    var _btnPlanTecViejo=document.getElementById('btn-planmtto-tecnico');
+    if(_btnPlanTecViejo) _btnPlanTecViejo.remove();
+  }
   // Super: también mostrar botones de técnico y calidad
   if(r==='super'){
     setTimeout(function(){
@@ -2717,10 +2743,14 @@ function _renderDetallePM03(id,p){
     // ver pm3SetEstadoCampo), no A/B/C: la versión anterior de esta tabla comparaba
     // contra 'A' (que nunca ocurre) y coloreaba "Bien" de naranja y "Regular" de gris
     // por el desface. Se corrige aquí de paso, ya que se está tocando esta misma tabla.
-    function estadoBC(e){
+    // Estado Inicial describe cómo se ENCONTRÓ el equipo (no una acción), así que su
+    // tercera opción dice "Mal" en vez de "Reprogramar" — el código guardado sigue
+    // siendo 'C' en ambos casos, y Estado Final (el que sí dispara el aviso de
+    // reprogramar) no cambia. Ver también abrirCierrePM03 y verProtocoloFormato.
+    function estadoBC(e,esInicial){
       if(e==='B') return {label:'Bien',color:'#16a34a'};
       if(e==='R') return {label:'Regular',color:'#d97706'};
-      if(e==='C') return {label:'Reprogramar',color:'#dc2626'};
+      if(e==='C') return esInicial?{label:'Mal',color:'#dc2626'}:{label:'Reprogramar',color:'#dc2626'};
       if(e==='SI') return {label:'Aplicado',color:'#16a34a'};
       if(e==='NO') return {label:'No aplica',color:'#6b7280'};
       return {label:'—',color:'#9ca3af'};
@@ -2729,7 +2759,7 @@ function _renderDetallePM03(id,p){
     var mediciones=p.medicionesActividades||{};
     var fotos=p.fotosActividades||{};
     var filas=proto.actividades.map(function(a){
-      var eIni=estadoBC((p.actividadesEstadoInicial||{})[a.id]);
+      var eIni=estadoBC((p.actividadesEstadoInicial||{})[a.id],true);
       var eFin=estadoBC((p.actividadesEstadoFinal||p.actividadesEstado||{})[a.id]);
       var com=comentarios[a.id];
       var med=mediciones[a.id];
@@ -2950,7 +2980,10 @@ function abrirCierrePM03(id){
           var sel=cur===e;
           var bg=e==='B'?'#dcfce7':e==='R'?'#fef3c7':'#fee2e2';
           var col=e==='B'?'#16a34a':e==='R'?'#d97706':'#dc2626';
-          var lbl=e==='B'?'Bien':e==='R'?'Regular':'Reprogramar';
+          // Estado Inicial describe cómo se ENCONTRÓ el equipo (no una acción) — su tercera
+          // opción dice "Mal", no "Reprogramar". Estado Final sigue igual (es el que dispara
+          // el aviso rojo de reprogramar); el código guardado sigue siendo 'C' en ambos casos.
+          var lbl=e==='B'?'Bien':e==='R'?'Regular':(campo==='inicial'?'Mal':'Reprogramar');
           return '<button id="pm3-'+campo+'-'+actId+'-'+e+'" onclick="pm3SetEstadoCampo(\''+id+'\','+actId+',\''+campo+'\',\''+e+'\') " '
             +'style="flex:1;padding:6px 2px;border:2px solid '+(sel?col:'#e5e7eb')+';border-radius:6px;'
             +'background:'+(sel?bg:'#fff')+';font-weight:'+(sel?'800':'400')+';color:'+(sel?col:'#6b7280')+';cursor:pointer;font-size:.78rem">'+lbl+'</button>';
@@ -23794,8 +23827,11 @@ function verProtocoloFormato(id){
   function esc(s){return (s||'').toString().replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
   var acts=p.actividades||[];
 
-  function estadoBtnsDemo(){
-    return [['Bien','#16a34a'],['Regular','#d97706'],['Reprogramar','#dc2626']].map(function(x){
+  // esInicial=true → tercera opción dice "Mal" (describe cómo se encontró el equipo);
+  // Estado Final sigue diciendo "Reprogramar" — es solo texto de la vista previa, no
+  // guarda nada.
+  function estadoBtnsDemo(esInicial){
+    return [['Bien','#16a34a'],['Regular','#d97706'],[esInicial?'Mal':'Reprogramar','#dc2626']].map(function(x){
       return '<div style="flex:1;padding:6px 2px;border:2px solid #e5e7eb;border-radius:6px;background:#fff;font-weight:400;color:#9ca3af;font-size:.78rem;text-align:center">'+x[0]+'</div>';
     }).join('');
   }
@@ -23827,10 +23863,10 @@ function verProtocoloFormato(id){
         )
         : (
           '<div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:4px">Estado Inicial</div>'
-          +'<div style="display:flex;gap:4px;margin-bottom:8px">'+estadoBtnsDemo()+'</div>'
+          +'<div style="display:flex;gap:4px;margin-bottom:8px">'+estadoBtnsDemo(true)+'</div>'
 
           +'<div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:4px">Estado Final (A=Bien, R=Regular, C=Reprogramar)</div>'
-          +'<div style="display:flex;gap:4px;margin-bottom:8px">'+estadoBtnsDemo()+'</div>'
+          +'<div style="display:flex;gap:4px;margin-bottom:8px">'+estadoBtnsDemo(false)+'</div>'
 
           +'<div style="margin-bottom:6px"><div style="font-size:.72rem;font-weight:700;color:#6b7280;margin-bottom:3px">Personas en esta actividad</div>'
           +'<div style="padding:7px;font-size:.82rem;max-width:120px;color:#9ca3af;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px">1</div></div>'
@@ -38327,6 +38363,14 @@ function showPlanMantenimiento(){
   renderPlanMenu();
 }
 
+// Técnico tiene acceso a Plan Mtto en modo solo lectura: ve menú/área/línea/calendario/
+// historial/listado/imprimir-exportar igual que siempre, pero no puede crear, editar ni
+// eliminar actividades, ni usar "Comparar con otra máquina" (que agrega/quita en lote).
+// Admin/super no cambian en nada — esta función solo devuelve true para rol técnico.
+function _planSoloLectura(){
+  return !!(currentUser && currentUser.rol==='tecnico');
+}
+
 // #plan-content es un lienzo compartido (igual que #screen-ordenes): el menú
 // de Plan Mtto, una área, el detalle de una línea, su calendario anual y el
 // Calendario Completo pintan todos ahí. Antes, cualquier sync que repintara
@@ -38528,7 +38572,7 @@ function renderPlanLinea(areaId,linea){
         html+='<div style="background:#fff;border:1px solid #e5e7eb;border-left:4px solid #1e3a8a;border-radius:8px;padding:10px;margin-bottom:5px">'
           +'<div style="font-size:12px;font-weight:700;color:#111827;margin-bottom:4px">'+a.actividad+'</div>'
           +'<div style="font-size:10px;color:#6b7280">🔢 '+a.count+' ejecuciones · 🕐 Última: '+ultima+'</div>'
-          +'<div style="margin-top:6px"><button onclick="formalizarActividadBtn(this)" data-area="'+areaId+'" data-linea="'+linea+'" data-comp="'+comp+'" data-act="'+a.actividad+'" style="padding:3px 8px;background:#1e3a8a;color:#fff;border:none;border-radius:5px;font-size:10px;cursor:pointer">📋 Formalizar en plan</button></div>'
+          +(_planSoloLectura()?'':'<div style="margin-top:6px"><button onclick="formalizarActividadBtn(this)" data-area="'+areaId+'" data-linea="'+linea+'" data-comp="'+comp+'" data-act="'+a.actividad+'" style="padding:3px 8px;background:#1e3a8a;color:#fff;border:none;border-radius:5px;font-size:10px;cursor:pointer">📋 Formalizar en plan</button></div>')
           +'</div>';
       });
       html+='</div>';
@@ -38563,7 +38607,7 @@ function renderPlanLinea(areaId,linea){
            +'<div style="font-size:13px;font-weight:700;color:#111827;line-height:1.4;margin-bottom:5px">'+p.descripcion+'</div>'
            +'<div style="font-size:11px;color:#6b7280">🕐 Última ejecución: <strong style="color:'+cumplCol+'">'+ultimaFecha+'</strong></div>'
            +'</div>'
-           +'<button onclick="event.stopPropagation();editarActividad(\''+p.id+'\')" style="padding:5px 10px;background:#f1f5f9;border:1px solid #d1d5db;border-radius:6px;font-size:11px;color:#374151;cursor:pointer;flex-shrink:0">✏️</button>'
+           +(_planSoloLectura()?'':'<button onclick="event.stopPropagation();editarActividad(\''+p.id+'\')" style="padding:5px 10px;background:#f1f5f9;border:1px solid #d1d5db;border-radius:6px;font-size:11px;color:#374151;cursor:pointer;flex-shrink:0">✏️</button>')
            +'</div></div>';
       });
       html+='</div>';
@@ -38571,7 +38615,7 @@ function renderPlanLinea(areaId,linea){
   }
 
   html+='<div style="display:flex;gap:8px;margin-top:4px;flex-wrap:wrap">'
-    +'<button onclick="abrirNuevaActividad(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\''+')" style="flex:1;padding:10px;background:#14532d;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">➕ Nueva Actividad</button>'
+    +(_planSoloLectura()?'':'<button onclick="abrirNuevaActividad(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\''+')" style="flex:1;padding:10px;background:#14532d;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">➕ Nueva Actividad</button>')
     +'<button onclick="showPlanHistorial(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\''+')" style="flex:1;padding:10px;background:#1e3a8a;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">📊 Historial PMs</button>'
     +'<button onclick="imprimirPlanLinea(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\''+')" style="flex:1;padding:10px;background:#374151;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">🖨️ Imprimir / PDF</button>'
     +'</div>';
@@ -39093,12 +39137,14 @@ function verDetalleActividad(id){
     +(tieneProc?'<button onclick="verProcedimientoPDF(\''+id+'\')" style="width:100%;padding:11px;background:#0f766e;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer;margin-bottom:10px">📄 5W+1H</button>':'')
     +'<div style="font-size:10px;color:#9ca3af;margin:6px 0 14px">Creado por '+(p.creado_por||'—')+(p.creado_ts?' · '+fmtDate(p.creado_ts):'')+'</div>'
     +'<div style="display:flex;flex-direction:column;gap:8px">'
-    +'<button onclick="verProtocoloDesdeActividad(\''+id+'\')" style="padding:12px;background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;font-weight:700;color:#1d4ed8;cursor:pointer">📄 Ver / Editar protocolo</button>'
-    +'<button onclick="document.getElementById(\'modal-detalle-actividad\').remove();abrirNuevaActividadParaEquipo(\''+p.area_id+'\',\''+p.linea.replace(/'/g,"\\'")+'\',\''+(p.componente||'').replace(/'/g,"\\'")+'\')" style="padding:12px;background:#14532d;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">➕ Agregar actividad a este equipo</button>'
-    +'<div style="display:flex;gap:8px">'
-    +'<button onclick="document.getElementById(\'modal-detalle-actividad\').remove();'+(esDetallado?'editarProtocoloDetalladoDesdeActividad(\''+id+'\')':'editarActividad(\''+id+'\')')+'" style="flex:1;padding:12px;background:#1e3a8a;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">✏️ Editar</button>'
-    +'<button onclick="eliminarActividadPlan(\''+id+'\')" style="flex:1;padding:12px;background:#fef2f2;border:1px solid #fca5a5;color:#dc2626;border-radius:10px;font-weight:700;cursor:pointer">🗑️ Eliminar</button>'
-    +'</div>'
+    +(_planSoloLectura()?'':'<button onclick="verProtocoloDesdeActividad(\''+id+'\')" style="padding:12px;background:#eff6ff;border:1px solid #93c5fd;border-radius:10px;font-weight:700;color:#1d4ed8;cursor:pointer">📄 Ver / Editar protocolo</button>')
+    +(_planSoloLectura()?'':'<button onclick="document.getElementById(\'modal-detalle-actividad\').remove();abrirNuevaActividadParaEquipo(\''+p.area_id+'\',\''+p.linea.replace(/'/g,"\\'")+'\',\''+(p.componente||'').replace(/'/g,"\\'")+'\')" style="padding:12px;background:#14532d;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">➕ Agregar actividad a este equipo</button>')
+    +(_planSoloLectura()?'':(
+      '<div style="display:flex;gap:8px">'
+      +'<button onclick="document.getElementById(\'modal-detalle-actividad\').remove();'+(esDetallado?'editarProtocoloDetalladoDesdeActividad(\''+id+'\')':'editarActividad(\''+id+'\')')+'" style="flex:1;padding:12px;background:#1e3a8a;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">✏️ Editar</button>'
+      +'<button onclick="eliminarActividadPlan(\''+id+'\')" style="flex:1;padding:12px;background:#fef2f2;border:1px solid #fca5a5;color:#dc2626;border-radius:10px;font-weight:700;cursor:pointer">🗑️ Eliminar</button>'
+      +'</div>'
+    ))
     +'<button onclick="document.getElementById(\'modal-detalle-actividad\').remove()" style="padding:10px;background:#f3f4f6;border:none;border-radius:10px;cursor:pointer;color:#374151">Cerrar</button>'
     +'</div></div>';
   document.body.appendChild(modal);
@@ -39778,8 +39824,8 @@ function showPlanDetalle(areaId,linea){
   html+='<div style="display:flex;flex-direction:column;gap:8px">'
     +'<button onclick="showPlanCalendario(\''+areaId+'\',\''+linea+'\')" style="width:100%;padding:13px;background:#1e3a8a;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">📅 Calendario anual</button>'
     +'<button onclick="showPlanHistorial(\''+areaId+'\',\''+linea+'\')" style="width:100%;padding:13px;background:#4c1d95;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">📊 Historial de PMs</button>'
-    +'<button onclick="abrirNuevaActividad(\''+areaId+'\',\''+linea+'\')" style="width:100%;padding:13px;background:#14532d;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">➕ Nueva Actividad</button>'
-    +'<button onclick="abrirCompararMaquinas(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\')" style="width:100%;padding:13px;background:#92400e;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">🔁 Comparar con otra máquina</button>'
+    +(_planSoloLectura()?'':'<button onclick="abrirNuevaActividad(\''+areaId+'\',\''+linea+'\')" style="width:100%;padding:13px;background:#14532d;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">➕ Nueva Actividad</button>')
+    +(_planSoloLectura()?'':'<button onclick="abrirCompararMaquinas(\''+areaId+'\',\''+linea.replace(/'/g,"\\'")+'\')" style="width:100%;padding:13px;background:#92400e;color:#fff;border:none;border-radius:10px;font-size:13px;font-weight:700;cursor:pointer;text-align:left">🔁 Comparar con otra máquina</button>')
     +'</div>';
 
   cont.innerHTML=html;
