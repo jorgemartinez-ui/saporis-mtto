@@ -2421,7 +2421,7 @@ function setFiltro(tipo,val,btn){filtrosConsulta[tipo]=val;const row=btn.closest
 // ================================================================
 // PM03
 // ================================================================
-function showPM03(){window._pm3FiltroTec='';window._pm3FiltroEstado='todas';window._pm3FiltroLinea='';_pm3FiltroSem=0;_pm3FiltroMes=0;_pm3AvisarFirmasPendientes();_pm3PedirMotivosPendientes();renderPM03();showScreen('screen-pm03');}
+function showPM03(){window._pm3FiltroTec='';window._pm3FiltroEstado='todas';window._pm3FiltroLinea='';_pm3FiltroSem=0;_pm3FiltroMes=0;_pm3AvisarFirmasPendientes();_pm3PedirMotivosPendientes();_pm3AvisarLineasHuerfanas();renderPM03();showScreen('screen-pm03');}
 // Estado de filtros PM03
 var _pm3FiltroSem  = 0; // 0 = semana actual
 var _pm3FiltroMes  = 0;
@@ -40412,6 +40412,13 @@ function _pm3DesdeCorte(anio,semana){
   return semana>=PM3_CORTE_DESDE.semana;
 }
 
+// Si el backlog de PM03 vencidas de golpe supera este número, en vez de
+// aplicarse solo o abortar en silencio (como pasaba antes con el límite de
+// 100, nunca visible), se le muestra al admin/super la lista completa y se
+// espera su confirmación explícita antes de recorrerlas de semana. Por
+// debajo de este número se sigue aplicando automático, como siempre.
+var PM3_CORTE_LIMITE=10;
+
 // Checklist completo pero con firmas (requeridas por el protocolo) todavía
 // sin poner — devuelve {proto,faltan:[...]} o null si no aplica (checklist
 // incompleto todavía, o ya están todas las firmas puestas). Se usa tanto para
@@ -40444,6 +40451,31 @@ function _pm3ExisteColisionSemana(p,semanaObjetivo,anioObjetivo){
   });
 }
 
+// Recorre UNA PM03 de semana (puede ser varias vueltas si lleva mucho tiempo
+// sin corte) -- misma lógica de siempre, separada en su propia función para
+// poder reutilizarla tanto en el corte automático (backlog chico) como en la
+// confirmación manual del admin (backlog grande, ver _pm3ConfirmarBacklogCorte).
+function _pm3RecorrerPM03(p){
+  var ahora=new Date();
+  var vueltas=0;
+  while(vueltas<60 && ahora>_pm3CutoffCorte(p.año||p.anio||currentYear(),p.semana)){
+    var anioActual=p.año||p.anio||currentYear();
+    if(!p.semanasVencidas) p.semanasVencidas=[];
+    var yaMarcada=p.semanasVencidas.some(function(v){return v.semana===p.semana&&v.anio===anioActual;});
+    if(!yaMarcada) p.semanasVencidas.push({semana:p.semana,anio:anioActual});
+    var s=p.semana+1, a=anioActual;
+    if(s>52){s-=52;a+=1;}
+    // La semana siguiente ya tiene programada esta misma actividad, todavía
+    // abierta: no nos movemos encima de ella — se queda parada en rojo en su
+    // semana actual y sigue su ciclo normal de pedir el comentario.
+    if(_pm3ExisteColisionSemana(p,s,a)) break;
+    p.semana=s; p.año=a;
+    vueltas++;
+  }
+  p._editadoTs=Date.now();
+  savePM03Supa(p);
+}
+
 function _pm3AplicarCortes(){
   if(!Array.isArray(PM03_PLAN)||!PM03_PLAN.length) return;
   var ahora=new Date();
@@ -40464,30 +40496,58 @@ function _pm3AplicarCortes(){
     return true;
   });
   if(!candidatos.length) return;
-  if(candidatos.length>100){
-    console.warn('⚠️ Corte de PM03: '+candidatos.length+' actividades vencidas de golpe — se aborta el proceso automático, hay que revisarlo a mano.');
+  if(candidatos.length>PM3_CORTE_LIMITE){
+    console.warn('⚠️ Corte de PM03: '+candidatos.length+' actividades vencidas de golpe — se pide confirmación antes de recorrerlas.');
+    _pm3AvisarBacklogCorte(candidatos);
     return;
   }
-  candidatos.forEach(function(p){
-    var vueltas=0;
-    while(vueltas<60 && ahora>_pm3CutoffCorte(p.año||p.anio||currentYear(),p.semana)){
-      var anioActual=p.año||p.anio||currentYear();
-      if(!p.semanasVencidas) p.semanasVencidas=[];
-      var yaMarcada=p.semanasVencidas.some(function(v){return v.semana===p.semana&&v.anio===anioActual;});
-      if(!yaMarcada) p.semanasVencidas.push({semana:p.semana,anio:anioActual});
-      var s=p.semana+1, a=anioActual;
-      if(s>52){s-=52;a+=1;}
-      // La semana siguiente ya tiene programada esta misma actividad, todavía
-      // abierta: no nos movemos encima de ella — se queda parada en rojo en su
-      // semana actual y sigue su ciclo normal de pedir el comentario.
-      if(_pm3ExisteColisionSemana(p,s,a)) break;
-      p.semana=s; p.año=a;
-      vueltas++;
-    }
-    p._editadoTs=Date.now();
-    savePM03Supa(p);
-  });
+  candidatos.forEach(_pm3RecorrerPM03);
   saveDB('pm03_plan',PM03_PLAN);
+}
+
+// Aviso visible (solo admin/super) cuando el corte automático encuentra más
+// de PM3_CORTE_LIMITE actividades vencidas de golpe -- en vez de aplicarse
+// solo o abortar en silencio, se le muestra la lista completa y se espera su
+// confirmación explícita antes de recorrerlas de semana (ver
+// _pm3ConfirmarBacklogCorte). Para cualquier otro rol (p.ej. un técnico
+// sincronizando en su teléfono) no hace nada -- igual que antes, se queda
+// esperando a que un admin/super lo revise.
+function _pm3AvisarBacklogCorte(candidatos){
+  if(!currentUser||(currentUser.rol!=='admin'&&currentUser.rol!=='super')) return;
+  if(document.getElementById('modal-backlog-corte')) return; // ya está abierto
+  window._pm3BacklogPendiente=candidatos;
+  var MAX_LISTA=20;
+  var lista=candidatos.slice(0,MAX_LISTA).map(function(p){
+    var anio=p.año||p.anio||currentYear();
+    return '• '+(p.linea||'—')+' — '+(p.componente||'General')+' — '+(p.actividad||'—')+' (Sem '+p.semana+'/'+anio+')';
+  }).join('<br>');
+  if(candidatos.length>MAX_LISTA) lista+='<br><span style="color:#9ca3af">+'+(candidatos.length-MAX_LISTA)+' más…</span>';
+  var modal=document.createElement('div');
+  modal.id='modal-backlog-corte';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
+  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box;max-height:80vh;overflow:auto">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#1a3c5e;margin-bottom:4px">⚠️ '+candidatos.length+' PM03 vencidas de golpe</div>'
+    +'<div style="font-size:12px;color:#6b7280;margin-bottom:12px">Ya pasaron su corte de semana y están esperando recorrerse a la semana que les toca. Revisa la lista antes de confirmar:</div>'
+    +'<div style="font-size:12px;color:#374151;line-height:1.6;margin-bottom:16px">'+lista+'</div>'
+    +'<div style="display:flex;gap:10px">'
+    +'<button onclick="var m=document.getElementById(\'modal-backlog-corte\');if(m)m.remove();window._pm3BacklogPendiente=null;" style="flex:1;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Revisar después</button>'
+    +'<button onclick="_pm3ConfirmarBacklogCorte()" style="flex:1;padding:13px;background:#1e3a8a;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer">Confirmar y recorrer</button>'
+    +'</div></div>';
+  document.body.appendChild(modal);
+}
+
+// Se dispara al darle "Confirmar y recorrer" en el aviso de arriba -- recorre
+// de semana exactamente el lote que se mostró (misma lógica de siempre, ver
+// _pm3RecorrerPM03) y guarda.
+function _pm3ConfirmarBacklogCorte(){
+  var pendientes=window._pm3BacklogPendiente||[];
+  var m=document.getElementById('modal-backlog-corte'); if(m) m.remove();
+  window._pm3BacklogPendiente=null;
+  if(!pendientes.length) return;
+  pendientes.forEach(_pm3RecorrerPM03);
+  saveDB('pm03_plan',PM03_PLAN);
+  showAlert('✅ '+pendientes.length+' PM03 recorridas de semana');
+  if(typeof renderPM03==='function') renderPM03();
 }
 
 // ================================================================
@@ -40555,6 +40615,30 @@ function _pm3AvisarFirmasPendientes(){
     return '• '+(x.p.componente||'General')+' — '+(x.p.actividad||'—')+' (Sem '+x.p.semana+'/'+x.anio+'): falta '+faltanTxt;
   }).join('\n');
   alert('✍️ PM03 ejecutadas, pendientes de firma:\n\n'+lista);
+}
+
+// Aviso (solo admin/super, al abrir el botón PM03) de líneas que tienen PM03
+// cargadas pero ya no aparecen en ningún catálogo de líneas (listas_config)
+// -- quedan invisibles en los selectores de la app (alta de PM03, filtros,
+// calendario, etc.) aunque sigan generando/recorriendo PM03 en la base de
+// datos. Pasó con líneas nuevas que se agregaron directo a pm03_plan sin
+// agregarlas también al catálogo. Solo avisa una vez por sesión mientras el
+// mismo conjunto siga huérfano, para no repetir el aviso en cada entrada.
+function _pm3AvisarLineasHuerfanas(){
+  if(!currentUser||(currentUser.rol!=='admin'&&currentUser.rol!=='super')) return;
+  if(!Array.isArray(PM03_PLAN)||!PM03_PLAN.length) return;
+  var catalogo=(LISTAS.lineas_proceso||[]).concat(LISTAS.lineas_envasado||[]).concat(LISTAS.lineas_servicios||[]).concat(LISTAS.lineas_bodega||[]).concat(LISTAS.lineas_instalaciones||[]);
+  var vistos={};
+  var huerfanas=[];
+  PM03_PLAN.forEach(function(p){
+    if(!p.linea||vistos[p.linea]) return;
+    vistos[p.linea]=true;
+    if(catalogo.indexOf(p.linea)<0) huerfanas.push(p.linea);
+  });
+  if(!huerfanas.length) return;
+  if(window._pm3LineasHuerfanasAvisadas && window._pm3LineasHuerfanasAvisadas.join('|')===huerfanas.join('|')) return;
+  window._pm3LineasHuerfanasAvisadas=huerfanas;
+  alert('⚠️ Hay PM03 cargadas con línea(s) que no están en ningún catálogo (quedan invisibles en selectores):\n\n'+huerfanas.map(function(l){return '• '+l;}).join('\n')+'\n\nAgrégalas en Configuración → Listas si deben estar visibles.');
 }
 
 function abrirDetonarPM03Anticipada(actividadPlanId,semana,anio){
