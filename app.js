@@ -38845,16 +38845,181 @@ function _avisoSerieUnificada(p){
     +'<div style="background:#f1f5f9;border-radius:10px;padding:12px;margin-top:12px;font-size:13px;color:#1f2937;line-height:1.6">'
     +'📋 <strong>Puntos, criterios u horas:</strong> Admin → Protocolos PM03<br>'
     +'📅 <strong>Mover una PM03:</strong> botón Reprogramar de esa PM03<br>'
-    +'🔄 <strong>Frecuencias o calendario:</strong> solo por SQL (con Claude)'
+    +'🔄 <strong>Frecuencias o calendario:</strong> botón 🔓 Separar plan (abajo) o por SQL (con Claude)'
     +'</div>'
     +'<div style="margin-top:14px;font-size:13px;font-weight:700;color:#374151">¿Se requiere máquina parada? <span style="font-weight:400;color:#6b7280">(esto sí se puede cambiar aquí)</span></div>'
     +'<div style="display:flex;gap:8px;margin-top:6px">'
     +'<button onclick="_paroDesdeAviso(\''+p.id+'\',true)" style="flex:1;padding:10px;border-radius:10px;cursor:pointer;font-weight:700;'+(p.requiere_paro===true?'background:#b91c1c;color:#fff;border:none':'background:#fff;color:#b91c1c;border:1px solid #fca5a5')+'">🛑 Sí, parada</button>'
     +'<button onclick="_paroDesdeAviso(\''+p.id+'\',false)" style="flex:1;padding:10px;border-radius:10px;cursor:pointer;font-weight:700;'+(p.requiere_paro===false?'background:#15803d;color:#fff;border:none':'background:#fff;color:#15803d;border:1px solid #86efac')+'">▶️ No, corriendo</button>'
     +'</div>'
+    +((currentUser&&(currentUser.rol==='admin'||currentUser.rol==='super'))?'<button onclick="document.getElementById(\'modal-serie-unificada\').remove();abrirSepararPlanUnificado(\''+p.id+'\')" style="width:100%;margin-top:14px;padding:12px;background:#fff;color:#b45309;border:1px solid #f59e0b;border-radius:10px;font-weight:700;cursor:pointer">🔓 Separar plan y cambiar frecuencia</button>':'')
     +'<button onclick="document.getElementById(\'modal-serie-unificada\').remove()" style="width:100%;margin-top:14px;padding:12px;background:#1e3a8a;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">Entendido</button>'
     +'</div>';
   document.body.appendChild(m);
+}
+
+// ── Separar un PLAN UNIFICADO (2026-11-27) ──────────────────────────────────────────
+// Actividades del mismo plan unificado: misma área+línea+componente con serie_unificada.
+function _grupoSerieUnificada(p){
+  return PLAN_ACTIVIDADES.filter(function(x){
+    return x&&x.serie_unificada===true&&x.activo!==false&&x.area_id===p.area_id&&x.linea===p.linea
+      &&_normTxtAct(x.componente||'General')===_normTxtAct(p.componente||'General');
+  });
+}
+// PM03 de una actividad (por texto: línea+componente+descripción, igual que el resto del motor).
+function _pm03DeActividadPlan(g){
+  var comp=g.componente||'General';
+  return PM03_PLAN.filter(function(x){
+    return x.linea===g.linea&&_normTxtAct(x.componente||'General')===_normTxtAct(comp)&&_normTxtAct(x.actividad)===_normTxtAct(g.descripcion)&&x.semana&&x.año;
+  });
+}
+// semanaIni/anioIni opcionales (vienen de la celda en blanco del Calendario).
+function abrirSepararPlanUnificado(id,semanaIni,anioIni){
+  if(!currentUser||(currentUser.rol!=='admin'&&currentUser.rol!=='super')) return;
+  var p=PLAN_ACTIVIDADES.find(function(x){return x.id===id;});
+  if(!p) return;
+  var grupo=_grupoSerieUnificada(p);
+  var frecuencias=[{v:1,l:'Semanal'},{v:2,l:'Quincenal'},{v:4,l:'Mensual'},{v:8,l:'Bimestral'},{v:12,l:'Trimestral'},{v:24,l:'Semestral'},{v:52,l:'Anual'}];
+  var fa=p.frecuencia_semanas||4;
+  var esPreset=frecuencias.some(function(f){return f.v===fa;});
+  var fechaIni=(semanaIni&&anioIni)?_fechaDeSemanaISO(anioIni,semanaIni):new Date();
+  var fechaIniStr=fechaIni.getFullYear()+'-'+String(fechaIni.getMonth()+1).padStart(2,'0')+'-'+String(fechaIni.getDate()).padStart(2,'0');
+  var m=document.createElement('div');
+  m.id='modal-separar-unificado';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9999;overflow-y:auto;padding:12px;box-sizing:border-box';
+  m.innerHTML='<div style="background:#fff;border-radius:16px;padding:20px;max-width:500px;margin:auto">'
+    +'<div style="font-size:16px;font-weight:800;color:#b45309;margin-bottom:6px">🔓 Separar plan unificado</div>'
+    +'<div style="background:#fef3c7;border:1px solid #f59e0b;border-radius:10px;padding:12px;font-size:13px;color:#78350f;line-height:1.5">'
+    +'⚠️ Este plan dejará de ser unido. Las <strong>'+grupo.length+'</strong> actividades de <strong>'+(p.componente||'')+'</strong> ya no caerán juntas: quedarán <strong>independientes</strong> y cuando coincidan saldrán PM03 separadas.<br><br>'
+    +'Para no repetir tareas, ve a <strong>Admin → Protocolos PM03</strong> y elimina las actividades repetidas.<br><br>'
+    +'Las PM03 ya cerradas no se tocan.</div>'
+    +'<div style="font-size:12px;color:#374151;margin:10px 0 4px">'+grupo.map(function(g){return '• '+g.descripcion+(g.id===p.id?' <strong>(esta)</strong>':'');}).join('<br>')+'</div>'
+    +'<div class="form-group" style="margin-top:12px"><label class="form-label">Nueva frecuencia de "'+p.descripcion+'"</label>'
+    +'<select class="form-control" id="su-freq" onchange="var w=document.getElementById(\'su-freq-manual-wrap\');if(w)w.style.display=(this.value===\'manual\'?\'block\':\'none\')" style="padding:10px">'
+    +frecuencias.map(function(f){return '<option value="'+f.v+'"'+(esPreset&&f.v===fa?' selected':'')+'>'+f.l+'</option>';}).join('')
+    +'<option value="manual"'+(esPreset?'':' selected')+'>Personalizada (número y unidad)</option>'
+    +'</select>'
+    +'<div id="su-freq-manual-wrap" style="display:'+(esPreset?'none':'block')+';margin-top:6px"><div style="display:flex;gap:6px">'
+    +'<input type="number" min="1" step="1" class="form-control" id="su-freq-manual" value="'+(esPreset?'':fa)+'" style="flex:1;padding:10px">'
+    +'<select class="form-control" id="su-freq-manual-unit" style="flex:1;padding:10px"><option value="dias">Días</option><option value="semanas" selected>Semanas</option><option value="meses">Meses</option><option value="anios">Años</option></select>'
+    +'</div></div></div>'
+    +'<div class="form-group"><label class="form-label">¿Desde qué fecha aplica?</label>'
+    +'<input type="date" class="form-control" id="su-fecha" value="'+fechaIniStr+'" style="padding:10px">'
+    +'<div style="font-size:10px;color:#6b7280;margin-top:3px">Esta actividad arranca en esa semana; las demás siguen desde su próxima fecha del calendario actual.</div></div>'
+    +'<div class="form-group"><label class="form-label">Motivo</label>'
+    +'<input type="text" class="form-control" id="su-motivo" placeholder="Ej: cambio de filtros a 12 meses" style="padding:10px"></div>'
+    +'<div style="display:flex;gap:8px;margin-top:8px">'
+    +'<button onclick="document.getElementById(\'modal-separar-unificado\').remove()" style="flex:1;padding:12px;background:#f3f4f6;border:none;border-radius:10px;cursor:pointer">Cancelar</button>'
+    +'<button onclick="confirmarSepararPlanUnificado(\''+p.id+'\')" style="flex:2;padding:12px;background:#b45309;color:#fff;border:none;border-radius:10px;font-weight:700;cursor:pointer">🔓 Separar y regenerar</button>'
+    +'</div></div>';
+  document.body.appendChild(m);
+}
+
+function confirmarSepararPlanUnificado(id){
+  var freqSel=document.getElementById('su-freq')?.value;
+  var freq;
+  if(freqSel==='manual'){
+    var mv=document.getElementById('su-freq-manual')?.value;
+    if(!parseInt(mv)||parseInt(mv)<1){showAlert('Indica cada cuánto se repite (número mayor a 0)','error');return;}
+    freq=freqToSemanas('manual',mv,document.getElementById('su-freq-manual-unit')?.value||'semanas');
+  } else freq=parseInt(freqSel);
+  var fecha=_parseFechaInput(document.getElementById('su-fecha')?.value||'');
+  if(!fecha){showAlert('Selecciona la fecha','error');return;}
+  var motivo=document.getElementById('su-motivo')?.value.trim()||null;
+  if(!confirm('¿Separar el plan? Todas sus actividades quedarán independientes. Esto no se deshace desde la app.')) return;
+  document.getElementById('modal-separar-unificado')?.remove();
+  _separarPlanUnificadoCore(id,freq,fecha,motivo);
+}
+
+function _separarPlanUnificadoCore(id,freq,fechaDeton,motivo){
+  var p=PLAN_ACTIVIDADES.find(function(x){return x.id===id;});
+  if(!p) return null;
+  var grupo=_grupoSerieUnificada(p);
+  if(grupo.indexOf(p)<0) grupo.push(p);
+  var f0=new Date(fechaDeton.getTime()); f0.setHours(0,0,0,0);
+  // Lunes de la semana elegida: las PM03 de esa semana también se reemplazan.
+  var lunes0=new Date(f0.getTime()); lunes0.setDate(lunes0.getDate()-((lunes0.getDay()+6)%7));
+  // 1) Fecha de arranque de cada actividad (ANTES de borrar nada)
+  var arranque={};
+  grupo.forEach(function(g){
+    if(g.id===p.id){ arranque[g.id]=f0; return; }
+    var prox=_pm03DeActividadPlan(g).filter(function(x){return x.estado!=='cerrada';})
+      .map(function(x){return _fechaDeSemanaISO(x.año,x.semana);})
+      .filter(function(d){return d>=lunes0;})
+      .sort(function(a,b){return a-b;})[0];
+    arranque[g.id]=prox||f0;
+  });
+  // 2) Borrar PM03 abiertas del grupo desde la semana elegida (nunca las cerradas)
+  var idsBorrar=[];
+  grupo.forEach(function(g){
+    _pm03DeActividadPlan(g).forEach(function(x){
+      if(x.estado==='cerrada') return;
+      if(_fechaDeSemanaISO(x.año,x.semana)>=lunes0) idsBorrar.push(x.id);
+    });
+  });
+  if(idsBorrar.length){
+    PM03_PLAN=PM03_PLAN.filter(function(x){return idsBorrar.indexOf(x.id)<0;});
+    var elim=loadDB('pm03_eliminadas',[]);
+    idsBorrar.forEach(function(idb){ if(elim.indexOf(idb)<0) elim.push(idb); });
+    saveDB('pm03_eliminadas',elim);
+    for(var i=0;i<idsBorrar.length;i+=100){
+      fetch(SUPA_URL+'/rest/v1/pm03_plan?id=in.('+idsBorrar.slice(i,i+100).join(',')+')',{
+        method:'DELETE',headers:{'apikey':SUPA_KEY,'Authorization':supaAuthHeader(),'Prefer':'return=minimal'}
+      }).then(function(r){ if(!r.ok) r.text().then(function(t){console.error('Error al separar plan (DELETE):',t);}); }).catch(function(){});
+    }
+  }
+  // 3) Quitar candado + nueva frecuencia en la editada + regenerar cada serie
+  var anioLimite=currentYear()+10;
+  var usados=_usadosPM03Base();
+  var nuevas=[];
+  grupo.forEach(function(g){
+    var patch={serie_unificada:false};
+    g.serie_unificada=false;
+    if(g.id===p.id&&freq!==g.frecuencia_semanas){
+      supaFetch('plan_frecuencia_historial','POST',{id:genID('FH'),actividad_id:g.id,frecuencia_anterior:g.frecuencia_semanas,frecuencia_nueva:freq,fecha_cambio:new Date().toISOString().slice(0,10),motivo:'Separación de plan unificado'+(motivo?' — '+motivo:''),cambiado_por:currentUser.nombre,creado_ts:Date.now()},'').catch(function(){});
+      g.frecuencia_semanas=freq; g.frecuencia_dias=null;
+      patch.frecuencia_semanas=freq; patch.frecuencia_dias=null;
+    }
+    supaFetch('plan_actividades','PATCH',patch,'id=eq.'+g.id).catch(function(){});
+    var fs=g.frecuencia_semanas||4;
+    var it=new Date(arranque[g.id].getTime());
+    while(it.getFullYear()<=anioLimite){
+      nuevas.push({
+        id:_genPM03IdUnico(usados),linea:g.linea,area:g.area_id,componente:g.componente||'—',actividad:g.descripcion,
+        semana:getWeekNumber(it),año:it.getFullYear(),tecnicoId:'',tecnicoNombre:'Sin asignar',estado:'abierta',
+        pasoAPaso:g.protocolo||'',generadoPor:'Plan Mtto',actividadPlanId:g.id,ts:Date.now(),horaCreacion:new Date().toISOString()
+      });
+      it=new Date(it.getTime()); it.setDate(it.getDate()+fs*7);
+    }
+  });
+  saveDB('plan_actividades',PLAN_ACTIVIDADES);
+  nuevas.forEach(function(x){PM03_PLAN.push(x);});
+  saveDB('pm03_plan',PM03_PLAN);
+  var supaRows=nuevas.map(function(x){
+    return {id:x.id,linea:x.linea,componente:x.componente||null,actividad:x.actividad,area:x.area||null,
+      semana:x.semana,anio:x.año,tecnico_id:null,tecnico_nombre:x.tecnicoNombre,estado:'abierta',generado_por:x.generadoPor,ts:x.ts,estado_flujo:'ejecucion',fuente_excel:false};
+  });
+  for(var j=0;j<supaRows.length;j+=500){ supaUpsert('pm03_plan',supaRows.slice(j,j+500)).catch(function(){}); }
+  showAlert('🔓 Plan separado — '+grupo.length+' actividades independientes, '+idsBorrar.length+' PM03 reemplazadas por '+nuevas.length+' nuevas. Revisa Admin → Protocolos PM03 para quitar actividades repetidas.');
+  if(typeof showPlanCalendario==='function') showPlanCalendario(p.area_id,p.linea);
+  return {grupo:grupo.length,borradas:idsBorrar.length,nuevas:nuevas.length};
+}
+
+// Celda en blanco del Calendario en una actividad de plan unificado: 2 opciones.
+function _abrirDetonarUnificada(p,semana,anio){
+  var modal=document.createElement('div');
+  modal.id='modal-detonar-pm03';
+  modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
+  modal.innerHTML='<div style="background:#fff;border-radius:20px 20px 0 0;padding:24px;width:100%;box-sizing:border-box">'
+    +'<div style="font-family:Nunito,sans-serif;font-size:17px;font-weight:800;color:#1a3c5e;margin-bottom:4px">⚡ Semana '+semana+'/'+anio+' — plan unificado</div>'
+    +'<div style="font-size:13px;color:#374151;margin:10px 0 14px">'+(p.componente||'General')+' — '+p.descripcion+'</div>'
+    +'<button onclick="confirmarDetonarPM03Anticipada(\''+p.id+'\','+semana+','+anio+')" style="width:100%;padding:13px;background:#1e3a8a;color:#fff;border:none;border-radius:11px;font-weight:700;cursor:pointer;margin-bottom:4px">⚡ Solo adelantar esta PM03</button>'
+    +'<div style="font-size:11px;color:#6b7280;margin-bottom:12px">Crea la PM03 en esa semana. El ciclo del plan sigue igual.</div>'
+    +'<button onclick="var mm=document.getElementById(\'modal-detonar-pm03\');if(mm)mm.remove();abrirSepararPlanUnificado(\''+p.id+'\','+semana+','+anio+')" style="width:100%;padding:13px;background:#fff;color:#b45309;border:1px solid #f59e0b;border-radius:11px;font-weight:700;cursor:pointer;margin-bottom:4px">🔓 Separar plan y resincronizar</button>'
+    +'<div style="font-size:11px;color:#6b7280;margin-bottom:12px">Todas las actividades del plan quedan independientes.</div>'
+    +'<button onclick="var mm=document.getElementById(\'modal-detonar-pm03\');if(mm)mm.remove()" style="width:100%;padding:13px;background:#f3f4f6;border:none;border-radius:11px;cursor:pointer">Cancelar</button>'
+    +'</div>';
+  document.body.appendChild(modal);
 }
 
 function _paroDesdeAviso(id,val){
@@ -40644,6 +40809,7 @@ function _pm3AvisarLineasHuerfanas(){
 function abrirDetonarPM03Anticipada(actividadPlanId,semana,anio){
   var p=PLAN_ACTIVIDADES.find(function(x){return x.id===actividadPlanId;});
   if(!p) return;
+  if(p.serie_unificada===true){ _abrirDetonarUnificada(p,semana,anio); return; }
   var modal=document.createElement('div');
   modal.id='modal-detonar-pm03';
   modal.style.cssText='position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.55);z-index:9999;display:flex;align-items:flex-end';
@@ -40670,6 +40836,8 @@ function confirmarDetonarPM03Anticipada(actividadPlanId,semana,anio){
   saveDB('pm03_plan',PM03_PLAN);
   savePM03Supa(nuevo);
   showAlert('✅ PM03 detonada para semana '+semana+'/'+anio);
+  // Plan unificado: solo se adelanta esta PM03, sin preguntar frecuencia ni regenerar la serie.
+  if(p.serie_unificada===true){ showPlanCalendario(p.area_id,p.linea); return; }
   abrirPreguntaFrecuenciaPM03(actividadPlanId,semana,anio,nuevo.id);
 }
 
@@ -40714,6 +40882,7 @@ function _resincronizarSeriePM03(actividadPlanId,semanaDeton,anioDeton,nuevaFrec
   var p=PLAN_ACTIVIDADES.find(function(x){return x.id===actividadPlanId;});
   var mF=document.getElementById('modal-frecuencia-pm03');if(mF)mF.remove();
   if(!p){showAlert('No se encontró la actividad del plan','error');return;}
+  if(p.serie_unificada===true){ _avisoSerieUnificada(p); return; } // respaldo: nunca regenerar un plan unificado
   var freqAnterior=p.frecuencia_semanas;
   var cambioFrecuencia=nuevaFrecuencia!==freqAnterior;
 
